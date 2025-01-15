@@ -10,18 +10,8 @@ const nextConfig = {
   },
   // Enable static optimization
   swcMinify: true,
-  // Configure CSS handling
-  optimizeFonts: true,
   images: {
     domains: ['app.hubspot.com'],
-  },
-  // Add custom webpack configuration for CSS
-  webpack: (config) => {
-    config.module.rules.push({
-      test: /\.css$/,
-      use: ['style-loader', 'css-loader', 'postcss-loader'],
-    });
-    return config;
   },
 }
 
