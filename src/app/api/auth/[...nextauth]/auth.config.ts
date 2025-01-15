@@ -15,9 +15,19 @@ if (!process.env.NEXTAUTH_SECRET) {
   console.error('[NextAuth] Missing NEXTAUTH_SECRET');
 }
 
+// Validate that NEXTAUTH_URL matches our expected URL
+const expectedUrl = process.env.NODE_ENV === 'development' 
+  ? 'http://localhost:3000' 
+  : 'https://hubspot-dashboard.vercel.app';
+
+if (process.env.NEXTAUTH_URL !== expectedUrl) {
+  console.error(`[NextAuth] NEXTAUTH_URL mismatch. Expected ${expectedUrl}, got ${process.env.NEXTAUTH_URL}`);
+}
+
 // Log all environment variables (excluding secrets)
 console.log('[NextAuth] Configuration:', {
   nextAuthUrl: process.env.NEXTAUTH_URL,
+  expectedUrl,
   hasNextAuthSecret: !!process.env.NEXTAUTH_SECRET,
   nodeEnv: process.env.NODE_ENV,
   hubspotAppId: HUBSPOT_CONFIG.appId,
@@ -61,7 +71,7 @@ export const authOptions: AuthOptions = {
                 client_id: HUBSPOT_CONFIG.clientId,
                 client_secret: HUBSPOT_CONFIG.clientSecret,
                 redirect_uri: HUBSPOT_CONFIG.redirectUri,
-                code: params.code,
+                code: params.code || '',
               }).toString(),
             });
 
