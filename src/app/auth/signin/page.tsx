@@ -33,9 +33,9 @@ export default function SignIn() {
       setIsSigningIn(true);
       setError(null);
       
-      const result = await signIn('hubspot', { 
+      const result = await signIn('hubspot', {
         redirect: false,
-        callbackUrl: '/'
+        callbackUrl: window.location.origin
       });
       
       console.log('[NextAuth] Sign-in result:', {
@@ -44,15 +44,22 @@ export default function SignIn() {
         error: result?.error,
       });
 
-      if (result?.error) {
-        setError(result.error);
-        router.push(`/auth/error?error=${encodeURIComponent(result.error)}`);
+      if (result?.error === 'AccessDenied') {
+        setError('HubSpot access was denied. Please check your permissions.');
+      } else if (result?.error === 'Configuration') {
+        setError('There was an issue with the OAuth configuration. Please contact support.');
+      } else if (result?.error === 'OAuthSignin') {
+        setError('Failed to initiate HubSpot sign-in. Please try again.');
+      } else if (result?.error === 'OAuthCallback') {
+        setError('Failed to complete HubSpot authentication. Please try again.');
+      } else if (result?.error) {
+        setError(`Authentication failed: ${result.error}`);
       } else if (result?.url) {
         window.location.href = result.url;
       }
     } catch (error) {
       console.error('[NextAuth] Sign-in error:', error);
-      setError('An unexpected error occurred');
+      setError('An unexpected error occurred during authentication');
     } finally {
       setIsSigningIn(false);
     }

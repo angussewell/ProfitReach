@@ -15,19 +15,9 @@ if (!process.env.NEXTAUTH_SECRET) {
   console.error('[NextAuth] Missing NEXTAUTH_SECRET');
 }
 
-// Validate that NEXTAUTH_URL matches our expected URL
-const expectedUrl = process.env.NODE_ENV === 'development' 
-  ? 'http://localhost:3000' 
-  : 'https://hubspot-dashboard.vercel.app';
-
-if (process.env.NEXTAUTH_URL !== expectedUrl) {
-  console.error(`[NextAuth] NEXTAUTH_URL mismatch. Expected ${expectedUrl}, got ${process.env.NEXTAUTH_URL}`);
-}
-
 // Log all environment variables (excluding secrets)
 console.log('[NextAuth] Configuration:', {
   nextAuthUrl: process.env.NEXTAUTH_URL,
-  expectedUrl,
   hasNextAuthSecret: !!process.env.NEXTAUTH_SECRET,
   nodeEnv: process.env.NODE_ENV,
   hubspotAppId: HUBSPOT_CONFIG.appId,
@@ -43,7 +33,7 @@ export const authOptions: AuthOptions = {
       name: 'HubSpot',
       type: 'oauth',
       authorization: {
-        url: `https://app.hubspot.com/oauth/23255575/authorize`,
+        url: 'https://app.hubspot.com/oauth/authorize',
         params: {
           client_id: HUBSPOT_CONFIG.clientId,
           scope: HUBSPOT_CONFIG.scopes.join(' '),
@@ -51,94 +41,13 @@ export const authOptions: AuthOptions = {
           response_type: 'code',
         },
       },
-      token: {
-        url: 'https://api.hubapi.com/oauth/v1/token',
-        async request({ params }) {
-          try {
-            console.log('[NextAuth] Token request started:', {
-              hasCode: !!params.code,
-              redirectUri: HUBSPOT_CONFIG.redirectUri,
-              clientId: HUBSPOT_CONFIG.clientId,
-            });
-
-            if (!params.code) {
-              console.error('[NextAuth] No code parameter received');
-              throw new Error('No code parameter received');
-            }
-
-            const response = await fetch('https://api.hubapi.com/oauth/v1/token', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-              },
-              body: new URLSearchParams({
-                grant_type: 'authorization_code',
-                client_id: HUBSPOT_CONFIG.clientId,
-                client_secret: HUBSPOT_CONFIG.clientSecret,
-                redirect_uri: HUBSPOT_CONFIG.redirectUri,
-                code: params.code,
-              }).toString(),
-            });
-
-            const responseText = await response.text();
-            console.log('[NextAuth] Token response:', {
-              status: response.status,
-              statusText: response.statusText,
-              responsePreview: responseText.substring(0, 100),
-            });
-
-            if (!response.ok) {
-              console.error('[NextAuth] Token request failed:', responseText);
-              throw new Error(`Token request failed: ${response.status} - ${responseText}`);
-            }
-
-            const tokens = JSON.parse(responseText);
-            console.log('[NextAuth] Token request successful');
-            return tokens;
-          } catch (error) {
-            console.error('[NextAuth] Token request error:', error);
-            throw error;
-          }
-        },
-      },
-      userinfo: {
-        url: 'https://api.hubapi.com/oauth/v1/access-tokens/${tokens.access_token}',
-        async request({ tokens }) {
-          try {
-            console.log('[NextAuth] Userinfo request started');
-            const response = await fetch(`https://api.hubapi.com/oauth/v1/access-tokens/${tokens.access_token}`, {
-              headers: {
-                Authorization: `Bearer ${tokens.access_token}`,
-              },
-            });
-
-            const responseText = await response.text();
-            console.log('[NextAuth] Userinfo response:', {
-              status: response.status,
-              statusText: response.statusText,
-              responsePreview: responseText.substring(0, 100),
-            });
-
-            if (!response.ok) {
-              console.error('[NextAuth] Userinfo request failed:', responseText);
-              throw new Error(`Userinfo request failed: ${response.status} - ${responseText}`);
-            }
-
-            const profile = JSON.parse(responseText);
-            console.log('[NextAuth] Userinfo request successful');
-            return profile;
-          } catch (error) {
-            console.error('[NextAuth] Userinfo request error:', error);
-            throw error;
-          }
-        },
-      },
+      token: 'https://api.hubapi.com/oauth/v1/token',
+      userinfo: 'https://api.hubapi.com/oauth/v1/refresh-tokens',
       profile(profile) {
-        console.log('[NextAuth] Processing profile:', profile);
         return {
-          id: profile.user_id || profile.user || 'unknown',
-          name: profile.hub_domain || 'unknown',
-          email: profile.user || 'unknown',
+          id: profile.user,
+          name: profile.hub_domain,
+          email: profile.user,
         };
       },
       clientId: HUBSPOT_CONFIG.clientId,
@@ -148,17 +57,20 @@ export const authOptions: AuthOptions = {
   debug: true,
   callbacks: {
     async jwt({ token, account }) {
-      console.log('[NextAuth] JWT callback:', { hasToken: !!token, hasAccount: !!account });
-      if (account?.access_token) {
+      if (account) {
         token.accessToken = account.access_token;
         token.refreshToken = account.refresh_token;
+        token.hubspotPortalId = account.hubspotPortalId;
       }
       return token;
     },
     async session({ session, token }) {
-      console.log('[NextAuth] Session callback:', { hasSession: !!session, hasToken: !!token });
-      session.accessToken = token.accessToken;
-      return session;
+      return {
+        ...session,
+        accessToken: token.accessToken,
+        refreshToken: token.refreshToken,
+        hubspotPortalId: token.hubspotPortalId
+      };
     },
   },
   pages: {

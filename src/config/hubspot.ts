@@ -3,11 +3,32 @@ import { Client } from '@hubspot/api-client';
 const PRODUCTION_URL = 'https://hubspot-dashboard.vercel.app';
 const DEVELOPMENT_URL = 'http://localhost:3000';
 
+// Validate required environment variables
+if (!process.env.HUBSPOT_CLIENT_ID) {
+  throw new Error('HUBSPOT_CLIENT_ID is required');
+}
+if (!process.env.HUBSPOT_CLIENT_SECRET) {
+  throw new Error('HUBSPOT_CLIENT_SECRET is required');
+}
+
+// Validate credentials in production
+if (process.env.NODE_ENV === 'production') {
+  if (process.env.HUBSPOT_CLIENT_ID === '875a7b08-7bb0-4a61-bc02-3354feec681c') {
+    throw new Error('Development HubSpot Client ID cannot be used in production');
+  }
+  if (process.env.HUBSPOT_CLIENT_SECRET === '915d00b9-fb17-4670-8d06-6d046483dfa8') {
+    throw new Error('Development HubSpot Client Secret cannot be used in production');
+  }
+  if (process.env.HUBSPOT_APP_ID === '6901795') {
+    throw new Error('Development HubSpot App ID cannot be used in production');
+  }
+}
+
 // HubSpot OAuth Configuration
 export const HUBSPOT_CONFIG = {
-  appId: '6901795',
-  clientId: process.env.HUBSPOT_CLIENT_ID || '875a7b08-7bb0-4a61-bc02-3354feec681c',
-  clientSecret: process.env.HUBSPOT_CLIENT_SECRET || '915d00b9-fb17-4670-8d06-6d046483dfa8',
+  appId: process.env.HUBSPOT_APP_ID,
+  clientId: process.env.HUBSPOT_CLIENT_ID,
+  clientSecret: process.env.HUBSPOT_CLIENT_SECRET,
   baseUrl: process.env.NODE_ENV === 'development' ? DEVELOPMENT_URL : PRODUCTION_URL,
   redirectUri: process.env.HUBSPOT_REDIRECT_URI || (
     process.env.NODE_ENV === 'development'
@@ -25,12 +46,13 @@ export const HUBSPOT_CONFIG = {
 // Log configuration on initialization (excluding secrets)
 console.log('[HubSpot] Configuration:', {
   appId: HUBSPOT_CONFIG.appId,
-  clientId: HUBSPOT_CONFIG.clientId,
   baseUrl: HUBSPOT_CONFIG.baseUrl,
   redirectUri: HUBSPOT_CONFIG.redirectUri,
-  scopes: HUBSPOT_CONFIG.scopes,
+  scopes: HUBSPOT_CONFIG.scopes.join(' '),
   nodeEnv: process.env.NODE_ENV,
-  nextAuthUrl: process.env.NEXTAUTH_URL
+  nextAuthUrl: process.env.NEXTAUTH_URL,
+  hasClientId: !!HUBSPOT_CONFIG.clientId,
+  hasClientSecret: !!HUBSPOT_CONFIG.clientSecret
 });
 
 // Initialize the HubSpot client with the access token

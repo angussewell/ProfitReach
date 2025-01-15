@@ -25,11 +25,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <head>
-        <link rel="stylesheet" href="/_next/static/css/app/globals.css" />
-      </head>
-      <body className={`${lexend.variable} min-h-screen bg-[#f5f8fa] text-hubspot-blue font-sans antialiased`}>
+    <html lang="en" className={lexend.variable} suppressHydrationWarning>
+      <body className="min-h-screen bg-[#f5f8fa] text-hubspot-blue font-sans antialiased">
         <RootWrapper>
           <Providers>
             <div className="flex min-h-screen">

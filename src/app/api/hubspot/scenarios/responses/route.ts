@@ -210,9 +210,8 @@ export async function GET(request: Request) {
           additionalScenarios.add(scenario);
         }
       });
-
       // Add response data for additional scenarios
-      for (const scenario of additionalScenarios) {
+      for (const scenario of Array.from(additionalScenarios)) {
         try {
           const responseData = await getResponsesForScenario(session.accessToken, scenario);
           scenarioResponses.push(responseData);
