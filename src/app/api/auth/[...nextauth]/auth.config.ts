@@ -1,4 +1,4 @@
-import { AuthOptions } from 'next-auth';
+import { AuthOptions, TokenSet, EventCallbacks } from 'next-auth';
 import { HUBSPOT_CONFIG } from '@/config/hubspot';
 
 // Add detailed environment variable validation at the top
@@ -43,8 +43,48 @@ export const authOptions: AuthOptions = {
       },
       token: {
         url: 'https://api.hubapi.com/oauth/v1/token',
-        params: {
-          grant_type: 'authorization_code',
+        async request({ client, params, checks, provider }) {
+          console.log('[NextAuth] Token request params:', {
+            grantType: params.grant_type,
+            hasCode: !!params.code,
+            hasRedirectUri: !!params.redirect_uri,
+          });
+
+          const tokenUrl = typeof provider.token === 'string' 
+            ? provider.token 
+            : provider.token?.url;
+
+          if (!tokenUrl) {
+            throw new Error('Token URL is not configured');
+          }
+
+          const response = await fetch(tokenUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+              grant_type: 'authorization_code',
+              client_id: HUBSPOT_CONFIG.clientId,
+              client_secret: HUBSPOT_CONFIG.clientSecret,
+              redirect_uri: HUBSPOT_CONFIG.redirectUri,
+              code: params.code as string,
+            }),
+          });
+
+          const tokens = await response.json();
+
+          if (!response.ok) {
+            console.error('[NextAuth] Token exchange failed:', tokens);
+            throw new Error(tokens.message || 'Failed to exchange authorization code');
+          }
+
+          console.log('[NextAuth] Token exchange successful:', {
+            hasAccessToken: !!tokens.access_token,
+            hasRefreshToken: !!tokens.refresh_token,
+          });
+
+          return tokens;
         },
       },
       userinfo: {
@@ -56,7 +96,18 @@ export const authOptions: AuthOptions = {
                 Authorization: `Bearer ${tokens.access_token}`,
               },
             });
+            
+            if (!response.ok) {
+              console.error('[NextAuth] Failed to fetch user info:', await response.text());
+              throw new Error('Failed to fetch user info');
+            }
+
             const data = await response.json();
+            console.log('[NextAuth] User info fetched:', {
+              hasUser: !!data.user,
+              hasHubDomain: !!data.hub_domain,
+            });
+
             return {
               id: data.user,
               name: data.hub_domain,
@@ -110,15 +161,31 @@ export const authOptions: AuthOptions = {
     },
     async redirect({ url, baseUrl }) {
       console.log('[NextAuth] Redirect callback:', { url, baseUrl });
+      // Always allow callback URLs
+      if (url.startsWith('/api/auth/callback')) {
+        return url;
+      }
       // Allows relative callback URLs
-      if (url.startsWith("/")) return `${baseUrl}${url}`;
-      // Allows callback URLs on the same origin
-      else if (new URL(url).origin === baseUrl) return url;
+      if (url.startsWith("/")) {
+        return `${baseUrl}${url}`;
+      }
+      // Allow URLs from the same origin
+      if (new URL(url).origin === baseUrl) {
+        return url;
+      }
       return baseUrl;
     },
   },
   pages: {
     signIn: '/auth/signin',
     error: '/auth/error',
+  },
+  events: {
+    async signIn({ user, account, profile, isNewUser }) {
+      console.log('[NextAuth] Sign in event:', { user, account, isNewUser });
+    },
+    async signOut({ session, token }) {
+      console.log('[NextAuth] Sign out event:', { session, token });
+    },
   },
 }; 
