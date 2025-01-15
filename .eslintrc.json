@@ -1,15 +1,25 @@
 {
-  "extends": "next/core-web-vitals",
+  "root": true,
+  "parser": "@typescript-eslint/parser",
+  "plugins": ["@typescript-eslint"],
+  "extends": [
+    "next/core-web-vitals",
+    "plugin:@typescript-eslint/recommended"
+  ],
   "rules": {
     "@typescript-eslint/no-explicit-any": "off",
     "@typescript-eslint/no-unused-vars": "off",
     "react/no-unescaped-entities": "off",
     "@typescript-eslint/ban-ts-comment": "off",
     "@typescript-eslint/no-empty-interface": "off",
-    "typescript-eslint/no-unused-vars": "off"
+    "no-unused-vars": "off"
   },
-  "ignorePatterns": ["**/*.js", "**/*.jsx"],
+  "ignorePatterns": ["**/*.js", "**/*.jsx", ".next", "node_modules"],
   "parserOptions": {
-    "project": "./tsconfig.json"
+    "ecmaVersion": 2020,
+    "sourceType": "module",
+    "ecmaFeatures": {
+      "jsx": true
+    }
   }
 } 
