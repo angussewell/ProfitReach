@@ -1,6 +1,6 @@
 // Force new deployment - OAuth configuration update
 import NextAuth, { TokenSet, Session } from 'next-auth';
-import type { AuthOptions } from 'next-auth';
+import type { AuthOptions, LoggerInstance } from 'next-auth';
 import type { JWT } from 'next-auth/jwt';
 import type { OAuthConfig } from 'next-auth/providers/oauth';
 import { HUBSPOT_CONFIG } from '@/config/hubspot';
@@ -304,27 +304,32 @@ export const authOptions: AuthOptions = {
     async redirect({ url, baseUrl }) {
       console.log('Redirect callback:', { url, baseUrl });
       
-      // Handle callback URLs
-      if (url.startsWith('/api/auth/callback/')) {
-        console.log('Handling callback URL:', url);
-        return url;
+      try {
+        // Handle callback URLs
+        if (url.startsWith('/api/auth/callback/')) {
+          console.log('Processing callback URL:', url);
+          return url;
+        }
+        
+        // Handle relative URLs
+        if (url.startsWith('/')) {
+          const finalUrl = `${baseUrl}${url}`;
+          console.log('Returning relative URL:', finalUrl);
+          return finalUrl;
+        }
+        
+        // Handle absolute URLs on same origin
+        if (new URL(url).origin === baseUrl) {
+          console.log('Returning same origin URL:', url);
+          return url;
+        }
+        
+        console.log('Returning base URL:', baseUrl);
+        return baseUrl;
+      } catch (error) {
+        console.error('Error in redirect callback:', error);
+        return baseUrl;
       }
-      
-      // Handle relative URLs
-      if (url.startsWith('/')) {
-        const finalUrl = `${baseUrl}${url}`;
-        console.log('Handling relative URL:', finalUrl);
-        return finalUrl;
-      }
-      
-      // Handle absolute URLs on same origin
-      if (new URL(url).origin === baseUrl) {
-        console.log('Handling same origin URL:', url);
-        return url;
-      }
-      
-      console.log('Defaulting to base URL:', baseUrl);
-      return baseUrl;
     }
   },
   pages: {
@@ -333,19 +338,43 @@ export const authOptions: AuthOptions = {
   }
 };
 
+const logger: LoggerInstance = {
+  error(code, metadata) {
+    console.error('NextAuth Error:', {
+      code,
+      metadata,
+      stack: new Error().stack
+    });
+  },
+  warn(code, metadata) {
+    console.warn('NextAuth Warning:', {
+      code,
+      metadata
+    });
+  },
+  debug(code, metadata) {
+    console.log('NextAuth Debug:', {
+      code,
+      metadata
+    });
+  }
+};
+
 const handler = NextAuth({
   ...authOptions,
+  logger,
   events: {
-    async signIn({ user, account, isNewUser }) {
+    async signIn(message) {
       console.log('SignIn event:', {
-        user: user?.email,
-        account: account?.provider,
-        isNewUser
+        user: message.user?.email,
+        account: message.account?.provider,
+        isNewUser: message.isNewUser,
+        profile: message.profile
       });
     },
-    async signOut({ user }) {
+    async signOut(message) {
       console.log('SignOut event:', {
-        user: user?.email
+        session: message.session
       });
     },
     async session({ session }) {
@@ -355,15 +384,37 @@ const handler = NextAuth({
       });
     }
   },
-  logger: {
-    error(code, ...message) {
-      console.error('NextAuth Error:', { code, message });
-    },
-    warn(code, ...message) {
-      console.warn('NextAuth Warning:', { code, message });
-    },
-    debug(code, ...message) {
-      console.log('NextAuth Debug:', { code, message });
+  callbacks: {
+    ...authOptions.callbacks,
+    async redirect({ url, baseUrl }) {
+      console.log('Redirect callback:', { url, baseUrl });
+      
+      try {
+        // Handle callback URLs
+        if (url.startsWith('/api/auth/callback/')) {
+          console.log('Processing callback URL:', url);
+          return url;
+        }
+        
+        // Handle relative URLs
+        if (url.startsWith('/')) {
+          const finalUrl = `${baseUrl}${url}`;
+          console.log('Returning relative URL:', finalUrl);
+          return finalUrl;
+        }
+        
+        // Handle absolute URLs on same origin
+        if (new URL(url).origin === baseUrl) {
+          console.log('Returning same origin URL:', url);
+          return url;
+        }
+        
+        console.log('Returning base URL:', baseUrl);
+        return baseUrl;
+      } catch (error) {
+        console.error('Error in redirect callback:', error);
+        return baseUrl;
+      }
     }
   }
 });
