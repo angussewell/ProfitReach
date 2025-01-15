@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/app/api/auth/[...nextauth]/auth.config';
 
 const CACHE_DURATION = 60 * 60 * 1000; // 1 hour
 const cache = new Map<string, { data: any; timestamp: number }>();
