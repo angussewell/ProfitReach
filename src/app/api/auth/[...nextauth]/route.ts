@@ -1,3 +1,4 @@
+// Force new deployment - OAuth configuration update
 import NextAuth, { TokenSet, Session } from 'next-auth';
 import type { AuthOptions } from 'next-auth';
 import type { JWT } from 'next-auth/jwt';
