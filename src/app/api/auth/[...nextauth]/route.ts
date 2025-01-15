@@ -1,4 +1,4 @@
-import NextAuth, { TokenSet, Session, DefaultSession } from 'next-auth';
+import NextAuth, { TokenSet, Session } from 'next-auth';
 import type { JWT } from 'next-auth/jwt';
 import type { AuthOptions } from 'next-auth';
 import type { OAuthConfig } from 'next-auth/providers/oauth';
@@ -57,6 +57,35 @@ interface HubSpotAccount extends TokenSet {
   refresh_token: string;
   expires_in: number;
   token_type: string;
+}
+
+interface HubSpotProvider {
+  id: string;
+  name: string;
+  type: 'oauth';
+  authorization: {
+    url: string;
+    params: {
+      scope: string;
+      client_id: string;
+      response_type: string;
+    };
+  };
+  token: {
+    url: string;
+    request: (context: TokenEndpointContext) => Promise<TokenEndpointResponse>;
+  };
+  userinfo: {
+    url: string;
+    request: (params: { tokens: HubSpotTokens }) => Promise<HubSpotProfile>;
+  };
+  profile: (profile: HubSpotProfile) => {
+    id: string;
+    name: string;
+    email: string;
+  };
+  clientId: string | undefined;
+  clientSecret: string | undefined;
 }
 
 const hubspotProvider = {
@@ -146,7 +175,7 @@ const hubspotProvider = {
 } as const;
 
 export const authOptions: AuthOptions = {
-  providers: [hubspotProvider as any], // Type assertion to fix type error
+  providers: [hubspotProvider as unknown as OAuthConfig<any>],
   debug: true,
   session: {
     strategy: 'jwt',
