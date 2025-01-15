@@ -4,7 +4,7 @@ import { Client } from '@hubspot/api-client';
 export const HUBSPOT_CONFIG = {
   clientId: process.env.HUBSPOT_CLIENT_ID,
   clientSecret: process.env.HUBSPOT_CLIENT_SECRET,
-  redirectUri: process.env.HUBSPOT_REDIRECT_URI || 'http://localhost:3000/api/auth/callback/hubspot',
+  redirectUri: process.env.HUBSPOT_REDIRECT_URI || 'https://hubspot-dashboard.vercel.app/api/auth/callback/hubspot',
   scopes: [
     'oauth',
     'crm.objects.contacts.read',
