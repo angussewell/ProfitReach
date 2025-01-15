@@ -2,8 +2,9 @@ import { Client } from '@hubspot/api-client';
 
 // HubSpot OAuth Configuration
 export const HUBSPOT_CONFIG = {
-  clientId: process.env.HUBSPOT_CLIENT_ID,
-  clientSecret: process.env.HUBSPOT_CLIENT_SECRET,
+  appId: '6901795',
+  clientId: process.env.HUBSPOT_CLIENT_ID || '875a7b08-7bb0-4a61-bc02-3354feec681c',
+  clientSecret: process.env.HUBSPOT_CLIENT_SECRET || '915d00b9-fb17-4670-8d06-6d046483dfa8',
   redirectUri: process.env.HUBSPOT_REDIRECT_URI || (
     process.env.NODE_ENV === 'development'
       ? 'http://localhost:3000/api/auth/callback/hubspot'
@@ -18,9 +19,9 @@ export const HUBSPOT_CONFIG = {
 };
 
 // Log configuration on initialization (excluding secrets)
-console.log('HubSpot Configuration:', {
-  hasClientId: !!process.env.HUBSPOT_CLIENT_ID,
-  hasClientSecret: !!process.env.HUBSPOT_CLIENT_SECRET,
+console.log('[HubSpot] Configuration:', {
+  appId: HUBSPOT_CONFIG.appId,
+  clientId: HUBSPOT_CONFIG.clientId,
   redirectUri: HUBSPOT_CONFIG.redirectUri,
   scopes: HUBSPOT_CONFIG.scopes,
   nodeEnv: process.env.NODE_ENV,

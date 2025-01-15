@@ -2,10 +2,10 @@ import { AuthOptions } from 'next-auth';
 import { HUBSPOT_CONFIG } from '@/config/hubspot';
 
 // Add detailed environment variable validation at the top
-if (!process.env.HUBSPOT_CLIENT_ID) {
+if (!HUBSPOT_CONFIG.clientId) {
   console.error('[NextAuth] Missing HUBSPOT_CLIENT_ID');
 }
-if (!process.env.HUBSPOT_CLIENT_SECRET) {
+if (!HUBSPOT_CONFIG.clientSecret) {
   console.error('[NextAuth] Missing HUBSPOT_CLIENT_SECRET');
 }
 if (!process.env.NEXTAUTH_URL) {
@@ -16,12 +16,12 @@ if (!process.env.NEXTAUTH_SECRET) {
 }
 
 // Log all environment variables (excluding secrets)
-console.log('[NextAuth] Environment Variables:', {
+console.log('[NextAuth] Configuration:', {
   nextAuthUrl: process.env.NEXTAUTH_URL,
   hasNextAuthSecret: !!process.env.NEXTAUTH_SECRET,
   nodeEnv: process.env.NODE_ENV,
-  hasHubspotClientId: !!process.env.HUBSPOT_CLIENT_ID,
-  hasHubspotClientSecret: !!process.env.HUBSPOT_CLIENT_SECRET,
+  hubspotAppId: HUBSPOT_CONFIG.appId,
+  hubspotClientId: HUBSPOT_CONFIG.clientId,
   hubspotRedirectUri: HUBSPOT_CONFIG.redirectUri,
   hubspotScopes: HUBSPOT_CONFIG.scopes,
 });
@@ -32,36 +32,24 @@ export const authOptions: AuthOptions = {
       id: 'hubspot',
       name: 'HubSpot',
       type: 'oauth',
-      wellKnown: 'https://api.hubapi.com/.well-known/openid-configuration',
       authorization: {
         url: 'https://app.hubspot.com/oauth/authorize',
         params: {
+          client_id: HUBSPOT_CONFIG.clientId,
           scope: HUBSPOT_CONFIG.scopes.join(' '),
-          client_id: HUBSPOT_CONFIG.clientId!,
-          response_type: 'code',
           redirect_uri: HUBSPOT_CONFIG.redirectUri,
+          response_type: 'code',
         },
       },
       token: {
         url: 'https://api.hubapi.com/oauth/v1/token',
-        async request({ params, provider }) {
+        async request({ params }) {
           try {
-            console.log('[NextAuth] Token request started with params:', {
+            console.log('[NextAuth] Token request started:', {
               hasCode: !!params.code,
               redirectUri: HUBSPOT_CONFIG.redirectUri,
               clientId: HUBSPOT_CONFIG.clientId,
-              provider: provider.id,
-              scopes: HUBSPOT_CONFIG.scopes,
             });
-
-            // Ensure we have all required parameters
-            if (!params.code) {
-              throw new Error('No code parameter received');
-            }
-
-            if (!HUBSPOT_CONFIG.clientId || !HUBSPOT_CONFIG.clientSecret) {
-              throw new Error('Missing client credentials');
-            }
 
             const response = await fetch('https://api.hubapi.com/oauth/v1/token', {
               method: 'POST',
@@ -77,26 +65,15 @@ export const authOptions: AuthOptions = {
               }).toString(),
             });
 
-            const responseText = await response.text();
-            console.log('[NextAuth] Token response:', {
-              status: response.status,
-              statusText: response.statusText,
-              headers: Object.fromEntries(response.headers.entries()),
-              responsePreview: responseText.substring(0, 100),
-            });
-
             if (!response.ok) {
-              console.error('[NextAuth] Token request failed:', {
-                status: response.status,
-                statusText: response.statusText,
-                response: responseText,
-              });
-              throw new Error(`Token request failed: ${response.status} - ${responseText}`);
+              const error = await response.text();
+              console.error('[NextAuth] Token request failed:', error);
+              throw new Error(error);
             }
 
-            const tokenResponse = JSON.parse(responseText);
-            console.log('[NextAuth] Token parsed successfully');
-            return tokenResponse;
+            const tokens = await response.json();
+            console.log('[NextAuth] Token request successful');
+            return tokens;
           } catch (error) {
             console.error('[NextAuth] Token request error:', error);
             throw error;
@@ -104,46 +81,25 @@ export const authOptions: AuthOptions = {
         },
       },
       userinfo: {
-        url: 'https://api.hubapi.com/oauth/v1/access-tokens',
+        url: 'https://api.hubapi.com/oauth/v1/access-tokens/${tokens.access_token}',
         async request({ tokens }) {
           try {
-            console.log('[NextAuth] Userinfo request started:', {
-              hasAccessToken: !!tokens.access_token,
-            });
-
-            if (!tokens.access_token) {
-              throw new Error('No access token available');
-            }
-
+            console.log('[NextAuth] Userinfo request started');
             const response = await fetch(`https://api.hubapi.com/oauth/v1/access-tokens/${tokens.access_token}`, {
               headers: {
-                'Authorization': `Bearer ${tokens.access_token}`,
+                Authorization: `Bearer ${tokens.access_token}`,
               },
             });
 
-            const responseText = await response.text();
-            console.log('[NextAuth] Userinfo response:', {
-              status: response.status,
-              statusText: response.statusText,
-              responsePreview: responseText.substring(0, 100),
-            });
-
             if (!response.ok) {
-              console.error('[NextAuth] Userinfo request failed:', {
-                status: response.status,
-                statusText: response.statusText,
-                response: responseText,
-              });
-              throw new Error(`Userinfo request failed: ${response.status} - ${responseText}`);
+              const error = await response.text();
+              console.error('[NextAuth] Userinfo request failed:', error);
+              throw new Error(error);
             }
 
-            const userInfo = JSON.parse(responseText);
-            console.log('[NextAuth] Userinfo parsed successfully');
-            return {
-              sub: userInfo.user_id || 'unknown',
-              name: userInfo.hub_domain || 'unknown',
-              email: userInfo.user || 'unknown',
-            };
+            const profile = await response.json();
+            console.log('[NextAuth] Userinfo request successful');
+            return profile;
           } catch (error) {
             console.error('[NextAuth] Userinfo request error:', error);
             throw error;
@@ -151,11 +107,10 @@ export const authOptions: AuthOptions = {
         },
       },
       profile(profile) {
-        console.log('[NextAuth] Processing profile:', profile);
         return {
-          id: profile.sub,
-          name: profile.name,
-          email: profile.email,
+          id: profile.user_id || profile.user || 'unknown',
+          name: profile.hub_domain || 'unknown',
+          email: profile.user || 'unknown',
         };
       },
       clientId: HUBSPOT_CONFIG.clientId,
@@ -165,7 +120,6 @@ export const authOptions: AuthOptions = {
   debug: true,
   callbacks: {
     async jwt({ token, account }) {
-      console.log('[NextAuth] JWT callback:', { hasToken: !!token, hasAccount: !!account });
       if (account?.access_token) {
         token.accessToken = account.access_token;
         token.refreshToken = account.refresh_token;
@@ -173,7 +127,6 @@ export const authOptions: AuthOptions = {
       return token;
     },
     async session({ session, token }) {
-      console.log('[NextAuth] Session callback:', { hasSession: !!session, hasToken: !!token });
       session.accessToken = token.accessToken;
       return session;
     },
