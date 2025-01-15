@@ -147,9 +147,8 @@ export async function GET(request: Request) {
     console.log('Unique scenarios found:', Array.from(uniqueScenarios));
 
     const result = { scenarios: [] as ScenarioCount[] };
-
     // Get counts for each unique scenario
-    for (const scenarioValue of uniqueScenarios) {
+    for (const scenarioValue of Array.from(uniqueScenarios)) {
       console.log('Fetching count for scenario:', scenarioValue);
 
       const countResponse = await fetchWithRetry(

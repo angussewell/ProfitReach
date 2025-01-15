@@ -1,6 +1,6 @@
 import NextAuth, { TokenSet, Session } from 'next-auth';
-import type { JWT } from 'next-auth/jwt';
 import type { AuthOptions } from 'next-auth';
+import type { JWT } from 'next-auth/jwt';
 import type { OAuthConfig } from 'next-auth/providers/oauth';
 import { HUBSPOT_CONFIG } from '@/config/hubspot';
 
@@ -88,10 +88,10 @@ interface HubSpotProvider {
   clientSecret: string | undefined;
 }
 
-const hubspotProvider = {
+const hubspotProvider: OAuthConfig<any> = {
   id: 'hubspot',
   name: 'HubSpot',
-  type: 'oauth' as const,
+  type: 'oauth',
   authorization: {
     url: 'https://app.hubspot.com/oauth/authorize',
     params: {
@@ -102,68 +102,20 @@ const hubspotProvider = {
   },
   token: {
     url: 'https://api.hubapi.com/oauth/v1/token',
-    async request(context: TokenEndpointContext) {
-      try {
-        console.log('Token request context:', {
-          clientId: HUBSPOT_CONFIG.clientId,
-          hasClientSecret: !!HUBSPOT_CONFIG.clientSecret,
-          code: context.params.code,
-          redirectUri: HUBSPOT_CONFIG.redirectUri
-        });
-        
-        const tokenParams = {
-          grant_type: 'authorization_code',
-          client_id: HUBSPOT_CONFIG.clientId!,
-          client_secret: HUBSPOT_CONFIG.clientSecret!,
-          redirect_uri: HUBSPOT_CONFIG.redirectUri,
-          code: context.params.code as string,
-        };
-        
-        const response = await fetch(context.provider.token.url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: new URLSearchParams(tokenParams),
-        });
-
-        if (!response.ok) {
-          const error = await response.text();
-          console.error('Token request failed:', error);
-          throw new Error('Failed to get access token');
-        }
-
-        const tokens = await response.json();
-        console.log('Received tokens:', { ...tokens, access_token: '***', refresh_token: '***' });
-        return tokens as TokenEndpointResponse;
-      } catch (error) {
-        console.error('Token request error:', error);
-        throw error;
-      }
+    params: {
+      grant_type: 'authorization_code',
+      client_id: HUBSPOT_CONFIG.clientId,
+      client_secret: HUBSPOT_CONFIG.clientSecret,
     }
   },
   userinfo: {
-    url: 'https://api.hubapi.com/oauth/v1/access-tokens',
-    async request({ tokens }: { tokens: HubSpotTokens }) {
-      try {
-        const response = await fetch(`https://api.hubapi.com/oauth/v1/access-tokens/${tokens.access_token}`);
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('Failed to fetch user info:', errorText);
-          throw new Error('Failed to fetch user info');
-        }
-
-        const profile = await response.json();
-        console.log('User profile:', profile);
-        return profile as HubSpotProfile;
-      } catch (error) {
-        console.error('Error in userinfo request:', error);
-        throw error;
-      }
-    },
+    url: 'https://api.hubapi.com/oauth/v1/access-tokens/${tokens.access_token}',
+    request: async ({ tokens }) => {
+      const response = await fetch(`https://api.hubapi.com/oauth/v1/access-tokens/${tokens.access_token}`);
+      return await response.json();
+    }
   },
-  profile(profile: HubSpotProfile) {
+  profile(profile) {
     return {
       id: profile.user,
       name: profile.hub_domain,
@@ -172,22 +124,39 @@ const hubspotProvider = {
   },
   clientId: HUBSPOT_CONFIG.clientId,
   clientSecret: HUBSPOT_CONFIG.clientSecret,
-} as const;
+  style: {
+    logo: '/hubspot.svg',
+    logoDark: '/hubspot.svg',
+    bg: '#ff7a59',
+    text: '#fff',
+    bgDark: '#ff7a59',
+    textDark: '#fff',
+  },
+};
 
 export const authOptions: AuthOptions = {
-  providers: [hubspotProvider as unknown as OAuthConfig<any>],
+  providers: [hubspotProvider],
   debug: true,
   session: {
     strategy: 'jwt',
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
   callbacks: {
-    async jwt({ token, account, trigger }) {
-      if (account) {
-        console.log('Processing JWT with account:', { ...account, access_token: '***', refresh_token: '***' });
-        token.accessToken = account.access_token;
-        token.refreshToken = account.refresh_token;
-        token.expiresAt = Math.floor(Date.now() / 1000 + (account as unknown as HubSpotAccount).expires_in);
+    async jwt({ token, account, user }) {
+      if (account && user) {
+        console.log('Processing JWT with account and user:', { 
+          accountType: account.type,
+          accountProvider: account.provider,
+          userId: user.id,
+          hasAccessToken: !!account.access_token
+        });
+        
+        return {
+          ...token,
+          accessToken: account.access_token,
+          refreshToken: account.refresh_token,
+          expiresAt: Math.floor(Date.now() / 1000 + (account as unknown as HubSpotAccount).expires_in)
+        };
       }
 
       // Return previous token if the access token has not expired yet
@@ -211,18 +180,22 @@ export const authOptions: AuthOptions = {
             }),
           });
 
+          const data = await response.text();
+          console.log('Token refresh response:', data);
+
           if (!response.ok) {
-            const error = await response.text();
-            console.error('Token refresh failed:', error);
-            throw new Error('RefreshAccessTokenError');
+            throw new Error(`Token refresh failed: ${data}`);
           }
 
-          const refreshedTokens = await response.json();
-          console.log('Refreshed tokens:', { ...refreshedTokens, access_token: '***', refresh_token: '***' });
+          const refreshedTokens = JSON.parse(data);
+          console.log('Refreshed tokens successfully');
 
-          token.accessToken = refreshedTokens.access_token;
-          token.refreshToken = refreshedTokens.refresh_token ?? token.refreshToken;
-          token.expiresAt = Math.floor(Date.now() / 1000 + refreshedTokens.expires_in);
+          return {
+            ...token,
+            accessToken: refreshedTokens.access_token,
+            refreshToken: refreshedTokens.refresh_token ?? token.refreshToken,
+            expiresAt: Math.floor(Date.now() / 1000 + refreshedTokens.expires_in)
+          };
         } catch (error) {
           console.error('Error refreshing access token:', error);
           return { ...token, error: 'RefreshAccessTokenError' };
@@ -232,9 +205,14 @@ export const authOptions: AuthOptions = {
       return token;
     },
     async session({ session, token }: { session: ExtendedSession; token: ExtendedToken }) {
-      console.log('Processing session with token');
+      console.log('Processing session with token:', {
+        hasAccessToken: !!token.accessToken,
+        hasError: !!token.error,
+        sessionExpiry: session.expires
+      });
       
       if (token.error) {
+        console.error('Token error:', token.error);
         throw new Error(token.error);
       }
 
@@ -246,10 +224,9 @@ export const authOptions: AuthOptions = {
       console.log('Redirect callback:', { url, baseUrl });
       
       // Handle callback URLs
-      if (url.includes('/api/auth/callback/')) {
-        const finalUrl = `${baseUrl}${url.split(baseUrl)[1]}`;
-        console.log('Handling callback URL:', finalUrl);
-        return finalUrl;
+      if (url.startsWith('/api/auth/callback/')) {
+        console.log('Handling callback URL:', url);
+        return url;
       }
       
       // Handle relative URLs
@@ -259,20 +236,20 @@ export const authOptions: AuthOptions = {
         return finalUrl;
       }
       
-      // Handle absolute URLs
-      if (url.startsWith(baseUrl)) {
-        console.log('Handling absolute URL:', url);
+      // Handle absolute URLs on same origin
+      if (new URL(url).origin === baseUrl) {
+        console.log('Handling same origin URL:', url);
         return url;
       }
       
       console.log('Defaulting to base URL:', baseUrl);
       return baseUrl;
-    },
+    }
   },
   pages: {
     signIn: '/auth/signin',
     error: '/auth/error',
-  },
+  }
 };
 
 const handler = NextAuth(authOptions);
