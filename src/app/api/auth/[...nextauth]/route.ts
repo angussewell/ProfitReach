@@ -107,12 +107,17 @@ const hubspotProvider: OAuthConfig<any> = {
       grant_type: 'authorization_code',
       client_id: HUBSPOT_CONFIG.clientId,
       client_secret: HUBSPOT_CONFIG.clientSecret,
+      redirect_uri: HUBSPOT_CONFIG.redirectUri
     }
   },
   userinfo: {
-    url: 'https://api.hubapi.com/oauth/v1/access-tokens/${tokens.access_token}',
+    url: 'https://api.hubapi.com/oauth/v1/access-tokens',
     request: async ({ tokens }) => {
       const response = await fetch(`https://api.hubapi.com/oauth/v1/access-tokens/${tokens.access_token}`);
+      if (!response.ok) {
+        console.error('Failed to fetch user info:', await response.text());
+        throw new Error('Failed to fetch user info');
+      }
       return await response.json();
     }
   },
