@@ -4,9 +4,11 @@ import { Client } from '@hubspot/api-client';
 export const HUBSPOT_CONFIG = {
   clientId: process.env.HUBSPOT_CLIENT_ID,
   clientSecret: process.env.HUBSPOT_CLIENT_SECRET,
-  redirectUri: process.env.NODE_ENV === 'development'
-    ? 'http://localhost:3000/api/auth/callback/hubspot'
-    : 'https://hubspot-dashboard.vercel.app/api/auth/callback/hubspot',
+  redirectUri: process.env.HUBSPOT_REDIRECT_URI || (
+    process.env.NODE_ENV === 'development'
+      ? 'http://localhost:3000/api/auth/callback/hubspot'
+      : 'https://hubspot-dashboard.vercel.app/api/auth/callback/hubspot'
+  ),
   scopes: [
     'crm.objects.contacts.read',
     'crm.objects.contacts.write',
@@ -14,6 +16,16 @@ export const HUBSPOT_CONFIG = {
     'oauth'
   ],
 };
+
+// Log configuration on initialization (excluding secrets)
+console.log('HubSpot Configuration:', {
+  hasClientId: !!process.env.HUBSPOT_CLIENT_ID,
+  hasClientSecret: !!process.env.HUBSPOT_CLIENT_SECRET,
+  redirectUri: HUBSPOT_CONFIG.redirectUri,
+  scopes: HUBSPOT_CONFIG.scopes,
+  nodeEnv: process.env.NODE_ENV,
+  nextAuthUrl: process.env.NEXTAUTH_URL
+});
 
 // Initialize the HubSpot client with the access token
 export const getHubspotClient = (accessToken: string) => {
