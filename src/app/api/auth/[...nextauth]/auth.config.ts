@@ -43,7 +43,7 @@ export const authOptions: AuthOptions = {
       name: 'HubSpot',
       type: 'oauth',
       authorization: {
-        url: 'https://app.hubspot.com/oauth/authorize',
+        url: `https://app.hubspot.com/oauth/23255575/authorize`,
         params: {
           client_id: HUBSPOT_CONFIG.clientId,
           scope: HUBSPOT_CONFIG.scopes.join(' '),
