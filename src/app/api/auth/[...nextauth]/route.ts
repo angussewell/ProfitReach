@@ -103,22 +103,61 @@ const hubspotProvider: OAuthConfig<any> = {
   },
   token: {
     url: 'https://api.hubapi.com/oauth/v1/token',
-    params: {
-      grant_type: 'authorization_code',
-      client_id: HUBSPOT_CONFIG.clientId,
-      client_secret: HUBSPOT_CONFIG.clientSecret,
-      redirect_uri: HUBSPOT_CONFIG.redirectUri
+    async request({ params }) {
+      try {
+        console.log('Token request params:', {
+          ...params,
+          code: params.code ? '***' : undefined
+        });
+
+        const response = await fetch('https://api.hubapi.com/oauth/v1/token', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({
+            grant_type: 'authorization_code',
+            client_id: HUBSPOT_CONFIG.clientId!,
+            client_secret: HUBSPOT_CONFIG.clientSecret!,
+            redirect_uri: HUBSPOT_CONFIG.redirectUri,
+            code: params.code as string,
+          }),
+        });
+
+        const data = await response.text();
+        console.log('Token response:', data);
+
+        if (!response.ok) {
+          throw new Error(`Token request failed: ${data}`);
+        }
+
+        return JSON.parse(data);
+      } catch (error) {
+        console.error('Token request error:', error);
+        throw error;
+      }
     }
   },
   userinfo: {
     url: 'https://api.hubapi.com/oauth/v1/access-tokens',
-    request: async ({ tokens }) => {
-      const response = await fetch(`https://api.hubapi.com/oauth/v1/access-tokens/${tokens.access_token}`);
-      if (!response.ok) {
-        console.error('Failed to fetch user info:', await response.text());
-        throw new Error('Failed to fetch user info');
+    async request({ tokens }) {
+      try {
+        console.log('Fetching user info for token');
+        const response = await fetch(`https://api.hubapi.com/oauth/v1/access-tokens/${tokens.access_token}`);
+        
+        if (!response.ok) {
+          const error = await response.text();
+          console.error('Failed to fetch user info:', error);
+          throw new Error(`Failed to fetch user info: ${error}`);
+        }
+
+        const data = await response.json();
+        console.log('User info response:', { ...data, token: '***' });
+        return data;
+      } catch (error) {
+        console.error('User info request error:', error);
+        throw error;
       }
-      return await response.json();
     }
   },
   profile(profile) {
