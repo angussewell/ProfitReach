@@ -105,9 +105,18 @@ const hubspotProvider: OAuthConfig<any> = {
     url: 'https://api.hubapi.com/oauth/v1/token',
     async request({ params }) {
       try {
+        const requestBody = {
+          grant_type: 'authorization_code',
+          client_id: HUBSPOT_CONFIG.clientId!,
+          client_secret: HUBSPOT_CONFIG.clientSecret!,
+          redirect_uri: HUBSPOT_CONFIG.redirectUri,
+          code: params.code as string,
+        };
+
         console.log('Token request params:', {
-          ...params,
-          code: params.code ? '***' : undefined
+          ...requestBody,
+          client_secret: '***',
+          code: '***'
         });
 
         const response = await fetch('https://api.hubapi.com/oauth/v1/token', {
@@ -115,20 +124,21 @@ const hubspotProvider: OAuthConfig<any> = {
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
           },
-          body: new URLSearchParams({
-            grant_type: 'authorization_code',
-            client_id: HUBSPOT_CONFIG.clientId!,
-            client_secret: HUBSPOT_CONFIG.clientSecret!,
-            redirect_uri: HUBSPOT_CONFIG.redirectUri,
-            code: params.code as string,
-          }),
+          body: new URLSearchParams(requestBody),
         });
 
         const data = await response.text();
-        console.log('Token response:', data);
+        console.log('Token response status:', response.status);
+        console.log('Token response headers:', Object.fromEntries(response.headers.entries()));
+        console.log('Token response body:', data);
 
         if (!response.ok) {
-          throw new Error(`Token request failed: ${data}`);
+          console.error('Token request failed:', {
+            status: response.status,
+            statusText: response.statusText,
+            body: data
+          });
+          throw new Error(`Token request failed: ${response.status} ${response.statusText} - ${data}`);
         }
 
         return JSON.parse(data);
@@ -143,7 +153,11 @@ const hubspotProvider: OAuthConfig<any> = {
     async request({ tokens }) {
       try {
         console.log('Fetching user info for token');
-        const response = await fetch(`https://api.hubapi.com/oauth/v1/access-tokens/${tokens.access_token}`);
+        const response = await fetch('https://api.hubapi.com/oauth/v1/access-tokens', {
+          headers: {
+            'Authorization': `Bearer ${tokens.access_token}`,
+          },
+        });
         
         if (!response.ok) {
           const error = await response.text();
