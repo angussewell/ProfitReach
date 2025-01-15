@@ -88,7 +88,7 @@ export const authOptions: AuthOptions = {
         },
       },
       userinfo: {
-        url: 'https://api.hubapi.com/oauth/v1/refresh',
+        url: 'https://api.hubapi.com/oauth/v1/access-tokens',
         async request({ tokens }) {
           try {
             console.log('[NextAuth] Userinfo request started:', {
@@ -99,17 +99,10 @@ export const authOptions: AuthOptions = {
               throw new Error('No access token available');
             }
 
-            const response = await fetch('https://api.hubapi.com/oauth/v1/refresh', {
-              method: 'POST',
+            const response = await fetch(`https://api.hubapi.com/oauth/v1/access-tokens/${tokens.access_token}`, {
               headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
+                'Authorization': `Bearer ${tokens.access_token}`,
               },
-              body: new URLSearchParams({
-                grant_type: 'refresh_token',
-                client_id: HUBSPOT_CONFIG.clientId!,
-                client_secret: HUBSPOT_CONFIG.clientSecret!,
-                refresh_token: tokens.refresh_token as string,
-              }).toString(),
             });
 
             const responseText = await response.text();

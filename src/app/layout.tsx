@@ -1,4 +1,4 @@
-import '@/styles/hubspot.css';
+import './globals.css';
 import { Lexend } from 'next/font/google';
 import Providers from '@/components/providers/Providers';
 import RootWrapper from '@/components/providers/RootWrapper';
