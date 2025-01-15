@@ -15,34 +15,43 @@ export default function SignIn() {
   useEffect(() => {
     const errorParam = searchParams.get('error');
     if (errorParam) {
+      console.log('[NextAuth] Sign-in page loaded with error:', errorParam);
       setError(decodeURIComponent(errorParam));
     }
   }, [searchParams]);
 
   useEffect(() => {
     if (status === 'authenticated' && session) {
-      console.log('Session authenticated, redirecting to dashboard');
+      console.log('[NextAuth] Session authenticated, redirecting to dashboard');
       router.push('/');
     }
   }, [session, status, router]);
 
   const handleSignIn = async () => {
     try {
+      console.log('[NextAuth] Starting sign-in process');
       setIsSigningIn(true);
       setError(null);
       
       const result = await signIn('hubspot', { 
-        redirect: true,
+        redirect: false,
         callbackUrl: '/'
       });
       
-      // This code will only run if redirect is set to false
+      console.log('[NextAuth] Sign-in result:', {
+        success: result?.ok,
+        hasError: !!result?.error,
+        error: result?.error,
+      });
+
       if (result?.error) {
         setError(result.error);
         router.push(`/auth/error?error=${encodeURIComponent(result.error)}`);
+      } else if (result?.url) {
+        window.location.href = result.url;
       }
     } catch (error) {
-      console.error('Sign in error:', error);
+      console.error('[NextAuth] Sign-in error:', error);
       setError('An unexpected error occurred');
     } finally {
       setIsSigningIn(false);

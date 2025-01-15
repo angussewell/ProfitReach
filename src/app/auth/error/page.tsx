@@ -1,50 +1,51 @@
 'use client';
 
-import { useSearchParams } from 'next/navigation';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import Link from 'next/link';
 
-export default function AuthError() {
-  const searchParams = useSearchParams();
-  const error = searchParams.get('error');
+export default function ErrorPage({
+  searchParams,
+}: {
+  searchParams: { [key: string]: string | string[] | undefined };
+}) {
+  console.log('[NextAuth] Error page params:', searchParams);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f5f8fa] px-4">
-      <div className="max-w-md w-full">
-        <div className="hs-card text-center">
-          <svg
-            className="mx-auto h-12 w-12 text-red-500"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-            />
-          </svg>
-          
-          <h2 className="mt-4 text-xl font-semibold text-[#2d3e50]">
-            Authentication Error
-          </h2>
-          
-          <p className="mt-2 text-[#516f90]">
-            {error === 'AccessDenied'
-              ? 'Access was denied to your HubSpot account. Please try again and make sure to approve the requested permissions.'
-              : 'There was an error connecting to HubSpot. Please try again.'}
-          </p>
+    <div className="container flex items-center justify-center min-h-screen py-8">
+      <Card className="w-full max-w-md p-6 space-y-6">
+        <Alert variant="destructive">
+          <AlertTitle>Authentication Error</AlertTitle>
+          <AlertDescription>
+            There was a problem authenticating with HubSpot.
+            {searchParams.error && (
+              <div className="mt-2">
+                Error: {searchParams.error}
+              </div>
+            )}
+          </AlertDescription>
+        </Alert>
 
-          <div className="mt-6">
-            <Link
-              href="/auth/signin"
-              className="hs-button-primary inline-flex items-center"
-            >
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            This could be due to:
+          </p>
+          <ul className="list-disc pl-6 text-sm text-muted-foreground space-y-2">
+            <li>Invalid or expired OAuth token</li>
+            <li>Missing or incorrect permissions</li>
+            <li>HubSpot service interruption</li>
+          </ul>
+        </div>
+
+        <div className="flex justify-center">
+          <Button asChild>
+            <Link href="/auth/signin">
               Try Again
             </Link>
-          </div>
+          </Button>
         </div>
-      </div>
+      </Card>
     </div>
   );
 } 
