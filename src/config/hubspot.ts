@@ -6,10 +6,10 @@ export const HUBSPOT_CONFIG = {
   clientSecret: process.env.HUBSPOT_CLIENT_SECRET,
   redirectUri: process.env.HUBSPOT_REDIRECT_URI || 'https://hubspot-dashboard.vercel.app/api/auth/callback/hubspot',
   scopes: [
-    'oauth',
     'crm.objects.contacts.read',
     'crm.objects.contacts.write',
-    'crm.objects.marketing_events.read'
+    'crm.objects.marketing_events.read',
+    'oauth'
   ],
 };
 
