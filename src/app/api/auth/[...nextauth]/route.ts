@@ -5,9 +5,31 @@ import type { JWT } from 'next-auth/jwt';
 import type { OAuthConfig } from 'next-auth/providers/oauth';
 import { HUBSPOT_CONFIG } from '@/config/hubspot';
 
+// Validate required environment variables
 if (!process.env.NEXTAUTH_URL) {
   throw new Error('NEXTAUTH_URL environment variable is not set');
 }
+
+if (!process.env.NEXTAUTH_SECRET) {
+  throw new Error('NEXTAUTH_SECRET environment variable is not set');
+}
+
+if (!HUBSPOT_CONFIG.clientId) {
+  throw new Error('HUBSPOT_CLIENT_ID environment variable is not set');
+}
+
+if (!HUBSPOT_CONFIG.clientSecret) {
+  throw new Error('HUBSPOT_CLIENT_SECRET environment variable is not set');
+}
+
+// Log configuration for debugging
+console.log('OAuth Configuration:', {
+  nextAuthUrl: process.env.NEXTAUTH_URL,
+  redirectUri: HUBSPOT_CONFIG.redirectUri,
+  scopes: HUBSPOT_CONFIG.scopes,
+  hasClientId: !!HUBSPOT_CONFIG.clientId,
+  hasClientSecret: !!HUBSPOT_CONFIG.clientSecret,
+});
 
 interface HubSpotProfile {
   user: string;
