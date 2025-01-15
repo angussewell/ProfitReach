@@ -41,8 +41,33 @@ export const authOptions: AuthOptions = {
           response_type: 'code',
         },
       },
-      token: 'https://api.hubapi.com/oauth/v1/token',
-      userinfo: 'https://api.hubapi.com/oauth/v1/refresh-tokens',
+      token: {
+        url: 'https://api.hubapi.com/oauth/v1/token',
+        params: {
+          grant_type: 'authorization_code',
+        },
+      },
+      userinfo: {
+        url: 'https://api.hubapi.com/oauth/v1/access-tokens',
+        async request({ tokens }) {
+          try {
+            const response = await fetch('https://api.hubapi.com/oauth/v1/access-tokens', {
+              headers: {
+                Authorization: `Bearer ${tokens.access_token}`,
+              },
+            });
+            const data = await response.json();
+            return {
+              id: data.user,
+              name: data.hub_domain,
+              email: data.user,
+            };
+          } catch (error) {
+            console.error('[NextAuth] Error fetching user info:', error);
+            throw error;
+          }
+        },
+      },
       profile(profile) {
         return {
           id: profile.user,
@@ -54,10 +79,16 @@ export const authOptions: AuthOptions = {
       clientSecret: HUBSPOT_CONFIG.clientSecret,
     },
   ],
-  debug: true,
+  debug: process.env.NODE_ENV === 'development',
   callbacks: {
     async jwt({ token, account }) {
       if (account) {
+        console.log('[NextAuth] Received account in JWT callback:', {
+          provider: account.provider,
+          type: account.type,
+          hasAccessToken: !!account.access_token,
+          hasRefreshToken: !!account.refresh_token,
+        });
         token.accessToken = account.access_token;
         token.refreshToken = account.refresh_token;
         token.hubspotPortalId = account.hubspotPortalId;
@@ -65,12 +96,25 @@ export const authOptions: AuthOptions = {
       return token;
     },
     async session({ session, token }) {
+      console.log('[NextAuth] Building session:', {
+        hasAccessToken: !!token.accessToken,
+        hasRefreshToken: !!token.refreshToken,
+        hasPortalId: !!token.hubspotPortalId,
+      });
       return {
         ...session,
         accessToken: token.accessToken,
         refreshToken: token.refreshToken,
         hubspotPortalId: token.hubspotPortalId
       };
+    },
+    async redirect({ url, baseUrl }) {
+      console.log('[NextAuth] Redirect callback:', { url, baseUrl });
+      // Allows relative callback URLs
+      if (url.startsWith("/")) return `${baseUrl}${url}`;
+      // Allows callback URLs on the same origin
+      else if (new URL(url).origin === baseUrl) return url;
+      return baseUrl;
     },
   },
   pages: {
