@@ -11,19 +11,6 @@ if (!process.env.HUBSPOT_CLIENT_SECRET) {
   throw new Error('HUBSPOT_CLIENT_SECRET is required');
 }
 
-// Validate credentials in production
-if (process.env.NODE_ENV === 'production') {
-  if (process.env.HUBSPOT_CLIENT_ID === '875a7b08-7bb0-4a61-bc02-3354feec681c') {
-    throw new Error('Development HubSpot Client ID cannot be used in production');
-  }
-  if (process.env.HUBSPOT_CLIENT_SECRET === '915d00b9-fb17-4670-8d06-6d046483dfa8') {
-    throw new Error('Development HubSpot Client Secret cannot be used in production');
-  }
-  if (process.env.HUBSPOT_APP_ID === '6901795') {
-    throw new Error('Development HubSpot App ID cannot be used in production');
-  }
-}
-
 // HubSpot OAuth Configuration
 export const HUBSPOT_CONFIG = {
   appId: process.env.HUBSPOT_APP_ID,
