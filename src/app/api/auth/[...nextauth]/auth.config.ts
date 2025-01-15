@@ -7,28 +7,34 @@ if (!process.env.NEXTAUTH_SECRET) throw new Error('NEXTAUTH_SECRET is required')
 
 const SCOPES = ['crm.objects.contacts.read', 'crm.objects.contacts.write', 'crm.objects.marketing_events.read', 'oauth'];
 
+// Get the appropriate redirect URI based on environment
+const getRedirectUri = () => {
+  // For local development
+  if (process.env.NODE_ENV === 'development') {
+    return 'http://localhost:3000/api/auth/callback/hubspot';
+  }
+  // For Vercel production
+  return `${process.env.NEXTAUTH_URL}/api/auth/callback/hubspot`;
+};
+
+console.log('[NextAuth] Using redirect URI:', getRedirectUri());
+
 export const authOptions: AuthOptions = {
   providers: [
     {
       id: 'hubspot',
       name: 'HubSpot',
       type: 'oauth',
-      wellKnown: 'https://app.hubspot.com/oauth/authorize',
       authorization: {
         url: 'https://app.hubspot.com/oauth/authorize',
         params: {
           client_id: process.env.HUBSPOT_CLIENT_ID,
           scope: SCOPES.join(' '),
           response_type: 'code',
-          redirect_uri: process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/api/auth/callback/hubspot` : undefined,
+          redirect_uri: getRedirectUri(),
         },
       },
-      token: {
-        url: 'https://api.hubapi.com/oauth/v1/token',
-        params: {
-          grant_type: 'authorization_code',
-        },
-      },
+      token: 'https://api.hubapi.com/oauth/v1/token',
       userinfo: 'https://api.hubapi.com/oauth/v1/access-tokens',
       profile(profile) {
         return {
@@ -39,10 +45,12 @@ export const authOptions: AuthOptions = {
       },
       clientId: process.env.HUBSPOT_CLIENT_ID,
       clientSecret: process.env.HUBSPOT_CLIENT_SECRET,
+      checks: ['state'],
     },
   ],
   session: {
     strategy: 'jwt',
+    maxAge: 30 * 24 * 60 * 60, // 30 days
   },
   callbacks: {
     async jwt({ token, account, profile }) {
@@ -62,6 +70,11 @@ export const authOptions: AuthOptions = {
       };
     },
     async redirect({ url, baseUrl }) {
+      // For development environment
+      if (process.env.NODE_ENV === 'development' && url.includes('localhost')) {
+        return url;
+      }
+      // For production environment
       if (url.startsWith('/api/auth/callback')) return url;
       if (url.startsWith('/')) return `${baseUrl}${url}`;
       if (url.startsWith(baseUrl)) return url;
