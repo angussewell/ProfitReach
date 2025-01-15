@@ -24,13 +24,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={lexend.variable}>
-      <body suppressHydrationWarning>
+    <html lang="en" className={`${lexend.variable} antialiased`}>
+      <body className="min-h-screen bg-[#f5f8fa] text-hubspot-blue">
         <RootWrapper>
           <Providers>
             <div className="flex min-h-screen">
               <AppSidebar />
-              <main className="flex-1 p-6 bg-[#f5f8fa]">
+              <main className="flex-1 p-6">
                 {children}
               </main>
             </div>

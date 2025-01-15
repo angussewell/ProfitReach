@@ -1,6 +1,20 @@
 import { AuthOptions } from 'next-auth';
 import { HUBSPOT_CONFIG } from '@/config/hubspot';
 
+// Add detailed environment variable validation at the top
+if (!process.env.HUBSPOT_CLIENT_ID) {
+  console.error('[NextAuth] Missing HUBSPOT_CLIENT_ID');
+}
+if (!process.env.HUBSPOT_CLIENT_SECRET) {
+  console.error('[NextAuth] Missing HUBSPOT_CLIENT_SECRET');
+}
+if (!process.env.NEXTAUTH_URL) {
+  console.error('[NextAuth] Missing NEXTAUTH_URL');
+}
+if (!process.env.NEXTAUTH_SECRET) {
+  console.error('[NextAuth] Missing NEXTAUTH_SECRET');
+}
+
 // Log all environment variables (excluding secrets)
 console.log('[NextAuth] Environment Variables:', {
   nextAuthUrl: process.env.NEXTAUTH_URL,
@@ -9,6 +23,7 @@ console.log('[NextAuth] Environment Variables:', {
   hasHubspotClientId: !!process.env.HUBSPOT_CLIENT_ID,
   hasHubspotClientSecret: !!process.env.HUBSPOT_CLIENT_SECRET,
   hubspotRedirectUri: HUBSPOT_CONFIG.redirectUri,
+  hubspotScopes: HUBSPOT_CONFIG.scopes,
 });
 
 export const authOptions: AuthOptions = {
@@ -31,11 +46,12 @@ export const authOptions: AuthOptions = {
         url: 'https://api.hubapi.com/oauth/v1/token',
         async request({ params, provider }) {
           try {
-            console.log('[NextAuth] Token request started:', {
+            console.log('[NextAuth] Token request started with params:', {
               hasCode: !!params.code,
               redirectUri: HUBSPOT_CONFIG.redirectUri,
               clientId: HUBSPOT_CONFIG.clientId,
               provider: provider.id,
+              scopes: HUBSPOT_CONFIG.scopes,
             });
 
             // Ensure we have all required parameters
