@@ -333,5 +333,39 @@ export const authOptions: AuthOptions = {
   }
 };
 
-const handler = NextAuth(authOptions);
+const handler = NextAuth({
+  ...authOptions,
+  events: {
+    async signIn({ user, account, isNewUser }) {
+      console.log('SignIn event:', {
+        user: user?.email,
+        account: account?.provider,
+        isNewUser
+      });
+    },
+    async signOut({ user }) {
+      console.log('SignOut event:', {
+        user: user?.email
+      });
+    },
+    async session({ session }) {
+      console.log('Session event:', {
+        user: session.user?.email,
+        expires: session.expires
+      });
+    }
+  },
+  logger: {
+    error(code, ...message) {
+      console.error('NextAuth Error:', { code, message });
+    },
+    warn(code, ...message) {
+      console.warn('NextAuth Warning:', { code, message });
+    },
+    debug(code, ...message) {
+      console.log('NextAuth Debug:', { code, message });
+    }
+  }
+});
+
 export { handler as GET, handler as POST }; 
