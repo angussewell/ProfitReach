@@ -8,6 +8,7 @@ const lexend = Lexend({
   subsets: ['latin'],
   display: 'swap',
   variable: '--font-lexend',
+  preload: true,
 });
 
 export const metadata = {
@@ -24,8 +25,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${lexend.variable} antialiased`}>
-      <body className="min-h-screen bg-[#f5f8fa] text-hubspot-blue">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="stylesheet" href="/_next/static/css/app/globals.css" />
+      </head>
+      <body className={`${lexend.variable} min-h-screen bg-[#f5f8fa] text-hubspot-blue font-sans antialiased`}>
         <RootWrapper>
           <Providers>
             <div className="flex min-h-screen">

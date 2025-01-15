@@ -61,6 +61,11 @@ export const authOptions: AuthOptions = {
               clientId: HUBSPOT_CONFIG.clientId,
             });
 
+            if (!params.code) {
+              console.error('[NextAuth] No code parameter received');
+              throw new Error('No code parameter received');
+            }
+
             const response = await fetch('https://api.hubapi.com/oauth/v1/token', {
               method: 'POST',
               headers: {
@@ -71,17 +76,23 @@ export const authOptions: AuthOptions = {
                 client_id: HUBSPOT_CONFIG.clientId,
                 client_secret: HUBSPOT_CONFIG.clientSecret,
                 redirect_uri: HUBSPOT_CONFIG.redirectUri,
-                code: params.code || '',
+                code: params.code,
               }).toString(),
             });
 
+            const responseText = await response.text();
+            console.log('[NextAuth] Token response:', {
+              status: response.status,
+              statusText: response.statusText,
+              responsePreview: responseText.substring(0, 100),
+            });
+
             if (!response.ok) {
-              const error = await response.text();
-              console.error('[NextAuth] Token request failed:', error);
-              throw new Error(error);
+              console.error('[NextAuth] Token request failed:', responseText);
+              throw new Error(`Token request failed: ${response.status} - ${responseText}`);
             }
 
-            const tokens = await response.json();
+            const tokens = JSON.parse(responseText);
             console.log('[NextAuth] Token request successful');
             return tokens;
           } catch (error) {
@@ -101,13 +112,19 @@ export const authOptions: AuthOptions = {
               },
             });
 
+            const responseText = await response.text();
+            console.log('[NextAuth] Userinfo response:', {
+              status: response.status,
+              statusText: response.statusText,
+              responsePreview: responseText.substring(0, 100),
+            });
+
             if (!response.ok) {
-              const error = await response.text();
-              console.error('[NextAuth] Userinfo request failed:', error);
-              throw new Error(error);
+              console.error('[NextAuth] Userinfo request failed:', responseText);
+              throw new Error(`Userinfo request failed: ${response.status} - ${responseText}`);
             }
 
-            const profile = await response.json();
+            const profile = JSON.parse(responseText);
             console.log('[NextAuth] Userinfo request successful');
             return profile;
           } catch (error) {
@@ -117,6 +134,7 @@ export const authOptions: AuthOptions = {
         },
       },
       profile(profile) {
+        console.log('[NextAuth] Processing profile:', profile);
         return {
           id: profile.user_id || profile.user || 'unknown',
           name: profile.hub_domain || 'unknown',
@@ -130,6 +148,7 @@ export const authOptions: AuthOptions = {
   debug: true,
   callbacks: {
     async jwt({ token, account }) {
+      console.log('[NextAuth] JWT callback:', { hasToken: !!token, hasAccount: !!account });
       if (account?.access_token) {
         token.accessToken = account.access_token;
         token.refreshToken = account.refresh_token;
@@ -137,6 +156,7 @@ export const authOptions: AuthOptions = {
       return token;
     },
     async session({ session, token }) {
+      console.log('[NextAuth] Session callback:', { hasSession: !!session, hasToken: !!token });
       session.accessToken = token.accessToken;
       return session;
     },
