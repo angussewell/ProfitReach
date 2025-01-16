@@ -1,6 +1,7 @@
 'use client';
 
-import { ArrowUpIcon, ArrowDownIcon } from '@heroicons/react/24/solid';
+import { ArrowUp, ArrowDown } from 'lucide-react';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 
 interface SequenceMetricCardProps {
   name: string;
@@ -22,54 +23,59 @@ export default function SequenceMetricCard({
   const activeRate = (activeContacts / totalContacts) * 100;
 
   return (
-    <div className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow">
-      <div className="flex justify-between items-start mb-4">
-        <h3 className="text-lg font-semibold text-gray-900">{name}</h3>
-        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium
-          ${trend === 'up' ? 'bg-green-100 text-green-800' : 
-            trend === 'down' ? 'bg-red-100 text-red-800' : 
-            'bg-gray-100 text-gray-800'}`}>
-          {trend === 'up' ? (
-            <ArrowUpIcon className="w-4 h-4 mr-1" />
-          ) : trend === 'down' ? (
-            <ArrowDownIcon className="w-4 h-4 mr-1" />
-          ) : null}
-          {trendValue}%
-        </span>
-      </div>
+    <Card className="group">
+      <CardHeader className="pb-2">
+        <div className="flex justify-between items-start">
+          <CardTitle className="text-base">{name}</CardTitle>
+          <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium transition-colors
+            ${trend === 'up' ? 'bg-hubspot-teal/10 text-hubspot-teal' : 
+              trend === 'down' ? 'bg-red-100 text-red-700' : 
+              'bg-gray-100 text-gray-700'}`}>
+            {trend === 'up' ? (
+              <ArrowUp className="w-4 h-4 mr-1" />
+            ) : trend === 'down' ? (
+              <ArrowDown className="w-4 h-4 mr-1" />
+            ) : null}
+            {trendValue}%
+          </span>
+        </div>
+      </CardHeader>
       
-      <div className="space-y-4">
+      <CardContent className="space-y-6">
         <div>
-          <div className="flex justify-between items-center mb-1">
-            <span className="text-sm font-medium text-gray-500">Reply Rate</span>
-            <span className="text-sm font-semibold text-gray-900">{replyRate}%</span>
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-sm font-medium text-muted-foreground">Reply Rate</span>
+            <span className="text-sm font-semibold text-hubspot-orange">{replyRate}%</span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
+          <div className="progress-bar">
             <div 
-              className="bg-blue-600 h-2 rounded-full" 
+              className="progress-bar-fill" 
               style={{ width: `${replyRate}%` }}
             />
           </div>
         </div>
 
         <div>
-          <div className="flex justify-between items-center mb-1">
-            <span className="text-sm font-medium text-gray-500">Active Contacts</span>
-            <span className="text-sm font-semibold text-gray-900">{activeRate.toFixed(1)}%</span>
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-sm font-medium text-muted-foreground">Active Contacts</span>
+            <span className="text-sm font-semibold text-hubspot-teal">{activeRate.toFixed(1)}%</span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
+          <div className="progress-bar">
             <div 
-              className="bg-indigo-600 h-2 rounded-full" 
-              style={{ width: `${activeRate}%` }}
+              className="progress-bar-fill"
+              style={{ 
+                width: `${activeRate}%`,
+                background: 'linear-gradient(90deg, var(--hubspot-teal), var(--hubspot-dark-teal))'
+              }}
             />
           </div>
         </div>
 
-        <div className="pt-2 flex justify-between text-sm text-gray-500">
-          <span>{activeContacts} active</span>
-          <span>{totalContacts} total</span>
+        <div className="flex justify-between text-sm text-muted-foreground">
+          <span>{activeContacts.toLocaleString()} active</span>
+          <span>{totalContacts.toLocaleString()} total</span>
         </div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 } 

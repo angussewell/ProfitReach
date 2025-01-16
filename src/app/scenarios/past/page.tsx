@@ -1,186 +1,161 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Skeleton } from '@/components/ui/skeleton';
-import { useSession } from 'next-auth/react';
-import { Users, MessageCircle } from 'lucide-react';
+import React from 'react';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { RefreshCw, CheckSquare, MessageSquare } from 'lucide-react';
 
-interface ScenarioCount {
-  scenario: string;
-  count: number;
-  responses?: number;
-  responseRate?: number;
+export const dynamic = 'force-dynamic';
+
+interface Scenario {
+  name: string;
+  totalCount: number;
+  positiveReplyCount: number;
+  error?: boolean;
 }
 
-interface ScenarioData {
-  scenarios: ScenarioCount[];
+interface ScenarioResponse {
+  scenarios: Scenario[];
+  total: number;
+  lastUpdated?: string;
   error?: string;
 }
 
-export default function PastScenariosPage() {
-  const { data: session, status } = useSession();
-  const [scenarios, setScenarios] = useState<ScenarioData | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+export default function PastScenarios() {
+  const [data, setData] = React.useState<ScenarioResponse | null>(null);
+  const [loading, setLoading] = React.useState(true);
 
-  useEffect(() => {
-    async function fetchScenarios() {
-      try {
-        setLoading(true);
-        setError(null);
-
-        if (status === 'loading') return;
-        
-        if (!session?.accessToken) {
-          setError('Please sign in to view scenarios');
-          setLoading(false);
-          return;
-        }
-
-        // Fetch both past scenarios and responses
-        const [scenariosResponse, responsesResponse] = await Promise.all([
-          fetch('/api/hubspot/scenarios/count', {
-            headers: {
-              'Authorization': `Bearer ${session.accessToken}`,
-            },
-          }),
-          fetch('/api/hubspot/scenarios/responses', {
-            headers: {
-              'Authorization': `Bearer ${session.accessToken}`,
-            },
-          }),
-        ]);
-
-        if (!scenariosResponse.ok) {
-          const data = await scenariosResponse.json();
-          throw new Error(data.error || 'Failed to fetch past scenarios');
-        }
-
-        if (!responsesResponse.ok) {
-          const data = await responsesResponse.json();
-          throw new Error(data.error || 'Failed to fetch scenario responses');
-        }
-
-        const [scenariosData, responsesData] = await Promise.all([
-          scenariosResponse.json(),
-          responsesResponse.json(),
-        ]);
-
-        // Merge scenario counts with response data
-        const mergedScenarios = scenariosData.scenarios.map((scenario: ScenarioCount) => {
-          const responseData = responsesData.scenarios.find(
-            (r: any) => r.scenario === scenario.scenario
-          );
-          return {
-            ...scenario,
-            responses: responseData?.responses || 0,
-            responseRate: responseData?.responseRate || 0,
-          };
-        });
-
-        // Add any scenarios that only exist in responses
-        responsesData.scenarios.forEach((responseScenario: any) => {
-          const exists = mergedScenarios.some(
-            (s: ScenarioCount) => s.scenario === responseScenario.scenario
-          );
-          if (!exists) {
-            mergedScenarios.push({
-              scenario: responseScenario.scenario,
-              count: responseScenario.totalContacts,
-              responses: responseScenario.responses,
-              responseRate: responseScenario.responseRate,
-            });
-          }
-        });
-
-        setScenarios({ scenarios: mergedScenarios });
-      } catch (error) {
-        console.error('Error fetching scenarios:', error);
-        setError(error instanceof Error ? error.message : 'Failed to fetch scenarios');
-      } finally {
-        setLoading(false);
-      }
+  const fetchScenarios = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/hubspot/contacts/past-scenarios');
+      const data = await response.json();
+      setData(data);
+    } catch (error) {
+      console.error('Error fetching scenarios:', error);
+      setData({
+        scenarios: [],
+        total: 0,
+        error: 'Failed to fetch scenarios'
+      });
+    } finally {
+      setLoading(false);
     }
+  };
 
+  React.useEffect(() => {
     fetchScenarios();
-  }, [session, status]);
+  }, []);
 
-  if (status === 'loading') {
+  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f5f8fa]">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#ff7a59]"></div>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold text-[#33475b]">All Sequences</h1>
+          <button 
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+            disabled={true}
+          >
+            <RefreshCw className="w-4 h-4" />
+            Refresh
+          </button>
+        </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="bg-white rounded-lg border border-gray-200 p-4 animate-pulse">
+              <div className="h-6 bg-gray-200 rounded w-3/4 mb-4"></div>
+              <div className="h-8 bg-gray-200 rounded w-1/4 mb-2"></div>
+              <div className="h-8 bg-gray-200 rounded w-1/3"></div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
 
-  if (!session?.accessToken) {
+  if (data?.error) {
     return (
-      <Alert className="bg-white border-0 shadow-sm">
-        <AlertDescription>
-          Please sign in to view past scenarios
-        </AlertDescription>
-      </Alert>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold text-[#33475b]">All Sequences</h1>
+          <button 
+            onClick={fetchScenarios}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#ff7a59] border border-[#ff7a59] rounded-lg hover:bg-[#ff7a59] hover:text-white transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Refresh
+          </button>
+        </div>
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <p className="text-lg text-gray-500 mb-4">{data.error}</p>
+            <button 
+              onClick={fetchScenarios}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#ff7a59] border border-[#ff7a59] rounded-lg hover:bg-[#ff7a59] hover:text-white transition-colors"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Try again
+            </button>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#f5f8fa] p-8 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-[#2d3e50]">Past Scenarios</h1>
-        <p className="mt-2 text-[#516f90]">
-          View the number of contacts who have completed each scenario and their response rates
-        </p>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-[#33475b] mb-1">All Sequences</h1>
+          <p className="text-sm text-gray-500">
+            Showing all sequences and their response rates
+          </p>
+          {data?.lastUpdated && (
+            <p className="text-sm text-gray-500">Last updated: {data.lastUpdated}</p>
+          )}
+        </div>
+        <button 
+          onClick={fetchScenarios}
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#ff7a59] border border-[#ff7a59] rounded-lg hover:bg-[#ff7a59] hover:text-white transition-colors"
+        >
+          <RefreshCw className="w-4 h-4" />
+          Refresh
+        </button>
       </div>
 
-      {error && (
-        <Alert variant="destructive" className="bg-white border-red-100 text-red-600">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {loading ? (
-          // Loading skeletons
-          [...Array(6)].map((_, i) => (
-            <Card key={i} className="bg-white border-0 shadow-sm">
-              <CardHeader className="pb-2">
-                <Skeleton className="h-4 w-[200px]" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-8 w-[100px]" />
-              </CardContent>
-            </Card>
-          ))
-        ) : scenarios?.scenarios.length === 0 ? (
-          <div className="col-span-full">
-            <Alert className="bg-white border-0 shadow-sm">
-              <AlertDescription>
-                No past scenarios found
-              </AlertDescription>
-            </Alert>
-          </div>
-        ) : scenarios?.scenarios.map((scenario) => (
-          <Card key={scenario.scenario} className="bg-white border-0 shadow-sm hover:shadow-md transition-shadow">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-[#516f90]">
-                {scenario.scenario}
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {data?.scenarios.map((scenario) => (
+          <Card key={scenario.name} className="hover:border-[#ff7a59] transition-colors">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CheckSquare className="w-5 h-5 text-[#ff7a59]" />
+                {scenario.name}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center space-x-2">
-                <Users className="h-5 w-5 text-[#ff7a59]" />
-                <p className="text-2xl font-bold text-[#2d3e50]">{scenario.count.toLocaleString()}</p>
-                <p className="text-sm text-[#516f90]">contacts</p>
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-semibold text-[#ff7a59]">
+                  {scenario.totalCount.toLocaleString()}
+                </span>
+                <span className="text-gray-500">Contacts</span>
               </div>
-              <div className="flex items-center space-x-2">
-                <MessageCircle className="h-5 w-5 text-[#00bda5]" />
-                <p className="text-2xl font-bold text-[#2d3e50]">{scenario.responses?.toLocaleString() || '0'}</p>
-                <p className="text-sm text-[#516f90]">responses</p>
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-semibold text-[#00bda5]">
+                  {scenario.positiveReplyCount.toLocaleString()}
+                </span>
+                <span className="text-gray-500">Responses</span>
               </div>
-              <div className="text-sm text-[#516f90]">
-                Response rate: {scenario.responseRate?.toFixed(1) || '0'}%
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                <MessageSquare className="w-4 h-4" />
+                Response Rate: {((scenario.positiveReplyCount / scenario.totalCount) * 100).toFixed(1)}%
+              </div>
+              <div className="mt-4 h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-[#ff7a59] to-[#00bda5]"
+                  style={{ 
+                    width: `${Math.min((scenario.positiveReplyCount / scenario.totalCount) * 100, 100)}%`,
+                    transition: 'width 0.5s ease-in-out'
+                  }}
+                />
               </div>
             </CardContent>
           </Card>

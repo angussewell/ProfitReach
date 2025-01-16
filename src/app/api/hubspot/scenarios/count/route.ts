@@ -1,195 +1,257 @@
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/auth.config';
 import { NextResponse } from 'next/server';
+import hubspotClient from '@/utils/hubspotClient';
+import { FilterOperatorEnum } from '@hubspot/api-client/lib/codegen/crm/contacts';
 
 export const dynamic = 'force-dynamic';
 
-interface ScenarioOption {
-  label: string;
-  value: string;
-  hidden: boolean;
-  displayOrder: number;
-}
-
-interface ScenarioCount {
-  scenario: string;
-  count: number;
-  error: boolean;
+interface ScenarioStats {
+  name: string;
+  activeCount: number;
+  completedCount: number;
+  responseCount: number;
+  responseRate: number;
+  lastResponseDate?: string;
+  isLoading?: boolean;
 }
 
 interface CacheData {
-  scenarios: ScenarioCount[];
+  scenarios: ScenarioStats[];
+  totalActive: number;
+  totalCompleted: number;
+  totalResponses: number;
+  overallResponseRate: number;
+  lastUpdated: string;
+  isRefreshing?: boolean;
 }
 
-interface Cache {
-  timestamp: number;
-  data: CacheData | null;
-  expiryTime: number;
+interface Option {
+  id: string;
+  name: string;
+  count: number;
 }
 
-// Cache the results for 1 hour
-let cache: Cache = {
-  timestamp: 0,
-  data: null,
-  expiryTime: 60 * 60 * 1000 // 1 hour in milliseconds
-};
+interface PropertyOption {
+  label: string;
+  value: string;
+  hidden?: boolean;
+}
+
+let cache: CacheData | null = null;
+let isRefreshing = false;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-const MAX_RETRIES = 5;
-const BASE_DELAY = 1000; // 1 second
-
-async function fetchWithRetry(url: string, options: RequestInit, retryCount = 0): Promise<Response> {
-  try {
-    const response = await fetch(url, options);
-    
-    // If rate limited, wait and retry
-    if (response.status === 429) {
-      if (retryCount < MAX_RETRIES) {
-        const delay = BASE_DELAY * Math.pow(2, retryCount);
-        console.log(`Rate limited, retrying in ${delay}ms (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+async function fetchWithRetry(fn: () => Promise<any>, maxRetries = 5): Promise<any> {
+  let retries = 0;
+  while (true) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      if (error.code === 429 && retries < maxRetries) {
+        const delay = Math.min(1000 * Math.pow(2, retries), 10000); // Exponential backoff, max 10s
         await wait(delay);
-        return fetchWithRetry(url, options, retryCount + 1);
+        retries++;
+        continue;
       }
+      throw error;
     }
-    
-    return response;
-  } catch (error) {
-    if (retryCount < MAX_RETRIES) {
-      const delay = BASE_DELAY * Math.pow(2, retryCount);
-      console.log(`Request failed, retrying in ${delay}ms (attempt ${retryCount + 1}/${MAX_RETRIES})`);
-      await wait(delay);
-      return fetchWithRetry(url, options, retryCount + 1);
-    }
-    throw error;
   }
+}
+
+async function fetchAllContacts(filterGroups: any[], properties: string[]): Promise<any[]> {
+  const results: any[] = [];
+  let hasMore = true;
+  let after = '0';
+
+  while (hasMore) {
+    const response = await fetchWithRetry(() => 
+      hubspotClient.crm.contacts.searchApi.doSearch({
+        filterGroups,
+        limit: 100,
+        after,
+        sorts: [],
+        properties
+      })
+    );
+
+    if (response.results) {
+      results.push(...response.results);
+    }
+
+    if (response.paging?.next?.after) {
+      after = response.paging.next.after;
+      await wait(100); // Small delay between requests
+    } else {
+      hasMore = false;
+    }
+  }
+
+  return results;
 }
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    const authHeader = request.headers.get('Authorization');
-    
-    if (!session?.accessToken || !authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json(
-        { error: 'Please sign in to access this resource' },
-        { status: 401 }
-      );
+    const { searchParams } = new URL(request.url);
+    const forceRefresh = searchParams.get('refresh') === 'true';
+
+    // Return cache if it's still valid and not forcing refresh
+    if (cache && !forceRefresh && Date.now() - new Date(cache.lastUpdated).getTime() < CACHE_DURATION) {
+      return NextResponse.json(cache);
     }
 
-    const token = authHeader.split(' ')[1];
-    if (token !== session.accessToken) {
-      return NextResponse.json(
-        { error: 'Invalid access token' },
-        { status: 401 }
-      );
+    // If already refreshing, return current cache with isRefreshing flag
+    if (isRefreshing) {
+      return NextResponse.json({ ...cache, isRefreshing: true });
     }
 
-    // Check cache
-    if (cache.data && (Date.now() - cache.timestamp) < cache.expiryTime) {
-      return NextResponse.json(cache.data);
-    }
+    isRefreshing = true;
 
-    // First, fetch the property definition to get all possible values
-    const propertyResponse = await fetchWithRetry(
-      'https://api.hubapi.com/properties/v2/contacts/properties/named/past_sequences',
-      {
-        headers: {
-          'Authorization': `Bearer ${session.accessToken}`,
-          'Content-Type': 'application/json',
-        },
+    try {
+      // Start with empty cache if none exists
+      if (!cache) {
+        cache = {
+          scenarios: [],
+          totalActive: 0,
+          totalCompleted: 0,
+          totalResponses: 0,
+          overallResponseRate: 0,
+          lastUpdated: new Date().toISOString()
+        };
       }
-    );
 
-    // If property doesn't exist, return empty scenarios
-    if (propertyResponse.status === 404) {
-      const emptyResult = { scenarios: [] };
-      cache = {
-        timestamp: Date.now(),
-        data: emptyResult,
-        expiryTime: cache.expiryTime
-      };
-      return NextResponse.json(emptyResult);
-    }
-
-    if (!propertyResponse.ok) {
-      const errorText = await propertyResponse.text();
-      console.error('Failed to fetch property definition:', errorText);
-      return NextResponse.json(
-        { error: 'Failed to fetch scenarios' },
-        { status: propertyResponse.status }
+      // 1. Get all active sequences
+      const activeContacts = await fetchAllContacts(
+        [{
+          filters: [{
+            propertyName: 'current_sequence',
+            operator: FilterOperatorEnum.HasProperty,
+            value: ''
+          }]
+        }],
+        ['current_sequence']
       );
-    }
 
-    const propertyData = await propertyResponse.json();
-    console.log('Property data:', propertyData);
-
-    // Now fetch counts for each scenario with better spacing between requests
-    const scenarioCounts = [];
-    for (const option of propertyData.options) {
-      const response = await fetchWithRetry(
-        'https://api.hubapi.com/crm/v3/objects/contacts/search',
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session.accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            filterGroups: [{
-              filters: [{
-                propertyName: 'past_sequences',
-                operator: 'EQ',
-                value: option.value
-              }]
-            }],
-            properties: ['past_sequences'],
-            limit: 1,
-            total: true
-          }),
+      const activeScenarios = new Map<string, number>();
+      activeContacts.forEach(contact => {
+        const scenario = contact.properties.current_sequence;
+        if (scenario) {
+          activeScenarios.set(scenario, (activeScenarios.get(scenario) || 0) + 1);
         }
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Failed to fetch count for ${option.label}:`, errorText);
-        scenarioCounts.push({
-          scenario: option.label,
-          count: 0,
-          error: true
-        });
-        continue;
-      }
-
-      const data = await response.json();
-      console.log(`Count for ${option.label}:`, data);
-
-      scenarioCounts.push({
-        scenario: option.label,
-        count: data.total,
-        error: false
       });
 
-      // Add a longer delay between requests to be more conservative
-      await wait(500); // 500ms between requests
+      // 2. Get past sequences property
+      const propertyResponse = await fetchWithRetry(() =>
+        hubspotClient.crm.properties.coreApi.getByName('contacts', 'past_sequences')
+      );
+
+      if (!propertyResponse?.options) {
+        throw new Error('Failed to fetch scenario options');
+      }
+
+      // 3. Process each scenario
+      const scenarios: ScenarioStats[] = [];
+      let totalActive = 0;
+      let totalCompleted = 0;
+      let totalResponses = 0;
+
+      // Combine current and past scenarios
+      const allScenarios = Array.from(new Set([
+        ...Array.from(activeScenarios.keys()),
+        ...propertyResponse.options
+          .filter((option: PropertyOption) => !option.hidden)
+          .map((option: PropertyOption) => option.label)
+      ]));
+
+      for (const scenarioName of allScenarios) {
+        try {
+          const activeCount = activeScenarios.get(scenarioName) || 0;
+
+          // Get completed contacts
+          const completedContacts = await fetchAllContacts(
+            [{
+              filters: [{
+                propertyName: 'past_sequences',
+                operator: FilterOperatorEnum.ContainsToken,
+                value: scenarioName
+              }]
+            }],
+            ['past_sequences']
+          );
+
+          // Get responses
+          const responseContacts = await fetchAllContacts(
+            [{
+              filters: [{
+                propertyName: 'scenario_on_connection',
+                operator: FilterOperatorEnum.Eq,
+                value: scenarioName
+              }]
+            }],
+            ['scenario_on_connection', 'date_of_connection']
+          );
+
+          const completedCount = completedContacts.length;
+          const responseCount = responseContacts.length;
+          
+          const totalLeads = completedCount + activeCount;
+          const responseRate = totalLeads > 0 ? (responseCount / totalLeads) * 100 : 0;
+
+          const lastResponseDate = responseContacts
+            .map(contact => contact.properties.date_of_connection)
+            .filter(Boolean)
+            .sort()
+            .reverse()[0];
+
+          scenarios.push({
+            name: scenarioName,
+            activeCount,
+            completedCount,
+            responseCount,
+            responseRate,
+            lastResponseDate
+          });
+
+          totalActive += activeCount;
+          totalCompleted += completedCount;
+          totalResponses += responseCount;
+
+          // Update cache after each scenario
+          cache = {
+            scenarios: scenarios.sort((a, b) => b.activeCount - a.activeCount),
+            totalActive,
+            totalCompleted,
+            totalResponses,
+            overallResponseRate: (totalActive + totalCompleted) > 0 
+              ? (totalResponses / (totalActive + totalCompleted)) * 100 
+              : 0,
+            lastUpdated: new Date().toISOString()
+          };
+
+        } catch (error) {
+          console.error(`Error processing scenario ${scenarioName}:`, error);
+          // Continue with next scenario
+        }
+      }
+
+      return NextResponse.json(cache);
+
+    } finally {
+      isRefreshing = false;
     }
 
-    // Cache the results
-    cache = {
-      timestamp: Date.now(),
-      data: { 
-        scenarios: scenarioCounts
-          .filter(s => !s.error)
-          .sort((a: ScenarioCount, b: ScenarioCount) => b.count - a.count)
-      },
-      expiryTime: cache.expiryTime
-    };
-
-    return NextResponse.json(cache.data);
   } catch (error) {
-    console.error('Error fetching scenario counts:', error);
+    console.error('Error fetching scenarios:', error);
+    // If we have cache, return it with error status
+    if (cache) {
+      return NextResponse.json({
+        ...cache,
+        error: 'Failed to refresh data',
+        isRefreshing: false
+      });
+    }
     return NextResponse.json(
-      { error: 'An unexpected error occurred while fetching scenarios' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

@@ -1,132 +1,144 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Skeleton } from '@/components/ui/skeleton';
-import { useSession } from 'next-auth/react';
-import { Users } from 'lucide-react';
+import React from 'react';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { RefreshCw } from 'lucide-react';
 
-interface ScenarioCount {
-  scenario: string;
+export const dynamic = 'force-dynamic';
+
+interface Scenario {
+  id: string;
+  name: string;
   count: number;
+  lastUpdated: string;
+  error?: boolean;
 }
 
-interface ScenarioData {
-  scenarios: ScenarioCount[];
+interface ScenarioResponse {
+  scenarios: Scenario[];
+  total: number;
+  lastUpdated: string;
   error?: string;
 }
 
-export default function CurrentScenariosPage() {
-  const { data: session, status } = useSession();
-  const [scenarios, setScenarios] = useState<ScenarioData | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+export default function CurrentScenarios() {
+  const [data, setData] = React.useState<ScenarioResponse | null>(null);
+  const [loading, setLoading] = React.useState(true);
 
-  useEffect(() => {
-    async function fetchScenarios() {
-      try {
-        setLoading(true);
-        setError(null);
-
-        if (status === 'loading') return;
-        
-        if (!session?.accessToken) {
-          setError('Please sign in to view scenarios');
-          setLoading(false);
-          return;
-        }
-
-        const response = await fetch('/api/hubspot/scenarios/current', {
-          headers: {
-            'Authorization': `Bearer ${session.accessToken}`,
-          },
-        });
-
-        if (!response.ok) {
-          const data = await response.json();
-          throw new Error(data.error || 'Failed to fetch current scenarios');
-        }
-
-        const data = await response.json();
-        setScenarios(data);
-      } catch (error) {
-        console.error('Error fetching current scenarios:', error);
-        setError(error instanceof Error ? error.message : 'Failed to fetch current scenarios');
-      } finally {
-        setLoading(false);
-      }
+  const fetchScenarios = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/hubspot/contacts/scenarios');
+      const data = await response.json();
+      setData(data);
+    } catch (error) {
+      console.error('Error fetching scenarios:', error);
+      setData({
+        scenarios: [],
+        total: 0,
+        lastUpdated: new Date().toISOString(),
+        error: 'Failed to fetch scenarios'
+      });
+    } finally {
+      setLoading(false);
     }
+  };
 
+  React.useEffect(() => {
     fetchScenarios();
-  }, [session, status]);
+  }, []);
 
-  if (status === 'loading') {
+  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f5f8fa]">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#ff7a59]"></div>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold text-[#33475b]">Active Sequences</h1>
+          <button 
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+            disabled={true}
+          >
+            <RefreshCw className="w-4 h-4" />
+            Refresh
+          </button>
+        </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="bg-white rounded-lg border border-gray-200 p-4 animate-pulse">
+              <div className="h-6 bg-gray-200 rounded w-3/4 mb-4"></div>
+              <div className="h-8 bg-gray-200 rounded w-1/4 mb-2"></div>
+              <div className="h-8 bg-gray-200 rounded w-1/3"></div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
 
-  if (!session?.accessToken) {
+  if (data?.error) {
     return (
-      <Alert className="bg-white border-0 shadow-sm">
-        <AlertDescription>
-          Please sign in to view current scenarios
-        </AlertDescription>
-      </Alert>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold text-[#33475b]">Active Sequences</h1>
+          <button 
+            onClick={fetchScenarios}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#ff7a59] border border-[#ff7a59] rounded-lg hover:bg-[#ff7a59] hover:text-white transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Refresh
+          </button>
+        </div>
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <p className="text-lg text-gray-500 mb-4">{data.error}</p>
+            <button 
+              onClick={fetchScenarios}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#ff7a59] border border-[#ff7a59] rounded-lg hover:bg-[#ff7a59] hover:text-white transition-colors"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Try again
+            </button>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#f5f8fa] p-8 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-[#2d3e50]">Current Scenarios</h1>
-        <p className="mt-2 text-[#516f90]">
-          View the number of contacts currently in each scenario
-        </p>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-[#33475b] mb-1">Active Sequences</h1>
+          {data?.lastUpdated && (
+            <p className="text-sm text-gray-500">Last updated: {data.lastUpdated}</p>
+          )}
+        </div>
+        <button 
+          onClick={fetchScenarios}
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#ff7a59] border border-[#ff7a59] rounded-lg hover:bg-[#ff7a59] hover:text-white transition-colors"
+        >
+          <RefreshCw className="w-4 h-4" />
+          Refresh
+        </button>
       </div>
 
-      {error && (
-        <Alert variant="destructive" className="bg-white border-red-100 text-red-600">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {loading ? (
-          // Loading skeletons
-          [...Array(6)].map((_, i) => (
-            <Card key={i} className="bg-white border-0 shadow-sm">
-              <CardHeader className="pb-2">
-                <Skeleton className="h-4 w-[200px]" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-8 w-[100px]" />
-              </CardContent>
-            </Card>
-          ))
-        ) : scenarios?.scenarios.length === 0 ? (
-          <div className="col-span-full">
-            <Alert className="bg-white border-0 shadow-sm">
-              <AlertDescription>
-                No current scenarios found
-              </AlertDescription>
-            </Alert>
-          </div>
-        ) : scenarios?.scenarios.map((scenario) => (
-          <Card key={scenario.scenario} className="bg-white border-0 shadow-sm hover:shadow-md transition-shadow">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-[#516f90]">
-                {scenario.scenario}
-              </CardTitle>
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {data?.scenarios.map((scenario) => (
+          <Card key={scenario.id} className="hover:border-[#ff7a59] transition-colors">
+            <CardHeader>
+              <CardTitle>{scenario.name}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center space-x-2">
-                <Users className="h-5 w-5 text-[#ff7a59]" />
-                <p className="text-2xl font-bold text-[#2d3e50]">{scenario.count.toLocaleString()}</p>
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-semibold text-[#ff7a59]">
+                  {scenario.count.toLocaleString()}
+                </span>
+                <span className="text-gray-500">Active Contacts</span>
               </div>
+              {scenario.lastUpdated && (
+                <p className="text-sm text-gray-500 mt-4">
+                  Last updated: {new Date(scenario.lastUpdated).toLocaleString()}
+                </p>
+              )}
             </CardContent>
           </Card>
         ))}

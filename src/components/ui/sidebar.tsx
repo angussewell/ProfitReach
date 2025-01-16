@@ -2,9 +2,10 @@
 
 import { cn } from "@/lib/utils";
 import Link, { LinkProps } from "next/link";
-import React, { useState, createContext, useContext } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import React, { useState, createContext, useContext, ReactNode } from "react";
+import { AnimatePresence, motion, MotionValue } from "framer-motion";
 import { Menu, X } from "lucide-react";
+import { usePathname } from "next/navigation";
 
 interface Links {
   label: string;
@@ -53,23 +54,24 @@ export const SidebarProvider = ({
   );
 };
 
-export const Sidebar = ({
-  children,
-  open,
-  setOpen,
-  animate,
-}: {
-  children: React.ReactNode;
-  open?: boolean;
-  setOpen?: React.Dispatch<React.SetStateAction<boolean>>;
-  animate?: boolean;
-}) => {
+interface SidebarProps {
+  children: ReactNode;
+  isOpen: boolean;
+}
+
+export function Sidebar({ children, isOpen }: SidebarProps) {
   return (
-    <SidebarProvider open={open} setOpen={setOpen} animate={animate}>
+    <motion.div
+      style={{
+        width: isOpen ? '240px' : '0px',
+        overflow: 'hidden',
+        transition: 'width 0.3s ease'
+      }}
+    >
       {children}
-    </SidebarProvider>
+    </motion.div>
   );
-};
+}
 
 export const SidebarBody = (props: React.ComponentProps<typeof motion.div>) => {
   return (
@@ -89,16 +91,26 @@ export const DesktopSidebar = ({
   return (
     <motion.div
       className={cn(
-        "h-full px-4 py-4 hidden md:flex md:flex-col bg-neutral-100 dark:bg-neutral-800 w-[300px] flex-shrink-0",
+        "h-full px-2 py-4 hidden md:flex md:flex-col bg-[#213343] text-white w-[250px] flex-shrink-0 border-r border-[#2d4454]",
         className
       )}
       animate={{
-        width: animate ? (open ? "300px" : "60px") : "300px",
+        width: animate ? (open ? "250px" : "60px") : "250px",
       }}
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
       {...props}
     >
+      <div className="flex items-center justify-center mb-6">
+        <img 
+          src={open ? "/HubSpot Logo Black and White.png" : "/HubSpot Logo.png"}
+          alt="HubSpot Logo" 
+          className={cn(
+            "transition-all duration-300",
+            open ? "w-36" : "w-8"
+          )} 
+        />
+      </div>
       {children}
     </motion.div>
   );
@@ -163,26 +175,41 @@ export const SidebarLink = ({
   className?: string;
   props?: LinkProps;
 }) => {
-  const { open, animate } = useSidebar();
+  const { open } = useSidebar();
+  const pathname = usePathname();
+  const isActive = pathname === link.href;
+
   return (
     <Link
       href={link.href}
       className={cn(
-        "flex items-center justify-start gap-2 group/sidebar py-2",
+        "flex items-center gap-2 px-3 py-2 rounded-md transition-colors duration-200",
+        "hover:bg-[#2d4454] group",
+        isActive ? "bg-[#2d4454] text-white" : "text-[#cbd6e2]",
         className
       )}
       {...props}
     >
-      {link.icon}
-      <motion.span
-        animate={{
-          display: animate ? (open ? "inline-block" : "none") : "inline-block",
-          opacity: animate ? (open ? 1 : 0) : 1,
-        }}
-        className="text-neutral-700 dark:text-neutral-200 text-sm group-hover/sidebar:translate-x-1 transition duration-150 whitespace-pre inline-block !p-0 !m-0"
-      >
-        {link.label}
-      </motion.span>
+      <div className="w-8 h-8 flex items-center justify-center">
+        {React.cloneElement(link.icon as React.ReactElement, {
+          className: cn(
+            "w-5 h-5 transition-colors duration-200",
+            isActive ? "text-white" : "text-[#cbd6e2] group-hover:text-white"
+          ),
+        })}
+      </div>
+      <AnimatePresence>
+        {open && (
+          <motion.span
+            initial={{ opacity: 0, width: 0 }}
+            animate={{ opacity: 1, width: "auto" }}
+            exit={{ opacity: 0, width: 0 }}
+            className="whitespace-nowrap font-medium"
+          >
+            {link.label}
+          </motion.span>
+        )}
+      </AnimatePresence>
     </Link>
   );
 }; 

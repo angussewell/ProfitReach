@@ -36,19 +36,27 @@ export default function ConnectedContactsCard() {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-2">Connected Contacts</h3>
+    <div className="bg-white rounded-xl p-6 hover:shadow-lg transition-all duration-300 border-none">
+      <h3 className="text-base font-medium text-gray-700 mb-4">Connected Contacts</h3>
       <div className="flex items-center">
         {loading ? (
           <div className="animate-pulse flex space-x-4">
-            <div className="h-12 w-24 bg-gray-200 rounded"></div>
+            <div className="h-12 w-24 bg-gray-100 rounded"></div>
           </div>
         ) : error ? (
           <p className="text-red-500">{error}</p>
         ) : (
-          <div className="flex flex-col">
-            <span className="text-3xl font-bold text-[#ff7a59]">{count?.toLocaleString()}</span>
-            <span className="text-sm text-gray-500">Total Connected</span>
+          <div className="space-y-4 w-full">
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-bold text-hubspot-orange">{count?.toLocaleString()}</span>
+              <span className="text-sm text-gray-500">Total Connected</span>
+            </div>
+            <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-hubspot-orange rounded-full transition-all duration-500"
+                style={{ width: `${Math.min((count || 0) / 10000 * 100, 100)}%` }}
+              />
+            </div>
           </div>
         )}
       </div>

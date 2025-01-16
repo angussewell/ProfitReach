@@ -1,32 +1,16 @@
-import { Sidebar, SidebarBody, SidebarLink } from '@/components/ui/sidebar';
-import { LayoutDashboard, ListChecks, History } from 'lucide-react';
+'use client';
 
-const links = [
-  {
-    label: 'Dashboard',
-    href: '/',
-    icon: <LayoutDashboard className="w-5 h-5 text-neutral-700 dark:text-neutral-200" />,
-  },
-  {
-    label: 'Current Scenarios',
-    href: '/scenarios/current',
-    icon: <ListChecks className="w-5 h-5 text-neutral-700 dark:text-neutral-200" />,
-  },
-  {
-    label: 'Past Scenarios',
-    href: '/scenarios/past',
-    icon: <History className="w-5 h-5 text-neutral-700 dark:text-neutral-200" />,
-  },
-];
+import { Sidebar, SidebarProvider, SidebarBody } from '@/components/ui/sidebar';
+import { useState } from 'react';
 
-export default function AppSidebar() {
+export default function AppSidebar({ children }: { children: React.ReactNode }) {
+  const [isOpen, setIsOpen] = useState(true);
+
   return (
-    <Sidebar>
+    <SidebarProvider open={isOpen} setOpen={setIsOpen}>
       <SidebarBody>
-        {links.map((link) => (
-          <SidebarLink key={link.href} link={link} />
-        ))}
+        {children}
       </SidebarBody>
-    </Sidebar>
+    </SidebarProvider>
   );
 } 
