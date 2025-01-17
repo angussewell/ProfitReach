@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-async function getScenarioCounts(scenario: string, propertyName: string) {
+async function getScenarioCounts(scenario: string, propertyName: string, retryCount = 0) {
   try {
     const response = await hubspotClient.crm.contacts.searchApi.doSearch({
       filterGroups: [{
@@ -19,59 +19,16 @@ async function getScenarioCounts(scenario: string, propertyName: string) {
       limit: 100,
       after: '0',
       sorts: [],
-      properties: [propertyName, 'scenario_on_connection_date']
+      properties: [propertyName]
     });
-    
-    // For scenario_on_connection, verify each contact actually has this scenario
-    if (propertyName === 'scenario_on_connection') {
-      let verifiedCount = response.results.filter(contact => {
-        const scenarioResponses = contact.properties.scenario_on_connection?.split(';') || [];
-        return scenarioResponses.some(s => s.trim() === scenario);
-      }).length;
-      
-      // If we hit the limit, we need to do pagination
-      if (response.total > response.results.length) {
-        let after = response.paging?.next?.after;
-        while (after) {
-          await wait(100); // Rate limiting
-          const nextResponse = await hubspotClient.crm.contacts.searchApi.doSearch({
-            filterGroups: [{
-              filters: [{
-                propertyName,
-                operator: FilterOperatorEnum.ContainsToken,
-                value: scenario
-              }]
-            }],
-            limit: 100,
-            after,
-            sorts: [],
-            properties: [propertyName, 'scenario_on_connection_date']
-          });
-          
-          const additionalVerified = nextResponse.results.filter(contact => {
-            const scenarioResponses = contact.properties.scenario_on_connection?.split(';') || [];
-            return scenarioResponses.some(s => s.trim() === scenario);
-          }).length;
-          
-          verifiedCount += additionalVerified;
-          after = nextResponse.paging?.next?.after;
-        }
-      }
-      
-      return verifiedCount;
-    }
     
     return response.total;
   } catch (error: any) {
-    if (error.code === 429) {
+    if (error.code === 429 && retryCount < 3) {
       const retryAfter = parseInt(error.headers?.['retry-after'] || '1', 10);
+      console.log(`Rate limit hit for ${scenario}, retry ${retryCount + 1} in ${retryAfter}s`);
       await wait(retryAfter * 1000);
-      try {
-        return await getScenarioCounts(scenario, propertyName); // Recursive retry
-      } catch (retryError) {
-        console.error(`Error in retry for ${scenario}:`, retryError);
-        return 0;
-      }
+      return getScenarioCounts(scenario, propertyName, retryCount + 1);
     }
     console.error(`Error getting counts for ${scenario}:`, error);
     return 0;
@@ -95,19 +52,22 @@ export async function GET() {
     const result = {
       scenarios: await Promise.all(
         scenarios.map(async (scenario) => {
-          await wait(100); // Add delay between API calls to avoid rate limits
-          
           // Get total count from past_sequences (contacts who have gone through this sequence)
           const totalCount = await getScenarioCounts(scenario, 'past_sequences');
+          await wait(100); // Add delay between API calls to avoid rate limits
           
-          // Get positive reply count from scenario_on_connection (contacts who responded to this sequence)
+          // Get positive reply count from scenarios_responded_to
+          const positiveReplyCount = await getScenarioCounts(scenario, 'scenarios_responded_to');
           await wait(100); // Add delay between API calls
-          const positiveReplyCount = await getScenarioCounts(scenario, 'scenario_on_connection');
+          
+          // Get count of contacts currently in this scenario
+          const currentCount = await getScenarioCounts(scenario, 'currently_in_scenario');
           
           return {
             name: scenario,
             totalCount,
             positiveReplyCount,
+            currentCount,
             error: false
           };
         })

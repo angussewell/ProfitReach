@@ -1,59 +1,41 @@
 import { NextResponse } from 'next/server';
-import hubspotClient from '@/utils/hubspotClient';
-import { FilterOperatorEnum } from '@hubspot/api-client/lib/codegen/crm/contacts';
-
-// Add delay between API calls to avoid rate limits
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-export const revalidate = 300; // Cache for 5 minutes
+import hubspotClient, { withRetry } from '@/utils/hubspotClient';
 
 export async function GET() {
   try {
-    // Get all contacts with their lead status in a single query
-    const response = await hubspotClient.crm.contacts.searchApi.doSearch({
-      filterGroups: [
-        {
-          filters: [{
-            propertyName: 'hs_lead_status',
-            operator: FilterOperatorEnum.HasProperty
-          }]
-        }
-      ],
-      limit: 1,
-      after: '0',
-      sorts: [],
-      properties: ['hs_lead_status'],
-    });
+    const response = await withRetry(() => hubspotClient.crm.contacts.basicApi.getPage(1));
+    const contacts = response.results;
 
-    // Get counts for each status
-    const totalActive = response.results.filter(contact => 
-      contact.properties.hs_lead_status === 'IN_PROGRESS'
-    ).length;
+    let totalActive = 0;
+    let totalCompleted = 0;
+    let totalResponses = 0;
 
-    const totalCompleted = response.results.filter(contact => 
-      contact.properties.hs_lead_status === 'COMPLETED'
-    ).length;
+    for (const contact of contacts) {
+      if (contact.properties.current_sequence) {
+        totalActive++;
+      }
+      if (contact.properties.past_sequences) {
+        totalCompleted++;
+      }
+      if (contact.properties.scenarios_responded_to) {
+        totalResponses++;
+      }
+    }
 
-    const totalResponses = response.results.filter(contact => 
-      contact.properties.hs_lead_status === 'RESPONDED'
-    ).length;
-    
-    // Calculate response rate
-    const overallResponseRate = totalActive > 0 ? 
-      ((totalResponses / totalActive) * 100) : 0;
+    const overallResponseRate = totalCompleted > 0 
+      ? (totalResponses / totalCompleted) * 100 
+      : 0;
 
     return NextResponse.json({
       totalActive,
       totalCompleted,
       totalResponses,
-      overallResponseRate,
+      overallResponseRate: Math.round(overallResponseRate * 10) / 10,
       lastUpdated: new Date().toISOString()
     });
-
   } catch (error: any) {
     console.error('Error fetching stats:', error);
     
-    // Check if it's a rate limit error
     if (error.response?.status === 429) {
       return NextResponse.json(
         {

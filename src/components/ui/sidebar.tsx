@@ -3,7 +3,7 @@
 import { cn } from "@/lib/utils";
 import Link, { LinkProps } from "next/link";
 import React, { useState, createContext, useContext, ReactNode } from "react";
-import { AnimatePresence, motion, MotionValue } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import { usePathname } from "next/navigation";
 
@@ -73,35 +73,40 @@ export function Sidebar({ children, isOpen }: SidebarProps) {
   );
 }
 
-export const SidebarBody = (props: React.ComponentProps<typeof motion.div>) => {
+export const SidebarBody = ({ children, className }: { children: React.ReactNode, className?: string }) => {
   return (
     <>
-      <DesktopSidebar {...props} />
-      <MobileSidebar {...(props as React.ComponentProps<"div">)} />
+      <DesktopSidebar className={className}>{children}</DesktopSidebar>
+      <MobileSidebar className={className}>{children}</MobileSidebar>
     </>
   );
 };
+
+interface DesktopSidebarProps extends React.ComponentProps<typeof motion.div> {
+  children: React.ReactNode;
+}
 
 export const DesktopSidebar = ({
   className,
   children,
   ...props
-}: React.ComponentProps<typeof motion.div>) => {
+}: DesktopSidebarProps) => {
   const { open, setOpen, animate } = useSidebar();
   return (
     <motion.div
       className={cn(
-        "h-full px-2 py-4 hidden md:flex md:flex-col bg-[#213343] text-white w-[250px] flex-shrink-0 border-r border-[#2d4454]",
+        "h-full hidden md:flex md:flex-col bg-[#213343] text-white flex-shrink-0 border-r border-[#2d4454] shadow-lg",
+        "transition-all duration-300 ease-in-out",
         className
       )}
       animate={{
-        width: animate ? (open ? "250px" : "60px") : "250px",
+        width: animate ? (open ? "250px" : "64px") : "250px",
       }}
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
       {...props}
     >
-      <div className="flex items-center justify-center mb-6">
+      <div className="flex items-center justify-center h-16 px-4 border-b border-[#2d4454]">
         <img 
           src={open ? "/HubSpot Logo Black and White.png" : "/HubSpot Logo.png"}
           alt="HubSpot Logo" 
@@ -111,31 +116,43 @@ export const DesktopSidebar = ({
           )} 
         />
       </div>
-      {children}
+      <div className="flex-1 overflow-y-auto py-4 px-3">
+        {children}
+      </div>
     </motion.div>
   );
 };
+
+interface MobileSidebarProps extends React.ComponentProps<"div"> {
+  children: React.ReactNode;
+}
 
 export const MobileSidebar = ({
   className,
   children,
   ...props
-}: React.ComponentProps<"div">) => {
+}: MobileSidebarProps) => {
   const { open, setOpen } = useSidebar();
   return (
     <>
       <div
         className={cn(
-          "h-10 px-4 py-4 flex flex-row md:hidden items-center justify-between bg-neutral-100 dark:bg-neutral-800 w-full"
+          "h-16 px-4 flex md:hidden items-center justify-between bg-[#213343] text-white w-full border-b border-[#2d4454]",
+          "fixed top-0 left-0 right-0 z-50"
         )}
         {...props}
       >
-        <div className="flex justify-end z-20 w-full">
-          <Menu
-            className="text-neutral-800 dark:text-neutral-200 cursor-pointer"
-            onClick={() => setOpen(!open)}
+        <div className="flex items-center">
+          <img 
+            src="/HubSpot Logo.png"
+            alt="HubSpot Logo" 
+            className="w-8 h-8"
           />
         </div>
+        <Menu
+          className="text-white cursor-pointer hover:text-[#cbd6e2] transition-colors"
+          onClick={() => setOpen(!open)}
+        />
         <AnimatePresence>
           {open && (
             <motion.div
@@ -147,21 +164,30 @@ export const MobileSidebar = ({
                 ease: "easeInOut",
               }}
               className={cn(
-                "fixed h-full w-full inset-0 bg-white dark:bg-neutral-900 p-10 z-[100] flex flex-col justify-between",
+                "fixed inset-0 bg-[#213343] p-6 z-[100]",
+                "flex flex-col",
                 className
               )}
             >
-              <div
-                className="absolute right-10 top-10 z-50 text-neutral-800 dark:text-neutral-200 cursor-pointer"
-                onClick={() => setOpen(!open)}
-              >
-                <X />
+              <div className="flex items-center justify-between mb-8">
+                <img 
+                  src="/HubSpot Logo Black and White.png"
+                  alt="HubSpot Logo" 
+                  className="w-36"
+                />
+                <X
+                  className="text-white cursor-pointer hover:text-[#cbd6e2] transition-colors"
+                  onClick={() => setOpen(false)}
+                />
               </div>
-              {children}
+              <div className="flex-1 overflow-y-auto">
+                {children}
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
+      <div className="h-16 md:hidden" /> {/* Spacer for fixed header */}
     </>
   );
 };
@@ -183,17 +209,18 @@ export const SidebarLink = ({
     <Link
       href={link.href}
       className={cn(
-        "flex items-center gap-2 px-3 py-2 rounded-md transition-colors duration-200",
-        "hover:bg-[#2d4454] group",
-        isActive ? "bg-[#2d4454] text-white" : "text-[#cbd6e2]",
+        "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
+        "hover:bg-[#2d4454] group relative overflow-hidden",
+        isActive && "bg-[#2d4454] text-white",
+        !isActive && "text-[#cbd6e2] hover:text-white",
         className
       )}
       {...props}
     >
-      <div className="w-8 h-8 flex items-center justify-center">
+      <div className="w-8 h-8 flex items-center justify-center relative z-10">
         {React.cloneElement(link.icon as React.ReactElement, {
           className: cn(
-            "w-5 h-5 transition-colors duration-200",
+            "w-5 h-5 transition-all duration-200",
             isActive ? "text-white" : "text-[#cbd6e2] group-hover:text-white"
           ),
         })}
@@ -204,12 +231,22 @@ export const SidebarLink = ({
             initial={{ opacity: 0, width: 0 }}
             animate={{ opacity: 1, width: "auto" }}
             exit={{ opacity: 0, width: 0 }}
-            className="whitespace-nowrap font-medium"
+            className={cn(
+              "font-medium whitespace-nowrap relative z-10",
+              isActive ? "text-white" : "text-[#cbd6e2] group-hover:text-white"
+            )}
           >
             {link.label}
           </motion.span>
         )}
       </AnimatePresence>
+      {isActive && (
+        <motion.div
+          className="absolute inset-0 bg-gradient-to-r from-[#ff7a59] to-[#ff957a] opacity-10"
+          layoutId="activeBackground"
+          transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+        />
+      )}
     </Link>
   );
 }; 
