@@ -48,7 +48,7 @@ export async function POST(request: Request) {
 
     // Log environment variables (without sensitive values)
     console.log('Environment check:', {
-      hasHubspotToken: !!process.env.HUBSPOT_ACCESS_TOKEN,
+      hasHubspotToken: !!process.env.HUBSPOT_PRIVATE_APP_TOKEN,
       hasDbUrl: !!process.env.DATABASE_URL,
       nodeEnv: process.env.NODE_ENV
     });

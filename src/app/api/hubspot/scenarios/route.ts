@@ -19,17 +19,47 @@ interface HubSpotProperty {
 // Get existing scenarios from HubSpot properties
 export async function GET() {
   try {
+    // Check environment variables
+    if (!process.env.HUBSPOT_PRIVATE_APP_TOKEN) {
+      console.error('HUBSPOT_PRIVATE_APP_TOKEN is not set');
+      return NextResponse.json(
+        { error: 'HubSpot token not configured' },
+        { status: 500 }
+      );
+    }
+
+    console.log('Environment check:', {
+      hasHubspotToken: !!process.env.HUBSPOT_PRIVATE_APP_TOKEN,
+      nodeEnv: process.env.NODE_ENV
+    });
+
     console.log('Fetching scenarios from HubSpot...');
     
     // Get all contact properties
     const response = await withRetry(async () => {
       console.log('Making request to HubSpot API...');
-      const res = await hubspotClient.apiRequest({
-        method: 'GET',
-        path: '/properties/v1/contacts/properties'
-      });
-      const data = await res.json();
-      return data as HubSpotProperty[];
+      try {
+        const res = await hubspotClient.apiRequest({
+          method: 'GET',
+          path: '/properties/v1/contacts/properties'
+        });
+        
+        if (!res.ok) {
+          const errorText = await res.text();
+          console.error('HubSpot API error:', {
+            status: res.status,
+            statusText: res.statusText,
+            body: errorText
+          });
+          throw new Error(`HubSpot API error: ${res.status} ${res.statusText}`);
+        }
+        
+        const data = await res.json();
+        return data as HubSpotProperty[];
+      } catch (error) {
+        console.error('Error in HubSpot API request:', error);
+        throw error;
+      }
     });
 
     // Ensure we have an array of properties
@@ -57,11 +87,19 @@ export async function GET() {
       message: error.message,
       status: error.response?.status,
       data: error.response?.data,
-      stack: error.stack
+      stack: error.stack,
+      hasHubspotToken: !!process.env.HUBSPOT_PRIVATE_APP_TOKEN
     });
     
     return NextResponse.json(
-      { error: error.message || 'Failed to fetch scenarios' },
+      { 
+        error: error.message || 'Failed to fetch scenarios',
+        details: {
+          status: error.response?.status,
+          message: error.message,
+          type: error.name
+        }
+      },
       { status: error.response?.status || 500 }
     );
   }
