@@ -32,9 +32,30 @@ export const withRetry = async <T>(fn: () => Promise<T>, maxRetries = 5): Promis
   throw new Error('Max retries exceeded');
 };
 
-// Extend the client with aggressive retry logic
+// Direct API request function
+const apiRequest = async <T>({ method, path, body }: { method: string; path: string; body?: any }): Promise<T> => {
+  const baseUrl = 'https://api.hubapi.com';
+  const response = await fetch(`${baseUrl}${path}`, {
+    method,
+    headers: {
+      'Authorization': `Bearer ${process.env.HUBSPOT_PRIVATE_APP_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  if (!response.ok) {
+    throw new Error(`HubSpot API error: ${response.status} ${response.statusText}`);
+  }
+
+  return response.json();
+};
+
+// Extend the client with aggressive retry logic and direct API access
 const extendedClient = {
   ...hubspotClient,
+  apiRequest: <T>(config: { method: string; path: string; body?: any }) => 
+    withRetry(() => apiRequest<T>(config)),
   crm: {
     ...hubspotClient.crm,
     contacts: {

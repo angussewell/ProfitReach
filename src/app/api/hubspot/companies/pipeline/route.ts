@@ -65,24 +65,21 @@ export async function GET() {
           body: searchRequest
         });
 
-        if (!response.ok) {
-          const errorText = await response.text();
+        if (!response.results) {
           console.error(`Error fetching pipeline data for stage ${stage.name}:`, {
-            status: response.status,
-            statusText: response.statusText,
-            body: errorText
+            error: 'No results in response',
+            stage: stage.name
           });
           continue;
         }
 
-        const data = await response.json();
         stages.push({
           name: stage.name,
           id: stage.id,
-          count: data.total,
+          count: response.total || 0,
           error: false,
         });
-      } catch (error) {
+      } catch (error: any) {
         console.error(`Error fetching pipeline data for stage ${stage.name}:`, error);
         stages.push({
           name: stage.name,
