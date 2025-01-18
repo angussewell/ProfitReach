@@ -1,4 +1,5 @@
-import { hubspotClient } from '@/utils/hubspotClient';
+import { NextResponse } from 'next/server';
+import hubspotClient from '@/utils/hubspotClient';
 import { FilterOperatorEnum, PublicObjectSearchRequest } from '@hubspot/api-client/lib/codegen/crm/companies';
 
 // Define pipeline stages with correct HubSpot lifecycle stage IDs
@@ -14,65 +15,82 @@ const PIPELINE_STAGES = [
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-const fetchStageWithRetry = async (stage: typeof PIPELINE_STAGES[0], attempt = 1): Promise<any> => {
-  try {
-    await delay(500 * attempt); // Increase delay with each retry
-
-    const searchRequest: PublicObjectSearchRequest = {
-      filterGroups: [
-        {
-          filters: [
-            {
-              propertyName: 'lifecyclestage',
-              operator: FilterOperatorEnum.Eq,
-              value: stage.id,
-            },
-          ],
-        },
-      ],
-      properties: ['name', 'createdate', 'hs_lastmodifieddate', 'lifecyclestage'],
-      limit: 100,
-      after: '0',
-      sorts: [],
-    };
-
-    const response = await hubspotClient.crm.companies.searchApi.doSearch(searchRequest);
-    
-    console.log(`Stage ${stage.name} response:`, {
-      total: response.total,
-      results: response.results.length,
-      firstCompany: response.results[0]?.properties,
-    });
-
-    return {
-      name: stage.name,
-      id: stage.id,
-      count: response.total,
-      error: false,
-    };
-  } catch (error: any) {
-    if (error.code === 429 && attempt < 3) {
-      console.log(`Rate limit hit for ${stage.name}, attempt ${attempt}, retrying...`);
-      return fetchStageWithRetry(stage, attempt + 1);
-    }
-    
-    console.error(`Error fetching pipeline data for stage ${stage.name}:`, error);
-    return {
-      name: stage.name,
-      id: stage.id,
-      count: 0,
-      error: true,
-    };
-  }
-};
-
 export async function GET() {
   try {
+    // Check environment variables
+    const token = process.env.HUBSPOT_PRIVATE_APP_TOKEN;
+    if (!token) {
+      console.error('HUBSPOT_PRIVATE_APP_TOKEN is not set');
+      return NextResponse.json(
+        { error: 'HubSpot token not configured' },
+        { status: 500 }
+      );
+    }
+
+    // Log token length and first/last few characters for debugging
+    console.log('Token check:', {
+      length: token.length,
+      prefix: token.slice(0, 7),
+      suffix: token.slice(-4),
+      nodeEnv: process.env.NODE_ENV
+    });
+
     // Fetch stages sequentially to avoid rate limits
     const stages = [];
     for (const stage of PIPELINE_STAGES) {
-      const stageData = await fetchStageWithRetry(stage);
-      stages.push(stageData);
+      try {
+        await delay(500); // Add delay between requests
+        
+        const searchRequest: PublicObjectSearchRequest = {
+          filterGroups: [
+            {
+              filters: [
+                {
+                  propertyName: 'lifecyclestage',
+                  operator: FilterOperatorEnum.Eq,
+                  value: stage.id,
+                },
+              ],
+            },
+          ],
+          properties: ['name', 'createdate', 'hs_lastmodifieddate', 'lifecyclestage'],
+          limit: 100,
+          after: '0',
+          sorts: []
+        };
+
+        const response = await hubspotClient.apiRequest({
+          method: 'POST',
+          path: '/crm/v3/objects/companies/search',
+          body: searchRequest
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`Error fetching pipeline data for stage ${stage.name}:`, {
+            status: response.status,
+            statusText: response.statusText,
+            body: errorText
+          });
+          continue;
+        }
+
+        const data = await response.json();
+        stages.push({
+          name: stage.name,
+          id: stage.id,
+          count: data.total,
+          error: false,
+        });
+      } catch (error) {
+        console.error(`Error fetching pipeline data for stage ${stage.name}:`, error);
+        stages.push({
+          name: stage.name,
+          id: stage.id,
+          count: 0,
+          error: true,
+        });
+      }
     }
 
     const totalPipeline = stages.reduce((sum, stage) => sum + stage.count, 0);
@@ -82,13 +100,16 @@ export async function GET() {
       percentage: totalPipeline > 0 ? (stage.count / totalPipeline) * 100 : 0,
     }));
 
-    return Response.json({
+    return NextResponse.json({
       stages: stagesWithPercentages,
       total: totalPipeline,
       lastUpdated: new Date().toLocaleTimeString(),
     });
   } catch (error) {
     console.error('Error in pipeline GET:', error);
-    return Response.json({ error: 'Failed to fetch pipeline data' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to fetch pipeline data' },
+      { status: 500 }
+    );
   }
 } 

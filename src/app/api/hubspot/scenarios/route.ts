@@ -45,7 +45,7 @@ export async function GET() {
       try {
         const res = await hubspotClient.apiRequest({
           method: 'GET',
-          path: '/properties/v1/contacts/properties',
+          path: '/crm/v3/properties/contacts',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -70,7 +70,7 @@ export async function GET() {
         }
         
         const data = await res.json();
-        return data as HubSpotProperty[];
+        return data.results as HubSpotProperty[];
       } catch (error) {
         console.error('Error in HubSpot API request:', error);
         throw error;
