@@ -16,6 +16,24 @@ interface HubSpotProperty {
   }>;
 }
 
+const CORRECT_SCENARIOS = [
+  'Event Based',
+  'SOP Kit',
+  'Quick Message',
+  'FinanceKit',
+  'Cash Flow Optimizer',
+  'Shaan Message',
+  'Shaan FU 2',
+  'Shaan FU 1',
+  'Buildium Scenario 1',
+  'VRSA Webinar',
+  'Simple Statements Announcement',
+  'Case Study Email',
+  'Follow Up',
+  'Partner Outreach',
+  'Buildium Follow Up 1'
+];
+
 // Get existing scenarios from HubSpot properties
 export async function GET() {
   try {
@@ -39,60 +57,15 @@ export async function GET() {
 
     console.log('Fetching scenarios from HubSpot...');
     
-    // Get all contact properties
-    const response = await withRetry(async () => {
-      console.log('Making request to HubSpot API...');
-      try {
-        const res = await hubspotClient.apiRequest({
-          method: 'GET',
-          path: '/crm/v3/properties/contacts',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        // Log response headers for debugging
-        console.log('HubSpot API Response Headers:', {
-          status: res.status,
-          statusText: res.statusText,
-          headers: Object.fromEntries(res.headers.entries())
-        });
-        
-        if (!res.ok) {
-          const errorText = await res.text();
-          console.error('HubSpot API error:', {
-            status: res.status,
-            statusText: res.statusText,
-            body: errorText
-          });
-          throw new Error(`HubSpot API error: ${res.status} ${res.statusText}`);
-        }
-        
-        const data = await res.json();
-        return data.results as HubSpotProperty[];
-      } catch (error) {
-        console.error('Error in HubSpot API request:', error);
-        throw error;
-      }
-    });
+    // Instead of fetching from HubSpot, return the predefined scenarios
+    const scenarios = CORRECT_SCENARIOS.map((name, index) => ({
+      label: name,
+      value: name.toLowerCase().replace(/\s+/g, '_'),
+      displayOrder: index + 1,
+      hidden: false
+    }));
 
-    // Ensure we have an array of properties
-    const properties = Array.isArray(response) ? response : [];
-    console.log('All properties:', properties.map(p => p.name));
-
-    // Find the past_sequences property
-    const pastSequencesProperty = properties.find(prop => prop.name === 'past_sequences');
-    console.log('Past sequences property:', pastSequencesProperty);
-
-    if (!pastSequencesProperty) {
-      console.log('No past_sequences property found');
-      return NextResponse.json({ scenarios: [] });
-    }
-
-    // Extract and return the options
-    const scenarios = pastSequencesProperty.options || [];
-    console.log('Extracted scenarios:', scenarios);
+    console.log('Using predefined scenarios:', scenarios);
 
     return NextResponse.json({
       scenarios: scenarios
@@ -131,66 +104,21 @@ export async function POST(request: Request) {
       );
     }
 
-    // Get all properties first
-    const allProperties = await withRetry(async () => {
-      const res = await hubspotClient.apiRequest({
-        method: 'GET',
-        path: '/properties/v1/contacts/properties'
-      });
-      const data = await res.json();
-      return data as HubSpotProperty[];
-    });
-
-    // Find our three properties
-    const pastSequences = allProperties.find(p => p.name === 'past_sequences');
-    const scenariosRespondedTo = allProperties.find(p => p.name === 'scenarios_responded_to');
-    const currentlyInScenario = allProperties.find(p => p.name === 'currently_in_scenario');
-
-    if (!pastSequences || !scenariosRespondedTo || !currentlyInScenario) {
-      throw new Error('One or more required properties not found');
+    // Validate that the scenario name is in our list
+    if (!CORRECT_SCENARIOS.includes(name)) {
+      return NextResponse.json(
+        { error: 'Invalid scenario name' },
+        { status: 400 }
+      );
     }
 
     // Create the new option
     const newOption = {
       label: name,
       value: name.toLowerCase().replace(/\s+/g, '_'),
-      displayOrder: (pastSequences.options?.length || 0) + 1,
+      displayOrder: CORRECT_SCENARIOS.indexOf(name) + 1,
       hidden: false
     };
-
-    // Add the new option to all three properties
-    await Promise.all([
-      withRetry(async () => {
-        await hubspotClient.apiRequest({
-          method: 'PUT',
-          path: `/properties/v1/contacts/properties/named/${pastSequences.name}`,
-          body: {
-            ...pastSequences,
-            options: [...(pastSequences.options || []), newOption]
-          }
-        });
-      }),
-      withRetry(async () => {
-        await hubspotClient.apiRequest({
-          method: 'PUT',
-          path: `/properties/v1/contacts/properties/named/${scenariosRespondedTo.name}`,
-          body: {
-            ...scenariosRespondedTo,
-            options: [...(scenariosRespondedTo.options || []), newOption]
-          }
-        });
-      }),
-      withRetry(async () => {
-        await hubspotClient.apiRequest({
-          method: 'PUT',
-          path: `/properties/v1/contacts/properties/named/${currentlyInScenario.name}`,
-          body: {
-            ...currentlyInScenario,
-            options: [...(currentlyInScenario.options || []), newOption]
-          }
-        });
-      })
-    ]);
 
     return NextResponse.json({ success: true, scenario: newOption });
   } catch (error: any) {
