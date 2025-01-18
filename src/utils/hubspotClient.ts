@@ -10,7 +10,7 @@ const hubspotClient = new Client({
 });
 
 // Helper function to force synchronous API calls
-async function forceSyncApiCall<T>(fn: () => Promise<T>, maxRetries = 5): Promise<T> {
+export const withRetry = async <T>(fn: () => Promise<T>, maxRetries = 5): Promise<T> => {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const result = await fn();
@@ -30,7 +30,7 @@ async function forceSyncApiCall<T>(fn: () => Promise<T>, maxRetries = 5): Promis
     }
   }
   throw new Error('Max retries exceeded');
-}
+};
 
 // Extend the client with aggressive retry logic
 const extendedClient = {
@@ -42,13 +42,13 @@ const extendedClient = {
       searchApi: {
         ...hubspotClient.crm.contacts.searchApi,
         doSearch: async (request: any) => {
-          return forceSyncApiCall(() => hubspotClient.crm.contacts.searchApi.doSearch(request));
+          return withRetry(() => hubspotClient.crm.contacts.searchApi.doSearch(request));
         }
       },
       basicApi: {
         ...hubspotClient.crm.contacts.basicApi,
         getPage: async (...args: any[]) => {
-          return forceSyncApiCall(() => hubspotClient.crm.contacts.basicApi.getPage(...args));
+          return withRetry(() => hubspotClient.crm.contacts.basicApi.getPage(...args));
         }
       }
     }
