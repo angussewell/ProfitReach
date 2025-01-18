@@ -4,14 +4,19 @@ export type VariableMap = {
 };
 
 /**
- * Extracts variables from text that match the pattern {variable_name}
+ * Extracts variables from text that match the pattern {variable_name} or {{variable_name}}
  * @param text The text to extract variables from
  * @returns Array of variable names without the curly braces
  */
 export function extractVariables(text: string): string[] {
-  const variableRegex = /{([^{}]+)}/g;
-  const matches = text.match(variableRegex) || [];
-  return matches.map(match => match.slice(1, -1)); // Remove { and }
+  const singleBraceRegex = /{([^{}]+)}/g;
+  const doubleBraceRegex = /{{([^{}]+)}}/g;
+  
+  const singleBraceMatches = text.match(singleBraceRegex) || [];
+  const doubleBraceMatches = text.match(doubleBraceRegex) || [];
+  
+  const allMatches = [...singleBraceMatches, ...doubleBraceMatches];
+  return allMatches.map(match => match.replace(/[{}]/g, '')); // Remove all curly braces
 }
 
 /**
@@ -25,13 +30,12 @@ export function replaceVariables(text: string, variables: VariableMap): string {
   
   // Replace each variable with its value
   Object.entries(variables).forEach(([key, value]) => {
-    // Handle both with and without curly braces in the variables object
-    const variableWithBraces = key.startsWith('{') ? key : `{${key}}`;
-    const variableWithoutBraces = key.startsWith('{') ? key.slice(1, -1) : key;
+    // Normalize the key by removing any existing curly braces
+    const normalizedKey = key.replace(/[{}]/g, '');
     
-    // Replace both formats in the text
-    result = result.replace(new RegExp(`{${variableWithoutBraces}}`, 'g'), value);
-    result = result.replace(new RegExp(`{{${variableWithoutBraces}}}`, 'g'), value);
+    // Replace both single and double brace formats
+    result = result.replace(new RegExp(`{${normalizedKey}}`, 'g'), value);
+    result = result.replace(new RegExp(`{{${normalizedKey}}}`, 'g'), value);
   });
   
   return result;
@@ -46,9 +50,18 @@ export function normalizeVariables(data: Record<string, any>): VariableMap {
   const normalized: VariableMap = {};
   
   Object.entries(data).forEach(([key, value]) => {
-    // Remove curly braces if present
-    const normalizedKey = key.replace(/[{}]/g, '');
-    normalized[normalizedKey] = String(value);
+    try {
+      // Remove all curly braces from the key
+      const normalizedKey = key.replace(/[{}]/g, '');
+      
+      // Convert value to string, handling null/undefined
+      const normalizedValue = value != null ? String(value) : '';
+      
+      normalized[normalizedKey] = normalizedValue;
+    } catch (error) {
+      console.error(`Error normalizing variable ${key}:`, error);
+      // Skip invalid entries but continue processing
+    }
   });
   
   return normalized;
@@ -64,19 +77,28 @@ export function processObjectVariables(
   obj: Record<string, any>,
   variables: VariableMap
 ): Record<string, any> {
+  if (!obj || typeof obj !== 'object') {
+    return obj;
+  }
+
   const processed: Record<string, any> = {};
   
   Object.entries(obj).forEach(([key, value]) => {
-    if (typeof value === 'string') {
-      processed[key] = replaceVariables(value, variables);
-    } else if (Array.isArray(value)) {
-      processed[key] = value.map(item => 
-        typeof item === 'string' ? replaceVariables(item, variables) : item
-      );
-    } else if (value && typeof value === 'object') {
-      processed[key] = processObjectVariables(value, variables);
-    } else {
-      processed[key] = value;
+    try {
+      if (typeof value === 'string') {
+        processed[key] = replaceVariables(value, variables);
+      } else if (Array.isArray(value)) {
+        processed[key] = value.map(item => 
+          typeof item === 'string' ? replaceVariables(item, variables) : item
+        );
+      } else if (value && typeof value === 'object') {
+        processed[key] = processObjectVariables(value, variables);
+      } else {
+        processed[key] = value;
+      }
+    } catch (error) {
+      console.error(`Error processing variable ${key}:`, error);
+      processed[key] = value; // Preserve original value on error
     }
   });
   
