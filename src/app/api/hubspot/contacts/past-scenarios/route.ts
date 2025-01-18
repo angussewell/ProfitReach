@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import hubspotClient from '@/utils/hubspotClient';
+import { CollectionResponseSimplePublicObjectWithAssociationsForwardPaging } from '@hubspot/api-client/lib/codegen/crm/contacts';
 
 // Force dynamic to prevent static page generation timeout
 export const dynamic = 'force-dynamic';
@@ -45,6 +46,15 @@ export async function GET() {
     // Try to get real data from HubSpot
     try {
       console.log('Attempting to fetch contacts from HubSpot...');
+      
+      // First, try a simple API call to verify connectivity
+      const testResponse = await hubspotClient.crm.contacts.basicApi.getPage(1);
+      console.log('Basic API test successful:', {
+        resultsCount: testResponse.results.length,
+        hasMore: !!testResponse.paging?.next
+      });
+
+      // Now try the search API
       const response = await hubspotClient.crm.contacts.searchApi.doSearch({
         filterGroups: [],
         properties: ['past_sequences'],
@@ -52,9 +62,10 @@ export async function GET() {
         after: '0',
         sorts: []
       });
-      console.log('HubSpot response:', {
-        total: response.total,
-        resultsCount: response.results.length
+      
+      console.log('Search API response:', {
+        resultsCount: response.results.length,
+        hasMore: !!response.paging?.next
       });
 
       // Process the results
@@ -87,7 +98,8 @@ export async function GET() {
       console.error('Error fetching from HubSpot:', {
         message: error.message,
         status: error.response?.status,
-        data: error.response?.data
+        data: error.response?.data,
+        stack: error.stack
       });
 
       // Return predefined scenarios with default counts
