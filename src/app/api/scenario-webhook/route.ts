@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { normalizeVariables, processObjectVariables } from '@/utils/variableReplacer';
+import { Prompt } from '@prisma/client';
 
 // Types for the webhook request
 interface WebhookRequest {
@@ -10,27 +11,56 @@ interface WebhookRequest {
 
 export async function POST(request: Request) {
   try {
-    // Parse the request body
-    const body: WebhookRequest = await request.json();
-    const { contactData, userWebhookUrl } = body;
-
-    // Log the raw request for debugging
-    console.log('Raw webhook request:', JSON.stringify(body, null, 2));
-
-    // Validate request body
-    if (!contactData || typeof contactData !== 'object') {
-      console.error('Invalid request body:', body);
+    // Log raw request details for debugging
+    const rawText = await request.text();
+    console.log('Raw request text:', rawText);
+    
+    // Try to parse the JSON
+    let body: WebhookRequest;
+    try {
+      body = JSON.parse(rawText);
+    } catch (parseError) {
+      console.error('JSON parse error:', parseError);
       return NextResponse.json(
-        { error: 'Invalid request: contactData must be an object' },
+        { 
+          error: 'Invalid JSON in request body',
+          details: parseError instanceof Error ? parseError.message : 'Unknown error',
+          rawText
+        },
         { status: 400 }
       );
     }
+
+    const { contactData, userWebhookUrl } = body;
+    console.log('Parsed request body:', JSON.stringify(body, null, 2));
+
+    // Validate request body
+    if (!contactData || typeof contactData !== 'object') {
+      console.error('Invalid contactData:', contactData);
+      return NextResponse.json(
+        { 
+          error: 'Invalid request: contactData must be an object',
+          received: contactData
+        },
+        { status: 400 }
+      );
+    }
+
+    // Log environment variables (without sensitive values)
+    console.log('Environment check:', {
+      hasHubspotToken: !!process.env.HUBSPOT_ACCESS_TOKEN,
+      hasDbUrl: !!process.env.DATABASE_URL,
+      nodeEnv: process.env.NODE_ENV
+    });
 
     // Validate make_sequence field
     if (!contactData.make_sequence) {
       console.error('Missing make_sequence field:', contactData);
       return NextResponse.json(
-        { error: 'Missing required field: contactData.make_sequence' },
+        { 
+          error: 'Missing required field: contactData.make_sequence',
+          receivedFields: Object.keys(contactData)
+        },
         { status: 400 }
       );
     }
@@ -40,15 +70,30 @@ export async function POST(request: Request) {
     console.log('Normalized variables:', variables);
 
     // Get the scenario from the database
-    const scenario = await prisma.scenario.findFirst({
-      where: { name: contactData.make_sequence },
-      include: { signature: true }
-    });
+    let scenario;
+    try {
+      scenario = await prisma.scenario.findFirst({
+        where: { name: contactData.make_sequence },
+        include: { signature: true }
+      });
+    } catch (dbError) {
+      console.error('Database error:', dbError);
+      return NextResponse.json(
+        { 
+          error: 'Database error',
+          details: dbError instanceof Error ? dbError.message : 'Unknown error'
+        },
+        { status: 500 }
+      );
+    }
 
     if (!scenario) {
       console.error(`Scenario not found: ${contactData.make_sequence}`);
       return NextResponse.json(
-        { error: `Scenario not found: ${contactData.make_sequence}` },
+        { 
+          error: `Scenario not found: ${contactData.make_sequence}`,
+          availableScenarios: await prisma.scenario.findMany({ select: { name: true } })
+        },
         { status: 404 }
       );
     }
@@ -56,8 +101,13 @@ export async function POST(request: Request) {
     console.log('Found scenario:', scenario.name);
 
     // Get all prompts
-    const prompts = await prisma.prompt.findMany();
-    console.log(`Found ${prompts.length} prompts`);
+    let prompts: Prompt[] = [];
+    try {
+      prompts = await prisma.prompt.findMany();
+      console.log(`Found ${prompts.length} prompts`);
+    } catch (promptError) {
+      console.error('Error fetching prompts:', promptError);
+    }
 
     // Process the scenario data with variable replacement
     const processedScenario = processObjectVariables(
@@ -103,21 +153,22 @@ export async function POST(request: Request) {
           body: JSON.stringify(responsePayload)
         });
 
+        const responseText = await webhookResponse.text();
+        console.log('Webhook response:', {
+          status: webhookResponse.status,
+          statusText: webhookResponse.statusText,
+          headers: Object.fromEntries(webhookResponse.headers.entries()),
+          body: responseText
+        });
+
         if (!webhookResponse.ok) {
-          const errorText = await webhookResponse.text();
-          console.error('Error forwarding to webhook:', {
-            status: webhookResponse.status,
-            statusText: webhookResponse.statusText,
-            body: errorText
-          });
-          
           return NextResponse.json(
             { 
               error: 'Failed to forward to webhook',
               details: {
                 status: webhookResponse.status,
                 statusText: webhookResponse.statusText,
-                body: errorText
+                body: responseText
               }
             },
             { status: 500 }

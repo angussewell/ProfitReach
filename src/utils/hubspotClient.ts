@@ -3,7 +3,7 @@ import pThrottle from 'p-throttle';
 
 // Initialize the HubSpot client
 const hubspotClient = new Client({
-  accessToken: process.env.HUBSPOT_ACCESS_TOKEN,
+  accessToken: process.env.HUBSPOT_PRIVATE_APP_TOKEN,
   defaultHeaders: {
     'Content-Type': 'application/json',
   },
