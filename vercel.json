@@ -1,13 +1,4 @@
 {
   "version": 2,
-  "buildCommand": "npm run build",
-  "devCommand": "npm run dev",
-  "installCommand": "npm install",
-  "framework": "nextjs",
-  "regions": ["iad1"],
-  "env": {
-    "HUBSPOT_PRIVATE_APP_TOKEN": "@hubspot-private-app-token",
-    "HUBSPOT_ACCESS_TOKEN": "@hubspot-access-token",
-    "DATABASE_URL": "@database-url"
-  }
+  "framework": "nextjs"
 } 
