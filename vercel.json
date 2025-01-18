@@ -1,5 +1,4 @@
 {
-  // Force redeploy - 2024-01-18
   "version": 2,
   "buildCommand": "npm run build",
   "devCommand": "npm run dev",
@@ -11,5 +10,5 @@
     "HUBSPOT_ACCESS_TOKEN": "@hubspot-access-token",
     "DATABASE_URL": "@database-url"
   },
-  "lastDeploy": "2024-01-18-01"
+  "deployTimestamp": "20240118-01"
 } 
