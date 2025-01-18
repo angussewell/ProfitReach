@@ -118,15 +118,12 @@ async function fetchStageData(stage: typeof PIPELINE_STAGES[0], requestId: strin
   });
 
   try {
-    const token = validateEnvironment();
+    validateEnvironment(); // Just validate, don't store token
     const response = await hubspotClient.apiRequest<HubSpotSearchResponse>({
       method: 'POST',
       path: '/crm/v3/objects/companies/search',
       body: searchRequest,
-      timeoutMs: 15000, // 15 second timeout per stage
-      queryParams: {
-        hapikey: token
-      }
+      timeoutMs: 15000 // 15 second timeout per stage
     });
 
     // Log the raw response for debugging

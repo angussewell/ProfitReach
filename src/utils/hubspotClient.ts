@@ -65,7 +65,7 @@ const validateToken = (token: string | undefined): string => {
   if (!token) {
     throw new Error('HUBSPOT_PRIVATE_APP_TOKEN is not configured');
   }
-  if (!token.startsWith('pat-') || token.length < 40) {
+  if (!token.startsWith('pat-na1-') || token.length < 40) {
     throw new Error('Invalid HubSpot token format');
   }
   return token;
@@ -214,7 +214,7 @@ const apiRequest = async <T>({
   method, 
   path, 
   body, 
-  queryParams,
+  queryParams = {},
   timeoutMs = 30000, // 30 second default timeout
   bypassCircuitBreaker = false
 }: ApiRequestConfig): Promise<T> => {
@@ -240,6 +240,9 @@ const apiRequest = async <T>({
     circuitBreakerState: CIRCUIT_BREAKER.state,
     requestsInWindow: REQUEST_TRACKING.requests.length
   });
+
+  // Remove any hapikey from query params if present
+  delete queryParams.hapikey;
 
   const url = addQueryParams(`${baseUrl}${path}`, queryParams);
   
