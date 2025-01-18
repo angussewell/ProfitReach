@@ -20,7 +20,8 @@ interface HubSpotProperty {
 export async function GET() {
   try {
     // Check environment variables
-    if (!process.env.HUBSPOT_PRIVATE_APP_TOKEN) {
+    const token = process.env.HUBSPOT_PRIVATE_APP_TOKEN;
+    if (!token) {
       console.error('HUBSPOT_PRIVATE_APP_TOKEN is not set');
       return NextResponse.json(
         { error: 'HubSpot token not configured' },
@@ -28,8 +29,11 @@ export async function GET() {
       );
     }
 
-    console.log('Environment check:', {
-      hasHubspotToken: !!process.env.HUBSPOT_PRIVATE_APP_TOKEN,
+    // Log token length and first/last few characters for debugging
+    console.log('Token check:', {
+      length: token.length,
+      prefix: token.slice(0, 7),
+      suffix: token.slice(-4),
       nodeEnv: process.env.NODE_ENV
     });
 
@@ -41,7 +45,18 @@ export async function GET() {
       try {
         const res = await hubspotClient.apiRequest({
           method: 'GET',
-          path: '/properties/v1/contacts/properties'
+          path: '/properties/v1/contacts/properties',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        // Log response headers for debugging
+        console.log('HubSpot API Response Headers:', {
+          status: res.status,
+          statusText: res.statusText,
+          headers: Object.fromEntries(res.headers.entries())
         });
         
         if (!res.ok) {
