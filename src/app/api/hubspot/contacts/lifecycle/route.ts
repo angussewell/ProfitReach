@@ -24,20 +24,41 @@ const LIFECYCLE_STAGES: LifecycleStage[] = [
 
 async function getCountForStage(stage: LifecycleStage) {
   try {
-    const response = await hubspotClient.crm.contacts.searchApi.doSearch({
-      filterGroups: [{
-        filters: [{
-          propertyName: 'lifecyclestage',
-          operator: FilterOperatorEnum.Eq,
-          value: stage.value
-        }]
-      }],
-      properties: ['lifecyclestage'],
-      limit: 1,
-      after: '0',
-      sorts: []
-    });
-    return response.total;
+    // Add exponential backoff retry logic
+    let retries = 0;
+    const maxRetries = 3;
+    
+    while (retries < maxRetries) {
+      try {
+        const response = await hubspotClient.crm.contacts.searchApi.doSearch({
+          filterGroups: [{
+            filters: [{
+              propertyName: 'lifecyclestage',
+              operator: FilterOperatorEnum.Eq,
+              value: stage.value
+            }]
+          }],
+          properties: ['lifecyclestage'],
+          limit: 1,
+          after: '0',
+          sorts: []
+        });
+        return response.total;
+      } catch (error: any) {
+        if (error.response?.status === 429) {
+          retries++;
+          if (retries === maxRetries) throw error;
+          
+          // Wait with exponential backoff
+          const delay = Math.pow(2, retries) * 1000;
+          console.log(`Rate limited, waiting ${delay}ms before retry ${retries}/${maxRetries}`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw new Error('Max retries reached');
   } catch (error) {
     console.error(`Error fetching count for stage ${stage.label}:`, error);
     throw error;
@@ -52,16 +73,15 @@ export async function GET() {
       return NextResponse.json(cached.data);
     }
 
-    // Clear cache to ensure fresh data during debugging
-    cache.clear();
-
     console.log('Fetching fresh lifecycle stages data');
     const stages = [];
+    
+    // Process stages sequentially with delay
     for (const stage of LIFECYCLE_STAGES) {
       try {
-        // Add a small delay between requests to avoid rate limits
+        // Add a longer delay between requests to avoid rate limits
         if (stages.length > 0) {
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
         
         const count = await getCountForStage(stage);
@@ -70,8 +90,15 @@ export async function GET() {
           value: stage.value,
           count
         });
-      } catch (error) {
+      } catch (error: any) {
         console.error(`Error fetching count for ${stage.label}:`, error);
+        if (error.response?.status === 429) {
+          // If we hit rate limit, return cached data if available
+          if (cached) {
+            console.log('Rate limited, returning cached data');
+            return NextResponse.json(cached.data);
+          }
+        }
         stages.push({
           label: stage.label,
           value: stage.value,
@@ -81,11 +108,18 @@ export async function GET() {
     }
 
     const result = { stages };
-    console.log('Final result:', JSON.stringify(result, null, 2));
     cache.set(cacheKey, { data: result, timestamp: Date.now() });
     return NextResponse.json(result);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching lifecycle stages count:', error);
+    
+    // Return cached data if available on error
+    const cached = cache.get('lifecycle-stages-count');
+    if (cached) {
+      console.log('Error occurred, returning cached data');
+      return NextResponse.json(cached.data);
+    }
+    
     return NextResponse.json(
       { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
