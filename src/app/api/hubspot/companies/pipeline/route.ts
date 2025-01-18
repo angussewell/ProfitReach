@@ -2,6 +2,20 @@ import { NextResponse } from 'next/server';
 import hubspotClient from '@/utils/hubspotClient';
 import { FilterOperatorEnum, PublicObjectSearchRequest } from '@hubspot/api-client/lib/codegen/crm/companies';
 
+// Define response type for HubSpot search API
+interface HubSpotSearchResponse {
+  total: number;
+  results: Array<{
+    id: string;
+    properties: {
+      name: string;
+      createdate: string;
+      hs_lastmodifieddate: string;
+      lifecyclestage: string;
+    };
+  }>;
+}
+
 // Define pipeline stages with correct HubSpot lifecycle stage IDs
 const PIPELINE_STAGES = [
   { name: 'Marketing Qualified Lead', id: 'marketingqualifiedlead' },
@@ -59,16 +73,30 @@ export async function GET() {
           sorts: []
         };
 
-        const response = await hubspotClient.apiRequest({
+        // Log the request for debugging
+        console.log(`Fetching data for stage ${stage.name}:`, {
+          request: searchRequest,
+          timestamp: new Date().toISOString()
+        });
+
+        const response = await hubspotClient.apiRequest<HubSpotSearchResponse>({
           method: 'POST',
           path: '/crm/v3/objects/companies/search',
           body: searchRequest
         });
 
-        if (!response.results) {
+        // Log the raw response for debugging
+        console.log(`Response for stage ${stage.name}:`, {
+          hasResults: !!response?.results,
+          total: response?.total,
+          timestamp: new Date().toISOString()
+        });
+
+        if (!response?.results) {
           console.error(`Error fetching pipeline data for stage ${stage.name}:`, {
             error: 'No results in response',
-            stage: stage.name
+            stage: stage.name,
+            response
           });
           continue;
         }
@@ -80,13 +108,23 @@ export async function GET() {
           error: false,
         });
       } catch (error: any) {
-        console.error(`Error fetching pipeline data for stage ${stage.name}:`, error);
+        console.error(`Error fetching pipeline data for stage ${stage.name}:`, {
+          error: error.message,
+          status: error.response?.status,
+          data: error.response?.data,
+          stack: error.stack
+        });
         stages.push({
           name: stage.name,
           id: stage.id,
           count: 0,
           error: true,
         });
+
+        // If we hit a rate limit, wait longer before the next request
+        if (error.response?.status === 429) {
+          await delay(2000);
+        }
       }
     }
 
