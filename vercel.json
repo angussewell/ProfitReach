@@ -9,6 +9,5 @@
     "HUBSPOT_PRIVATE_APP_TOKEN": "@hubspot-private-app-token",
     "HUBSPOT_ACCESS_TOKEN": "@hubspot-access-token",
     "DATABASE_URL": "@database-url"
-  },
-  "deployTimestamp": "20240118-01"
+  }
 } 
