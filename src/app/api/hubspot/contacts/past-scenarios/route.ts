@@ -7,12 +7,18 @@ async function getScenarioCounts() {
   return withCache(cacheKey, 5 * 60 * 1000, async () => {
     try {
       const scenarioCounts = new Map<string, number>();
-      let after: string | undefined;
+      let after = '0';
       const limit = 100; // Process in batches of 100
 
       do {
         const response = await withRetry(() => 
-          hubspotClient.crm.contacts.basicApi.getPage(limit, after, undefined, undefined, ['past_sequences'])
+          hubspotClient.crm.contacts.searchApi.doSearch({
+            filterGroups: [],
+            properties: ['past_sequences'],
+            limit,
+            after,
+            sorts: []
+          })
         );
 
         for (const contact of response.results) {
@@ -24,8 +30,9 @@ async function getScenarioCounts() {
           }
         }
 
-        after = response.paging?.next?.after;
-      } while (after);
+        after = response.paging?.next?.after || '';
+        if (!after) break;
+      } while (true);
 
       // Convert to array and sort by count
       const sortedScenarios = Array.from(scenarioCounts.entries())

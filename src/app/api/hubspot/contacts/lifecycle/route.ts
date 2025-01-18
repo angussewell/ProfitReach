@@ -32,10 +32,10 @@ async function getCountForStage(stage: LifecycleStage) {
           value: stage.value
         }]
       }],
+      properties: ['lifecyclestage'],
       limit: 1,
       after: '0',
-      sorts: [],
-      properties: ['lifecyclestage']
+      sorts: []
     });
     return response.total;
   } catch (error) {
