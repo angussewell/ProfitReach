@@ -1,114 +1,96 @@
 import { Client } from '@hubspot/api-client';
+import pThrottle from 'p-throttle';
 
-if (!process.env.HUBSPOT_PRIVATE_APP_TOKEN) {
-  throw new Error('HUBSPOT_PRIVATE_APP_TOKEN is required');
-}
-
-// Cache configuration
-const cache = new Map<string, { data: any; timestamp: number }>();
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-
-// Initialize the HubSpot client with the access token
+// Initialize the HubSpot client
 const hubspotClient = new Client({
-  accessToken: process.env.HUBSPOT_PRIVATE_APP_TOKEN,
+  accessToken: process.env.HUBSPOT_ACCESS_TOKEN,
   defaultHeaders: {
-    'User-Agent': 'hubspot-dashboard',
+    'Content-Type': 'application/json',
   },
-  numberOfApiCallRetries: 3,
 });
 
-// Helper function to retry a request with exponential backoff and rate limiting
-export async function withRetry<T>(
+// Create a throttled fetch function that limits to 10 requests per second
+const throttle = pThrottle({
+  limit: 10,
+  interval: 1000,
+});
+
+// Cache for API responses
+const cache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Wrapper for API calls with caching and rate limiting
+async function withCache(key: string, ttl: number, fn: () => Promise<any>) {
+  const cached = cache.get(key);
+  if (cached && Date.now() - cached.timestamp < ttl) {
+    return cached.data;
+  }
+
+  const data = await fn();
+  cache.set(key, { data, timestamp: Date.now() });
+  return data;
+}
+
+// Retry logic with exponential backoff
+async function withRetry<T>(
   fn: () => Promise<T>,
   maxRetries = 3,
-  initialDelay = 2000,
-  cacheKey?: string
+  baseDelay = 1000,
+  context = 'unknown'
 ): Promise<T> {
-  // Check cache first if cacheKey is provided
-  if (cacheKey) {
-    const cached = cache.get(cacheKey);
-    if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
-      console.log(`Returning cached data for ${cacheKey}`);
-      return cached.data;
-    }
-  }
-
-  let lastError: Error | null = null;
-  let delay = initialDelay;
-
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
+  let lastError;
+  for (let i = 0; i < maxRetries; i++) {
     try {
-      if (attempt > 0) {
-        console.log(`Retry attempt ${attempt + 1}/${maxRetries} after ${delay}ms delay`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-
-      const result = await fn();
-
-      // Cache the result if cacheKey is provided
-      if (cacheKey) {
-        cache.set(cacheKey, { data: result, timestamp: Date.now() });
-        console.log(`Cached result for ${cacheKey}`);
-      }
-
-      return result;
+      return await throttle(fn)();
     } catch (error: any) {
       lastError = error;
-      console.error(`API call failed (attempt ${attempt + 1}/${maxRetries}):`, error.message);
-      
       if (error.response?.status === 429) {
-        const retryAfter = parseInt(error.response.headers['retry-after'] || '2', 10);
-        console.log(`Rate limit hit, waiting ${retryAfter}s before retry...`);
+        const retryAfter = parseInt(error.response?.headers?.['retry-after'] || '1', 10);
+        console.log(`Rate limit hit for ${context}, retry ${i + 1} in ${retryAfter}s`);
         await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
-        delay = Math.min(delay * 2, 10000); // Cap at 10 seconds
         continue;
       }
-
-      // For other errors, use exponential backoff
-      delay = Math.min(delay * 2, 10000);
-
-      // If it's the last attempt, throw the error
-      if (attempt === maxRetries - 1) {
-        throw error;
-      }
+      throw error;
     }
   }
-
-  throw lastError || new Error('Max retries reached');
+  throw lastError;
 }
 
 // Add a helper method to get all contacts with pagination and rate limiting
 async function getAllContacts() {
-  const contacts = [];
-  let after: string | undefined = undefined;
-  let pageCount = 0;
-  
-  do {
-    // Add delay between pages to respect rate limits
-    if (pageCount > 0) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
+  const cacheKey = 'all-contacts';
+  return withCache(cacheKey, CACHE_TTL, async () => {
+    const contacts = [];
+    let after: string | undefined = undefined;
+    let pageCount = 0;
     
-    const response = await withRetry(() => 
-      hubspotClient.crm.contacts.basicApi.getPage(
-        100,
-        after,
-        ['past_sequences', 'scenarios_responded_to', 'currently_in_scenario'],
-        undefined,
-        undefined,
-        false
-      ),
-      3,
-      2000,
-      `contacts-page-${pageCount}`
-    );
+    do {
+      // Add delay between pages to respect rate limits
+      if (pageCount > 0) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+      
+      const response = await withRetry(() => 
+        hubspotClient.crm.contacts.basicApi.getPage(
+          100,
+          after,
+          ['past_sequences', 'scenarios_responded_to', 'currently_in_scenario'],
+          undefined,
+          undefined,
+          false
+        ),
+        3,
+        2000,
+        `contacts-page-${pageCount}`
+      );
+      
+      contacts.push(...response.results);
+      after = response.paging?.next?.after;
+      pageCount++;
+    } while (after);
     
-    contacts.push(...response.results);
-    after = response.paging?.next?.after;
-    pageCount++;
-  } while (after);
-  
-  return contacts;
+    return contacts;
+  });
 }
 
 // Extend the client with our custom methods
@@ -132,22 +114,5 @@ const extendedClient = {
   apiRequest: hubspotClient.apiRequest.bind(hubspotClient),
 };
 
-// Initialize validation on startup
-withRetry(async () => {
-  try {
-    await Promise.all([
-      hubspotClient.crm.contacts.basicApi.getPage(1),
-      hubspotClient.crm.companies.basicApi.getPage(1),
-    ]);
-    console.log('[HubSpot] API access validated successfully');
-  } catch (error: any) {
-    console.error('[HubSpot] API access validation failed:', {
-      status: error.response?.status,
-      message: error.message,
-    });
-    throw error;
-  }
-}, 3, 2000, 'api-validation').catch(console.error);
-
-export { extendedClient as hubspotClient };
-export default hubspotClient;
+export { withRetry, withCache };
+export default extendedClient;

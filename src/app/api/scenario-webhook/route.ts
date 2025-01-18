@@ -1,88 +1,88 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import type { Prisma } from '@prisma/client';
+import { normalizeVariables, processObjectVariables } from '@/utils/variableReplacer';
 
-interface ContactData {
-  company?: string;
-  firstname?: string;
-  make_sequence: string;
-  [key: string]: string | undefined;
-}
-
+// Types for the webhook request
 interface WebhookRequest {
-  contactData: ContactData;
-  userWebhookUrl: string;
+  contactData: Record<string, string>;
+  userWebhookUrl?: string;
 }
-
-type ScenarioWithSignature = Prisma.ScenarioGetPayload<{
-  include: { signature: true }
-}>;
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json() as WebhookRequest;
+    // Parse the request body
+    const body: WebhookRequest = await request.json();
     const { contactData, userWebhookUrl } = body;
 
-    if (!contactData.make_sequence) {
+    // Validate required fields
+    if (!contactData || !contactData.make_sequence) {
       return NextResponse.json(
-        { error: 'make_sequence is required in contactData' },
+        { error: 'Missing required fields: contactData.make_sequence' },
         { status: 400 }
       );
     }
 
-    // 1. Find the scenario by name
+    // Get the scenario from the database
     const scenario = await prisma.scenario.findFirst({
       where: { name: contactData.make_sequence },
-      include: {
-        signature: true // Include the related signature
-      }
+      include: { signature: true }
     });
 
     if (!scenario) {
       return NextResponse.json(
-        { error: `Scenario '${contactData.make_sequence}' not found` },
+        { error: `Scenario not found: ${contactData.make_sequence}` },
         { status: 404 }
       );
     }
 
-    // 2. Get all prompts
-    const prompts = await (prisma as any).prompt.findMany() as Array<{
-      name: string;
-      content: string;
-    }>;
+    // Get all prompts
+    const prompts = await prisma.prompt.findMany();
 
-    // 3. Build the response payload
-    const result = {
-      scenario: {
-        name: scenario.name,
-        scenarioType: scenario.scenarioType,
-        subjectLine: scenario.subjectLine,
-        customizationPrompt: scenario.customizationPrompt,
-        emailExamplesPrompt: scenario.emailExamplesPrompt,
+    // Normalize variables from contact data
+    const variables = normalizeVariables(contactData);
+
+    // Process the scenario data with variable replacement
+    const processedScenario = processObjectVariables(
+      {
+        ...scenario,
         signature: scenario.signature ? {
-          name: scenario.signature.signatureName,
-          content: scenario.signature.signatureContent
+          ...scenario.signature,
+          signatureContent: scenario.signature.signatureContent
         } : null
       },
-      prompts: prompts.map(({ name, content }) => ({
-        name,
-        content
-      })),
-      contactData
+      variables
+    );
+
+    // Process prompts with variable replacement
+    const processedPrompts = prompts.map(prompt => 
+      processObjectVariables(prompt, variables)
+    );
+
+    // Prepare the response payload
+    const responsePayload = {
+      scenario: processedScenario,
+      prompts: processedPrompts,
+      contactData: variables
     };
 
-    // 4. Forward to the user's webhook if provided
+    // If a webhook URL is provided, forward the processed data
     if (userWebhookUrl) {
-      const webhookResponse = await fetch(userWebhookUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(result)
-      });
+      try {
+        const webhookResponse = await fetch(userWebhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(responsePayload)
+        });
 
-      if (!webhookResponse.ok) {
-        console.error('Failed to forward to webhook:', await webhookResponse.text());
+        if (!webhookResponse.ok) {
+          console.error('Error forwarding to webhook:', await webhookResponse.text());
+          return NextResponse.json(
+            { error: 'Failed to forward to webhook' },
+            { status: 500 }
+          );
+        }
+      } catch (error) {
+        console.error('Error forwarding to webhook:', error);
         return NextResponse.json(
           { error: 'Failed to forward to webhook' },
           { status: 500 }
@@ -90,9 +90,10 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json(result);
+    // Return the processed data
+    return NextResponse.json(responsePayload);
   } catch (error) {
-    console.error('Error processing webhook:', error);
+    console.error('Error in scenario-webhook POST:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
