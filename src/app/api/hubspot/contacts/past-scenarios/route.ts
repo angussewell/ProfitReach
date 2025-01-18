@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import hubspotClient from '@/utils/hubspotClient';
-import { CollectionResponseSimplePublicObjectWithAssociationsForwardPaging } from '@hubspot/api-client/lib/codegen/crm/contacts';
 
 // Force dynamic rendering and disable caching
 export const dynamic = 'force-dynamic';
@@ -26,6 +25,22 @@ const PREDEFINED_SCENARIOS = [
   'Buildium Follow Up 1'
 ];
 
+// Helper function for direct API calls
+async function directHubSpotApiCall(path: string, token: string) {
+  const response = await fetch(`https://api.hubapi.com${path}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+  
+  if (!response.ok) {
+    throw new Error(`HubSpot API error: ${response.status} ${response.statusText}`);
+  }
+  
+  return response.json();
+}
+
 // Helper function to delay execution
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -49,70 +64,63 @@ export async function GET() {
       timestamp: new Date().toISOString()
     });
 
-    // Try to get real data from HubSpot
+    // Try multiple approaches to get data
+    let contacts = [];
+    let error = null;
+
+    // Approach 1: Try HubSpot client search API
     try {
-      console.log('Starting HubSpot API calls at:', new Date().toISOString());
-      
-      // First, try a direct API call using fetch to verify the token
-      const testUrl = 'https://api.hubapi.com/crm/v3/objects/contacts?limit=1';
-      console.log('Testing direct API call to:', testUrl);
-      
-      const testResult = await fetch(testUrl, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      console.log('Direct API test result:', {
-        status: testResult.status,
-        statusText: testResult.statusText,
-        headers: Object.fromEntries(testResult.headers.entries()),
-        timestamp: new Date().toISOString()
-      });
-
-      // Add a small delay to respect rate limits
-      await delay(1000);
-
-      // Now try the HubSpot client basic API
-      console.log('Testing HubSpot client basic API...');
-      const testResponse = await hubspotClient.crm.contacts.basicApi.getPage(1);
-      console.log('Basic API test successful:', {
-        resultsCount: testResponse.results.length,
-        hasMore: !!testResponse.paging?.next,
-        timestamp: new Date().toISOString()
-      });
-
-      // Add another delay
-      await delay(1000);
-
-      // Now try the search API with a larger limit
-      console.log('Attempting search API call...');
-      const response = await hubspotClient.crm.contacts.searchApi.doSearch({
+      console.log('Attempting search API...');
+      const searchResponse = await hubspotClient.crm.contacts.searchApi.doSearch({
         filterGroups: [],
         properties: ['past_sequences', 'scenarios_responded_to'],
-        limit: 100, // Increased from 10 to get more data
+        limit: 100,
         after: '0',
         sorts: []
       });
-      
-      console.log('Search API response:', {
-        resultsCount: response.results.length,
-        hasMore: !!response.paging?.next,
-        timestamp: new Date().toISOString()
-      });
+      contacts = searchResponse.results;
+      console.log('Search API successful:', { count: contacts.length });
+    } catch (e) {
+      error = e;
+      console.error('Search API failed:', e);
+    }
 
-      // Process the results
-      console.log('Processing contact data...');
+    // Approach 2: If search failed, try basic API
+    if (contacts.length === 0 && error) {
+      try {
+        console.log('Attempting basic API...');
+        await delay(1000); // Wait before retry
+        const basicResponse = await hubspotClient.crm.contacts.basicApi.getPage(100);
+        contacts = basicResponse.results;
+        console.log('Basic API successful:', { count: contacts.length });
+      } catch (e) {
+        error = e;
+        console.error('Basic API failed:', e);
+      }
+    }
+
+    // Approach 3: If both failed, try direct API call
+    if (contacts.length === 0 && error) {
+      try {
+        console.log('Attempting direct API call...');
+        await delay(1000); // Wait before retry
+        const directResponse = await directHubSpotApiCall('/crm/v3/objects/contacts?limit=100&properties=past_sequences,scenarios_responded_to', token);
+        contacts = directResponse.results;
+        console.log('Direct API call successful:', { count: contacts.length });
+      } catch (e) {
+        error = e;
+        console.error('Direct API call failed:', e);
+      }
+    }
+
+    // If we have contacts, process them
+    if (contacts.length > 0) {
+      console.log('Processing', contacts.length, 'contacts');
       const scenarioCounts = new Map<string, number>();
-      let processedContacts = 0;
       
-      for (const contact of response.results) {
-        processedContacts++;
+      for (const contact of contacts) {
         const pastSequences = contact.properties?.past_sequences?.split(',') || [];
         const respondedTo = contact.properties?.scenarios_responded_to?.split(',') || [];
-        
-        // Combine both properties
         const allScenarios = [...pastSequences, ...respondedTo];
         
         for (const sequence of allScenarios) {
@@ -121,12 +129,6 @@ export async function GET() {
           scenarioCounts.set(sequence, count + 1);
         }
       }
-
-      console.log('Data processing complete:', {
-        processedContacts,
-        uniqueScenarios: scenarioCounts.size,
-        timestamp: new Date().toISOString()
-      });
 
       // Convert to array and combine with predefined scenarios
       const scenarios = PREDEFINED_SCENARIOS.map(name => {
@@ -140,41 +142,31 @@ export async function GET() {
         };
       });
 
-      console.log('Final scenarios processed:', {
+      console.log('Successfully processed scenarios:', {
         count: scenarios.length,
-        timestamp: new Date().toISOString()
+        hasData: scenarios.some(s => s.count > 0)
       });
       
       return NextResponse.json(scenarios);
-
-    } catch (error: any) {
-      console.error('Error fetching from HubSpot:', {
-        message: error.message,
-        status: error.response?.status,
-        data: error.response?.data,
-        stack: error.stack,
-        timestamp: new Date().toISOString()
-      });
-
-      // Return predefined scenarios with default counts
-      const fallbackScenarios = PREDEFINED_SCENARIOS.map(name => ({
-        name,
-        count: 10,
-        totalCount: 10,
-        positiveReplyCount: 7,
-        currentCount: 3
-      }));
-
-      console.log('Returning fallback data due to error');
-      return NextResponse.json(fallbackScenarios);
     }
+
+    // If all approaches failed, return fallback data
+    console.log('All API approaches failed, returning fallback data');
+    const fallbackScenarios = PREDEFINED_SCENARIOS.map(name => ({
+      name,
+      count: 10,
+      totalCount: 10,
+      positiveReplyCount: 7,
+      currentCount: 3
+    }));
+
+    return NextResponse.json(fallbackScenarios);
   } catch (error: any) {
-    console.error('Error in past-scenarios GET:', {
+    console.error('Fatal error in past-scenarios GET:', {
       error,
       timestamp: new Date().toISOString()
     });
     
-    // Return predefined scenarios as fallback
     const fallbackScenarios = PREDEFINED_SCENARIOS.map(name => ({
       name,
       count: 10,
