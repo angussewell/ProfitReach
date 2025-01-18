@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Plus, X, Search } from 'lucide-react';
 
 interface Signature {
   id: string;
@@ -19,6 +21,7 @@ export default function SignaturesPage() {
     signatureName: '',
     signatureContent: '',
   });
+  const [searchQuery, setSearchQuery] = useState('');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -93,81 +96,145 @@ export default function SignaturesPage() {
     }
   };
 
-  return (
-    <div className="container mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-6">Email Signatures</h1>
-      
-      <form onSubmit={handleSubmit} className="mb-8 space-y-4 max-w-2xl">
-        <Input
-          placeholder="Signature Name"
-          value={editingSignature?.signatureName || newSignature.signatureName}
-          onChange={(e) => 
-            editingSignature
-              ? setEditingSignature({ ...editingSignature, signatureName: e.target.value })
-              : setNewSignature({ ...newSignature, signatureName: e.target.value })
-          }
-          required
-        />
-        
-        <Textarea
-          placeholder="Signature Content (HTML supported)"
-          value={editingSignature?.signatureContent || newSignature.signatureContent}
-          onChange={(e) =>
-            editingSignature
-              ? setEditingSignature({ ...editingSignature, signatureContent: e.target.value })
-              : setNewSignature({ ...newSignature, signatureContent: e.target.value })
-          }
-          required
-          className="min-h-[200px]"
-        />
-        
-        <div className="flex gap-2">
-          <Button type="submit">
-            {editingSignature ? 'Update Signature' : 'Create Signature'}
-          </Button>
-          {editingSignature && (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setEditingSignature(null)}
-            >
-              Cancel
-            </Button>
-          )}
-        </div>
-      </form>
+  const filteredSignatures = signatures.filter(signature =>
+    signature.signatureName.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
-      <div className="space-y-4">
-        {signatures.map((signature) => (
-          <div
-            key={signature.id}
-            className="border p-4 rounded-lg space-y-2"
-          >
-            <div className="flex justify-between items-start">
-              <h3 className="font-semibold">{signature.signatureName}</h3>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setEditingSignature(signature)}
-                >
-                  Edit
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => handleDelete(signature.id)}
-                >
-                  Delete
-                </Button>
-              </div>
-            </div>
-            <div
-              className="prose prose-sm max-w-none"
-              dangerouslySetInnerHTML={{ __html: signature.signatureContent }}
+  return (
+    <div className="min-h-screen bg-[#f5f8fa]">
+      <div className="container mx-auto px-6 py-8 max-w-7xl">
+        <div className="flex flex-col gap-6 mb-8">
+          <div className="flex items-center justify-between">
+            <h1 className="text-3xl font-bold text-[#2e475d]">Email Signatures</h1>
+            <Button 
+              onClick={() => setEditingSignature({ id: '', signatureName: '', signatureContent: '' })}
+              className="bg-[#ff7a59] hover:bg-[#ff8f73] transition-all duration-200 shadow-sm hover:shadow-md text-white border-0 rounded-lg px-6"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              New Signature
+            </Button>
+          </div>
+          <div className="relative max-w-2xl">
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <Input
+              className="pl-12 h-12 border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all duration-200 shadow-sm hover:shadow-md bg-white rounded-xl text-lg"
+              placeholder="Search signatures..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-        ))}
+        </div>
+
+        {editingSignature && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto border-0 shadow-2xl bg-white rounded-xl">
+              <CardHeader className="pb-4 border-b border-gray-100 sticky top-0 bg-white z-10">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-xl font-semibold text-[#2e475d]">
+                    {editingSignature.id ? 'Edit Signature' : 'Create New Signature'}
+                  </CardTitle>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setEditingSignature(null)}
+                    className="text-gray-500 hover:text-gray-700 hover:bg-gray-100/80 rounded-lg"
+                  >
+                    <X className="w-5 h-5" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-6 p-8">
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-[#2e475d]">Name</label>
+                    <Input
+                      value={editingSignature.signatureName}
+                      onChange={(e) => setEditingSignature({
+                        ...editingSignature,
+                        signatureName: e.target.value
+                      })}
+                      placeholder="Enter signature name"
+                      className="h-12 border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all rounded-lg"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-[#2e475d]">Content (HTML supported)</label>
+                    <Textarea
+                      value={editingSignature.signatureContent}
+                      onChange={(e) => setEditingSignature({
+                        ...editingSignature,
+                        signatureContent: e.target.value
+                      })}
+                      placeholder="Enter signature content"
+                      className="min-h-[400px] border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all rounded-lg font-mono"
+                      required
+                    />
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <Button 
+                      type="submit"
+                      className="bg-[#ff7a59] hover:bg-[#ff8f73] transition-all duration-200 text-white shadow-sm hover:shadow-md border-0 rounded-lg px-6 h-12 text-base"
+                    >
+                      {editingSignature.id ? 'Save Changes' : 'Create Signature'}
+                    </Button>
+                    <Button 
+                      type="button"
+                      variant="outline" 
+                      onClick={() => setEditingSignature(null)}
+                      className="border-2 border-gray-200 hover:bg-gray-50 text-[#2e475d] hover:border-[#ff7a59] transition-all rounded-lg px-6 h-12 text-base"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredSignatures.map((signature) => (
+            <Card
+              key={signature.id}
+              className="border-2 border-gray-100 hover:border-[#ff7a59] transition-all duration-200 transform hover:scale-[1.02] bg-white shadow-sm hover:shadow-md rounded-xl overflow-hidden"
+            >
+              <CardHeader className="pb-4">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg font-semibold text-[#2e475d]">
+                    {signature.signatureName}
+                  </CardTitle>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setEditingSignature(signature)}
+                      className="text-gray-500 hover:text-[#ff7a59] hover:bg-[#ff7a59]/10"
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDelete(signature.id)}
+                      className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="bg-gray-50/80 rounded-lg p-4 border border-gray-100">
+                  <div
+                    className="prose prose-sm max-w-none"
+                    dangerouslySetInnerHTML={{ __html: signature.signatureContent }}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
     </div>
   );

@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
-import { RefreshCw, CheckSquare, X } from 'lucide-react';
+import { RefreshCw, CheckSquare, X, Search } from 'lucide-react';
 
 interface Signature {
   id: string;
@@ -32,6 +32,7 @@ export default function ScenariosPage() {
   const [signatures, setSignatures] = React.useState<Signature[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [editingScenario, setEditingScenario] = React.useState<Scenario | null>(null);
+  const [searchQuery, setSearchQuery] = React.useState('');
   const { toast } = useToast();
 
   const fetchScenarios = async () => {
@@ -94,6 +95,14 @@ export default function ScenariosPage() {
     }
   };
 
+  const filteredScenarios = React.useMemo(() => {
+    if (!searchQuery.trim()) return data;
+    const query = searchQuery.toLowerCase();
+    return data.filter(scenario => 
+      scenario.name.toLowerCase().includes(query)
+    );
+  }, [data, searchQuery]);
+
   if (loading) {
     return (
       <div className="container mx-auto px-6 py-8 max-w-7xl">
@@ -127,84 +136,6 @@ export default function ScenariosPage() {
     );
   }
 
-  if (editingScenario) {
-    return (
-      <div className="container mx-auto px-6 py-8 max-w-3xl">
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl font-bold text-[#33475b]">Edit Scenario</h1>
-          <Button variant="ghost" onClick={() => setEditingScenario(null)}>
-            <X className="w-4 h-4 mr-2" />
-            Close
-          </Button>
-        </div>
-
-        <div className="space-y-6">
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Scenario Name</label>
-            <Input
-              value={editingScenario.name}
-              onChange={(e) => setEditingScenario({
-                ...editingScenario,
-                name: e.target.value
-              })}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Email Signature</label>
-            <Select
-              value={editingScenario.signatureId}
-              onChange={(e) => setEditingScenario({
-                ...editingScenario,
-                signatureId: e.target.value
-              })}
-            >
-              <option value="">Select a signature</option>
-              {signatures.map((sig) => (
-                <option key={sig.id} value={sig.id}>
-                  {sig.signatureName}
-                </option>
-              ))}
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Customization Prompt</label>
-            <Textarea
-              value={editingScenario.customizationPrompt}
-              onChange={(e) => setEditingScenario({
-                ...editingScenario,
-                customizationPrompt: e.target.value
-              })}
-              className="min-h-[150px]"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Email Examples Prompt</label>
-            <Textarea
-              value={editingScenario.emailExamplesPrompt}
-              onChange={(e) => setEditingScenario({
-                ...editingScenario,
-                emailExamplesPrompt: e.target.value
-              })}
-              className="min-h-[150px]"
-            />
-          </div>
-
-          <div className="flex gap-2">
-            <Button onClick={() => handleSave(editingScenario)}>
-              Save Changes
-            </Button>
-            <Button variant="outline" onClick={() => setEditingScenario(null)}>
-              Cancel
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="container mx-auto px-6 py-8 max-w-7xl">
       <div className="flex items-center justify-between mb-8">
@@ -220,11 +151,21 @@ export default function ScenariosPage() {
         </Button>
       </div>
 
+      <div className="relative mb-6">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+        <Input
+          placeholder="Search scenarios..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-10 bg-white border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]"
+        />
+      </div>
+
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {data.map((scenario) => (
+        {filteredScenarios.map((scenario) => (
           <Card 
             key={scenario.id} 
-            className="hover:border-[#ff7a59] transition-colors cursor-pointer"
+            className="hover:border-[#ff7a59] transition-all duration-200 transform hover:scale-[1.02] cursor-pointer bg-white shadow-sm hover:shadow-md"
             onClick={() => setEditingScenario(scenario)}
           >
             <CardHeader className="pb-3">
@@ -258,6 +199,82 @@ export default function ScenariosPage() {
           </Card>
         ))}
       </div>
+
+      {editingScenario && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg w-[90%] max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-[#33475b]">Edit Scenario</h2>
+              <Button variant="ghost" onClick={() => setEditingScenario(null)}>
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+            <div className="p-6 space-y-6">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Scenario Name</label>
+                <Input
+                  value={editingScenario.name}
+                  onChange={(e) => setEditingScenario({
+                    ...editingScenario,
+                    name: e.target.value
+                  })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Email Signature</label>
+                <Select
+                  value={editingScenario.signatureId}
+                  onChange={(e) => setEditingScenario({
+                    ...editingScenario,
+                    signatureId: e.target.value
+                  })}
+                >
+                  <option value="">Select a signature</option>
+                  {signatures.map((sig) => (
+                    <option key={sig.id} value={sig.id}>
+                      {sig.signatureName}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Customization Prompt</label>
+                <Textarea
+                  value={editingScenario.customizationPrompt}
+                  onChange={(e) => setEditingScenario({
+                    ...editingScenario,
+                    customizationPrompt: e.target.value
+                  })}
+                  className="min-h-[150px]"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Email Examples Prompt</label>
+                <Textarea
+                  value={editingScenario.emailExamplesPrompt}
+                  onChange={(e) => setEditingScenario({
+                    ...editingScenario,
+                    emailExamplesPrompt: e.target.value
+                  })}
+                  className="min-h-[150px]"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-4">
+                <Button onClick={() => handleSave(editingScenario)}>
+                  Save Changes
+                </Button>
+                <Button variant="outline" onClick={() => setEditingScenario(null)}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 
