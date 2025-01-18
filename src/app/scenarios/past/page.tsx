@@ -4,7 +4,9 @@ import React from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { RefreshCw, CheckSquare, MessageSquare, Users } from 'lucide-react';
 
+// Force dynamic rendering
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 interface Scenario {
   name: string;

@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import hubspotClient, { withRetry, withCache } from '@/utils/hubspotClient';
 
+// Force dynamic to prevent static page generation timeout
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 // Helper function to get scenario counts with caching
 async function getScenarioCounts() {
   const cacheKey = 'scenario-counts';

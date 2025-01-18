@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server';
 import hubspotClient from '@/utils/hubspotClient';
 import { FilterOperatorEnum } from '@hubspot/api-client/lib/codegen/crm/contacts';
 
+// Force dynamic to prevent static page generation timeout
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 const cache = new Map<string, { data: any; timestamp: number }>();
