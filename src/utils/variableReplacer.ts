@@ -46,23 +46,14 @@ export function replaceVariables(text: string, variables: VariableMap): string {
  * @param data Object containing variable names as keys
  * @returns Object with normalized variable names
  */
-export function normalizeVariables(data: Record<string, any>): VariableMap {
-  const normalized: VariableMap = {};
+export function normalizeVariables(data: Record<string, string>): Record<string, string> {
+  const normalized: Record<string, string> = {};
   
-  Object.entries(data).forEach(([key, value]) => {
-    try {
-      // Remove all curly braces from the key
-      const normalizedKey = key.replace(/[{}]/g, '');
-      
-      // Convert value to string, handling null/undefined
-      const normalizedValue = value != null ? String(value) : '';
-      
-      normalized[normalizedKey] = normalizedValue;
-    } catch (error) {
-      console.error(`Error normalizing variable ${key}:`, error);
-      // Skip invalid entries but continue processing
-    }
-  });
+  for (const [key, value] of Object.entries(data)) {
+    // Remove curly braces from keys if they exist
+    const normalizedKey = key.replace(/[{}]/g, '');
+    normalized[normalizedKey] = value;
+  }
   
   return normalized;
 }

@@ -14,8 +14,12 @@ export async function POST(request: Request) {
     const body: WebhookRequest = await request.json();
     const { contactData, userWebhookUrl } = body;
 
+    // Log the raw request for debugging
+    console.log('Raw webhook request:', JSON.stringify(body, null, 2));
+
     // Validate request body
     if (!contactData || typeof contactData !== 'object') {
+      console.error('Invalid request body:', body);
       return NextResponse.json(
         { error: 'Invalid request: contactData must be an object' },
         { status: 400 }
@@ -24,18 +28,16 @@ export async function POST(request: Request) {
 
     // Validate make_sequence field
     if (!contactData.make_sequence) {
+      console.error('Missing make_sequence field:', contactData);
       return NextResponse.json(
         { error: 'Missing required field: contactData.make_sequence' },
         { status: 400 }
       );
     }
 
-    // Log incoming request for debugging
-    console.log('Received webhook request:', {
-      make_sequence: contactData.make_sequence,
-      contactData: contactData,
-      hasWebhookUrl: !!userWebhookUrl
-    });
+    // Normalize variables from contact data
+    const variables = normalizeVariables(contactData);
+    console.log('Normalized variables:', variables);
 
     // Get the scenario from the database
     const scenario = await prisma.scenario.findFirst({
@@ -44,21 +46,18 @@ export async function POST(request: Request) {
     });
 
     if (!scenario) {
+      console.error(`Scenario not found: ${contactData.make_sequence}`);
       return NextResponse.json(
         { error: `Scenario not found: ${contactData.make_sequence}` },
         { status: 404 }
       );
     }
 
+    console.log('Found scenario:', scenario.name);
+
     // Get all prompts
     const prompts = await prisma.prompt.findMany();
-    if (!prompts.length) {
-      console.warn('No prompts found in database');
-    }
-
-    // Normalize variables from contact data
-    const variables = normalizeVariables(contactData);
-    console.log('Normalized variables:', variables);
+    console.log(`Found ${prompts.length} prompts`);
 
     // Process the scenario data with variable replacement
     const processedScenario = processObjectVariables(
@@ -93,6 +92,7 @@ export async function POST(request: Request) {
     if (userWebhookUrl) {
       try {
         console.log('Forwarding to webhook URL:', userWebhookUrl);
+        console.log('Webhook payload:', JSON.stringify(responsePayload, null, 2));
         
         const webhookResponse = await fetch(userWebhookUrl, {
           method: 'POST',
@@ -123,6 +123,8 @@ export async function POST(request: Request) {
             { status: 500 }
           );
         }
+
+        console.log('Successfully forwarded to webhook');
       } catch (error) {
         console.error('Error forwarding to webhook:', error);
         return NextResponse.json(
