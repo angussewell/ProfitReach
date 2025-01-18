@@ -31,3 +31,11 @@ model Scenario {
 
   @@index([name])
 }
+
+model Prompt {
+  id        String   @id @default(cuid())
+  name      String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

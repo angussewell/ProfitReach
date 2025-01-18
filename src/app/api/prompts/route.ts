@@ -1,28 +1,12 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient, Prisma } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/db';
+import type { Prisma, Prompt } from '@prisma/client';
 
 // Get all prompts
 export async function GET() {
   try {
-    const scenarios = await prisma.scenario.findMany({
-      select: {
-        id: true,
-        name: true,
-        scenarioType: true,
-        subjectLine: true,
-        signatureId: true,
-        signature: {
-          select: {
-            id: true,
-            signatureName: true
-          }
-        }
-      }
-    });
-
-    return NextResponse.json(scenarios);
+    const prompts = await prisma.prompt.findMany();
+    return NextResponse.json(prompts);
   } catch (error) {
     console.error('Error fetching prompts:', error);
     return NextResponse.json(
@@ -36,23 +20,16 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const data = await request.json();
-    const { name, signatureId } = data;
+    const { name, content } = data;
 
-    const createData: Prisma.ScenarioCreateInput = {
-      name,
-      scenarioType: 'simple',
-      subjectLine: '',
-      ...(signatureId ? { signature: { connect: { id: signatureId } } } : {})
-    };
-
-    const scenario = await prisma.scenario.create({
-      data: createData,
-      include: {
-        signature: true
+    const prompt = await prisma.prompt.create({
+      data: {
+        name,
+        content
       }
     });
 
-    return NextResponse.json(scenario);
+    return NextResponse.json(prompt);
   } catch (error) {
     console.error('Error creating prompt:', error);
     return NextResponse.json(
@@ -62,24 +39,21 @@ export async function POST(request: Request) {
   }
 }
 
+// Update a prompt
 export async function PUT(request: Request) {
   try {
     const data = await request.json();
-    const { id, signatureId } = data;
+    const { id, name, content } = data;
 
-    const updateData: Prisma.ScenarioUpdateInput = {
-      ...(signatureId ? { signature: { connect: { id: signatureId } } } : {})
-    };
-
-    const scenario = await prisma.scenario.update({
+    const prompt = await prisma.prompt.update({
       where: { id },
-      data: updateData,
-      include: {
-        signature: true
+      data: {
+        name,
+        content
       }
     });
 
-    return NextResponse.json(scenario);
+    return NextResponse.json(prompt);
   } catch (error) {
     console.error('Error updating prompt:', error);
     return NextResponse.json(

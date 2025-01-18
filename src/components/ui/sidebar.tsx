@@ -65,7 +65,7 @@ export function Sidebar({ children, isOpen }: SidebarProps) {
       style={{
         width: isOpen ? '240px' : '0px',
         overflow: 'hidden',
-        transition: 'width 0.3s ease'
+        transition: 'width 0.1s ease'
       }}
     >
       {children}
@@ -96,7 +96,7 @@ export const DesktopSidebar = ({
     <motion.div
       className={cn(
         "h-full hidden md:flex md:flex-col bg-[#213343] text-white flex-shrink-0 border-r border-[#2d4454] shadow-lg",
-        "transition-all duration-300 ease-in-out",
+        "transition-all duration-100 ease-in-out",
         className
       )}
       animate={{
@@ -111,7 +111,7 @@ export const DesktopSidebar = ({
           src={open ? "/HubSpot Logo Black and White.png" : "/HubSpot Logo.png"}
           alt="HubSpot Logo" 
           className={cn(
-            "transition-all duration-300",
+            "transition-all duration-100",
             open ? "w-36" : "w-8"
           )} 
         />
@@ -160,7 +160,7 @@ export const MobileSidebar = ({
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: "-100%", opacity: 0 }}
               transition={{
-                duration: 0.3,
+                duration: 0.1,
                 ease: "easeInOut",
               }}
               className={cn(
@@ -209,7 +209,7 @@ export const SidebarLink = ({
     <Link
       href={link.href}
       className={cn(
-        "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
+        "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-100",
         "hover:bg-[#2d4454] group relative overflow-hidden",
         isActive && "bg-[#2d4454] text-white",
         !isActive && "text-[#cbd6e2] hover:text-white",
@@ -217,10 +217,10 @@ export const SidebarLink = ({
       )}
       {...props}
     >
-      <div className="w-8 h-8 flex items-center justify-center relative z-10">
+      <div className="w-8 h-8 flex items-center justify-center relative z-10 -ml-0.5">
         {React.cloneElement(link.icon as React.ReactElement, {
           className: cn(
-            "w-5 h-5 transition-all duration-200",
+            "w-5 h-5 transition-all duration-100",
             isActive ? "text-white" : "text-[#cbd6e2] group-hover:text-white"
           ),
         })}
