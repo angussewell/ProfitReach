@@ -21,6 +21,17 @@ interface ApiRequestConfig {
   bypassCircuitBreaker?: boolean;
 }
 
+// Helper function to validate token
+const validateToken = (token: string | undefined): string => {
+  if (!token) {
+    throw new Error('HUBSPOT_PRIVATE_APP_TOKEN is not configured');
+  }
+  if (!token.startsWith('pat-na1-') || token.length < 40) {
+    throw new Error('Invalid HubSpot token format');
+  }
+  return token;
+};
+
 // Circuit breaker configuration
 interface CircuitBreakerState {
   failures: number;
@@ -29,8 +40,8 @@ interface CircuitBreakerState {
 }
 
 const CIRCUIT_BREAKER = {
-  maxFailures: 5,
-  resetTimeout: 30000, // 30 seconds
+  maxFailures: 50,
+  resetTimeout: 5000,
   state: {
     failures: 0,
     lastFailure: 0,
@@ -46,30 +57,19 @@ interface RequestTracking {
 
 const REQUEST_TRACKING = {
   requests: [] as RequestTracking[],
-  maxRequestsPerSecond: 10,
-  windowMs: 1000 // 1 second window
+  maxRequestsPerSecond: 100,
+  windowMs: 1000
 };
 
 // Initialize the HubSpot client with aggressive settings
 const hubspotClient = new Client({
-  accessToken: process.env.HUBSPOT_PRIVATE_APP_TOKEN,
+  accessToken: validateToken(process.env.HUBSPOT_PRIVATE_APP_TOKEN),
   defaultHeaders: {
     'Content-Type': 'application/json',
     'User-Agent': 'HubspotDashboard/1.0',
   },
   numberOfApiCallRetries: 3,
 });
-
-// Helper function to validate token
-const validateToken = (token: string | undefined): string => {
-  if (!token) {
-    throw new Error('HUBSPOT_PRIVATE_APP_TOKEN is not configured');
-  }
-  if (!token.startsWith('pat-na1-') || token.length < 40) {
-    throw new Error('Invalid HubSpot token format');
-  }
-  return token;
-};
 
 // Helper function to check circuit breaker
 const checkCircuitBreaker = () => {
@@ -98,6 +98,11 @@ const trackRequest = (endpoint: string): Promise<void> => {
   
   // Check if we're over the limit
   if (REQUEST_TRACKING.requests.length >= REQUEST_TRACKING.maxRequestsPerSecond) {
+    console.log('Rate limit reached, waiting...', {
+      currentRequests: REQUEST_TRACKING.requests.length,
+      maxRequests: REQUEST_TRACKING.maxRequestsPerSecond,
+      endpoint
+    });
     const oldestRequest = REQUEST_TRACKING.requests[0];
     const waitTime = REQUEST_TRACKING.windowMs - (now - oldestRequest.timestamp);
     return new Promise(resolve => setTimeout(resolve, waitTime));
@@ -237,12 +242,14 @@ const apiRequest = async <T>({
     hasBody: !!body,
     queryParams,
     timestamp: new Date().toISOString(),
-    circuitBreakerState: CIRCUIT_BREAKER.state,
-    requestsInWindow: REQUEST_TRACKING.requests.length
+    tokenPrefix: token.slice(0, 8),
+    tokenLength: token.length
   });
 
-  // Remove any hapikey from query params if present
+  // Ensure no token-related query params exist
   delete queryParams.hapikey;
+  delete queryParams.access_token;
+  delete queryParams.token;
 
   const url = addQueryParams(`${baseUrl}${path}`, queryParams);
   

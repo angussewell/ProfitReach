@@ -1,6 +1,6 @@
 import React from 'react';
 import { Star, ChevronDown, Share2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button } from '../ui/button';
 
 interface PageHeaderProps {
   title: string;
@@ -29,7 +29,7 @@ export default function PageHeader({ title }: PageHeaderProps) {
           Share
           <Share2 className="w-4 h-4 ml-1" />
         </Button>
-        <Button variant="coral" size="sm" className="bg-[#ff7a59] hover:bg-[#ff8f73] text-white">
+        <Button variant="secondary" size="sm" className="bg-[#ff7a59] hover:bg-[#ff8f73] text-white">
           Add report
           <ChevronDown className="w-4 h-4 ml-1" />
         </Button>

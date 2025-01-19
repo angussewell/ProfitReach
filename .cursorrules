@@ -1,0 +1,268 @@
+# Cold Outreach Dashboard - Cursor Rules
+
+## 🎯 Project Overview
+
+This Next.js dashboard application tracks and manages cold outreach scenarios through HubSpot integration. The core focus is scenario management, tracking scenario effectiveness, and maintaining prompts/signatures for outreach campaigns.
+
+### Core Pages & Functionality
+
+#### 1. Dashboard
+- **Purpose**: High-level overview of outreach performance
+- **Key Metrics**:
+  - Total pipeline
+  - Conversion rate
+  - Opportunities
+  - Pipeline stages breakdown
+- **Lifecycle Stages Tracked**:
+  - Marketing Qualified Lead (marketingqualifiedlead)
+  - Sale Qualified Lead (205174134)
+  - Opportunity (39710605)
+  - Closed Lost (205609479)
+  - Customer (customer)
+  - Stale (39786496)
+  - Abandoned (42495546)
+
+#### 2. All Scenarios
+- **Purpose**: Track effectiveness of each outreach scenario
+- **Key Metrics Per Scenario**:
+  - Total leads processed
+  - Response count
+  - Currently active leads
+  - Response rates
+- **Data Source**: 
+  - past_sequences (multi-checkbox field)
+  - scenario_on_connection (tracks which scenario got response)
+  - currently_in_scenario (tracks active scenarios)
+
+#### 3. Managed Scenarios
+- **Purpose**: Create and edit scenario configurations
+- **Editable Elements**:
+  - Subject line
+  - Scenario type selection:
+    - Simple email
+    - One attachment
+    - Two attachments
+    - Google Drive share
+  - Email signature
+  - Customization prompt
+  - Email examples prompt
+- **Management Features**:
+  - Add new scenarios
+  - Edit existing scenarios
+  - Configure scenario settings
+
+#### 4. Email Signatures
+- **Purpose**: Manage email signature templates
+- **Features**:
+  - Create new signatures
+  - Edit existing signatures
+  - Associate signatures with scenarios
+
+#### 5. Prompts
+- **Purpose**: Manage overview prompts for scenarios
+- **Features**:
+  - Add new prompts
+  - Edit existing prompts
+  - Associate prompts with scenarios
+
+## 🔄 Data Flow & Integration
+
+### HubSpot Integration
+- **Custom Properties**:
+  - past_sequences: Tracks completed scenarios
+  - scenario_on_connection: Records which scenario received response
+  - currently_in_scenario: Tracks active scenarios
+  - date_of_connection: Response timing
+  - hs_lead_status: Connection status
+
+### Make.com Integration
+- **Scenario Types**:
+  1. Simple email sending
+  2. Single attachment emails
+  3. Double attachment emails
+  4. Google Drive share emails
+
+## 💻 Development Guidelines
+
+### Performance Considerations
+- Handle thousands of contacts efficiently
+- Implement manual refresh mechanism
+- Optimize API calls to HubSpot
+- Cache response data appropriately
+
+### Error Handling
+- Manage HubSpot API rate limits
+- Handle large data sets gracefully
+- Provide clear error messages
+- Implement retry mechanisms
+
+### UI/UX Requirements
+- Consistent styling across pages
+- HubSpot color scheme integration
+- High-end tech product aesthetic
+- Responsive design
+- Clear data visualization
+
+## 🛠 Technical Implementation
+
+### API Integration
+- Use HubSpot Private App API
+- Implement efficient contact querying
+- Handle multi-property updates
+- Manage rate limiting
+
+### Data Management
+- Efficient contact counting
+- Scenario tracking
+- Response rate calculations
+- Pipeline stage management
+
+### Code Quality Standards
+- TypeScript for type safety
+- Comprehensive error handling
+- Clear documentation
+- Performance optimization
+- Regular testing
+
+## 🚀 Performance Guidelines
+
+### Optimization Priorities
+1. Contact data loading
+2. Scenario metrics calculation
+3. HubSpot API calls
+4. Real-time updates
+5. Page load times
+
+### Caching Strategy
+- Implement stale-while-revalidate
+- Cache HubSpot responses
+- Store scenario configurations
+- Optimize repeat queries
+
+## 🔍 Testing Requirements
+
+### Test Coverage
+- Unit tests for utilities
+- Integration tests for API
+- E2E tests for critical paths
+- Performance benchmarks
+- Error scenario testing
+
+### Testing Approach
+1. Write test description
+2. Define expected behavior
+3. Implement test cases
+4. Verify edge cases
+5. Document test coverage
+
+## 🛡️ Security Considerations
+
+### API Security
+- Validate all inputs
+- Sanitize HubSpot data
+- Protect webhook endpoints
+- Rate limit API calls
+- Handle authentication
+
+### Data Protection
+- Secure environment variables
+- Encrypt sensitive data
+- Implement access controls
+- Log security events
+- Regular security audits
+
+## 📈 Monitoring & Maintenance
+
+### Performance Monitoring
+- Track API response times
+- Monitor error rates
+- Measure page load times
+- Watch memory usage
+- Log system health
+
+### Maintenance Tasks
+- Regular dependency updates
+- Code quality checks
+- Performance optimization
+- Security patches
+- Documentation updates
+
+## ⚠️ Critical Reminders
+
+1. Always handle HubSpot rate limits
+2. Maintain proper error boundaries
+3. Update scenario tracking
+4. Optimize for large contact lists
+5. Keep documentation current
+6. Follow security protocols
+
+Remember: Quality and maintainability over speed. Focus on robust error handling and clear documentation.
+
+## 📚 Documentation Strategy
+
+### Specialized Markdown Files
+- `database_setup.md`: Schema and queries
+- `api_endpoints.md`: API documentation
+- `deployment.md`: Deployment procedures
+- `testing.md`: Test scenarios
+- `security.md`: Security protocols
+
+### File Headers
+```typescript
+/**
+ * @file: [filename]
+ * @path: src/components/scenarios/ScenarioCard.tsx
+ * @description: Component for displaying individual scenario metrics
+ * @dependencies: HubSpot API, React Query
+ * @lastUpdated: [date]
+ */
+```
+
+## 🔄 Workflow Optimization
+
+### Task Breakdown
+1. Split large features into smaller tasks
+2. Create focused branches per task
+3. Implement sequential improvements
+4. Regular testing checkpoints
+5. Documentation updates
+
+### Code Review Process
+1. Verify comment coverage
+2. Check error handling
+3. Assess performance impact
+4. Review security implications
+5. Test edge cases
+
+## ⚡ Performance Optimization
+
+### Loading Strategy
+- Implement manual refresh mechanism
+- Optimize HubSpot API calls
+- Cache scenario data
+- Lazy load components
+- Minimize bundle size
+
+### Data Management
+- Batch API requests
+- Implement pagination
+- Optimize state updates
+- Use efficient data structures
+- Regular performance monitoring
+
+## 🔑 Critical Reminders
+
+### Development Process
+- Comment every 3-4 lines of code
+- Focus on maintainable solutions
+- Regular documentation updates
+- Thorough error handling
+- Performance consideration
+- Security-first approach
+
+### AI Interaction
+- Clear, specific prompts
+- Request thorough reasoning
+- Focus on minimal solutions
+- Regular context updates
+- Document AI decisions

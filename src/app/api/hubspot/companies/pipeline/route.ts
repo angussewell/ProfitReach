@@ -1,307 +1,175 @@
 import { NextResponse } from 'next/server';
 import hubspotClient from '@/utils/hubspotClient';
-import { FilterOperatorEnum, PublicObjectSearchRequest } from '@hubspot/api-client/lib/codegen/crm/companies';
 
-// Define response type for HubSpot search API
+// Cache results for 5 minutes unless explicitly refreshed
+export const dynamic = 'force-dynamic';
+export const revalidate = 300;
+
 interface HubSpotSearchResponse {
   total: number;
   results: Array<{
     id: string;
     properties: {
-      name: string;
-      createdate: string;
-      hs_lastmodifieddate: string;
-      lifecyclestage: string;
+      lifecyclestage?: string;
     };
   }>;
+  paging?: {
+    next?: {
+      after?: string;
+    };
+  };
 }
 
-// Define pipeline stages with correct HubSpot lifecycle stage IDs
-const PIPELINE_STAGES = [
+interface Stage {
+  name: string;
+  id: string;
+  count: number;
+  percentage: number;
+}
+
+const STAGES: Array<{ name: string; id: string }> = [
   { name: 'Marketing Qualified Lead', id: 'marketingqualifiedlead' },
   { name: 'Sales Qualified Lead', id: '205174134' },
   { name: 'Opportunity', id: '39710605' },
-  { name: 'Closed Lost', id: '205609479' },
   { name: 'Customer', id: 'customer' },
+  { name: 'Closed Lost', id: '205609479' },
   { name: 'Stale', id: '39786496' },
   { name: 'Abandoned', id: '42495546' }
 ];
 
-// Cache configuration with persistence
+// In-memory cache
+let cache: {
+  data: { stages: Stage[], total: number } | null;
+  lastUpdated: number;
+} = {
+  data: null,
+  lastUpdated: 0
+};
+
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-const CACHE_STALE_WHILE_REVALIDATE = 30 * 60 * 1000; // 30 minutes
-interface CacheEntry {
-  data: any;
-  timestamp: number;
-  lastSuccessfulFetch: number;
+
+async function fetchAllCompanies(requestId: string): Promise<Map<string, number>> {
+  const stageCounts = new Map<string, number>();
+  let after: string | undefined;
+  let retryCount = 0;
+  const maxRetries = 3;
+
+  do {
+    try {
+      const response = await hubspotClient.apiRequest<HubSpotSearchResponse>({
+        method: 'POST',
+        path: '/crm/v3/objects/companies/search',
+        body: {
+          filterGroups: [{
+            filters: [{
+              propertyName: 'lifecyclestage',
+              operator: 'IN',
+              values: STAGES.map(stage => stage.id)
+            }]
+          }],
+          properties: ['lifecyclestage'],
+          limit: 100,
+          after
+        },
+        timeoutMs: 30000
+      });
+
+      // Count companies by lifecycle stage
+      response.results.forEach(company => {
+        const stage = company.properties.lifecyclestage;
+        if (stage) {
+          stageCounts.set(stage, (stageCounts.get(stage) || 0) + 1);
+        }
+      });
+
+      after = response.paging?.next?.after;
+      console.log(`[${requestId}] Fetched page: ${response.results.length} companies`);
+
+      if (!after) break;
+
+      await new Promise(resolve => setTimeout(resolve, 500));
+      retryCount = 0;
+    } catch (error: any) {
+      if (error.status === 429) {
+        retryCount++;
+        if (retryCount > maxRetries) {
+          console.log(`[${requestId}] Max retries reached, returning current counts`);
+          break;
+        }
+        const delay = Math.min(1000 * Math.pow(2, retryCount), 8000);
+        console.log(`[${requestId}] Rate limit hit, waiting ${delay}ms... (retry ${retryCount}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      throw error;
+    }
+  } while (after);
+
+  return stageCounts;
 }
-const cache: Record<string, CacheEntry> = {};
 
-// Helper function to get cached data with stale-while-revalidate
-const getCachedData = (key: string): { data: any | null; isStale: boolean } => {
-  const entry = cache[key];
-  if (!entry) return { data: null, isStale: false };
-  
-  const now = Date.now();
-  const age = now - entry.timestamp;
-  
-  if (age <= CACHE_TTL) {
-    return { data: entry.data, isStale: false };
-  }
-  
-  if (age <= CACHE_STALE_WHILE_REVALIDATE) {
-    return { data: entry.data, isStale: true };
-  }
-  
-  delete cache[key];
-  return { data: null, isStale: false };
-};
-
-// Helper function to set cached data
-const setCachedData = (key: string, data: any, wasSuccessful: boolean = true) => {
-  const now = Date.now();
-  const existing = cache[key];
-  
-  cache[key] = {
-    data,
-    timestamp: now,
-    lastSuccessfulFetch: wasSuccessful ? now : (existing?.lastSuccessfulFetch || now)
-  };
-};
-
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Helper function to validate token with detailed logging
-const validateEnvironment = () => {
-  const token = process.env.HUBSPOT_PRIVATE_APP_TOKEN;
-  if (!token) {
-    console.error('HUBSPOT_PRIVATE_APP_TOKEN is not set');
-    throw new Error('HubSpot token not configured');
-  }
-
-  // Log token details for debugging (safely)
-  console.log('Token validation:', {
-    length: token.length,
-    prefix: token.slice(0, 7),
-    suffix: token.slice(-4),
-    nodeEnv: process.env.NODE_ENV,
-    timestamp: new Date().toISOString()
-  });
-
-  return token;
-};
-
-// Helper function to fetch data for a single stage with retries
-async function fetchStageData(stage: typeof PIPELINE_STAGES[0], requestId: string) {
-  const searchRequest: PublicObjectSearchRequest = {
-    filterGroups: [
-      {
-        filters: [
-          {
-            propertyName: 'lifecyclestage',
-            operator: FilterOperatorEnum.Eq,
-            value: stage.id,
-          },
-        ],
-      },
-    ],
-    properties: ['name', 'createdate', 'hs_lastmodifieddate', 'lifecyclestage'],
-    limit: 100,
-    after: '0',
-    sorts: []
-  };
-
-  // Log the request for debugging
-  console.log(`[${requestId}] Fetching data for stage ${stage.name}:`, {
-    request: searchRequest,
-    timestamp: new Date().toISOString()
-  });
-
+export async function GET(request: Request) {
   try {
-    validateEnvironment(); // Just validate, don't store token
-    const response = await hubspotClient.apiRequest<HubSpotSearchResponse>({
-      method: 'POST',
-      path: '/crm/v3/objects/companies/search',
-      body: searchRequest,
-      timeoutMs: 15000 // 15 second timeout per stage
-    });
+    const url = new URL(request.url);
+    const forceRefresh = url.searchParams.get('refresh') === '1';
+    const requestId = Math.random().toString(36).substring(7);
 
-    // Log the raw response for debugging
-    console.log(`[${requestId}] Response for stage ${stage.name}:`, {
-      hasResults: !!response?.results,
-      total: response?.total,
-      timestamp: new Date().toISOString()
-    });
-
-    if (!response?.results) {
-      throw new Error('No results in response');
+    // Check for force refresh
+    if (forceRefresh) {
+      console.log(`[${requestId}] Force refreshing pipeline data`);
+      cache.data = null;
     }
 
-    return {
-      name: stage.name,
-      id: stage.id,
-      count: response.total || 0,
-      error: false,
-    };
-  } catch (error: any) {
-    console.error(`[${requestId}] Error fetching pipeline data for stage ${stage.name}:`, {
-      error: error.message,
-      status: error.response?.status,
-      data: error.response?.data,
-      stack: error.stack,
-      timestamp: new Date().toISOString()
-    });
+    // Return cached data if available and not forcing refresh
+    if (!forceRefresh && cache.data && (Date.now() - cache.lastUpdated) < CACHE_TTL) {
+      console.log(`[${requestId}] Returning cached pipeline data`);
+      return NextResponse.json({ ...cache.data, fromCache: true });
+    }
 
-    // Return error state for this stage
-    return {
-      name: stage.name,
-      id: stage.id,
-      count: 0,
-      error: true,
-      errorMessage: error.message
-    };
-  }
-}
-
-// Helper function to process pipeline data
-const processPipelineData = (stages: any[], requestId: string) => {
-  const totalPipeline = stages.reduce((sum, stage) => sum + stage.count, 0);
-
-  const stagesWithPercentages = stages.map(stage => ({
-    ...stage,
-    percentage: totalPipeline > 0 ? (stage.count / totalPipeline) * 100 : 0,
-  }));
-
-  return {
-    stages: stagesWithPercentages,
-    total: totalPipeline,
-    lastUpdated: new Date().toISOString(),
-    requestId
-  };
-};
-
-export async function GET() {
-  const requestId = Math.random().toString(36).substring(7);
-  console.log(`[${requestId}] Starting pipeline data fetch`, {
-    timestamp: new Date().toISOString()
-  });
-
-  try {
-    // Validate environment
-    validateEnvironment();
-
-    // Check cache with stale-while-revalidate
-    const { data: cachedData, isStale } = getCachedData('pipeline_data');
+    console.log(`[${requestId}] Fetching fresh pipeline data`);
+    const stageCounts = await fetchAllCompanies(requestId);
     
-    // If we have fresh cache data, return it
-    if (cachedData && !isStale) {
-      console.log(`[${requestId}] Returning fresh cached pipeline data`, {
-        timestamp: new Date().toISOString()
-      });
-      return NextResponse.json(cachedData);
-    }
+    const total = Array.from(stageCounts.values()).reduce((sum, count) => sum + count, 0);
+    
+    const stages: Stage[] = STAGES.map(stage => ({
+      name: stage.name,
+      id: stage.id,
+      count: stageCounts.get(stage.id) || 0,
+      percentage: total > 0 ? ((stageCounts.get(stage.id) || 0) / total) * 100 : 0
+    }));
 
-    // If we have stale data, trigger background refresh and return stale data
-    if (cachedData && isStale) {
-      console.log(`[${requestId}] Returning stale cached data and triggering refresh`, {
-        timestamp: new Date().toISOString()
-      });
-      
-      // Trigger background refresh
-      fetchPipelineData(requestId).catch(error => {
-        console.error(`[${requestId}] Background refresh failed:`, {
-          error: error.message,
-          stack: error.stack,
-          timestamp: new Date().toISOString()
-        });
-      });
-      
-      return NextResponse.json({
-        ...cachedData,
-        isStale: true
-      });
-    }
+    const data = {
+      stages,
+      total,
+      lastUpdated: new Date().toISOString()
+    };
+    
+    // Update cache
+    cache.data = data;
+    cache.lastUpdated = Date.now();
 
-    // No cache data available, fetch fresh data
-    const responseData = await fetchPipelineData(requestId);
-    return NextResponse.json(responseData);
-  } catch (error: any) {
-    console.error(`[${requestId}] Error in pipeline GET:`, {
-      error: error.message,
-      stack: error.stack,
-      timestamp: new Date().toISOString()
+    console.log(`[${requestId}] Pipeline data fetched successfully:`, {
+      totalCompanies: total,
+      stageBreakdown: stages.map(s => `${s.name}: ${s.count}`)
     });
 
-    // Try to return cached data on error
-    const { data: cachedData } = getCachedData('pipeline_data');
-    if (cachedData) {
-      console.log(`[${requestId}] Returning cached data after error`, {
-        timestamp: new Date().toISOString()
-      });
+    return NextResponse.json(data);
+
+  } catch (error: any) {
+    console.error('Error fetching pipeline data:', error);
+    
+    // Return cached data if available
+    if (cache.data) {
       return NextResponse.json({
-        ...cachedData,
+        ...cache.data,
         fromCache: true,
-        error: error.message
+        error: 'Error fetching fresh data'
       });
     }
 
     return NextResponse.json(
-      { 
-        error: 'Failed to fetch pipeline data',
-        message: error.message,
-        requestId,
-        timestamp: new Date().toISOString()
-      },
-      { status: 500 }
+      { error: error.message || 'Failed to fetch pipeline data' },
+      { status: error.response?.status || 500 }
     );
   }
-}
-
-// Helper function to fetch pipeline data
-async function fetchPipelineData(requestId: string) {
-  // Fetch stages sequentially with proper delays
-  const stages = [];
-  let consecutiveErrors = 0;
-  let hasAnySuccess = false;
-  
-  for (const stage of PIPELINE_STAGES) {
-    try {
-      // Add increasing delay between requests if we're seeing errors
-      const delayTime = consecutiveErrors > 0 ? Math.min(consecutiveErrors * 1000, 5000) : 500;
-      await delay(delayTime);
-      
-      const stageData = await fetchStageData(stage, requestId);
-      stages.push(stageData);
-      
-      // Track success/failure
-      if (!stageData.error) {
-        hasAnySuccess = true;
-        consecutiveErrors = 0;
-      } else {
-        consecutiveErrors++;
-      }
-    } catch (error) {
-      consecutiveErrors++;
-      stages.push({
-        name: stage.name,
-        id: stage.id,
-        count: 0,
-        error: true
-      });
-    }
-  }
-
-  const responseData = processPipelineData(stages, requestId);
-
-  // Cache the response based on success
-  setCachedData('pipeline_data', responseData, hasAnySuccess);
-
-  console.log(`[${requestId}] Successfully fetched pipeline data`, {
-    totalStages: stages.length,
-    totalCompanies: responseData.total,
-    hasAnySuccess,
-    timestamp: new Date().toISOString()
-  });
-
-  return responseData;
 } 
