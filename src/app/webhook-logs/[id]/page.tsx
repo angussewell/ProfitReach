@@ -54,14 +54,31 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
                 </div>
               </div>
               <div>
+                <Label>Scenario Name</Label>
+                <div className="text-sm font-medium">{log.scenarioName}</div>
+              </div>
+              <div>
                 <Label>Timestamp</Label>
                 <div className="text-sm font-medium">
                   {new Date(log.createdAt).toLocaleString()}
                 </div>
               </div>
-              <div>
-                <Label>Scenario Name</Label>
-                <div className="text-sm font-medium">{log.scenarioName}</div>
+              <div className="pt-2 border-t">
+                <Label>Pipeline Status</Label>
+                <div className="grid grid-cols-2 gap-2 mt-1">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Lead Status</div>
+                    <div className="text-sm font-medium">
+                      {contactInfo.leadStatus}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Lifecycle Stage</div>
+                    <div className="text-sm font-medium">
+                      {contactInfo.lifecycleStage}
+                    </div>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -87,18 +104,6 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
                 <Label>Company</Label>
                 <div className="text-sm font-medium">
                   {contactInfo.company}
-                </div>
-              </div>
-              <div>
-                <Label>Lead Status</Label>
-                <div className="text-sm font-medium">
-                  {contactInfo.leadStatus}
-                </div>
-              </div>
-              <div>
-                <Label>Lifecycle Stage</Label>
-                <div className="text-sm font-medium">
-                  {contactInfo.lifecycleStage}
                 </div>
               </div>
             </CardContent>
