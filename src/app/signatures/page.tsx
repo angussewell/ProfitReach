@@ -23,6 +23,7 @@ export default function SignaturesPage() {
   });
   const [searchQuery, setSearchQuery] = useState('');
   const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     fetchSignatures();
@@ -45,29 +46,58 @@ export default function SignaturesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
+    
     try {
+      // Ensure we have valid data
+      if (!editingSignature) {
+        throw new Error('No signature data available');
+      }
+
+      const signatureData = {
+        id: editingSignature.id,
+        signatureName: editingSignature.signatureName.trim(),
+        signatureContent: editingSignature.signatureContent.trim()
+      };
+
+      // Validate before sending
+      if (!signatureData.signatureName) {
+        throw new Error('Signature name is required');
+      }
+      if (!signatureData.signatureContent) {
+        throw new Error('Signature content is required');
+      }
+
+      console.log('Submitting signature data:', signatureData);
+
       const response = await fetch('/api/signatures', {
-        method: editingSignature ? 'PUT' : 'POST',
+        method: 'POST',  // Unified endpoint for create/update
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editingSignature || newSignature),
+        body: JSON.stringify(signatureData)
       });
 
-      if (!response.ok) throw new Error('Failed to save signature');
-      
+      const responseData = await response.json();
+      console.log('Server response:', responseData);
+
+      if (!response.ok) {
+        throw new Error(responseData.details?.join(', ') || responseData.error || 'Failed to save signature');
+      }
+
+      await fetchSignatures();
       toast({
         title: 'Success',
-        description: `Signature ${editingSignature ? 'updated' : 'created'} successfully`,
+        description: 'Signature saved successfully'
       });
-      
-      setNewSignature({ signatureName: '', signatureContent: '' });
       setEditingSignature(null);
-      fetchSignatures();
     } catch (error) {
+      console.error('Failed to save signature:', error);
       toast({
         title: 'Error',
-        description: 'Failed to save signature',
-        variant: 'destructive',
+        description: error instanceof Error ? error.message : 'Failed to save signature',
+        variant: 'destructive'
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
