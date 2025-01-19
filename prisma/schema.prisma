@@ -39,3 +39,24 @@ model Prompt {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+model WebhookLog {
+  id           String   @id @default(cuid())
+  scenarioName String
+  contactEmail String
+  contactName  String?
+  status       String   @default("success")
+  errorMessage String?
+  requestBody  Json
+  responseBody Json?
+  createdAt    DateTime @default(now())
+
+  @@index([scenarioName])
+  @@index([createdAt])
+}
+
+model playing_with_neon {
+  id    Int    @id @default(autoincrement())
+  name  String
+  value Float? @db.Real
+}

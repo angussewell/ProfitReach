@@ -129,7 +129,7 @@ export default function Dashboard() {
           >
             <Card className="bg-gradient-to-br from-[#ff7a59] to-[#ff957a] text-white">
               <CardHeader className="pb-2">
-                <CardTitle className="text-lg font-medium opacity-90">Total Pipeline</CardTitle>
+                <CardTitle className="text-lg font-semibold text-white">Total Pipeline</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-4xl font-bold">
@@ -139,7 +139,7 @@ export default function Dashboard() {
                     totalPipeline.toLocaleString()
                   )}
                 </div>
-                <p className="text-sm mt-2 opacity-80">Total companies in pipeline</p>
+                <p className="text-sm mt-2 text-white/80">Total companies in pipeline</p>
               </CardContent>
             </Card>
           </motion.div>
@@ -151,7 +151,7 @@ export default function Dashboard() {
           >
             <Card className="bg-gradient-to-br from-[#00a4bd] to-[#33b5c9] text-white">
               <CardHeader className="pb-2">
-                <CardTitle className="text-lg font-medium opacity-90">Conversion Rate</CardTitle>
+                <CardTitle className="text-lg font-semibold text-white">Conversion Rate</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-4xl font-bold">
@@ -161,7 +161,7 @@ export default function Dashboard() {
                     `${conversionRate.toFixed(1)}%`
                   )}
                 </div>
-                <p className="text-sm mt-2 opacity-80">Companies converted to customers</p>
+                <p className="text-sm mt-2 text-white/80">Companies converted to customers</p>
               </CardContent>
             </Card>
           </motion.div>
@@ -173,7 +173,7 @@ export default function Dashboard() {
           >
             <Card className="bg-gradient-to-br from-[#00bda5] to-[#33cbb8] text-white">
               <CardHeader className="pb-2">
-                <CardTitle className="text-lg font-medium opacity-90">Opportunities</CardTitle>
+                <CardTitle className="text-lg font-semibold text-white">Opportunities</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-4xl font-bold">
@@ -183,7 +183,7 @@ export default function Dashboard() {
                     opportunityCount.toLocaleString()
                   )}
                 </div>
-                <p className="text-sm mt-2 opacity-80">Active opportunities</p>
+                <p className="text-sm mt-2 text-white/80">Active opportunities</p>
               </CardContent>
             </Card>
           </motion.div>

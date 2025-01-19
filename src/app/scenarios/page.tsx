@@ -153,8 +153,8 @@ export default function ScenariosPage() {
         >
           <Card className="bg-gradient-to-br from-[#ff7a59] to-[#ff957a] text-white">
             <CardHeader className="pb-2">
-              <CardTitle className="text-lg font-medium opacity-90 flex items-center">
-                <Users className="w-5 h-5 mr-2 opacity-80" />
+              <CardTitle className="text-lg font-semibold text-white flex items-center">
+                <Users className="w-5 h-5 mr-2" />
                 Total Contacts
               </CardTitle>
             </CardHeader>
@@ -174,8 +174,8 @@ export default function ScenariosPage() {
         >
           <Card className="bg-gradient-to-br from-[#00a4bd] to-[#33b5c9] text-white">
             <CardHeader className="pb-2">
-              <CardTitle className="text-lg font-medium opacity-90 flex items-center">
-                <MessageSquare className="w-5 h-5 mr-2 opacity-80" />
+              <CardTitle className="text-lg font-semibold text-white flex items-center">
+                <MessageSquare className="w-5 h-5 mr-2" />
                 Total Responses
               </CardTitle>
             </CardHeader>
@@ -195,8 +195,8 @@ export default function ScenariosPage() {
         >
           <Card className="bg-gradient-to-br from-[#516f90] to-[#7389a3] text-white">
             <CardHeader className="pb-2">
-              <CardTitle className="text-lg font-medium opacity-90 flex items-center">
-                <TrendingUp className="w-5 h-5 mr-2 opacity-80" />
+              <CardTitle className="text-lg font-semibold text-white flex items-center">
+                <TrendingUp className="w-5 h-5 mr-2" />
                 Response Rate
               </CardTitle>
             </CardHeader>
@@ -246,6 +246,25 @@ export default function ScenariosPage() {
                     <span className="text-2xl font-bold text-green-500">
                       {scenario.responseCount.toLocaleString()}
                     </span>
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium">Response Rate</p>
+                    <span className="text-2xl font-bold text-purple-500">
+                      {((scenario.responseCount / scenario.totalCount) * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden mt-2">
+                    <motion.div
+                      className="h-full bg-gradient-to-r from-purple-500 to-purple-400"
+                      style={{
+                        width: `${(scenario.responseCount / scenario.totalCount) * 100}%`
+                      }}
+                      initial={{ width: 0 }}
+                      animate={{ width: `${(scenario.responseCount / scenario.totalCount) * 100}%` }}
+                      transition={{ duration: 0.5, delay: 0.2 }}
+                    />
                   </div>
                 </div>
               </div>

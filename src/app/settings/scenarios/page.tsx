@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
-import { Select } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Plus, Edit, Loader2, Search, X } from 'lucide-react';
 
@@ -275,14 +275,19 @@ export default function ManageScenariosPage() {
                     <label className="text-sm font-medium text-[#2e475d]">Type</label>
                     <Select
                       value={editingScenario?.scenarioType || ''}
-                      onChange={(e) => setEditingScenario(prev => prev ? { ...prev, scenarioType: e.target.value } : null)}
-                      required
-                      className="h-12 border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all rounded-lg"
+                      onValueChange={(value: string) => {
+                        setEditingScenario(prev => prev ? { ...prev, scenarioType: value } : null);
+                      }}
                     >
-                      <option value="simple">Simple Email</option>
-                      <option value="one_attachment">One Attachment</option>
-                      <option value="two_attachments">Two Attachments</option>
-                      <option value="google_drive">Google Drive Share</option>
+                      <SelectTrigger className="h-12 border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all rounded-lg">
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="simple">Simple Email</SelectItem>
+                        <SelectItem value="one_attachment">One Attachment</SelectItem>
+                        <SelectItem value="two_attachments">Two Attachments</SelectItem>
+                        <SelectItem value="google_drive">Google Drive Share</SelectItem>
+                      </SelectContent>
                     </Select>
                   </div>
 
@@ -301,16 +306,20 @@ export default function ManageScenariosPage() {
                     <label className="text-sm font-medium text-[#2e475d]">Email Signature</label>
                     <Select
                       value={editingScenario?.signatureId || ''}
-                      onChange={(e) => setEditingScenario(prev => prev ? { ...prev, signatureId: e.target.value } : null)}
-                      required
-                      className="h-12 border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all rounded-lg"
+                      onValueChange={(value: string) => {
+                        setEditingScenario(prev => prev ? { ...prev, signatureId: value } : null);
+                      }}
                     >
-                      <option value="">Select a signature</option>
-                      {signatures.map((sig) => (
-                        <option key={sig.id} value={sig.id}>
-                          {sig.signatureName}
-                        </option>
-                      ))}
+                      <SelectTrigger className="h-12 border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all rounded-lg">
+                        <SelectValue placeholder="Select signature" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {signatures.map((sig) => (
+                          <SelectItem key={sig.id} value={sig.id}>
+                            {sig.signatureName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
                     </Select>
                   </div>
 

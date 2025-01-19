@@ -1,4 +1,4 @@
-# Cold Outreach Dashboard - Cursor Rules
+# Hubspot Dashboard - Cursor Rules
 
 ## 🎯 Project Overview
 
@@ -64,6 +64,24 @@ This Next.js dashboard application tracks and manages cold outreach scenarios th
   - Add new prompts
   - Edit existing prompts
   - Associate prompts with scenarios
+
+#### 6. Webhook Logs
+- **Purpose**: Monitor and debug Make.com scenario interactions
+- **Key Metrics**:
+  - Success/failure status
+  - Scenario performance
+  - Contact engagement
+  - Error tracking
+- **Data Display**:
+  - Real-time log entries
+  - Scenario filtering
+  - Contact search
+  - JSON payload inspection
+- **Features**:
+  - Detailed log viewing
+  - Error analysis
+  - Request/response inspection
+  - Scenario filtering
 
 ## 🔄 Data Flow & Integration
 
