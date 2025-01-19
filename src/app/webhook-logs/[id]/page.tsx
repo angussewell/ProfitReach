@@ -4,6 +4,23 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 
+// Helper function to extract contact info from request body
+function extractContactInfo(requestBody: any) {
+  const contactData = requestBody?.contactData || {};
+  const firstName = contactData?.first_name || contactData?.["first_name"];
+  const lastName = contactData?.last_name || contactData?.["last_name"];
+  const company = contactData?.company || contactData?.["company"];
+  const leadStatus = contactData?.lead_status || contactData?.["lead_status"];
+  const lifecycleStage = contactData?.lifecycle_stage || contactData?.["lifecycle_stage"];
+  
+  return {
+    contactName: [firstName, lastName].filter(Boolean).join(' ') || 'N/A',
+    company: company || 'Not available',
+    leadStatus: leadStatus || 'Empty',
+    lifecycleStage: lifecycleStage || 'Unknown'
+  };
+}
+
 export default async function WebhookLogPage({ params }: { params: { id: string } }) {
   const log = await prisma.webhookLog.findUnique({
     where: { id: params.id }
@@ -14,8 +31,7 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
   }
 
   const requestBody = log.requestBody as any;
-  const mappedFields = requestBody?.mappedFields || {};
-  const contactData = requestBody?.contactData || {};
+  const contactInfo = extractContactInfo(requestBody);
 
   return (
     <div className="p-6 space-y-6">
@@ -39,13 +55,13 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
               </div>
               <div>
                 <Label>Timestamp</Label>
-                <div className="text-sm">
+                <div className="text-sm font-medium">
                   {new Date(log.createdAt).toLocaleString()}
                 </div>
               </div>
               <div>
                 <Label>Scenario Name</Label>
-                <div className="text-sm">{log.scenarioName}</div>
+                <div className="text-sm font-medium">{log.scenarioName}</div>
               </div>
             </CardContent>
           </Card>
@@ -58,7 +74,7 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
               <div>
                 <Label>Contact Name</Label>
                 <div className="text-sm font-medium">
-                  {mappedFields.contactName || 'Not available'}
+                  {contactInfo.contactName}
                 </div>
               </div>
               <div>
@@ -70,19 +86,19 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
               <div>
                 <Label>Company</Label>
                 <div className="text-sm font-medium">
-                  {mappedFields.company || 'Not available'}
+                  {contactInfo.company}
                 </div>
               </div>
               <div>
                 <Label>Lead Status</Label>
                 <div className="text-sm font-medium">
-                  {mappedFields.leadStatus || 'Empty'}
+                  {contactInfo.leadStatus}
                 </div>
               </div>
               <div>
                 <Label>Lifecycle Stage</Label>
                 <div className="text-sm font-medium">
-                  {mappedFields.lifecycleStage || 'Unknown'}
+                  {contactInfo.lifecycleStage}
                 </div>
               </div>
             </CardContent>
@@ -108,7 +124,7 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
           </CardHeader>
           <CardContent>
             <pre className="text-sm whitespace-pre-wrap">
-              {JSON.stringify(log.requestBody, null, 2)}
+              {JSON.stringify(requestBody, null, 2)}
             </pre>
           </CardContent>
         </Card>
