@@ -28,6 +28,7 @@ const SYSTEM_FIELDS = [
   { id: 'leadStatus', label: 'Lead Status', required: false },
   { id: 'lifecycleStage', label: 'Lifecycle Stage', required: false },
   { id: 'userWebsite', label: 'User Website', required: false },
+  { id: 'company', label: 'Company Name', required: false }
 ];
 
 export default function SettingsPage() {

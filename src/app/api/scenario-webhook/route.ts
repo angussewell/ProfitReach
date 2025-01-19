@@ -118,13 +118,41 @@ export async function POST(request: Request) {
     }
 
     // Get mapped values with detailed logging
-    const [scenarioName, contactEmail] = await Promise.all([
+    const [
+      scenarioName,
+      contactEmail,
+      contactFirstName,
+      contactLastName,
+      leadStatus,
+      lifecycleStage,
+      company
+    ] = await Promise.all([
       getMappedValue(data, 'scenarioName').then(value => {
         logMessage('info', 'Mapped scenarioName', { value });
         return value;
       }),
       getMappedValue(data, 'contactEmail').then(value => {
         logMessage('info', 'Mapped contactEmail', { value });
+        return value;
+      }),
+      getMappedValue(data, 'contactFirstName').then(value => {
+        logMessage('info', 'Mapped contactFirstName', { value });
+        return value;
+      }),
+      getMappedValue(data, 'contactLastName').then(value => {
+        logMessage('info', 'Mapped contactLastName', { value });
+        return value;
+      }),
+      getMappedValue(data, 'leadStatus').then(value => {
+        logMessage('info', 'Mapped leadStatus', { value });
+        return value;
+      }),
+      getMappedValue(data, 'lifecycleStage').then(value => {
+        logMessage('info', 'Mapped lifecycleStage', { value });
+        return value;
+      }),
+      getMappedValue(data, 'company').then(value => {
+        logMessage('info', 'Mapped company', { value });
         return value;
       })
     ]);
@@ -141,12 +169,11 @@ export async function POST(request: Request) {
     }
 
     // Fetch all related data in parallel with error handling for each promise
-    const [scenario, allPrompts, allSignatures, allScenarios] = await Promise.all([
+    const [scenario, allPrompts] = await Promise.all([
       prisma.scenario.findUnique({
         where: { name: scenarioName },
         include: { 
           signature: true,
-          // Ensure we include all possible relations
           prompts: true,
           attachments: true
         }
@@ -155,29 +182,9 @@ export async function POST(request: Request) {
         throw error;
       }),
       prisma.prompt.findMany({
-        orderBy: { createdAt: 'asc' },
-        include: { // Include any prompt relations
-          scenarios: true
-        }
+        orderBy: { createdAt: 'asc' }
       }).catch(error => {
         logMessage('error', 'Failed to fetch prompts', { error: String(error) });
-        throw error;
-      }),
-      prisma.signature.findMany({
-        orderBy: { signatureName: 'asc' }
-      }).catch(error => {
-        logMessage('error', 'Failed to fetch signatures', { error: String(error) });
-        throw error;
-      }),
-      prisma.scenario.findMany({
-        orderBy: { name: 'asc' },
-        include: { 
-          signature: true,
-          prompts: true,
-          attachments: true
-        }
-      }).catch(error => {
-        logMessage('error', 'Failed to fetch scenarios', { error: String(error) });
         throw error;
       })
     ]);
@@ -190,9 +197,12 @@ export async function POST(request: Request) {
       );
     }
 
-    // Prepare comprehensive enriched data with full details
+    // Prepare enriched data with only necessary information
     const enrichedData = {
-      // Current scenario full details
+      // Original webhook data preserved
+      originalData: data,
+      
+      // Current scenario details
       scenario: {
         id: scenario.id,
         name: scenario.name,
@@ -200,63 +210,33 @@ export async function POST(request: Request) {
         subjectLine: scenario.subjectLine,
         customizationPrompt: scenario.customizationPrompt,
         emailExamplesPrompt: scenario.emailExamplesPrompt,
-        createdAt: scenario.createdAt,
-        updatedAt: scenario.updatedAt,
-        // Include all scenario relations
+        signature: scenario.signature ? {
+          id: scenario.signature.id,
+          name: scenario.signature.signatureName,
+          content: scenario.signature.signatureContent
+        } : null,
         prompts: scenario.prompts || [],
         attachments: scenario.attachments || []
       },
-      // Contact information with all available data
+      
+      // Contact information with mapped fields
       contact: {
         email: contactEmail,
-        name: data.contactData?.name || [
-          data.contactData?.first_name,
-          data.contactData?.last_name
-        ].filter(Boolean).join(' '),
-        // Include all contact data for reference
-        data: data.contactData || {},
-        // Include any mapped fields
-        mappedFields: {
-          scenarioName,
-          contactEmail
-        }
+        firstName: contactFirstName,
+        lastName: contactLastName,
+        name: [contactFirstName, contactLastName].filter(Boolean).join(' '),
+        company: company,
+        leadStatus: leadStatus,
+        lifecycleStage: lifecycleStage,
+        data: data.contactData || {}
       },
-      // Current signature if available
-      signature: scenario.signature ? {
-        id: scenario.signature.id,
-        name: scenario.signature.signatureName,
-        content: scenario.signature.signatureContent,
-        createdAt: scenario.signature.createdAt,
-        updatedAt: scenario.signature.updatedAt
-      } : null,
-      // All available prompts with full details
+      
+      // All available prompts
       prompts: allPrompts.map(p => ({
         id: p.id,
         name: p.name,
-        content: p.content,
-        createdAt: p.createdAt,
-        updatedAt: p.updatedAt,
-        scenarios: p.scenarios || []
-      })),
-      // Reference data with complete context
-      reference: {
-        signatures: allSignatures.map(s => ({
-          id: s.id,
-          name: s.signatureName,
-          createdAt: s.createdAt,
-          updatedAt: s.updatedAt
-        })),
-        scenarios: allScenarios.map(s => ({
-          id: s.id,
-          name: s.name,
-          type: s.scenarioType,
-          prompts: s.prompts || [],
-          attachments: s.attachments || [],
-          signature: s.signature,
-          createdAt: s.createdAt,
-          updatedAt: s.updatedAt
-        }))
-      }
+        content: p.content
+      }))
     };
 
     // Log the enriched data size
@@ -280,7 +260,16 @@ export async function POST(request: Request) {
         contactName: enrichedData.contact.name,
         status: forwardResult?.ok ? 'success' : 'error',
         errorMessage: forwardResult?.error,
-        requestBody: data,
+        requestBody: {
+          ...data,
+          mappedFields: {
+            contactEmail,
+            contactName: enrichedData.contact.name,
+            leadStatus,
+            lifecycleStage,
+            company
+          }
+        },
         responseBody: forwardResult
       }
     }).catch(error => {

@@ -74,14 +74,37 @@ This Next.js dashboard application tracks and manages cold outreach scenarios th
   - Error tracking
 - **Data Display**:
   - Real-time log entries
-  - Scenario filtering
-  - Contact search
-  - JSON payload inspection
+  - Contact information (name, email, company)
+  - Lead status and lifecycle stage
+  - Scenario details
+  - Request/response payloads
 - **Features**:
   - Detailed log viewing
-  - Error analysis
-  - Request/response inspection
+  - Error analysis with highlighted error messages
+  - Full request/response inspection
+  - Mapped fields visualization
   - Scenario filtering
+
+#### 7. Settings
+- **Purpose**: Configure webhook field mappings and system defaults
+- **Key Features**:
+  - Field mapping configuration
+  - Pre-configured templates (e.g., Make.com)
+  - System field management
+- **Configurable Fields**:
+  - Contact Email (required)
+  - Contact First Name
+  - Contact Last Name
+  - Scenario Name (required)
+  - Lead Status
+  - Lifecycle Stage
+  - User Website
+  - Company Name
+- **Management Features**:
+  - Template application
+  - Real-time field mapping
+  - Validation of required fields
+  - Bulk mapping updates
 
 ## 🔄 Data Flow & Integration
 
