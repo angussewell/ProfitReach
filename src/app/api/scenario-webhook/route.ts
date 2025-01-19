@@ -21,6 +21,16 @@ function getErrorMessage(error: unknown): string {
   return String(error);
 }
 
+// Transform webhook data by removing template syntax
+function transformWebhookData(data: Record<string, string>): Record<string, string> {
+  const transformed: Record<string, string> = {};
+  for (const [key, value] of Object.entries(data)) {
+    const cleanKey = key.replace(/[{}]/g, '');
+    transformed[cleanKey] = value;
+  }
+  return transformed;
+}
+
 // Production logging helper
 function logProduction(message: string, data?: any) {
   const logEntry = {
@@ -41,10 +51,10 @@ export async function POST(request: Request) {
     logProduction('Raw webhook data', { rawText });
     
     // Try to parse the JSON
-    let body: WebhookRequest;
+    let rawData: Record<string, string>;
     try {
-      body = JSON.parse(rawText);
-      logProduction('Parsed webhook body', body);
+      rawData = JSON.parse(rawText);
+      logProduction('Parsed webhook body', rawData);
     } catch (parseError) {
       logProduction('JSON parse error', { error: getErrorMessage(parseError) });
       
@@ -67,7 +77,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const { contactData, userWebhookUrl } = body;
+    // Transform the webhook data
+    const cleanData = transformWebhookData(rawData);
+    logProduction('Transformed webhook data', cleanData);
 
     // Verify database connection before proceeding
     await prisma.$connect();
@@ -77,12 +89,12 @@ export async function POST(request: Request) {
     const result = await prisma.$transaction(async (tx) => {
       const log = await tx.webhookLog.create({
         data: {
-          scenarioName: contactData.make_sequence || 'unknown',
-          contactEmail: contactData.email || 'unknown',
-          contactName: contactData.first_name ? 
-            `${contactData.first_name} ${contactData.last_name || ''}`.trim() : undefined,
+          scenarioName: cleanData.make_sequence || 'unknown',
+          contactEmail: cleanData.email || 'unknown',
+          contactName: cleanData.first_name ? 
+            `${cleanData.first_name} ${cleanData.last_name || ''}`.trim() : undefined,
           status: 'success',
-          requestBody: contactData,
+          requestBody: rawData,
           responseBody: { processed: true },
         }
       });
