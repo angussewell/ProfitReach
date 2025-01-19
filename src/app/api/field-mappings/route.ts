@@ -1,48 +1,55 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 
+// Production-ready logging
+function log(level: 'error' | 'info', message: string, data?: any) {
+  console[level](JSON.stringify({
+    timestamp: new Date().toISOString(),
+    level,
+    message,
+    environment: process.env.VERCEL_ENV || 'development',
+    ...data
+  }));
+}
+
 // Get all field mappings
 export async function GET() {
   try {
-    const mappings = await prisma.fieldMapping.findMany();
+    log('info', 'Fetching field mappings');
+    const mappings = await prisma.fieldMapping.findMany({
+      orderBy: { systemField: 'asc' }
+    });
     return NextResponse.json(mappings);
   } catch (error) {
-    console.error('Failed to fetch field mappings:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch field mappings' },
-      { status: 500 }
-    );
+    log('error', 'Failed to fetch field mappings', { error: String(error) });
+    return NextResponse.json({ error: 'Database operation failed' }, { status: 500 });
   }
 }
 
 // Create or update a field mapping
 export async function POST(request: Request) {
   try {
-    const { systemField, webhookField } = await request.json();
-
-    if (!systemField || !webhookField) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      );
+    const body = await request.json();
+    log('info', 'Creating/updating field mapping', { body });
+    
+    const { systemField, webhookField } = body;
+    if (!systemField?.trim() || !webhookField?.trim()) {
+      return NextResponse.json({ error: 'Invalid fields' }, { status: 400 });
     }
 
     const mapping = await prisma.fieldMapping.upsert({
       where: { systemField },
-      create: {
+      create: { 
         systemField,
         webhookField,
-        isRequired: systemField === 'contactEmail' || systemField === 'scenarioName'
+        isRequired: ['contactEmail', 'scenarioName'].includes(systemField)
       },
       update: { webhookField }
     });
 
     return NextResponse.json(mapping);
   } catch (error) {
-    console.error('Failed to update field mapping:', error);
-    return NextResponse.json(
-      { error: 'Failed to update field mapping' },
-      { status: 500 }
-    );
+    log('error', 'Failed to update field mapping', { error: String(error) });
+    return NextResponse.json({ error: 'Database operation failed' }, { status: 500 });
   }
 } 

@@ -7,6 +7,19 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 
+// Pre-configured templates for common webhook formats
+const WEBHOOK_TEMPLATES = {
+  make: {
+    contactEmail: '{email}',
+    contactFirstName: '{first_name}',
+    contactLastName: '{last_name}',
+    scenarioName: 'make_sequence',
+    leadStatus: 'lead_status',
+    lifecycleStage: 'lifecycle_stage',
+    userWebsite: 'website'
+  }
+};
+
 // System fields that can be mapped
 const SYSTEM_FIELDS = [
   { id: 'contactEmail', label: 'Contact Email', required: true },
@@ -47,7 +60,19 @@ export default function SettingsPage() {
           ]);
           
           setMappings(mappingsData);
-          setWebhookFields(fieldsData.fields);
+          // Add template fields to available fields
+          setWebhookFields([
+            ...new Set([
+              ...fieldsData.fields,
+              '{email}',
+              '{first_name}',
+              '{last_name}',
+              'make_sequence',
+              'lead_status',
+              'lifecycle_stage',
+              'website'
+            ])
+          ]);
         }
       } catch (error) {
         toast.error('Failed to load settings');
@@ -58,6 +83,24 @@ export default function SettingsPage() {
 
     loadData();
   }, []);
+
+  // Apply a template
+  const applyTemplate = async (template: keyof typeof WEBHOOK_TEMPLATES) => {
+    try {
+      const templateData = WEBHOOK_TEMPLATES[template];
+      
+      // Update all mappings in parallel
+      await Promise.all(
+        Object.entries(templateData).map(([systemField, webhookField]) =>
+          updateMapping(systemField, webhookField)
+        )
+      );
+
+      toast.success('Template applied successfully');
+    } catch (error) {
+      toast.error('Failed to apply template');
+    }
+  };
 
   // Update a field mapping
   const updateMapping = async (systemField: string, webhookField: string) => {
@@ -73,10 +116,9 @@ export default function SettingsPage() {
         setMappings(prev => 
           prev.map(m => m.systemField === systemField ? updatedMapping : m)
         );
-        toast.success('Mapping updated');
       }
     } catch (error) {
-      toast.error('Failed to update mapping');
+      throw error;
     }
   };
 
@@ -86,7 +128,15 @@ export default function SettingsPage() {
 
   return (
     <div className="p-8 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">Webhook Field Mappings</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold">Webhook Field Mappings</h1>
+        <Button 
+          onClick={() => applyTemplate('make')}
+          className="bg-[#ff7a59] hover:bg-[#ff8f73] text-white"
+        >
+          Apply Make.com Template
+        </Button>
+      </div>
       <Card className="p-6">
         <div className="space-y-6">
           {SYSTEM_FIELDS.map(field => {

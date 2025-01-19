@@ -11,9 +11,26 @@ async function getMappedValue(data: Record<string, any>, systemField: string): P
     return undefined;
   }
 
-  // Check both top level and contactData
-  return data[mapping.webhookField] || 
-         (data.contactData && data.contactData[mapping.webhookField]);
+  // Handle template format (e.g., {email})
+  const field = mapping.webhookField;
+  
+  // If it's a direct field in data
+  if (data[field]) {
+    return data[field];
+  }
+  
+  // If it's in contactData
+  if (data.contactData?.[field]) {
+    return data.contactData[field];
+  }
+  
+  // If it's a template field in contactData
+  if (field.startsWith('{') && field.endsWith('}')) {
+    const templateField = field.slice(1, -1); // Remove { }
+    return data.contactData?.[templateField] || data.contactData?.[field];
+  }
+
+  return undefined;
 }
 
 // Production logging helper
