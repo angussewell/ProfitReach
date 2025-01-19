@@ -21,14 +21,9 @@ function getErrorMessage(error: unknown): string {
   return String(error);
 }
 
-// Transform webhook data by removing template syntax
-function transformWebhookData(data: Record<string, string>): Record<string, string> {
-  const transformed: Record<string, string> = {};
-  for (const [key, value] of Object.entries(data)) {
-    const cleanKey = key.replace(/[{}]/g, '');
-    transformed[cleanKey] = value;
-  }
-  return transformed;
+// Get value from template field
+function getTemplateValue(data: Record<string, string>, field: string): string | undefined {
+  return data[`{${field}}`] || data[field];
 }
 
 // Production logging helper
@@ -51,10 +46,10 @@ export async function POST(request: Request) {
     logProduction('Raw webhook data', { rawText });
     
     // Try to parse the JSON
-    let rawData: Record<string, string>;
+    let data: Record<string, string>;
     try {
-      rawData = JSON.parse(rawText);
-      logProduction('Parsed webhook body', rawData);
+      data = JSON.parse(rawText);
+      logProduction('Parsed webhook body', data);
     } catch (parseError) {
       logProduction('JSON parse error', { error: getErrorMessage(parseError) });
       
@@ -77,10 +72,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Transform the webhook data
-    const cleanData = transformWebhookData(rawData);
-    logProduction('Transformed webhook data', cleanData);
-
     // Verify database connection before proceeding
     await prisma.$connect();
     logProduction('Database connected');
@@ -89,12 +80,12 @@ export async function POST(request: Request) {
     const result = await prisma.$transaction(async (tx) => {
       const log = await tx.webhookLog.create({
         data: {
-          scenarioName: cleanData.make_sequence || 'unknown',
-          contactEmail: cleanData.email || 'unknown',
-          contactName: cleanData.first_name ? 
-            `${cleanData.first_name} ${cleanData.last_name || ''}`.trim() : undefined,
+          scenarioName: data.make_sequence || 'unknown',
+          contactEmail: getTemplateValue(data, 'email') || 'unknown',
+          contactName: getTemplateValue(data, 'first_name') ? 
+            `${getTemplateValue(data, 'first_name')} ${getTemplateValue(data, 'last_name') || ''}`.trim() : undefined,
           status: 'success',
-          requestBody: rawData,
+          requestBody: data,
           responseBody: { processed: true },
         }
       });
