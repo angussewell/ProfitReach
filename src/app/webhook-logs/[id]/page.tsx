@@ -57,23 +57,33 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
             <CardContent className="space-y-2">
               <div>
                 <Label>Contact Name</Label>
-                <div className="text-sm">{mappedFields.contactName || 'Not available'}</div>
+                <div className="text-sm font-medium">
+                  {mappedFields.contactName || 'Not available'}
+                </div>
               </div>
               <div>
                 <Label>Email</Label>
-                <div className="text-sm">{log.contactEmail}</div>
+                <div className="text-sm font-medium">
+                  {log.contactEmail}
+                </div>
               </div>
               <div>
                 <Label>Company</Label>
-                <div className="text-sm">{mappedFields.company || 'Not available'}</div>
+                <div className="text-sm font-medium">
+                  {mappedFields.company || 'Not available'}
+                </div>
               </div>
               <div>
                 <Label>Lead Status</Label>
-                <div className="text-sm">{mappedFields.leadStatus || 'Not available'}</div>
+                <div className="text-sm font-medium">
+                  {mappedFields.leadStatus || 'Empty'}
+                </div>
               </div>
               <div>
                 <Label>Lifecycle Stage</Label>
-                <div className="text-sm">{mappedFields.lifecycleStage || 'Not available'}</div>
+                <div className="text-sm font-medium">
+                  {mappedFields.lifecycleStage || 'Unknown'}
+                </div>
               </div>
             </CardContent>
           </Card>

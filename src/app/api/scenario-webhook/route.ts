@@ -2,35 +2,39 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 
 // Helper function to get mapped field value
-async function getMappedValue(data: Record<string, any>, systemField: string): Promise<string | undefined> {
-  const mapping = await prisma.fieldMapping.findUnique({
-    where: { systemField }
-  });
+async function getMappedValue(
+  data: Record<string, any>, 
+  systemField: string,
+  fallback?: string
+): Promise<string | undefined> {
+  try {
+    // Get mapping for this field
+    const mapping = await prisma.fieldMapping.findUnique({
+      where: { systemField }
+    });
 
-  if (!mapping) {
-    return undefined;
-  }
+    if (!mapping) {
+      logMessage('info', 'No mapping found for field', { systemField });
+      return fallback;
+    }
 
-  // Handle template format (e.g., {email})
-  const field = mapping.webhookField;
-  
-  // If it's a direct field in data
-  if (data[field]) {
-    return data[field];
-  }
-  
-  // If it's in contactData
-  if (data.contactData?.[field]) {
-    return data.contactData[field];
-  }
-  
-  // If it's a template field in contactData
-  if (field.startsWith('{') && field.endsWith('}')) {
-    const templateField = field.slice(1, -1); // Remove { }
-    return data.contactData?.[templateField] || data.contactData?.[field];
-  }
+    // Extract value using webhook field path
+    const webhookField = mapping.webhookField;
+    const value = webhookField.split('.').reduce((obj, key) => obj?.[key], data);
 
-  return undefined;
+    if (value === undefined || value === null) {
+      logMessage('info', 'No value found for mapped field', { systemField, webhookField });
+      return fallback;
+    }
+
+    return String(value);
+  } catch (error) {
+    logMessage('error', 'Error getting mapped value', { 
+      systemField, 
+      error: String(error)
+    });
+    return fallback;
+  }
 }
 
 // Forward webhook to specified URL with enriched data
@@ -135,27 +139,31 @@ export async function POST(request: Request) {
         logMessage('info', 'Mapped contactEmail', { value });
         return value;
       }),
-      getMappedValue(data, 'contactFirstName').then(value => {
+      getMappedValue(data, 'contactFirstName', data.contactData?.first_name).then(value => {
         logMessage('info', 'Mapped contactFirstName', { value });
         return value;
       }),
-      getMappedValue(data, 'contactLastName').then(value => {
+      getMappedValue(data, 'contactLastName', data.contactData?.last_name).then(value => {
         logMessage('info', 'Mapped contactLastName', { value });
         return value;
       }),
-      getMappedValue(data, 'leadStatus').then(value => {
+      getMappedValue(data, 'leadStatus', data.contactData?.lead_status).then(value => {
         logMessage('info', 'Mapped leadStatus', { value });
         return value;
       }),
-      getMappedValue(data, 'lifecycleStage').then(value => {
+      getMappedValue(data, 'lifecycleStage', data.contactData?.lifecycle_stage).then(value => {
         logMessage('info', 'Mapped lifecycleStage', { value });
         return value;
       }),
-      getMappedValue(data, 'company').then(value => {
+      getMappedValue(data, 'company', data.contactData?.company).then(value => {
         logMessage('info', 'Mapped company', { value });
         return value;
       })
     ]);
+
+    // Compose full name from components
+    const contactName = [contactFirstName, contactLastName].filter(Boolean).join(' ');
+    logMessage('info', 'Composed contact name', { contactName, contactFirstName, contactLastName });
 
     // Verify required fields
     if (!scenarioName || !contactEmail) {
@@ -224,7 +232,7 @@ export async function POST(request: Request) {
         email: contactEmail,
         firstName: contactFirstName,
         lastName: contactLastName,
-        name: [contactFirstName, contactLastName].filter(Boolean).join(' '),
+        name: contactName,
         company: company,
         leadStatus: leadStatus,
         lifecycleStage: lifecycleStage,
@@ -257,16 +265,18 @@ export async function POST(request: Request) {
       data: {
         scenarioName,
         contactEmail,
-        contactName: enrichedData.contact.name,
+        contactName,
         status: forwardResult?.ok ? 'success' : 'error',
         errorMessage: forwardResult?.error,
         requestBody: {
           ...data,
           mappedFields: {
             contactEmail,
-            contactName: enrichedData.contact.name,
-            leadStatus,
-            lifecycleStage,
+            contactName,
+            contactFirstName,
+            contactLastName,
+            leadStatus: leadStatus || 'Empty',
+            lifecycleStage: lifecycleStage || 'Unknown',
             company
           }
         },
