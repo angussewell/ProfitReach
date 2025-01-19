@@ -2,12 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 
-// Pre-configured templates for common webhook formats
+// Pre-configured templates
 const WEBHOOK_TEMPLATES = {
   make: {
     contactEmail: '{email}',
@@ -31,18 +30,11 @@ const SYSTEM_FIELDS = [
   { id: 'userWebsite', label: 'User Website', required: false },
 ];
 
-interface FieldMapping {
-  id: string;
-  systemField: string;
-  webhookField: string;
-  description?: string;
-  isRequired: boolean;
-}
-
 export default function SettingsPage() {
-  const [mappings, setMappings] = useState<FieldMapping[]>([]);
+  const [mappings, setMappings] = useState<Record<string, string>>({});
   const [webhookFields, setWebhookFields] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   // Load existing mappings and sample webhook fields
   useEffect(() => {
@@ -59,20 +51,14 @@ export default function SettingsPage() {
             fieldsRes.json()
           ]);
           
-          setMappings(mappingsData);
-          // Add template fields to available fields
-          setWebhookFields([
-            ...new Set([
-              ...fieldsData.fields,
-              '{email}',
-              '{first_name}',
-              '{last_name}',
-              'make_sequence',
-              'lead_status',
-              'lifecycle_stage',
-              'website'
-            ])
-          ]);
+          // Convert array of mappings to object for easier state management
+          const mappingsObj = mappingsData.reduce((acc: Record<string, string>, m: any) => {
+            acc[m.systemField] = m.webhookField;
+            return acc;
+          }, {});
+          
+          setMappings(mappingsObj);
+          setWebhookFields(fieldsData.fields);
         }
       } catch (error) {
         toast.error('Failed to load settings');
@@ -84,42 +70,37 @@ export default function SettingsPage() {
     loadData();
   }, []);
 
-  // Apply a template
-  const applyTemplate = async (template: keyof typeof WEBHOOK_TEMPLATES) => {
+  // Update local state
+  const handleFieldChange = (systemField: string, webhookField: string) => {
+    setMappings(prev => ({ ...prev, [systemField]: webhookField }));
+  };
+
+  // Save all changes
+  const handleSave = async () => {
+    setSaving(true);
     try {
-      const templateData = WEBHOOK_TEMPLATES[template];
-      
-      // Update all mappings in parallel
+      // Save all mappings in parallel
       await Promise.all(
-        Object.entries(templateData).map(([systemField, webhookField]) =>
-          updateMapping(systemField, webhookField)
+        Object.entries(mappings).map(([systemField, webhookField]) =>
+          fetch('/api/field-mappings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ systemField, webhookField })
+          })
         )
       );
-
-      toast.success('Template applied successfully');
+      toast.success('Settings saved successfully');
     } catch (error) {
-      toast.error('Failed to apply template');
+      toast.error('Failed to save settings');
+    } finally {
+      setSaving(false);
     }
   };
 
-  // Update a field mapping
-  const updateMapping = async (systemField: string, webhookField: string) => {
-    try {
-      const res = await fetch('/api/field-mappings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ systemField, webhookField })
-      });
-
-      if (res.ok) {
-        const updatedMapping = await res.json();
-        setMappings(prev => 
-          prev.map(m => m.systemField === systemField ? updatedMapping : m)
-        );
-      }
-    } catch (error) {
-      throw error;
-    }
+  // Apply template
+  const applyTemplate = (template: keyof typeof WEBHOOK_TEMPLATES) => {
+    setMappings(WEBHOOK_TEMPLATES[template]);
+    toast.success('Template applied - click Save to apply changes');
   };
 
   if (loading) {
@@ -130,44 +111,50 @@ export default function SettingsPage() {
     <div className="p-8 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Webhook Field Mappings</h1>
-        <Button 
-          onClick={() => applyTemplate('make')}
-          className="bg-[#ff7a59] hover:bg-[#ff8f73] text-white"
-        >
-          Apply Make.com Template
-        </Button>
+        <div className="space-x-4">
+          <Button 
+            onClick={() => applyTemplate('make')}
+            variant="outline"
+          >
+            Apply Make.com Template
+          </Button>
+          <Button 
+            onClick={handleSave}
+            disabled={saving}
+            className="bg-[#ff7a59] hover:bg-[#ff8f73] text-white"
+          >
+            {saving ? 'Saving...' : 'Save Changes'}
+          </Button>
+        </div>
       </div>
+      
       <Card className="p-6">
         <div className="space-y-6">
-          {SYSTEM_FIELDS.map(field => {
-            const mapping = mappings.find(m => m.systemField === field.id);
-            
-            return (
-              <div key={field.id} className="flex items-center gap-4">
-                <div className="w-1/3">
-                  <label className="text-sm font-medium">
-                    {field.label}
-                    {field.required && <span className="text-red-500 ml-1">*</span>}
-                  </label>
-                </div>
-                <Select
-                  value={mapping?.webhookField || ''}
-                  onValueChange={value => updateMapping(field.id, value)}
-                >
-                  <SelectTrigger className="w-2/3">
-                    <SelectValue placeholder="Select webhook field" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {webhookFields.map(field => (
-                      <SelectItem key={field} value={field}>
-                        {field}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+          {SYSTEM_FIELDS.map(field => (
+            <div key={field.id} className="flex items-center gap-4">
+              <div className="w-1/3">
+                <label className="text-sm font-medium">
+                  {field.label}
+                  {field.required && <span className="text-red-500 ml-1">*</span>}
+                </label>
               </div>
-            );
-          })}
+              <Select
+                value={mappings[field.id] || ''}
+                onValueChange={value => handleFieldChange(field.id, value)}
+              >
+                <SelectTrigger className="w-2/3">
+                  <SelectValue placeholder="Select webhook field" />
+                </SelectTrigger>
+                <SelectContent>
+                  {webhookFields.map(field => (
+                    <SelectItem key={field} value={field}>
+                      {field}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ))}
         </div>
       </Card>
     </div>
