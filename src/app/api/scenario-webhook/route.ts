@@ -33,42 +33,50 @@ async function getMappedValue(data: Record<string, any>, systemField: string): P
   return undefined;
 }
 
+// Forward webhook to specified URL
+async function forwardWebhook(url: string, data: any) {
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    return { 
+      ok: response.ok,
+      status: response.status,
+      body: await response.text()
+    };
+  } catch (error) {
+    return { 
+      ok: false, 
+      error: String(error)
+    };
+  }
+}
+
 // Production logging helper
-function logProduction(message: string, data?: any) {
-  const logEntry = {
+function logMessage(level: 'error' | 'info', message: string, data?: any) {
+  console[level](JSON.stringify({
     timestamp: new Date().toISOString(),
+    level,
     message,
-    data,
-    environment: process.env.VERCEL_ENV || 'unknown'
-  };
-  console.log(JSON.stringify(logEntry));
+    environment: process.env.VERCEL_ENV || 'development',
+    ...data
+  }));
 }
 
 export async function POST(request: Request) {
-  logProduction('Webhook received', { url: request.url });
+  logMessage('info', 'Webhook received', { url: request.url });
   
   try {
     // Parse request body
     const rawText = await request.text();
-    logProduction('Raw webhook data', { rawText });
-    
     let data: Record<string, any>;
     try {
       data = JSON.parse(rawText);
-      logProduction('Parsed webhook body', data);
+      logMessage('info', 'Parsed webhook data', data);
     } catch (parseError) {
-      logProduction('JSON parse error', { error: String(parseError) });
-      
-      await prisma.webhookLog.create({
-        data: {
-          scenarioName: 'unknown',
-          contactEmail: 'unknown',
-          status: 'error',
-          errorMessage: `JSON parse error: ${String(parseError)}`,
-          requestBody: { raw: rawText },
-        }
-      });
-
+      logMessage('error', 'JSON parse error', { error: String(parseError) });
       return NextResponse.json(
         { error: 'Invalid JSON in request body' },
         { status: 400 }
@@ -80,39 +88,54 @@ export async function POST(request: Request) {
       scenarioName,
       contactEmail,
       contactFirstName,
-      contactLastName,
-      leadStatus,
-      lifecycleStage
+      contactLastName
     ] = await Promise.all([
       getMappedValue(data, 'scenarioName'),
       getMappedValue(data, 'contactEmail'),
       getMappedValue(data, 'contactFirstName'),
-      getMappedValue(data, 'contactLastName'),
-      getMappedValue(data, 'leadStatus'),
-      getMappedValue(data, 'lifecycleStage')
+      getMappedValue(data, 'contactLastName')
     ]);
-
-    // Combine first and last name
-    const contactName = [contactFirstName, contactLastName]
-      .filter(Boolean)
-      .join(' ') || undefined;
 
     // Verify required fields
     if (!scenarioName || !contactEmail) {
       const error = 'Missing required fields: scenario name and contact email must be mapped';
-      logProduction('Validation error', { error });
-      
-      await prisma.webhookLog.create({
-        data: {
-          scenarioName: scenarioName || 'unknown',
-          contactEmail: contactEmail || 'unknown',
-          status: 'error',
-          errorMessage: error,
-          requestBody: data,
-        }
-      });
-
+      logMessage('error', 'Validation error', { error });
       return NextResponse.json({ error }, { status: 400 });
+    }
+
+    // Get scenario details
+    const scenario = await prisma.scenario.findUnique({
+      where: { name: scenarioName },
+      include: { signature: true }
+    });
+
+    if (!scenario) {
+      logMessage('error', 'Scenario not found', { scenarioName });
+      return NextResponse.json(
+        { error: 'Scenario not found' },
+        { status: 404 }
+      );
+    }
+
+    // Prepare data for forwarding
+    const forwardData = {
+      contactEmail,
+      contactName: [contactFirstName, contactLastName].filter(Boolean).join(' '),
+      scenarioType: scenario.scenarioType,
+      subjectLine: scenario.subjectLine,
+      signature: scenario.signature?.signatureContent,
+      customizationPrompt: scenario.customizationPrompt,
+      emailExamplesPrompt: scenario.emailExamplesPrompt
+    };
+
+    // Forward to webhook URL if provided
+    let forwardResult;
+    if (data.userWebhookUrl) {
+      forwardResult = await forwardWebhook(data.userWebhookUrl, forwardData);
+      logMessage('info', 'Webhook forwarded', { 
+        url: data.userWebhookUrl,
+        success: forwardResult.ok
+      });
     }
 
     // Create webhook log
@@ -120,43 +143,23 @@ export async function POST(request: Request) {
       data: {
         scenarioName,
         contactEmail,
-        contactName,
-        status: 'success',
-        requestBody: {
-          ...data,
-          mappedFields: {
-            scenarioName,
-            contactEmail,
-            contactFirstName,
-            contactLastName,
-            contactName,
-            leadStatus,
-            lifecycleStage
-          }
-        }
+        contactName: forwardData.contactName,
+        status: forwardResult?.ok ? 'success' : 'error',
+        errorMessage: forwardResult?.error,
+        requestBody: data,
+        responseBody: forwardResult
       }
     });
 
-    logProduction('Webhook processed successfully', { logId: log.id });
-    return NextResponse.json({ success: true, logId: log.id });
+    return NextResponse.json({ 
+      success: true, 
+      logId: log.id,
+      forwarded: !!forwardResult,
+      forwardSuccess: forwardResult?.ok
+    });
     
   } catch (error) {
-    logProduction('Webhook processing failed', { error: String(error) });
-    
-    try {
-      await prisma.webhookLog.create({
-        data: {
-          scenarioName: 'unknown',
-          contactEmail: 'unknown',
-          status: 'error',
-          errorMessage: String(error),
-          requestBody: { error: String(error) },
-        }
-      });
-    } catch (logError) {
-      logProduction('Failed to create error log', { error: String(logError) });
-    }
-
+    logMessage('error', 'Webhook processing failed', { error: String(error) });
     return NextResponse.json(
       { error: 'Webhook processing failed' },
       { status: 500 }
