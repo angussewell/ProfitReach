@@ -79,7 +79,8 @@ export async function POST(request: Request) {
         data: {
           scenarioName: contactData.make_sequence || 'unknown',
           contactEmail: contactData.email || 'unknown',
-          contactName: contactData.firstname ? `${contactData.firstname} ${contactData.lastname || ''}`.trim() : undefined,
+          contactName: contactData.first_name ? 
+            `${contactData.first_name} ${contactData.last_name || ''}`.trim() : undefined,
           status: 'success',
           requestBody: contactData,
           responseBody: { processed: true },
