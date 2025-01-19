@@ -1,6 +1,6 @@
 import { Metadata } from 'next';
 import { Inter } from 'next/font/google';
-import { HomeIcon, ListIcon, MessageSquare, Sparkles, Settings, ScrollText } from 'lucide-react';
+import { HomeIcon, ListIcon, Settings, MessageSquare, Sparkles, ScrollText } from 'lucide-react';
 import AppSidebar from '@/components/layout/AppSidebar';
 import { SidebarLink } from '@/components/ui/sidebar';
 import './globals.css';
@@ -20,6 +20,7 @@ const navigationItems = [
   { label: 'Email Signatures', href: '/signatures', icon: <MessageSquare /> },
   { label: 'Prompts', href: '/prompts', icon: <Sparkles /> },
   { label: 'Webhook Logs', href: '/logs', icon: <ScrollText /> },
+  { label: 'Settings', href: '/settings', icon: <Settings /> }
 ];
 
 export default function RootLayout({

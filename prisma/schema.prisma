@@ -55,6 +55,20 @@ model WebhookLog {
   @@index([createdAt])
 }
 
+// Field mapping configuration for webhook data
+model FieldMapping {
+  id            String   @id @default(cuid())
+  systemField   String   // Internal field name (e.g., "contactEmail")
+  webhookField  String   // External field name (e.g., "{email}")
+  description   String?  // Optional description of the field
+  isRequired    Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([systemField])
+  @@index([webhookField])
+}
+
 model playing_with_neon {
   id    Int    @id @default(autoincrement())
   name  String

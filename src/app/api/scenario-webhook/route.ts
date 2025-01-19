@@ -1,29 +1,19 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { normalizeVariables, processObjectVariables } from '@/utils/variableReplacer';
-import { Prompt } from '@prisma/client';
 
-// Types for the webhook request
-interface WebhookRequest {
-  contactData: Record<string, string>;
-  userWebhookUrl?: string;
-}
+// Helper function to get mapped field value
+async function getMappedValue(data: Record<string, any>, systemField: string): Promise<string | undefined> {
+  const mapping = await prisma.fieldMapping.findUnique({
+    where: { systemField }
+  });
 
-// Error handling utilities
-function isError(error: unknown): error is Error {
-  return error instanceof Error;
-}
-
-function getErrorMessage(error: unknown): string {
-  if (isError(error)) {
-    return error.message;
+  if (!mapping) {
+    return undefined;
   }
-  return String(error);
-}
 
-// Get value from template field
-function getTemplateValue(data: Record<string, string>, field: string): string | undefined {
-  return data[`{${field}}`] || data[field];
+  // Check both top level and contactData
+  return data[mapping.webhookField] || 
+         (data.contactData && data.contactData[mapping.webhookField]);
 }
 
 // Production logging helper
@@ -41,29 +31,25 @@ export async function POST(request: Request) {
   logProduction('Webhook received', { url: request.url });
   
   try {
-    // Log raw request details for debugging
+    // Parse request body
     const rawText = await request.text();
     logProduction('Raw webhook data', { rawText });
     
-    // Try to parse the JSON
-    let data: Record<string, string>;
+    let data: Record<string, any>;
     try {
       data = JSON.parse(rawText);
       logProduction('Parsed webhook body', data);
     } catch (parseError) {
-      logProduction('JSON parse error', { error: getErrorMessage(parseError) });
+      logProduction('JSON parse error', { error: String(parseError) });
       
-      await prisma.$transaction(async (tx) => {
-        const errorLog = await tx.webhookLog.create({
-          data: {
-            scenarioName: 'unknown',
-            contactEmail: 'unknown',
-            status: 'error',
-            errorMessage: `JSON parse error: ${getErrorMessage(parseError)}`,
-            requestBody: { raw: rawText },
-          }
-        });
-        logProduction('Error log created', { logId: errorLog.id });
+      await prisma.webhookLog.create({
+        data: {
+          scenarioName: 'unknown',
+          contactEmail: 'unknown',
+          status: 'error',
+          errorMessage: `JSON parse error: ${String(parseError)}`,
+          requestBody: { raw: rawText },
+        }
       });
 
       return NextResponse.json(
@@ -72,47 +58,86 @@ export async function POST(request: Request) {
       );
     }
 
-    // Verify database connection before proceeding
-    await prisma.$connect();
-    logProduction('Database connected');
+    // Get mapped values
+    const [
+      scenarioName,
+      contactEmail,
+      contactFirstName,
+      contactLastName,
+      leadStatus,
+      lifecycleStage
+    ] = await Promise.all([
+      getMappedValue(data, 'scenarioName'),
+      getMappedValue(data, 'contactEmail'),
+      getMappedValue(data, 'contactFirstName'),
+      getMappedValue(data, 'contactLastName'),
+      getMappedValue(data, 'leadStatus'),
+      getMappedValue(data, 'lifecycleStage')
+    ]);
 
-    // Process webhook in transaction
-    const result = await prisma.$transaction(async (tx) => {
-      const log = await tx.webhookLog.create({
+    // Combine first and last name
+    const contactName = [contactFirstName, contactLastName]
+      .filter(Boolean)
+      .join(' ') || undefined;
+
+    // Verify required fields
+    if (!scenarioName || !contactEmail) {
+      const error = 'Missing required fields: scenario name and contact email must be mapped';
+      logProduction('Validation error', { error });
+      
+      await prisma.webhookLog.create({
         data: {
-          scenarioName: data.make_sequence || 'unknown',
-          contactEmail: getTemplateValue(data, 'email') || 'unknown',
-          contactName: getTemplateValue(data, 'first_name') ? 
-            `${getTemplateValue(data, 'first_name')} ${getTemplateValue(data, 'last_name') || ''}`.trim() : undefined,
-          status: 'success',
+          scenarioName: scenarioName || 'unknown',
+          contactEmail: contactEmail || 'unknown',
+          status: 'error',
+          errorMessage: error,
           requestBody: data,
-          responseBody: { processed: true },
         }
       });
-      
-      logProduction('Webhook log created', { logId: log.id });
-      return log;
+
+      return NextResponse.json({ error }, { status: 400 });
+    }
+
+    // Create webhook log
+    const log = await prisma.webhookLog.create({
+      data: {
+        scenarioName,
+        contactEmail,
+        contactName,
+        status: 'success',
+        requestBody: {
+          ...data,
+          mappedFields: {
+            scenarioName,
+            contactEmail,
+            contactFirstName,
+            contactLastName,
+            contactName,
+            leadStatus,
+            lifecycleStage
+          }
+        }
+      }
     });
 
-    logProduction('Webhook processed successfully', { logId: result.id });
-    return NextResponse.json({ success: true, logId: result.id });
+    logProduction('Webhook processed successfully', { logId: log.id });
+    return NextResponse.json({ success: true, logId: log.id });
     
   } catch (error) {
-    logProduction('Webhook processing failed', { error: getErrorMessage(error) });
+    logProduction('Webhook processing failed', { error: String(error) });
     
     try {
-      const errorLog = await prisma.webhookLog.create({
+      await prisma.webhookLog.create({
         data: {
           scenarioName: 'unknown',
           contactEmail: 'unknown',
           status: 'error',
-          errorMessage: getErrorMessage(error),
-          requestBody: { error: getErrorMessage(error) },
+          errorMessage: String(error),
+          requestBody: { error: String(error) },
         }
       });
-      logProduction('Error log created', { logId: errorLog.id });
     } catch (logError) {
-      logProduction('Failed to create error log', { error: getErrorMessage(logError) });
+      logProduction('Failed to create error log', { error: String(logError) });
     }
 
     return NextResponse.json(
