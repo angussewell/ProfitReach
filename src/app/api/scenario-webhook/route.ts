@@ -14,13 +14,29 @@ async function getMappedValue(
     });
 
     if (!mapping) {
+      // Special handling for known fields
+      if (systemField === 'scenarioName' && data.contactData?.make_sequence) {
+        return data.contactData.make_sequence;
+      }
+      
       logMessage('info', 'No mapping found for field', { systemField });
       return fallback;
     }
 
     // Extract value using webhook field path
     const webhookField = mapping.webhookField;
-    const value = webhookField.split('.').reduce((obj, key) => obj?.[key], data);
+    
+    // Try different field formats
+    const value = 
+      // Direct field access
+      data[webhookField] ||
+      data.contactData?.[webhookField] ||
+      // Template format
+      data.contactData?.[`{${webhookField}}`] ||
+      // Remove template brackets if present
+      data.contactData?.[webhookField.replace(/[{}]/g, '')] ||
+      // Try as a nested path
+      webhookField.split('.').reduce((obj, key) => obj?.[key], data);
 
     if (value === undefined || value === null) {
       logMessage('info', 'No value found for mapped field', { systemField, webhookField });
