@@ -9,21 +9,43 @@ export const prisma = globalForPrisma.prisma || new PrismaClient();
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 
+// Production logging helper
+function logMessage(level: 'error' | 'info', message: string, data?: any) {
+  console[level](JSON.stringify({
+    timestamp: new Date().toISOString(),
+    level,
+    message,
+    environment: process.env.VERCEL_ENV || 'development',
+    ...data
+  }));
+}
+
+// Validate signature data
+function validateSignature(data: any) {
+  const errors = [];
+  
+  if (!data.signatureName?.trim()) {
+    errors.push('Signature name is required');
+  }
+  
+  if (!data.signatureContent?.trim()) {
+    errors.push('Signature content is required');
+  }
+  
+  return errors;
+}
+
 // Get all signatures
 export async function GET() {
   try {
-    console.log('Fetching all signatures...');
     const signatures = await prisma.signature.findMany({
-      orderBy: {
-        createdAt: 'desc',
-      },
+      orderBy: { signatureName: 'asc' }
     });
-    console.log('Found signatures:', signatures.length);
     return NextResponse.json(signatures);
-  } catch (error: any) {
-    console.error('Error fetching signatures:', error);
+  } catch (error) {
+    logMessage('error', 'Failed to fetch signatures', { error: String(error) });
     return NextResponse.json(
-      { error: error.message || 'Failed to fetch signatures' },
+      { error: 'Failed to fetch signatures' },
       { status: 500 }
     );
   }
@@ -33,19 +55,30 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const data = await request.json();
-    console.log('Creating new signature:', data);
+    logMessage('info', 'Creating signature', { data });
+
+    // Validate request
+    const errors = validateSignature(data);
+    if (errors.length > 0) {
+      return NextResponse.json({ 
+        error: 'Validation failed',
+        details: errors 
+      }, { status: 400 });
+    }
+
+    // Create signature
     const signature = await prisma.signature.create({
       data: {
-        signatureName: data.signatureName,
-        signatureContent: data.signatureContent,
-      },
+        signatureName: data.signatureName.trim(),
+        signatureContent: data.signatureContent.trim()
+      }
     });
-    console.log('Created signature:', signature);
+
     return NextResponse.json(signature);
-  } catch (error: any) {
-    console.error('Error creating signature:', error);
+  } catch (error) {
+    logMessage('error', 'Failed to create signature', { error: String(error) });
     return NextResponse.json(
-      { error: error.message || 'Failed to create signature' },
+      { error: 'Failed to create signature' },
       { status: 500 }
     );
   }
@@ -55,25 +88,38 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
   try {
     const data = await request.json();
-    const { id, signatureName, signatureContent } = data;
+    logMessage('info', 'Updating signature', { data });
 
-    if (!id) {
-      return NextResponse.json({ error: 'Missing signature ID' }, { status: 400 });
+    if (!data.id) {
+      return NextResponse.json(
+        { error: 'Signature ID is required' },
+        { status: 400 }
+      );
     }
 
+    // Validate request
+    const errors = validateSignature(data);
+    if (errors.length > 0) {
+      return NextResponse.json({ 
+        error: 'Validation failed',
+        details: errors 
+      }, { status: 400 });
+    }
+
+    // Update signature
     const signature = await prisma.signature.update({
-      where: { id },
+      where: { id: data.id },
       data: {
-        signatureName,
-        signatureContent,
-      },
+        signatureName: data.signatureName.trim(),
+        signatureContent: data.signatureContent.trim()
+      }
     });
 
     return NextResponse.json(signature);
-  } catch (error: any) {
-    console.error('Error updating signature:', error);
+  } catch (error) {
+    logMessage('error', 'Failed to update signature', { error: String(error) });
     return NextResponse.json(
-      { error: error.message || 'Failed to update signature' },
+      { error: 'Failed to update signature' },
       { status: 500 }
     );
   }
@@ -93,14 +139,14 @@ export async function DELETE(request: Request) {
     }
 
     await prisma.signature.delete({
-      where: { id },
+      where: { id }
     });
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    console.error('Error deleting signature:', error);
+  } catch (error) {
+    logMessage('error', 'Failed to delete signature', { error: String(error) });
     return NextResponse.json(
-      { error: error.message || 'Failed to delete signature' },
+      { error: 'Failed to delete signature' },
       { status: 500 }
     );
   }
