@@ -1,4 +1,4 @@
-import { Filter } from '@/types/filters';
+import { Filter, FilterOperator } from '@/types/filters';
 
 interface WebhookData {
   [key: string]: any;
@@ -246,6 +246,39 @@ function evaluateFilterGroup(filters: Filter[], data: Record<string, any>): { pa
   };
 }
 
+// Single source of truth for filter handling
+const FilterPipeline = {
+  normalize: (filter: Filter): Filter => ({
+    ...filter,
+    field: filter.field.trim(),
+    value: filter.value?.trim(),
+    operator: filter.operator
+  }),
+  
+  validate: (filter: Filter): Filter => {
+    const errors = [];
+    if (!filter.field) errors.push('Field required');
+    if (filter.operator === 'equals' && !filter.value) errors.push('Value required for equals operator');
+    if (errors.length > 0) {
+      log('error', 'Filter validation failed', { filter, errors });
+      throw new Error(errors.join(', '));
+    }
+    return filter;
+  },
+  
+  process: (filter: Filter, data: Record<string, any>): { passed: boolean; reason: string } => {
+    try {
+      const normalized = FilterPipeline.normalize(filter);
+      FilterPipeline.validate(normalized);
+      log('info', 'Processing filter', { original: filter, normalized });
+      return evaluateFilter(normalized, normalizeWebhookData(data));
+    } catch (error) {
+      log('error', 'Filter processing failed', { filter, error: String(error) });
+      return { passed: false, reason: String(error) };
+    }
+  }
+};
+
 /**
  * Evaluates all filter groups (OR logic between groups)
  */
@@ -256,51 +289,32 @@ export function evaluateFilters(
   }>,
   data: Record<string, any>
 ): { passed: boolean; reason: string } {
-  // First normalize the data
-  const normalizedData = normalizeWebhookData(data);
-  
-  console.log('Starting filter evaluation:', {
-    groupCount: filterGroups.length,
-    normalizedData
+  log('info', 'Starting filter evaluation', { 
+    groupCount: filterGroups?.length || 0,
+    data 
   });
 
-  // If no filters, pass by default
-  if (!filterGroups || filterGroups.length === 0) {
+  if (!filterGroups?.length) {
     return { passed: true, reason: 'No filters configured' };
   }
 
-  // Track results of each group for detailed feedback
-  const groupResults = filterGroups.map(group => {
-    console.log('Evaluating filter group:', {
-      logic: group.logic,
-      filterCount: group.filters.length
-    });
-
-    // All filters in a group must pass (AND logic)
+  const results = filterGroups.map(group => {
     const filterResults = group.filters.map(filter => 
-      evaluateFilter(filter, normalizedData)
+      FilterPipeline.process(filter, data)
     );
 
-    const groupPassed = filterResults.every(result => result.passed);
-    
-    console.log('Filter group result:', {
-      passed: groupPassed,
-      results: filterResults
-    });
-
+    const passed = filterResults.every(r => r.passed);
     return {
-      passed: groupPassed,
+      passed,
       reason: filterResults.map(r => r.reason).join(' AND ')
     };
   });
 
-  // If any group passes, the whole filter passes (OR logic between groups)
-  const passed = groupResults.some(result => result.passed);
+  const passed = results.some(r => r.passed);
   const reason = passed
-    ? `Passed: ${groupResults.find(r => r.passed)?.reason}`
-    : `Failed: ${groupResults.map(r => `(${r.reason})`).join(' OR ')}`;
+    ? `Passed: ${results.find(r => r.passed)?.reason}`
+    : `Failed: ${results.map(r => `(${r.reason})`).join(' OR ')}`;
 
-  console.log('Final filter evaluation result:', { passed, reason });
-  
+  log('info', 'Filter evaluation complete', { passed, reason });
   return { passed, reason };
 } 
