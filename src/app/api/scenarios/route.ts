@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient, Prisma, Scenario } from '@prisma/client';
 import { hubspotClient } from '@/utils/hubspotClient';
-
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/db';
+import { Filter } from '@/types/filters';
 
 const CORRECT_SCENARIOS = [
   'Event Based',
@@ -99,37 +99,41 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const data = await request.json();
-    const { name, customizationPrompt, emailExamplesPrompt, signatureId } = data;
+    const formData = await request.formData();
+    const id = formData.get('id') as string;
+    const name = formData.get('name') as string;
+    const type = formData.get('type') as string;
+    const subjectLine = formData.get('subjectLine') as string;
+    const customizationPrompt = formData.get('customizationPrompt') as string;
+    const emailExamplesPrompt = formData.get('emailExamplesPrompt') as string;
+    const filtersJson = formData.get('filters') as string;
 
-    // Validate that the scenario name is in our list
-    if (!CORRECT_SCENARIOS.includes(name)) {
-      return NextResponse.json(
-        { error: 'Invalid scenario name' },
-        { status: 400 }
-      );
+    // Parse filters
+    let filters: Filter[] = [];
+    try {
+      filters = JSON.parse(filtersJson);
+    } catch (e) {
+      console.error('Failed to parse filters:', e);
+      // Continue with empty filters array
     }
 
-    const scenario = await prisma.scenario.create({
+    const scenario = await prisma.scenario.update({
+      where: { id },
       data: {
         name,
-        scenarioType: 'simple',
-        subjectLine: '',
-        ...(customizationPrompt && { customizationPrompt }),
-        ...(emailExamplesPrompt && { emailExamplesPrompt }),
-        ...(signatureId && { signatureId })
-      } as Prisma.ScenarioCreateInput
+        scenarioType: type,
+        subjectLine,
+        customizationPrompt,
+        emailExamplesPrompt,
+        filters: JSON.stringify(filters)
+      }
     });
-
-    // Invalidate cache to force refresh
-    scenariosCache = [];
-    lastSyncTime = 0;
 
     return NextResponse.json(scenario);
   } catch (error) {
-    console.error('Error creating scenario:', error);
+    console.error('Failed to update scenario:', error);
     return NextResponse.json(
-      { error: 'Failed to create scenario' },
+      { error: 'Failed to update scenario' },
       { status: 500 }
     );
   }

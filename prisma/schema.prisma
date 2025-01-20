@@ -30,6 +30,7 @@ model Scenario {
   signature           Signature? @relation(fields: [signatureId], references: [id])
   prompts            Prompt[]    @relation("ScenarioPrompts")
   attachments        Attachment[]
+  filters             Json?      @default("[]")
 
   @@index([name])
 }

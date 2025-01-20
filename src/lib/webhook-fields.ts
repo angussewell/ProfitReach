@@ -61,4 +61,34 @@ export async function registerWebhookFields(data: any) {
     console.error('Failed to register webhook fields:', error);
     throw error;
   }
+}
+
+/**
+ * Gets all available webhook fields from field mappings
+ */
+export async function getWebhookFields(): Promise<string[]> {
+  const mappings = await prisma.fieldMapping.findMany();
+  
+  // Get unique field names
+  const fields = new Set<string>();
+  
+  mappings.forEach(mapping => {
+    fields.add(mapping.webhookField);
+  });
+
+  // Add common fields that might not be mapped
+  const commonFields = [
+    'lifecycle_stage',
+    'lead_status',
+    'company',
+    'PMS',
+    'first_name',
+    'last_name',
+    'email',
+    'make_sequence'
+  ];
+
+  commonFields.forEach(field => fields.add(field));
+
+  return Array.from(fields).sort();
 } 
