@@ -118,13 +118,17 @@ function evaluateFilter(filter: Filter, normalizedData: NormalizedData): boolean
   
   // Get the field value, trying multiple formats
   const fieldValue = 
+    // Try direct access first
+    normalizedData[field] ||  // Exact match
+    (normalizedData as any).contactData?.[field] || // Direct contactData access with type assertion
+    // Then try normalized versions
     normalizedData[field.toLowerCase()] || 
     normalizedData[field.replace(/[{}]/g, '').toLowerCase()] ||
     normalizedData[`contactData.${field.toLowerCase()}`] ||
     normalizedData[`contactData.${field.replace(/[{}]/g, '').toLowerCase()}`] ||
-    normalizedData[field] ||  // Try exact match
-    normalizedData[field.replace(/[{}]/g, '')] || // Try without braces
-    field.split('.').reduce((obj: any, key: string) => (obj && typeof obj === 'object' ? obj[key.toLowerCase()] : undefined), normalizedData as any); // Try nested path with type safety
+    normalizedData[field.replace(/[{}]/g, '')] || // Without braces
+    // Finally try nested path
+    field.split('.').reduce((obj: any, key: string) => (obj && typeof obj === 'object' ? obj[key] : undefined), normalizedData as any);
   
   log('info', 'Evaluating filter', { 
     field, 
