@@ -4,6 +4,17 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 
+// Define all possible fields with their display names and groups
+const FIELD_DEFINITIONS = [
+  { id: 'scenarioName', label: 'Scenario', group: 'scenario' },
+  { id: 'contactEmail', label: 'Contact Email', group: 'contact' },
+  { id: 'contactName', label: 'Contact Name', group: 'contact' },
+  { id: 'company', label: 'Company', group: 'company' },
+  { id: 'propertyManagementSoftware', label: 'Property Management Software', group: 'company' },
+  { id: 'leadStatus', label: 'Lead Status', group: 'status' },
+  { id: 'lifecycleStage', label: 'Lifecycle Stage', group: 'status' }
+];
+
 // Helper function to extract contact info from request body
 function extractContactInfo(requestBody: any) {
   const contactData = requestBody?.contactData || {};
@@ -52,16 +63,13 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
   const mappedFields = requestBody?.mappedFields || {};
   const contactInfo = extractContactInfo(requestBody);
 
-  // Required fields to display prominently
-  const requiredFields = [
-    { label: 'Scenario Name', value: mappedFields.scenarioName || 'N/A' },
-    { label: 'Contact Email', value: mappedFields.contactEmail || 'N/A' },
-    { label: 'Contact Name', value: contactInfo.contactName },
-    { label: 'Time', value: new Date(log.createdAt).toLocaleString() },
-    { label: 'Lifecycle Stage', value: contactInfo.lifecycleStage },
-    { label: 'Property Management Software', value: contactInfo.propertyManagementSoftware },
-    { label: 'Lead Status', value: contactInfo.leadStatus }
-  ];
+  // Prepare all fields with values
+  const fields = FIELD_DEFINITIONS.map(field => ({
+    ...field,
+    value: field.id === 'contactName' 
+      ? log.contactName 
+      : mappedFields[field.id] || 'N/A'
+  }));
 
   return (
     <div className="p-6 space-y-6">
@@ -76,14 +84,23 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
           </div>
         </div>
 
-        {/* Required Fields Display */}
-        <Card className="mb-4">
+        {/* Field Display */}
+        <Card>
           <CardHeader>
-            <CardTitle>Webhook Details</CardTitle>
+            <CardTitle>Details</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {requiredFields.map((field, index) => (
+              {/* Timestamp */}
+              <div className="space-y-1">
+                <Label className="text-sm text-muted-foreground">Time</Label>
+                <div className="text-sm font-medium">
+                  {new Date(log.createdAt).toLocaleString()}
+                </div>
+              </div>
+              
+              {/* Mapped Fields */}
+              {fields.map((field, index) => (
                 <div key={index} className="space-y-1">
                   <Label className="text-sm text-muted-foreground">{field.label}</Label>
                   <div className="text-sm font-medium">{field.value}</div>
