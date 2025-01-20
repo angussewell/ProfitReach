@@ -2,13 +2,21 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { registerWebhookFields } from '@/lib/webhook-fields';
 import { evaluateFilters } from '@/lib/filter-utils';
-import { Filter, FilterGroup } from '@/types/filters';
+import { Filter, FilterGroup, FilterOperator } from '@/types/filters';
 import { Prisma } from '@prisma/client';
 import { processWebhookVariables } from '@/utils/variableReplacer';
 
 interface WebhookRequestBody {
   contactData?: Record<string, any>;
   [key: string]: any;
+}
+
+interface WebhookResponse {
+  message?: string;
+  error?: string;
+  details?: string;
+  status?: string;
+  response?: any;
 }
 
 // Production-ready logging
@@ -258,23 +266,26 @@ export async function POST(request: Request) {
         scenarioName: scenario.name
       });
 
-      const parsedFilters = filtersJson ? JSON.parse(String(filtersJson)) as Filter[] : [];
+      // Parse filters and ensure they're in the correct format
+      const parsedFilters = filtersJson ? 
+        (Array.isArray(filtersJson) ? filtersJson : JSON.parse(String(filtersJson))) as Filter[] : 
+        [];
       
-      // Convert flat filters array to filter groups
+      // Transform flat filters array into a single AND group
       filterGroups = parsedFilters.length > 0 ? [{
         logic: 'AND',
-        filters: parsedFilters
+        filters: parsedFilters.map(f => ({
+          ...f,
+          field: f.field?.trim() || '',
+          value: f.value?.trim(),
+          operator: f.operator as FilterOperator
+        }))
       }] : [];
       
-      log('info', 'Parsed filters', { 
-        filterCount: parsedFilters.length,
-        scenarioName: scenario.name,
-        filters: parsedFilters.map(f => ({
-          field: f.field,
-          operator: f.operator,
-          value: f.value
-        })),
-        rawFilters: filtersJson
+      log('info', 'Transformed filters', { 
+        filterGroups,
+        originalFilters: parsedFilters,
+        scenarioName: scenario.name
       });
     } catch (e) {
       log('error', 'Failed to parse filters', { 
@@ -282,7 +293,7 @@ export async function POST(request: Request) {
         filters: scenario.filters,
         type: typeof scenario.filters
       });
-      filterGroups = []; // Continue with empty filters
+      filterGroups = [];
     }
 
     // Prepare data for filter evaluation with all possible field variations
