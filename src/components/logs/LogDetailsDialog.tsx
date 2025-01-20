@@ -34,6 +34,10 @@ export function LogDetailsDialog({ log }: LogDetailsDialogProps) {
     return new Date(dateStr).toLocaleString();
   };
 
+  // Extract mapped fields and contact data
+  const mappedFields = log.requestBody?.mappedFields || {};
+  const contactData = log.requestBody?.contactData || {};
+
   return (
     <Dialog>
       <DialogTrigger asChild>
@@ -52,9 +56,10 @@ export function LogDetailsDialog({ log }: LogDetailsDialogProps) {
         </DialogHeader>
         <div className="space-y-6">
           <div className="grid grid-cols-2 gap-4">
+            {/* Basic Info */}
             <div>
-              <h4 className="text-sm font-medium text-gray-500 mb-1">Scenario</h4>
-              <p className="text-base">{log.scenarioName}</p>
+              <h4 className="text-sm font-medium text-gray-500 mb-1">Time</h4>
+              <p className="text-base">{formatDate(log.createdAt)}</p>
             </div>
             <div>
               <h4 className="text-sm font-medium text-gray-500 mb-1">Status</h4>
@@ -62,18 +67,44 @@ export function LogDetailsDialog({ log }: LogDetailsDialogProps) {
                 {log.status.charAt(0).toUpperCase() + log.status.slice(1)}
               </p>
             </div>
+
+            {/* Scenario Info */}
+            <div>
+              <h4 className="text-sm font-medium text-gray-500 mb-1">Scenario</h4>
+              <p className="text-base">{mappedFields.scenarioName || log.scenarioName || 'N/A'}</p>
+            </div>
+
+            {/* Contact Info */}
             <div>
               <h4 className="text-sm font-medium text-gray-500 mb-1">Contact Email</h4>
-              <p className="text-base">{log.contactEmail}</p>
+              <p className="text-base">{mappedFields.contactEmail || log.contactEmail || 'N/A'}</p>
             </div>
             <div>
               <h4 className="text-sm font-medium text-gray-500 mb-1">Contact Name</h4>
-              <p className="text-base">{log.contactName || 'N/A'}</p>
+              <p className="text-base">{mappedFields.contactName || log.contactName || 'N/A'}</p>
+            </div>
+
+            {/* Company Info */}
+            <div>
+              <h4 className="text-sm font-medium text-gray-500 mb-1">Company</h4>
+              <p className="text-base">{mappedFields.company || contactData.company || 'N/A'}</p>
             </div>
             <div>
-              <h4 className="text-sm font-medium text-gray-500 mb-1">Time</h4>
-              <p className="text-base">{formatDate(log.createdAt)}</p>
+              <h4 className="text-sm font-medium text-gray-500 mb-1">Property Management Software</h4>
+              <p className="text-base">{mappedFields.propertyManagementSoftware || contactData.PMS || 'N/A'}</p>
             </div>
+
+            {/* Status Info */}
+            <div>
+              <h4 className="text-sm font-medium text-gray-500 mb-1">Lead Status</h4>
+              <p className="text-base">{mappedFields.leadStatus || contactData.lead_status || 'N/A'}</p>
+            </div>
+            <div>
+              <h4 className="text-sm font-medium text-gray-500 mb-1">Lifecycle Stage</h4>
+              <p className="text-base">{mappedFields.lifecycleStage || contactData.lifecycle_stage || 'N/A'}</p>
+            </div>
+
+            {/* Error Message (if any) */}
             {log.errorMessage && (
               <div className="col-span-2">
                 <h4 className="text-sm font-medium text-gray-500 mb-1">Error Message</h4>
@@ -82,6 +113,7 @@ export function LogDetailsDialog({ log }: LogDetailsDialogProps) {
             )}
           </div>
 
+          {/* Raw Data */}
           <div>
             <h4 className="text-sm font-medium text-gray-500 mb-2">Request Body</h4>
             <pre className="bg-gray-50 p-4 rounded-lg overflow-x-auto text-sm">
