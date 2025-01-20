@@ -102,150 +102,94 @@ function findFieldValue(data: Record<string, any>, field: string): { exists: boo
   };
 }
 
-function normalizeForComparison(value: any): string {
+function normalizeValue(value: any): string {
   if (value === null || value === undefined) return '';
   return String(value).toLowerCase().trim().replace(/\s+/g, ' ');
 }
 
-/**
- * Evaluates a single filter against normalized data
- */
-function evaluateFilter(
-  filter: Filter,
-  normalizedData: Record<string, any>
-): { passed: boolean; reason: string } {
-  // Log the start of filter evaluation
-  log('info', 'Evaluating filter:', {
-    field: filter.field,
-    operator: filter.operator,
-    value: filter.value,
-    normalizedData
-  });
-
-  // Check all possible variations of the field name
-  const fieldVariations = [
-    filter.field,
-    filter.field.toLowerCase(),
-    `{${filter.field}}`,
-    `{${filter.field.toLowerCase()}}`,
-    filter.field.toUpperCase(),
-    `{${filter.field.toUpperCase()}}`
-  ];
-
-  // Check if the field exists in any variation
-  const fieldExists = fieldVariations.some(variation => 
-    normalizedData[variation] !== undefined && normalizedData[variation] !== null
-  );
-
-  // Get the actual value (use the first non-null value found)
-  const fieldValue = fieldVariations
-    .map(variation => normalizedData[variation])
-    .find(value => value !== undefined && value !== null);
+function compareValues(actual: string | null | undefined, expected: string | null | undefined, operator: FilterOperator): { passed: boolean; reason: string } {
+  const normalizedActual = normalizeValue(actual);
+  const normalizedExpected = normalizeValue(expected);
   
-  // Log the field value found
-  log('info', 'Field value found:', {
-    field: filter.field,
-    variations: fieldVariations,
-    exists: fieldExists,
-    value: fieldValue,
-    normalizedValue: normalizeForComparison(fieldValue)
+  log('info', 'Comparing values', {
+    original: { actual, expected },
+    normalized: { actual: normalizedActual, expected: normalizedExpected },
+    operator
   });
 
-  switch (filter.operator) {
+  switch (operator) {
     case 'exists':
       return {
-        passed: fieldExists,
-        reason: fieldExists ? 
-          `Field ${filter.field} exists with value ${fieldValue}` : 
-          `Field ${filter.field} does not exist`
+        passed: normalizedActual !== '',
+        reason: normalizedActual !== '' ? 
+          `Field exists with value ${actual}` : 
+          `Field does not exist`
       };
 
     case 'not exists':
       return {
-        passed: !fieldExists,
-        reason: !fieldExists ? 
-          `Field ${filter.field} does not exist` : 
-          `Field ${filter.field} exists with value ${fieldValue}`
+        passed: normalizedActual === '',
+        reason: normalizedActual === '' ? 
+          `Field does not exist` : 
+          `Field exists with value ${actual}`
       };
 
     case 'equals':
-      const normalizedField = normalizeForComparison(fieldValue);
-      const normalizedValue = normalizeForComparison(filter.value);
-      const equals = normalizedField === normalizedValue;
-      
-      log('info', 'Equals comparison:', {
-        original: { field: fieldValue, value: filter.value },
-        normalized: { field: normalizedField, value: normalizedValue },
-        equals
-      });
-      
+      const equals = normalizedActual === normalizedExpected;
       return {
         passed: equals,
         reason: equals ? 
-          `Field ${filter.field} equals ${filter.value}` : 
-          `Field ${filter.field} (${fieldValue}) does not equal ${filter.value}`
+          `Value equals ${expected}` : 
+          `Value (${actual}) does not equal ${expected}`
       };
 
     case 'not equals':
-      const neNormalizedField = normalizeForComparison(fieldValue);
-      const neNormalizedValue = normalizeForComparison(filter.value);
-      const notEquals = neNormalizedField !== neNormalizedValue;
-      
-      log('info', 'Not equals comparison:', {
-        original: { field: fieldValue, value: filter.value },
-        normalized: { field: neNormalizedField, value: neNormalizedValue },
-        notEquals
-      });
-      
+      const notEquals = normalizedActual !== normalizedExpected;
       return {
         passed: notEquals,
         reason: notEquals ? 
-          `Field ${filter.field} (${fieldValue}) is not equal to ${filter.value}` : 
-          `Field ${filter.field} equals ${filter.value}`
+          `Value (${actual}) is not equal to ${expected}` : 
+          `Value equals ${expected}`
       };
 
     case 'contains':
-      const containsNormalizedField = normalizeForComparison(fieldValue);
-      const containsNormalizedValue = normalizeForComparison(filter.value);
-      const contains = containsNormalizedField.includes(containsNormalizedValue);
-      
-      log('info', 'Contains comparison:', {
-        original: { field: fieldValue, value: filter.value },
-        normalized: { field: containsNormalizedField, value: containsNormalizedValue },
-        contains
-      });
-      
+      const contains = normalizedActual.includes(normalizedExpected);
       return {
         passed: contains,
         reason: contains ? 
-          `Field ${filter.field} contains ${filter.value}` : 
-          `Field ${filter.field} (${fieldValue}) does not contain ${filter.value}`
+          `Value contains ${expected}` : 
+          `Value (${actual}) does not contain ${expected}`
       };
 
     case 'not contains':
-      const ncNormalizedField = normalizeForComparison(fieldValue);
-      const ncNormalizedValue = normalizeForComparison(filter.value);
-      const notContains = !ncNormalizedField.includes(ncNormalizedValue);
-      
-      log('info', 'Not contains comparison:', {
-        original: { field: fieldValue, value: filter.value },
-        normalized: { field: ncNormalizedField, value: ncNormalizedValue },
-        notContains
-      });
-      
+      const notContains = !normalizedActual.includes(normalizedExpected);
       return {
         passed: notContains,
         reason: notContains ? 
-          `Field ${filter.field} does not contain ${filter.value}` : 
-          `Field ${filter.field} (${fieldValue}) contains ${filter.value}`
+          `Value does not contain ${expected}` : 
+          `Value (${actual}) contains ${expected}`
       };
 
     default:
       return {
         passed: false,
-        reason: `Unknown operator: ${filter.operator}`
+        reason: `Unknown operator: ${operator}`
       };
   }
+}
+
+function evaluateFilter(filter: Filter, data: Record<string, any>): { passed: boolean; reason: string } {
+  const normalizedData = normalizeWebhookData(data);
+  const fieldValue = findFieldValue(normalizedData, filter.field).value;
+  
+  log('info', 'Evaluating filter', {
+    field: filter.field,
+    operator: filter.operator,
+    expectedValue: filter.value,
+    actualValue: fieldValue
+  });
+
+  return compareValues(fieldValue, filter.value, filter.operator);
 }
 
 /**
