@@ -1,5 +1,6 @@
 import { Filter, FilterOperator } from '@/types/filters';
 import prisma from '@/lib/prisma';
+import get from 'lodash/get';
 
 interface WebhookData {
   [key: string]: any;
@@ -24,66 +25,38 @@ function log(level: 'error' | 'info' | 'warn', message: string, data?: any) {
  * Normalizes webhook data into a flat structure with standardized field access
  */
 function normalizeWebhookData(data: Record<string, any>): Record<string, any> {
-  const normalized: Record<string, any> = {};
-  
-  // Helper to add a field with various formats
-  const addField = (key: string, value: any) => {
-    // Convert to lowercase for consistent lookup
-    const normalizedKey = key.toLowerCase();
-    // Remove any template braces
-    const cleanKey = normalizedKey.replace(/[{}]/g, '');
-    normalized[cleanKey] = value;
-    
-    // Log field addition for debugging
-    console.log(`Adding field: ${cleanKey} = ${value}`);
-  };
-
-  // Process top-level fields
-  Object.entries(data).forEach(([key, value]) => {
-    if (key !== 'contactData') {
-      addField(key, value);
-    }
-  });
-
-  // Process contact data fields
-  if (data.contactData && typeof data.contactData === 'object') {
-    Object.entries(data.contactData).forEach(([key, value]) => {
-      addField(key, value);
-    });
+  // Ensure contactData exists
+  if (!data.contactData) {
+    data.contactData = {};
   }
 
-  // Log normalized data for debugging
-  console.log('Normalized webhook data:', normalized);
+  // Move any PMS or propertyManagementSoftware fields to the right place
+  if (data.contactData.propertyManagementSoftware) {
+    data.contactData.PMS = data.contactData.propertyManagementSoftware;
+  }
+  if (data.propertyManagementSoftware) {
+    data.contactData.PMS = data.propertyManagementSoftware;
+  }
 
-  return normalized;
+  log('info', 'Normalized webhook data', { data });
+  return data;
 }
 
 /**
  * Finds a field value in the data object, trying multiple formats
  */
 function findFieldValue(data: Record<string, any>, field: string): { exists: boolean; value: any } {
-  // Helper to check a data object for the field
-  const findInObject = (obj: Record<string, any>): { exists: boolean; value: any } => {
-    const normalized = normalizeValue(field);
-    const entries = Object.entries(obj);
-    const match = entries.find(([k]) => normalizeValue(k) === normalized);
-    return {
-      exists: !!match,
-      value: match ? match[1] : undefined
-    };
-  };
+  // Use lodash get to safely traverse nested paths
+  const value = get(data, field);
+  const exists = value !== undefined;
+  
+  log('info', 'Field lookup result', {
+    field,
+    exists,
+    value
+  });
 
-  // Check top level
-  const topLevel = findInObject(data);
-  if (topLevel.exists) return topLevel;
-
-  // Check contactData
-  if (data.contactData && typeof data.contactData === 'object') {
-    const inContactData = findInObject(data.contactData);
-    if (inContactData.exists) return inContactData;
-  }
-
-  return { exists: false, value: undefined };
+  return { exists, value };
 }
 
 function normalizeValue(value: any): string {
