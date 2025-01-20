@@ -121,9 +121,14 @@ function logMessage(level: 'error' | 'info', message: string, data?: any) {
 }
 
 export async function POST(request: Request) {
+  let requestBody;
   try {
-    const body = await request.json();
-    const { contactData, userWebhookUrl } = body;
+    requestBody = await request.json();
+    const { contactData, userWebhookUrl } = requestBody;
+
+    if (!contactData || !userWebhookUrl) {
+      throw new Error('Missing required fields: contactData or userWebhookUrl');
+    }
 
     // Get the scenario based on the make_sequence field
     const scenario = await prisma.scenario.findFirst({
@@ -136,11 +141,13 @@ export async function POST(request: Request) {
       await prisma.webhookLog.create({
         data: {
           status: 'error',
-          requestBody: body,
+          requestBody: requestBody,
           responseBody: { error: 'Scenario not found' },
-          scenarioName: contactData.make_sequence,
-          contactEmail: contactData.email,
-          contactName: `${contactData.first_name} ${contactData.last_name}`.trim()
+          scenarioName: contactData.make_sequence || 'Unknown',
+          contactEmail: contactData?.email || 'Unknown',
+          contactName: contactData?.first_name && contactData?.last_name 
+            ? `${contactData.first_name} ${contactData.last_name}`.trim()
+            : 'Unknown'
         }
       });
       return NextResponse.json({ error: 'Scenario not found' }, { status: 404 });
@@ -163,11 +170,13 @@ export async function POST(request: Request) {
       await prisma.webhookLog.create({
         data: {
           status: 'blocked',
-          requestBody: body,
+          requestBody: requestBody,
           responseBody: { reason: filterResult.reason },
           scenarioName: scenario.name,
-          contactEmail: contactData.email,
-          contactName: `${contactData.first_name} ${contactData.last_name}`.trim()
+          contactEmail: contactData?.email || 'Unknown',
+          contactName: contactData?.first_name && contactData?.last_name 
+            ? `${contactData.first_name} ${contactData.last_name}`.trim()
+            : 'Unknown'
         }
       });
       return NextResponse.json({ status: 'blocked', reason: filterResult.reason }, { status: 200 });
@@ -179,24 +188,35 @@ export async function POST(request: Request) {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(requestBody),
     });
 
-    const responseData = await response.json();
+    let responseData;
+    const responseText = await response.text();
+    
+    try {
+      // Try to parse as JSON first
+      responseData = JSON.parse(responseText);
+    } catch (e) {
+      // If not JSON, use the text response
+      responseData = { message: responseText };
+    }
 
     // Log the successful webhook
     await prisma.webhookLog.create({
       data: {
-        status: 'success',
-        requestBody: body,
+        status: response.ok ? 'success' : 'error',
+        requestBody: requestBody,
         responseBody: responseData,
         scenarioName: scenario.name,
-        contactEmail: contactData.email,
-        contactName: `${contactData.first_name} ${contactData.last_name}`.trim()
+        contactEmail: contactData?.email || 'Unknown',
+        contactName: contactData?.first_name && contactData?.last_name 
+          ? `${contactData.first_name} ${contactData.last_name}`.trim()
+          : 'Unknown'
       }
     });
 
-    return NextResponse.json(responseData);
+    return NextResponse.json(responseData, { status: response.ok ? 200 : 500 });
   } catch (error: any) {
     console.error('Webhook processing error:', error);
 
@@ -204,14 +224,17 @@ export async function POST(request: Request) {
     await prisma.webhookLog.create({
       data: {
         status: 'error',
-        requestBody: { error: error.message },
-        responseBody: { error: error.message },
+        requestBody: requestBody || { error: 'Failed to parse request body' },
+        responseBody: { error: error.message || 'Unknown error' },
         scenarioName: 'Unknown',
         contactEmail: 'Unknown',
         contactName: 'Unknown'
       }
     });
 
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { error: error.message || 'Unknown error' }, 
+      { status: 500 }
+    );
   }
 } 

@@ -5,11 +5,40 @@ interface WebhookData {
 }
 
 /**
+ * Gets a field value from webhook data, handling nested paths and template formats
+ */
+function getFieldValue(data: WebhookData, field: string): any {
+  // Try direct access
+  let value = data[field];
+  if (value !== undefined) return value;
+
+  // Try in contactData
+  if (data.contactData) {
+    // Try different formats
+    value = 
+      data.contactData[field] ||                     // Direct
+      data.contactData[`{${field}}`] ||             // Template format
+      data.contactData[field.replace(/[{}]/g, '')];  // Without brackets
+    
+    if (value !== undefined) return value;
+  }
+
+  // Try as nested path
+  const path = field.split('.');
+  let current = data;
+  for (const key of path) {
+    if (current === undefined || current === null) return undefined;
+    current = current[key];
+  }
+  return current;
+}
+
+/**
  * Evaluates a single filter against webhook data
  */
 export function evaluateFilter(filter: Filter, data: WebhookData): boolean {
   const { field, operator, value } = filter;
-  const fieldValue = data[field];
+  const fieldValue = getFieldValue(data, field);
 
   switch (operator) {
     case 'exists':
@@ -19,10 +48,10 @@ export function evaluateFilter(filter: Filter, data: WebhookData): boolean {
       return fieldValue === undefined || fieldValue === null || fieldValue === '';
     
     case 'equals':
-      return fieldValue === value;
+      return String(fieldValue).toLowerCase() === String(value).toLowerCase();
     
     case 'not_equals':
-      return fieldValue !== value;
+      return String(fieldValue).toLowerCase() !== String(value).toLowerCase();
     
     default:
       return true;

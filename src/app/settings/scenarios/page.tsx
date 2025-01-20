@@ -150,10 +150,14 @@ export default function ManageScenariosPage() {
     e.preventDefault();
     if (!editingScenario || !selectedScenario) return;
 
+    const submitter = (e as any).nativeEvent?.submitter;
+    if (!submitter?.name || submitter.name !== 'saveButton') {
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       
-      // Ensure filters is always an array
       const scenarioData = {
         ...editingScenario,
         filters: editingScenario.filters || []
@@ -184,6 +188,15 @@ export default function ManageScenariosPage() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleFilterChange = (newFilters: Filter[]) => {
+    if (!editingScenario) return;
+    
+    setEditingScenario(prev => ({
+      ...prev!,
+      filters: newFilters
+    }));
   };
 
   const filteredScenarios = scenarios.filter(scenario =>
@@ -319,12 +332,7 @@ export default function ManageScenariosPage() {
                         <FilterBuilder
                           initialFilters={editingScenario?.filters || []}
                           fields={webhookFields}
-                          onChange={(newFilters) => {
-                            setEditingScenario(prev => ({
-                              ...prev!,
-                              filters: newFilters
-                            }));
-                          }}
+                          onChange={handleFilterChange}
                         />
                       </CardContent>
                     </Card>
@@ -382,31 +390,33 @@ export default function ManageScenariosPage() {
                     />
                   </div>
 
-                  <div className="flex gap-3 pt-2">
-                    <Button
-                      type="submit"
-                      disabled={isSubmitting}
-                      className="bg-[#ff7a59] hover:bg-[#ff8f73] transition-all duration-200 text-white shadow-sm hover:shadow-md border-0 rounded-lg px-6 h-12 text-base"
-                    >
-                      {isSubmitting ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : isCreating ? (
-                        'Create Scenario'
-                      ) : (
-                        'Update Scenario'
-                      )}
-                    </Button>
+                  <div className="flex justify-end gap-4 mt-6">
                     <Button
                       type="button"
+                      variant="outline"
                       onClick={() => {
                         setEditingScenario(null);
                         setSelectedScenario(null);
                         setIsCreating(false);
                       }}
-                      variant="outline"
-                      className="border-2 border-gray-200 hover:bg-gray-50 text-[#2e475d] hover:border-[#ff7a59] transition-all rounded-lg px-6 h-12 text-base"
+                      className="h-12 px-6"
                     >
                       Cancel
+                    </Button>
+                    <Button
+                      name="saveButton"
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="h-12 px-6 bg-[#ff7a59] hover:bg-[#ff8f73] text-white"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        'Update Scenario'
+                      )}
                     </Button>
                   </div>
                 </form>
