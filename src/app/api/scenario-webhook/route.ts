@@ -2,9 +2,14 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { registerWebhookFields } from '@/lib/webhook-fields';
 import { evaluateFilters } from '@/lib/filter-utils';
-import { Filter } from '@/types/filters';
+import { Filter, FilterGroup } from '@/types/filters';
 import { Prisma } from '@prisma/client';
 import { processWebhookVariables } from '@/utils/variableReplacer';
+
+interface WebhookRequestBody {
+  contactData?: Record<string, any>;
+  [key: string]: any;
+}
 
 // Production-ready logging
 function log(level: 'error' | 'info' | 'warn', message: string, data?: any) {
@@ -130,7 +135,7 @@ function getContactInfo(data: any) {
 }
 
 export async function POST(request: Request) {
-  let requestBody;
+  let requestBody: WebhookRequestBody;
   try {
     requestBody = await request.json();
     
@@ -244,20 +249,40 @@ export async function POST(request: Request) {
     };
 
     // Parse and evaluate filters
-    let filters: Filter[] = [];
+    let filterGroups: FilterGroup[] = [];
     try {
       const filtersJson = scenario.filters as Prisma.JsonValue;
-      filters = filtersJson ? JSON.parse(String(filtersJson)) as Filter[] : [];
+      log('info', 'Raw filters from database', {
+        filtersJson,
+        type: typeof filtersJson,
+        scenarioName: scenario.name
+      });
+
+      const parsedFilters = filtersJson ? JSON.parse(String(filtersJson)) as Filter[] : [];
       
-      log('info', 'Evaluating filters', { 
-        filterCount: filters.length,
+      // Convert flat filters array to filter groups
+      filterGroups = parsedFilters.length > 0 ? [{
+        logic: 'AND',
+        filters: parsedFilters
+      }] : [];
+      
+      log('info', 'Parsed filters', { 
+        filterCount: parsedFilters.length,
         scenarioName: scenario.name,
-        filters,
-        rawFilters: filtersJson // Log raw filters for debugging
+        filters: parsedFilters.map(f => ({
+          field: f.field,
+          operator: f.operator,
+          value: f.value
+        })),
+        rawFilters: filtersJson
       });
     } catch (e) {
-      log('error', 'Failed to parse filters', { error: String(e), filters: scenario.filters });
-      filters = []; // Continue with empty filters
+      log('error', 'Failed to parse filters', { 
+        error: String(e), 
+        filters: scenario.filters,
+        type: typeof scenario.filters
+      });
+      filterGroups = []; // Continue with empty filters
     }
 
     // Prepare data for filter evaluation with all possible field variations
@@ -285,6 +310,8 @@ export async function POST(request: Request) {
         '{company_name}': companyName,
         'company': companyName,
         '{company}': companyName,
+        'PMS': companyName, // Add PMS field variation
+        '{PMS}': companyName,
         
         lead_status: leadStatus,
         '{lead_status}': leadStatus,
@@ -299,27 +326,49 @@ export async function POST(request: Request) {
     };
 
     log('info', 'Evaluating filters with data', { 
-      filterCount: filters.length,
+      filterCount: filterGroups.length,
       scenarioName: scenario.name,
-      filters,
-      contactData: filterData.contactData,
-      rawData: requestBody // Log raw data for debugging
+      filters: filterGroups.map(g => ({
+        logic: g.logic,
+        filters: g.filters.map(f => ({
+          field: f.field,
+          operator: f.operator,
+          value: f.value
+        }))
+      })),
+      contactData: {
+        ...filterData.contactData,
+        // Log specific fields we're interested in
+        email: filterData.contactData.email,
+        company: filterData.contactData.company,
+        PMS: filterData.contactData.PMS,
+        lead_status: filterData.contactData.lead_status,
+        lifecycle_stage: filterData.contactData.lifecycle_stage
+      }
     });
 
-    const filterResult = evaluateFilters(filters, filterData);
+    const filterResult = evaluateFilters(filterGroups, filterData);
     
     log('info', 'Filter evaluation result', {
       passed: filterResult.passed,
       reason: filterResult.reason,
       scenarioName: scenario.name,
-      filters
+      filters: filterGroups.map(g => ({
+        logic: g.logic,
+        filters: g.filters.map(f => ({
+          field: f.field,
+          operator: f.operator,
+          value: f.value,
+          fieldExists: filterData.contactData[f.field.toLowerCase()] !== undefined
+        }))
+      }))
     });
 
     if (!filterResult.passed) {
       log('info', 'Request blocked by filters', { 
         reason: filterResult.reason,
         scenarioName: scenario.name,
-        filters,
+        filters: filterGroups,
         contactData: filterData.contactData
       });
 
@@ -330,7 +379,7 @@ export async function POST(request: Request) {
           requestBody: requestBody,
           responseBody: { 
             reason: filterResult.reason,
-            filters: JSON.stringify(filters),
+            filters: JSON.stringify(filterGroups),
             data: filterData.contactData
           },
           scenarioName: scenario.name,
@@ -346,7 +395,7 @@ export async function POST(request: Request) {
         reason: filterResult.reason,
         scenario: {
           name: scenario.name,
-          filters: filters
+          filters: filterGroups
         },
         evaluationDetails: filterResult,
         contactData: filterData.contactData // Include contact data for debugging
@@ -482,7 +531,8 @@ export async function POST(request: Request) {
     
     return NextResponse.json({ 
       message: error instanceof Error ? error.message : 'Unknown error occurred',
-      status: 'error'
+      status: 'error',
+      details: String(error)
     }, { status: 500 });
   }
 } 

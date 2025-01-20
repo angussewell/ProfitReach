@@ -16,7 +16,7 @@ interface FilterGroupProps {
 }
 
 function FilterGroupComponent({ filters, fields, onUpdate, onDelete, showDelete }: FilterGroupProps) {
-  const operators: FilterOperator[] = ['exists', 'not_exists', 'equals', 'not_equals'];
+  const operators: FilterOperator[] = ['exists', 'not exists', 'equals', 'not equals', 'contains', 'not contains'];
 
   const addFilter = () => {
     const newFilter = createFilter(fields[0], 'exists');
@@ -58,20 +58,21 @@ function FilterGroupComponent({ filters, fields, onUpdate, onDelete, showDelete 
                 const value = e.target.value as FilterOperator;
                 updateFilter(filter.id, { 
                   operator: value,
-                  value: value === 'exists' || value === 'not_exists' ? undefined : filter.value 
+                  value: value === 'exists' || value === 'not exists' ? undefined : filter.value 
                 });
               }}
               className="flex w-full items-center justify-between bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 h-12 border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all rounded-lg"
             >
               {operators.map(op => (
                 <option key={op} value={op}>
-                  {op.replace('_', ' ')}
+                  {op}
                 </option>
               ))}
             </select>
 
-            {/* Value input for equals/not_equals */}
-            {(filter.operator === 'equals' || filter.operator === 'not_equals') && (
+            {/* Value input for operators that need it */}
+            {(filter.operator === 'equals' || filter.operator === 'not equals' || 
+              filter.operator === 'contains' || filter.operator === 'not contains') && (
               <Input
                 type="text"
                 value={filter.value || ''}

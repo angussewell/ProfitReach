@@ -1,4 +1,4 @@
-export type FilterOperator = 'exists' | 'not_exists' | 'equals' | 'not_equals';
+export type FilterOperator = 'exists' | 'not exists' | 'equals' | 'not equals' | 'contains' | 'not contains';
 
 export interface Filter {
   id: string;        // Unique identifier for the filter

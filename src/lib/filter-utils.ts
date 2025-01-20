@@ -103,88 +103,128 @@ function findFieldValue(data: Record<string, any>, field: string): { exists: boo
 }
 
 /**
- * Evaluates a single filter against the data
+ * Evaluates a single filter against normalized data
  */
 function evaluateFilter(
   filter: Filter,
   normalizedData: Record<string, any>
 ): { passed: boolean; reason: string } {
-  const { field, operator, value } = filter;
-  const normalizedField = field.toLowerCase().replace(/[{}]/g, '');
-  const fieldValue = normalizedData[normalizedField];
-  
+  // Log the start of filter evaluation
   console.log('Evaluating filter:', {
-    field: normalizedField,
-    operator,
-    expectedValue: value,
-    actualValue: fieldValue,
-    exists: fieldValue !== undefined
+    field: filter.field,
+    operator: filter.operator,
+    value: filter.value,
+    normalizedData
   });
 
-  switch (operator) {
-    case 'exists': {
-      const exists = fieldValue !== undefined;
-      console.log(`Checking if ${field} exists:`, exists);
-      return {
-        passed: exists,
-        reason: exists ? 
-          `Field ${field} exists with value: ${fieldValue}` :
-          `Field ${field} does not exist`
-      };
-    }
+  // Check all possible variations of the field name
+  const fieldVariations = [
+    filter.field,
+    filter.field.toLowerCase(),
+    `{${filter.field}}`,
+    `{${filter.field.toLowerCase()}}`,
+    filter.field.toUpperCase(),
+    `{${filter.field.toUpperCase()}}`
+  ];
 
-    case 'not_exists': {
-      const exists = fieldValue !== undefined;
-      console.log(`Checking if ${field} does not exist:`, !exists);
-      return {
-        passed: !exists,
-        reason: !exists ?
-          `Field ${field} does not exist` :
-          `Field ${field} exists with value: ${fieldValue}`
-      };
-    }
+  // Check if the field exists in any variation
+  const fieldExists = fieldVariations.some(variation => 
+    normalizedData[variation] !== undefined && normalizedData[variation] !== null
+  );
 
-    case 'equals': {
-      if (fieldValue === undefined) {
-        console.log(`Field ${field} does not exist for equals comparison`);
-        return {
-          passed: false,
-          reason: `Field ${field} does not exist for equals comparison`
-        };
-      }
-      const matches = String(fieldValue).toLowerCase() === String(value).toLowerCase();
-      console.log(`Checking if ${field} equals ${value}:`, matches);
-      return {
-        passed: matches,
-        reason: matches ?
-          `Field ${field} matches value: ${value}` :
-          `Field ${field} value: ${fieldValue} does not match expected: ${value}`
-      };
-    }
+  // Get the actual value (use the first non-null value found)
+  const fieldValue = fieldVariations
+    .map(variation => normalizedData[variation])
+    .find(value => value !== undefined && value !== null);
+  
+  // Log the field value found
+  console.log('Field value found:', {
+    field: filter.field,
+    variations: fieldVariations,
+    exists: fieldExists,
+    value: fieldValue
+  });
 
-    case 'not_equals': {
-      if (fieldValue === undefined) {
-        console.log(`Field ${field} does not exist, so it cannot equal ${value}`);
-        return {
-          passed: true,
-          reason: `Field ${field} does not exist, so it cannot equal ${value}`
-        };
-      }
-      const matches = String(fieldValue).toLowerCase() === String(value).toLowerCase();
-      console.log(`Checking if ${field} does not equal ${value}:`, !matches);
+  switch (filter.operator) {
+    case 'exists':
+      console.log('Exists check result:', { fieldExists });
       return {
-        passed: !matches,
-        reason: !matches ?
-          `Field ${field} value: ${fieldValue} does not match ${value}` :
-          `Field ${field} matches excluded value: ${value}`
+        passed: fieldExists,
+        reason: fieldExists ? 
+          `Field ${filter.field} exists with value ${fieldValue}` : 
+          `Field ${filter.field} does not exist`
       };
-    }
+
+    case 'not exists':
+      console.log('Not exists check result:', { fieldExists });
+      return {
+        passed: !fieldExists,
+        reason: !fieldExists ? 
+          `Field ${filter.field} does not exist` : 
+          `Field ${filter.field} exists with value ${fieldValue}`
+      };
+
+    case 'equals':
+      const equals = String(fieldValue).toLowerCase() === String(filter.value).toLowerCase();
+      console.log('Equals check result:', { 
+        fieldValue: String(fieldValue).toLowerCase(), 
+        compareValue: String(filter.value).toLowerCase(),
+        equals 
+      });
+      return {
+        passed: equals,
+        reason: equals ? 
+          `Field ${filter.field} equals ${filter.value}` : 
+          `Field ${filter.field} (${fieldValue}) does not equal ${filter.value}`
+      };
+
+    case 'not equals':
+      const notEquals = String(fieldValue).toLowerCase() !== String(filter.value).toLowerCase();
+      console.log('Not equals check result:', { 
+        fieldValue: String(fieldValue).toLowerCase(), 
+        compareValue: String(filter.value).toLowerCase(),
+        notEquals 
+      });
+      return {
+        passed: notEquals,
+        reason: notEquals ? 
+          `Field ${filter.field} (${fieldValue}) is not equal to ${filter.value}` : 
+          `Field ${filter.field} equals ${filter.value}`
+      };
+
+    case 'contains':
+      const contains = String(fieldValue).toLowerCase().includes(String(filter.value).toLowerCase());
+      console.log('Contains check result:', { 
+        fieldValue: String(fieldValue).toLowerCase(), 
+        searchValue: String(filter.value).toLowerCase(),
+        contains 
+      });
+      return {
+        passed: contains,
+        reason: contains ? 
+          `Field ${filter.field} contains ${filter.value}` : 
+          `Field ${filter.field} (${fieldValue}) does not contain ${filter.value}`
+      };
+
+    case 'not contains':
+      const notContains = !String(fieldValue).toLowerCase().includes(String(filter.value).toLowerCase());
+      console.log('Not contains check result:', { 
+        fieldValue: String(fieldValue).toLowerCase(), 
+        searchValue: String(filter.value).toLowerCase(),
+        notContains 
+      });
+      return {
+        passed: notContains,
+        reason: notContains ? 
+          `Field ${filter.field} does not contain ${filter.value}` : 
+          `Field ${filter.field} (${fieldValue}) contains ${filter.value}`
+      };
 
     default:
-      console.warn(`Unknown operator: ${operator}`);
+      console.log('Unknown operator:', filter.operator);
       return {
         passed: false,
-        reason: `Unknown operator: ${operator}`
+        reason: `Unknown operator: ${filter.operator}`
       };
   }
 }
