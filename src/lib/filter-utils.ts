@@ -121,14 +121,18 @@ function evaluateFilter(filter: Filter, normalizedData: NormalizedData): boolean
     normalizedData[field.toLowerCase()] || 
     normalizedData[field.replace(/[{}]/g, '').toLowerCase()] ||
     normalizedData[`contactData.${field.toLowerCase()}`] ||
-    normalizedData[`contactData.${field.replace(/[{}]/g, '').toLowerCase()}`];
+    normalizedData[`contactData.${field.replace(/[{}]/g, '').toLowerCase()}`] ||
+    normalizedData[field] ||  // Try exact match
+    normalizedData[field.replace(/[{}]/g, '')] || // Try without braces
+    field.split('.').reduce((obj: any, key: string) => (obj && typeof obj === 'object' ? obj[key.toLowerCase()] : undefined), normalizedData as any); // Try nested path with type safety
   
   log('info', 'Evaluating filter', { 
     field, 
     operator, 
     value, 
     fieldValue,
-    allFields: Object.keys(normalizedData)
+    allFields: Object.keys(normalizedData),
+    normalizedData  // Log full normalized data for debugging
   });
 
   try {
@@ -137,18 +141,32 @@ function evaluateFilter(filter: Filter, normalizedData: NormalizedData): boolean
         const exists = fieldValue !== null && fieldValue !== undefined && fieldValue !== '';
         log('info', `Filter exists check: ${exists}`, { field, fieldValue });
         return exists;
+        
       case 'not_exists':
         const notExists = !fieldValue || fieldValue === '';
         log('info', `Filter not_exists check: ${notExists}`, { field, fieldValue });
         return notExists;
+        
       case 'equals':
-        const equals = fieldValue?.toLowerCase() === value?.toLowerCase();
+        // Handle case where fieldValue or value might be undefined
+        if (!fieldValue || !value) {
+          log('info', 'Filter equals check: false (missing value)', { field, fieldValue, value });
+          return false;
+        }
+        const equals = String(fieldValue).toLowerCase() === String(value).toLowerCase();
         log('info', `Filter equals check: ${equals}`, { field, fieldValue, value });
         return equals;
+        
       case 'not_equals':
-        const notEquals = fieldValue?.toLowerCase() !== value?.toLowerCase();
+        // Handle case where fieldValue or value might be undefined
+        if (!fieldValue || !value) {
+          log('info', 'Filter not_equals check: true (missing value)', { field, fieldValue, value });
+          return true;
+        }
+        const notEquals = String(fieldValue).toLowerCase() !== String(value).toLowerCase();
         log('info', `Filter not_equals check: ${notEquals}`, { field, fieldValue, value });
         return notEquals;
+        
       default:
         log('warn', 'Unknown operator', { operator });
         return false;
@@ -158,8 +176,9 @@ function evaluateFilter(filter: Filter, normalizedData: NormalizedData): boolean
       field, 
       operator, 
       value, 
-      fieldValue, 
-      error: String(error) 
+      fieldValue,
+      error: String(error),
+      stack: error instanceof Error ? error.stack : undefined
     });
     return false;
   }

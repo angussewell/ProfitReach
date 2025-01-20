@@ -233,32 +233,49 @@ export async function POST(request: Request) {
       log('info', 'Evaluating filters', { 
         filterCount: filters.length,
         scenarioName: scenario.name,
-        filters
+        filters,
+        rawFilters: filtersJson // Log raw filters for debugging
       });
     } catch (e) {
-      log('error', 'Failed to parse filters', { error: e });
+      log('error', 'Failed to parse filters', { error: String(e), filters: scenario.filters });
       filters = []; // Continue with empty filters
     }
 
-    // Prepare data for filter evaluation
+    // Prepare data for filter evaluation with all possible field variations
     const filterData = {
       ...requestBody,
       contactData: {
         ...requestBody.contactData,
         // Add mapped fields for filter evaluation with variations
         email: contactEmail,
-        first_name: contactFirstName,
-        last_name: contactLastName,
-        company_name: companyName,
-        lead_status: leadStatus,
-        lifecycle_stage: lifecycleStage,
-        // Add template variations
         '{email}': contactEmail,
+        'email_address': contactEmail,
+        '{email_address}': contactEmail,
+        
+        first_name: contactFirstName,
         '{first_name}': contactFirstName,
+        'firstName': contactFirstName,
+        '{firstName}': contactFirstName,
+        
+        last_name: contactLastName,
         '{last_name}': contactLastName,
+        'lastName': contactLastName,
+        '{lastName}': contactLastName,
+        
+        company_name: companyName,
         '{company_name}': companyName,
+        'company': companyName,
+        '{company}': companyName,
+        
+        lead_status: leadStatus,
         '{lead_status}': leadStatus,
-        '{lifecycle_stage}': lifecycleStage
+        'leadStatus': leadStatus,
+        '{leadStatus}': leadStatus,
+        
+        lifecycle_stage: lifecycleStage,
+        '{lifecycle_stage}': lifecycleStage,
+        'lifecycleStage': lifecycleStage,
+        '{lifecycleStage}': lifecycleStage
       }
     };
 
@@ -266,10 +283,18 @@ export async function POST(request: Request) {
       filterCount: filters.length,
       scenarioName: scenario.name,
       filters,
-      contactData: filterData.contactData
+      contactData: filterData.contactData,
+      rawData: requestBody // Log raw data for debugging
     });
 
     const filterResult = evaluateFilters(filters, filterData);
+    
+    log('info', 'Filter evaluation result', {
+      passed: filterResult.passed,
+      reason: filterResult.reason,
+      scenarioName: scenario.name,
+      filters
+    });
 
     if (!filterResult.passed) {
       log('info', 'Request blocked by filters', { 
@@ -279,6 +304,7 @@ export async function POST(request: Request) {
         contactData: filterData.contactData
       });
 
+      // Create webhook log for blocked request
       await prisma.webhookLog.create({
         data: {
           status: 'blocked',
@@ -295,6 +321,7 @@ export async function POST(request: Request) {
         }
       });
 
+      // Return blocked status with details
       return NextResponse.json({
         status: 'blocked',
         reason: filterResult.reason,
@@ -302,7 +329,8 @@ export async function POST(request: Request) {
           name: scenario.name,
           filters: filters
         },
-        evaluationDetails: filterResult
+        evaluationDetails: filterResult,
+        contactData: filterData.contactData // Include contact data for debugging
       }, { status: 200 });
     }
 
@@ -323,19 +351,22 @@ export async function POST(request: Request) {
       }
     };
 
-    log('info', 'Forwarding webhook', { 
-      url: userWebsite,
-      scenarioName: scenario.name,
-      contact: { email: contactEmail, name: contactName, company: companyName }
-    });
-
     // Forward the webhook if URL is provided
     let responseData = { message: 'Webhook processed successfully' };
     let responseStatus = 'success';
 
-    if (userWebsite) {
+    // Get forwarding URL with fallback to environment variable
+    const forwardingUrl = userWebsite || process.env.DEFAULT_WEBHOOK_URL;
+    
+    if (forwardingUrl) {
+      log('info', 'Forwarding webhook', { 
+        url: forwardingUrl,
+        scenarioName: scenario.name,
+        contact: { email: contactEmail, name: contactName, company: companyName }
+      });
+
       try {
-        const response = await fetch(userWebsite, {
+        const response = await fetch(forwardingUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -357,6 +388,16 @@ export async function POST(request: Request) {
             status: response.status,
             response: responseData
           };
+          log('error', 'Webhook forwarding failed', {
+            status: response.status,
+            url: forwardingUrl,
+            response: responseData
+          });
+        } else {
+          log('info', 'Webhook forwarded successfully', {
+            status: response.status,
+            url: forwardingUrl
+          });
         }
       } catch (error) {
         responseStatus = 'error';
@@ -364,7 +405,21 @@ export async function POST(request: Request) {
           error: 'Failed to forward webhook',
           details: String(error)
         };
+        log('error', 'Webhook forwarding error', {
+          error: String(error),
+          url: forwardingUrl
+        });
       }
+    } else {
+      log('warn', 'No forwarding URL provided', {
+        userWebsite,
+        defaultUrl: process.env.DEFAULT_WEBHOOK_URL
+      });
+      responseStatus = 'error';
+      responseData = {
+        error: 'No forwarding URL provided',
+        details: 'Neither user website nor default webhook URL was available'
+      };
     }
 
     // Log the webhook result
