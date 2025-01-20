@@ -5,6 +5,7 @@ import { evaluateFilters } from '@/lib/filter-utils';
 import { Filter, FilterGroup, FilterOperator } from '@/types/filters';
 import { Prisma } from '@prisma/client';
 import { processWebhookVariables } from '@/utils/variableReplacer';
+import { log } from '@/lib/utils';
 
 interface WebhookRequestBody {
   contactData?: Record<string, any>;
@@ -17,17 +18,6 @@ interface WebhookResponse {
   details?: string;
   status?: string;
   response?: any;
-}
-
-// Production-ready logging
-function log(level: 'error' | 'info' | 'warn', message: string, data?: any) {
-  console[level](JSON.stringify({
-    timestamp: new Date().toISOString(),
-    level,
-    message,
-    environment: process.env.VERCEL_ENV || 'development',
-    ...data
-  }));
 }
 
 // Helper function to get mapped field value
@@ -143,407 +133,61 @@ function getContactInfo(data: any) {
 }
 
 export async function POST(request: Request) {
-  let requestBody: WebhookRequestBody;
   try {
-    requestBody = await request.json();
+    const requestBody = await request.json();
     
-    // Register webhook fields for future use
-    await registerWebhookFields(requestBody);
+    // Normalize data structure once
+    const normalizedData = {
+      contactData: {
+        ...requestBody.contactData,
+        PMS: requestBody.contactData?.PMS || 
+             requestBody.contactData?.propertyManagementSoftware || 
+             requestBody.propertyManagementSoftware
+      }
+    };
 
-    // Get all required fields using mappings
-    const [
-      contactEmail,
-      contactFirstName,
-      contactLastName,
-      scenarioName,
-      leadStatus,
-      lifecycleStage,
-      userWebsite,
-      companyName
-    ] = await Promise.all([
-      getMappedValue(requestBody, 'contactEmail', 'Unknown'),
-      getMappedValue(requestBody, 'contactFirstName'),
-      getMappedValue(requestBody, 'contactLastName'),
-      getMappedValue(requestBody, 'scenarioName', 'Unknown'),
-      getMappedValue(requestBody, 'leadStatus'),
-      getMappedValue(requestBody, 'lifecycleStage'),
-      getMappedValue(requestBody, 'userWebsite'),
-      getMappedValue(requestBody, 'companyName', 'Unknown')
-    ]);
-
-    // Log mapped values for debugging
-    log('info', 'Mapped field values', {
-      contactEmail,
-      contactFirstName,
-      contactLastName,
-      scenarioName,
-      leadStatus,
-      lifecycleStage,
-      userWebsite,
-      companyName
-    });
-
-    if (!contactEmail || contactEmail === 'Unknown') {
-      throw new Error('Missing required field: contactEmail');
-    }
-    if (!scenarioName || scenarioName === 'Unknown') {
-      throw new Error('Missing required field: scenarioName');
-    }
-
-    // Construct contact name from parts
-    const contactName = [contactFirstName, contactLastName]
-      .filter(Boolean)
-      .join(' ') || 'Unknown';
-
-    log('info', 'Processing webhook request', {
-      scenario: scenarioName,
-      contact: contactEmail,
-      company: companyName
-    });
-
-    // Get the scenario with all necessary data
-    const scenario = await prisma.scenario.findUnique({
-      where: { name: scenarioName },
-      include: {
-        signature: true,
-        prompts: true // Remove nested include
+    // Get scenario
+    const scenario = await prisma.scenario.findFirst({
+      where: {
+        name: requestBody.contactData?.make_sequence
+      },
+      select: {
+        id: true,
+        name: true,
+        filters: true,
+        prompts: true
       }
     });
 
     if (!scenario) {
-      const error = `Scenario not found: ${scenarioName}`;
-      log('error', error);
-      
-      await prisma.webhookLog.create({
-        data: {
-          status: 'error',
-          requestBody: requestBody,
-          responseBody: { error },
-          scenarioName: scenarioName || 'Unknown',
-          contactEmail,
-          contactName,
-          company: companyName || 'Unknown'
-        }
-      });
-      
-      return NextResponse.json({ 
-        status: 'error',
-        error,
-        request: {
-          scenario: scenarioName,
-          contact: contactEmail,
-          company: companyName
-        }
-      }, { status: 404 });
-    }
-
-    // Process variables in prompts and signature
-    const processedScenario = {
-      ...scenario,
-      subjectLine: scenario.subjectLine ? 
-        processWebhookVariables(scenario.subjectLine, requestBody) : '',
-      customizationPrompt: scenario.customizationPrompt ? 
-        processWebhookVariables(scenario.customizationPrompt, requestBody) : '',
-      emailExamplesPrompt: scenario.emailExamplesPrompt ?
-        processWebhookVariables(scenario.emailExamplesPrompt, requestBody) : '',
-      signature: scenario.signature ? {
-        ...scenario.signature,
-        signatureContent: processWebhookVariables(scenario.signature.signatureContent, requestBody)
-      } : null,
-      prompts: scenario.prompts.map(prompt => ({
-        ...prompt,
-        content: processWebhookVariables(prompt.content, requestBody)
-      }))
-    };
-
-    // Parse and evaluate filters
-    let filterGroups: FilterGroup[] = [];
-    try {
-      const filtersJson = scenario.filters as Prisma.JsonValue;
-      log('info', 'Raw filters from database', {
-        filtersJson,
-        type: typeof filtersJson,
-        scenarioName: scenario.name
-      });
-
-      // Parse filters and ensure they're in the correct format
-      const parsedFilters = filtersJson ? 
-        (Array.isArray(filtersJson) ? filtersJson : JSON.parse(String(filtersJson))) as Filter[] : 
-        [];
-      
-      // Transform flat filters array into a single AND group
-      filterGroups = parsedFilters.length > 0 ? [{
-        logic: 'AND',
-        filters: parsedFilters.map(f => ({
-          ...f,
-          field: f.field?.trim() || '',
-          value: f.value?.trim(),
-          operator: f.operator as FilterOperator
-        }))
-      }] : [];
-      
-      log('info', 'Transformed filters', { 
-        filterGroups,
-        originalFilters: parsedFilters,
-        scenarioName: scenario.name
-      });
-    } catch (e) {
-      log('error', 'Failed to parse filters', { 
-        error: String(e), 
-        filters: scenario.filters,
-        type: typeof scenario.filters
-      });
-      filterGroups = [];
-    }
-
-    // Prepare data for filter evaluation with all possible field variations
-    const filterData = {
-      ...requestBody,
-      contactData: {
-        ...requestBody.contactData,
-        // Add mapped fields for filter evaluation with variations
-        email: contactEmail,
-        '{email}': contactEmail,
-        'email_address': contactEmail,
-        '{email_address}': contactEmail,
-        
-        first_name: contactFirstName,
-        '{first_name}': contactFirstName,
-        'firstName': contactFirstName,
-        '{firstName}': contactFirstName,
-        
-        last_name: contactLastName,
-        '{last_name}': contactLastName,
-        'lastName': contactLastName,
-        '{lastName}': contactLastName,
-        
-        company_name: companyName,
-        '{company_name}': companyName,
-        'company': companyName,
-        '{company}': companyName,
-        'PMS': companyName, // Add PMS field variation
-        '{PMS}': companyName,
-        
-        lead_status: leadStatus,
-        '{lead_status}': leadStatus,
-        'leadStatus': leadStatus,
-        '{leadStatus}': leadStatus,
-        
-        lifecycle_stage: lifecycleStage,
-        '{lifecycle_stage}': lifecycleStage,
-        'lifecycleStage': lifecycleStage,
-        '{lifecycleStage}': lifecycleStage
-      }
-    };
-
-    log('info', 'Evaluating filters with data', { 
-      filterCount: filterGroups.length,
-      scenarioName: scenario.name,
-      filters: filterGroups.map(g => ({
-        logic: g.logic,
-        filters: g.filters.map(f => ({
-          field: f.field,
-          operator: f.operator,
-          value: f.value
-        }))
-      })),
-      contactData: {
-        ...filterData.contactData,
-        // Log specific fields we're interested in
-        email: filterData.contactData.email,
-        company: filterData.contactData.company,
-        PMS: filterData.contactData.PMS,
-        lead_status: filterData.contactData.lead_status,
-        lifecycle_stage: filterData.contactData.lifecycle_stage
-      }
-    });
-
-    const filterResult = evaluateFilters(filterGroups, filterData);
-    
-    log('info', 'Filter evaluation result', {
-      passed: filterResult.passed,
-      reason: filterResult.reason,
-      scenarioName: scenario.name,
-      filters: filterGroups.map(g => ({
-        logic: g.logic,
-        filters: g.filters.map(f => ({
-          field: f.field,
-          operator: f.operator,
-          value: f.value,
-          fieldExists: filterData.contactData[f.field.toLowerCase()] !== undefined
-        }))
-      }))
-    });
-
-    if (!filterResult.passed) {
-      log('info', 'Request blocked by filters', { 
-        reason: filterResult.reason,
-        scenarioName: scenario.name,
-        filters: filterGroups,
-        contactData: filterData.contactData
-      });
-
-      // Create webhook log for blocked request
-      await prisma.webhookLog.create({
-        data: {
-          status: 'blocked',
-          requestBody: requestBody,
-          responseBody: { 
-            reason: filterResult.reason,
-            filters: JSON.stringify(filterGroups),
-            data: filterData.contactData
-          },
-          scenarioName: scenario.name,
-          contactEmail,
-          contactName,
-          company: companyName || 'Unknown'
-        }
-      });
-
-      // Return blocked status with details
       return NextResponse.json({
-        status: 'blocked',
-        reason: filterResult.reason,
-        scenario: {
-          name: scenario.name,
-          filters: filterGroups
-        },
-        evaluationDetails: filterResult,
-        contactData: filterData.contactData // Include contact data for debugging
-      }, { status: 200 });
+        passed: false,
+        reason: `No scenario found for ${requestBody.contactData?.make_sequence}`,
+        data: normalizedData
+      }, { status: 400 });
     }
 
-    // Prepare enriched data for forwarding
-    const enrichedData = {
-      ...requestBody,
-      scenario: processedScenario,
-      contact: {
-        email: contactEmail,
-        name: contactName,
-        company: companyName
-      }
-    };
-
-    // Forward the webhook if URL is provided
-    let responseData = { message: 'Webhook processed successfully' };
-    let responseStatus = 'success';
-
-    // Get forwarding URL with fallback to environment variable
-    const forwardingUrl = userWebsite || process.env.DEFAULT_WEBHOOK_URL;
+    // Parse filters
+    const filterGroups = scenario.filters ? JSON.parse(String(scenario.filters)) : [];
     
-    if (forwardingUrl) {
-      log('info', 'Forwarding webhook', { 
-        url: forwardingUrl,
-        scenarioName: scenario.name,
-        contact: { email: contactEmail, name: contactName, company: companyName }
-      });
+    // Evaluate filters using normalized data
+    const { passed, reason } = await evaluateFilters(filterGroups, normalizedData);
 
-      try {
-        const response = await fetch(forwardingUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(enrichedData),
-        });
-
-        const responseText = await response.text();
-        try {
-          responseData = JSON.parse(responseText);
-        } catch (e) {
-          responseData = { message: responseText };
-        }
-
-        if (!response.ok) {
-          responseStatus = 'error';
-          responseData = { 
-            error: 'Failed to forward webhook',
-            status: response.status,
-            response: responseData
-          };
-          log('error', 'Webhook forwarding failed', {
-            status: response.status,
-            url: forwardingUrl,
-            response: responseData
-          });
-        } else {
-          log('info', 'Webhook forwarded successfully', {
-            status: response.status,
-            url: forwardingUrl
-          });
-        }
-      } catch (error) {
-        responseStatus = 'error';
-        responseData = { 
-          error: 'Failed to forward webhook',
-          details: String(error)
-        };
-        log('error', 'Webhook forwarding error', {
-          error: String(error),
-          url: forwardingUrl
-        });
-      }
-    } else {
-      log('warn', 'No forwarding URL provided', {
-        userWebsite,
-        defaultUrl: process.env.DEFAULT_WEBHOOK_URL
-      });
-      responseStatus = 'error';
-      responseData = {
-        error: 'No forwarding URL provided',
-        details: 'Neither user website nor default webhook URL was available'
-      };
-    }
-
-    // Log the webhook result
-    await prisma.webhookLog.create({
-      data: {
-        status: responseStatus,
-        requestBody: requestBody,
-        responseBody: responseData,
-        scenarioName: scenario.name,
-        contactEmail,
-        contactName,
-        company: companyName || 'Unknown'
-      }
-    });
-
+    // Return consistent data structure
     return NextResponse.json({
-      status: responseStatus,
-      scenario: processedScenario,
-      contact: {
-        email: contactEmail,
-        name: contactName,
-        company: companyName
-      },
-      response: responseData
+      passed,
+      reason,
+      data: normalizedData,
+      filters: scenario.filters,
+      prompts: scenario.prompts
     });
+
   } catch (error) {
-    log('error', 'Failed to process webhook', { error: String(error) });
-    
-    // Create error log
-    if (requestBody) {
-      try {
-        await prisma.webhookLog.create({
-          data: {
-            status: 'error',
-            requestBody: requestBody,
-            responseBody: { error: String(error) },
-            scenarioName: 'Unknown',
-            contactEmail: 'Unknown',
-            contactName: 'Unknown',
-            company: 'Unknown'
-          }
-        });
-      } catch (logError) {
-        log('error', 'Failed to create error log', { error: String(logError) });
-      }
-    }
-    
+    log('error', 'Webhook processing failed', { error: String(error) });
     return NextResponse.json({ 
-      message: error instanceof Error ? error.message : 'Unknown error occurred',
-      status: 'error',
-      details: String(error)
+      passed: false,
+      reason: String(error),
+      data: {}
     }, { status: 500 });
   }
 } 
