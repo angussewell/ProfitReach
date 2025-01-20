@@ -63,10 +63,22 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
   const mappedFields = requestBody?.mappedFields || {};
   const contactInfo = extractContactInfo(requestBody);
 
+  // Define fields with their values
+  const fields = [
+    { label: 'Time', value: new Date(log.createdAt).toLocaleString() },
+    { label: 'Status', value: log.status, isStatus: true },
+    { label: 'Scenario', value: mappedFields.scenarioName || 'N/A' },
+    { label: 'Contact Email', value: mappedFields.contactEmail || 'N/A' },
+    { label: 'Contact Name', value: contactInfo.contactName },
+    { label: 'Company', value: contactInfo.company },
+    { label: 'Property Management Software', value: contactInfo.propertyManagementSoftware },
+    { label: 'Lead Status', value: contactInfo.leadStatus },
+    { label: 'Lifecycle Stage', value: contactInfo.lifecycleStage }
+  ];
+
   return (
     <div className="p-6 space-y-6">
       <div className="space-y-4">
-        {/* Header with Status */}
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold">Webhook Log Details</h1>
           <div className={cn(
@@ -81,33 +93,20 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
         <Card>
           <CardContent className="pt-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Time */}
-              <div className="space-y-1">
-                <Label className="text-sm text-muted-foreground">Time</Label>
-                <div className="text-sm font-medium">
-                  {new Date(log.createdAt).toLocaleString()}
-                </div>
-              </div>
-
-              {/* Status */}
-              <div className="space-y-1">
-                <Label className="text-sm text-muted-foreground">Status</Label>
-                <div className={cn(
-                  "text-sm font-medium",
-                  log.status === 'success' ? 'text-green-600' : 'text-red-600'
-                )}>
-                  {log.status}
-                </div>
-              </div>
-
-              {/* Mapped Fields */}
-              {DISPLAY_FIELDS.map((field) => (
-                <div key={field.key} className="space-y-1">
+              {fields.map((field, index) => (
+                <div key={index} className="space-y-1">
                   <Label className="text-sm text-muted-foreground">
                     {field.label}
                   </Label>
-                  <div className="text-sm font-medium">
-                    {mappedFields[field.key] || 'N/A'}
+                  <div className={cn(
+                    "text-sm font-medium",
+                    field.isStatus && (
+                      field.value === 'success' 
+                        ? 'text-green-600' 
+                        : 'text-red-600'
+                    )
+                  )}>
+                    {field.value}
                   </div>
                 </div>
               ))}
