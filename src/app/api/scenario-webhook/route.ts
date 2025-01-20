@@ -225,25 +225,19 @@ export async function POST(request: Request) {
     }
 
     // Process variables in prompts and signature
-    const contactData = {
-      email: contactEmail,
-      name: contactName,
-      company: companyName
-    };
-
     const processedScenario = {
       ...scenario,
       customizationPrompt: scenario.customizationPrompt ? 
-        processWebhookVariables(scenario.customizationPrompt, contactData) : '',
+        processWebhookVariables(scenario.customizationPrompt, requestBody) : '',
       emailExamplesPrompt: scenario.emailExamplesPrompt ?
-        processWebhookVariables(scenario.emailExamplesPrompt, contactData) : '',
+        processWebhookVariables(scenario.emailExamplesPrompt, requestBody) : '',
       signature: scenario.signature ? {
         ...scenario.signature,
-        signatureContent: processWebhookVariables(scenario.signature.signatureContent, contactData)
+        signatureContent: processWebhookVariables(scenario.signature.signatureContent, requestBody)
       } : null,
       prompts: scenario.prompts.map(prompt => ({
         ...prompt,
-        content: processWebhookVariables(prompt.content, contactData)
+        content: processWebhookVariables(prompt.content, requestBody)
       }))
     };
 

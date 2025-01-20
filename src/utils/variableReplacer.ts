@@ -97,29 +97,87 @@ export function processObjectVariables(
 }
 
 /**
- * Processes webhook data and replaces variables in prompts/scenarios
- * @param text The text containing variables to replace
- * @param contactData The webhook contact data
- * @returns Text with variables replaced with their values
+ * Recursively searches for a value in an object using various field name formats
  */
-export function processWebhookVariables(text: string, contactData: Record<string, any>): string {
-  // Extract all variables from the text
+function findValueInData(data: any, field: string): string | undefined {
+  // Remove any template syntax
+  const cleanField = field.replace(/[{}]/g, '').toLowerCase();
+  
+  // Different case variations to try
+  const variations = [
+    cleanField,                          // original (lowercase)
+    cleanField.replace(/[_-]/g, ''),     // removed separators
+    cleanField.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase()), // camelCase
+    cleanField.replace(/([A-Z])/g, '_$1').toLowerCase(), // snake_case
+  ];
+
+  // Log what we're searching for
+  console.log('Searching for field:', {
+    original: field,
+    cleaned: cleanField,
+    variations
+  });
+
+  // Try each variation
+  for (const variant of variations) {
+    // Direct match at any level
+    if (variant in data) {
+      console.log('Found direct match:', { variant, value: data[variant] });
+      return data[variant];
+    }
+
+    // Look in contactData
+    if (data.contactData?.[variant] !== undefined) {
+      console.log('Found in contactData:', { variant, value: data.contactData[variant] });
+      return data.contactData[variant];
+    }
+
+    // Look in contact
+    if (data.contact?.[variant] !== undefined) {
+      console.log('Found in contact:', { variant, value: data.contact[variant] });
+      return data.contact[variant];
+    }
+  }
+
+  // If no match found, recursively search nested objects
+  for (const key in data) {
+    if (typeof data[key] === 'object' && data[key] !== null) {
+      const found = findValueInData(data[key], field);
+      if (found !== undefined) {
+        console.log('Found in nested object:', { key, field, value: found });
+        return found;
+      }
+    }
+  }
+
+  console.log('No value found for field:', field);
+  return undefined;
+}
+
+/**
+ * Processes webhook data and replaces variables in text
+ * Completely independent of field mappings
+ */
+export function processWebhookVariables(text: string, webhookData: Record<string, any>): string {
+  // Extract variables
   const variables = extractVariables(text);
   
-  // Create a mapping of variables to their values from contactData
+  console.log('Processing variables:', {
+    text,
+    foundVariables: variables
+  });
+
+  // Create mapping
   const variableMap: VariableMap = {};
   variables.forEach(variable => {
-    const normalizedVar = variable.toLowerCase();
-    // Try direct access first, then nested path
-    const value = contactData[normalizedVar] ?? 
-                 contactData[variable] ??
-                 variable.split('.').reduce((obj, key) => obj?.[key], contactData);
-                 
+    const value = findValueInData(webhookData, variable);
     if (value !== undefined) {
       variableMap[variable] = String(value);
     }
   });
-  
-  // Replace variables using existing function
+
+  console.log('Variable mapping created:', variableMap);
+
+  // Replace variables
   return replaceVariables(text, variableMap);
 } 
