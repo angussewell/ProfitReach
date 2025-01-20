@@ -120,6 +120,19 @@ function logMessage(level: 'error' | 'info', message: string, data?: any) {
   }));
 }
 
+function getContactInfo(data: any) {
+  const contactData = data.contactData || {};
+  
+  return {
+    email: contactData.email || contactData['{email}'] || 'Unknown',
+    name: [
+      contactData.first_name || contactData['{first_name}'],
+      contactData.last_name || contactData['{last_name}']
+    ].filter(Boolean).join(' ') || 'Unknown',
+    company: contactData.company || contactData.company_name || contactData.PMS || 'Unknown'
+  };
+}
+
 export async function POST(request: Request) {
   let requestBody;
   try {
@@ -137,9 +150,13 @@ export async function POST(request: Request) {
       throw new Error('Missing make_sequence field in contactData');
     }
 
+    // Get contact info early
+    const { email, name, company } = getContactInfo(requestBody);
+
     logMessage('info', 'Processing webhook request', {
       sequence: contactData.make_sequence,
-      contact: contactData?.email
+      contact: email,
+      company
     });
 
     // Get the scenario with all necessary data
@@ -162,10 +179,9 @@ export async function POST(request: Request) {
           requestBody: requestBody,
           responseBody: { error },
           scenarioName: contactData.make_sequence || 'Unknown',
-          contactEmail: contactData?.email || 'Unknown',
-          contactName: contactData?.first_name && contactData?.last_name 
-            ? `${contactData.first_name} ${contactData.last_name}`.trim()
-            : 'Unknown'
+          contactEmail: email,
+          contactName: name,
+          company: company
         }
       });
       
@@ -174,7 +190,8 @@ export async function POST(request: Request) {
         error,
         request: {
           sequence: contactData.make_sequence,
-          contact: contactData?.email
+          contact: email,
+          company
         }
       }, { status: 404 });
     }
@@ -194,7 +211,7 @@ export async function POST(request: Request) {
       filters = []; // Continue with empty filters
     }
 
-    const filterResult = evaluateFilters(filters, { ...contactData });
+    const filterResult = evaluateFilters(filters, requestBody);
 
     if (!filterResult.passed) {
       logMessage('info', 'Request blocked by filters', { 
@@ -211,10 +228,9 @@ export async function POST(request: Request) {
             filters: JSON.stringify(filters)
           },
           scenarioName: scenario.name,
-          contactEmail: contactData?.email || 'Unknown',
-          contactName: contactData?.first_name && contactData?.last_name 
-            ? `${contactData.first_name} ${contactData.last_name}`.trim()
-            : 'Unknown'
+          contactEmail: email,
+          contactName: name,
+          company: company
         }
       });
 
@@ -239,12 +255,18 @@ export async function POST(request: Request) {
         customizationPrompt: scenario.customizationPrompt,
         emailExamplesPrompt: scenario.emailExamplesPrompt,
         signature: scenario.signature?.signatureContent
+      },
+      contact: {
+        email,
+        name,
+        company
       }
     };
 
     logMessage('info', 'Forwarding webhook', { 
       url: userWebhookUrl,
-      scenarioName: scenario.name
+      scenarioName: scenario.name,
+      contact: { email, name, company }
     });
 
     // Forward the webhook
@@ -272,10 +294,9 @@ export async function POST(request: Request) {
         requestBody: requestBody,
         responseBody: responseData,
         scenarioName: scenario.name,
-        contactEmail: contactData?.email || 'Unknown',
-        contactName: contactData?.first_name && contactData?.last_name 
-          ? `${contactData.first_name} ${contactData.last_name}`.trim()
-          : 'Unknown'
+        contactEmail: email,
+        contactName: name,
+        company: company
       }
     });
 
@@ -289,6 +310,11 @@ export async function POST(request: Request) {
         emailExamplesPrompt: scenario.emailExamplesPrompt,
         signature: scenario.signature?.signatureContent
       },
+      contact: {
+        email,
+        name,
+        company
+      },
       filterResult: filterResult,
       forwardResponse: responseData
     }, { status: response.ok ? 200 : 500 });
@@ -297,14 +323,18 @@ export async function POST(request: Request) {
     const errorMessage = error.message || 'Unknown error';
     logMessage('error', 'Webhook processing error', { error: errorMessage });
 
+    const { email = 'Unknown', name = 'Unknown', company = 'Unknown' } = 
+      requestBody ? getContactInfo(requestBody) : {};
+
     await prisma.webhookLog.create({
       data: {
         status: 'error',
         requestBody: requestBody || { error: 'Failed to parse request body' },
         responseBody: { error: errorMessage },
         scenarioName: 'Unknown',
-        contactEmail: 'Unknown',
-        contactName: 'Unknown'
+        contactEmail: email,
+        contactName: name,
+        company: company
       }
     });
 

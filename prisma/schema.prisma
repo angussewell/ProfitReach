@@ -46,17 +46,17 @@ model Prompt {
 
 model WebhookLog {
   id           String   @id @default(cuid())
-  scenarioName String
-  contactEmail String
-  contactName  String?
-  status       String   @default("success")
-  errorMessage String?
-  requestBody  Json
-  responseBody Json?
   createdAt    DateTime @default(now())
+  status       String   @default("error")
+  scenarioName String   @default("Unknown")
+  contactEmail String   @default("Unknown")
+  contactName  String   @default("Unknown")
+  company      String   @default("Unknown")
+  requestBody  Json
+  responseBody Json     @default("{}")
+  errorMessage String?  // Keep this for backward compatibility
 
   @@index([scenarioName])
-  @@index([createdAt])
 }
 
 // Field mapping configuration for webhook data
