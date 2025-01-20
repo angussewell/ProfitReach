@@ -25,38 +25,42 @@ function log(level: 'error' | 'info' | 'warn', message: string, data?: any) {
  * Normalizes webhook data into a flat structure with standardized field access
  */
 function normalizeWebhookData(data: Record<string, any>): Record<string, any> {
-  // Ensure contactData exists
-  if (!data.contactData) {
-    data.contactData = {};
-  }
+  // Create a clean copy of the data
+  const normalized = {
+    contactData: { ...data.contactData } || {}
+  };
 
-  // Move any PMS or propertyManagementSoftware fields to the right place
-  if (data.contactData.propertyManagementSoftware) {
-    data.contactData.PMS = data.contactData.propertyManagementSoftware;
-  }
-  if (data.propertyManagementSoftware) {
-    data.contactData.PMS = data.propertyManagementSoftware;
-  }
+  // Handle PMS field variations
+  normalized.contactData.PMS = 
+    data.contactData?.PMS || 
+    data.contactData?.propertyManagementSoftware || 
+    data.propertyManagementSoftware ||
+    normalized.contactData.PMS;
 
-  log('info', 'Normalized webhook data', { data });
-  return data;
+  log('info', 'Normalized webhook data', { 
+    original: data,
+    normalized,
+    pmsValue: normalized.contactData.PMS
+  });
+
+  return normalized;
 }
 
 /**
  * Finds a field value in the data object, trying multiple formats
  */
 function findFieldValue(data: Record<string, any>, field: string): { exists: boolean; value: any } {
-  // Use lodash get to safely traverse nested paths
   const value = get(data, field);
-  const exists = value !== undefined;
+  const exists = value !== undefined && value !== null;
   
   log('info', 'Field lookup result', {
     field,
     exists,
-    value
+    value,
+    data: JSON.stringify(data)
   });
 
-  return { exists, value };
+  return { exists, value: exists ? value : 'Unknown' };
 }
 
 function normalizeValue(value: any): string {
