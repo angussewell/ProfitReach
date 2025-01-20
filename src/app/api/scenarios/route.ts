@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient, Prisma, Scenario } from '@prisma/client';
+import { Prisma, Scenario } from '@prisma/client';
 import { hubspotClient } from '@/utils/hubspotClient';
 import { prisma } from '@/lib/db';
 import { Filter } from '@/types/filters';
