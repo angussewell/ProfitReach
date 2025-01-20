@@ -8,6 +8,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Plus, Edit, Loader2, Search, X } from 'lucide-react';
+import { FilterBuilder } from '@/components/filters/FilterBuilder';
 
 interface Signature {
   id: string;
@@ -24,6 +25,7 @@ interface Scenario {
   customizationPrompt: string;
   emailExamplesPrompt: string;
   signature?: Signature;
+  filters?: any;
 }
 
 export default function ManageScenariosPage() {
@@ -36,10 +38,12 @@ export default function ManageScenariosPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const { toast } = useToast();
+  const [webhookFields, setWebhookFields] = useState<string[]>([]);
 
   useEffect(() => {
     fetchScenarios();
     fetchSignatures();
+    fetchWebhookFields();
   }, []);
 
   const fetchScenarios = async () => {
@@ -73,6 +77,17 @@ export default function ManageScenariosPage() {
         description: 'Failed to load signatures',
         variant: 'destructive',
       });
+    }
+  };
+
+  const fetchWebhookFields = async () => {
+    try {
+      const response = await fetch('/api/webhook-fields');
+      if (!response.ok) throw new Error('Failed to fetch webhook fields');
+      const data = await response.json();
+      setWebhookFields(data);
+    } catch (error) {
+      console.error('Error fetching webhook fields:', error);
     }
   };
 
@@ -262,22 +277,19 @@ export default function ManageScenariosPage() {
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-[#2e475d]">Name</label>
                     <Input
-                      value={editingScenario?.name || ''}
-                      onChange={(e) => setEditingScenario(prev => prev ? { ...prev, name: e.target.value } : null)}
                       required
-                      disabled={!isCreating}
-                      className="h-12 border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all rounded-lg"
                       placeholder="Enter scenario name"
+                      value={editingScenario?.name || ''}
+                      onChange={(e) => setEditingScenario(prev => ({ ...prev!, name: e.target.value }))}
+                      className="h-12 border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all rounded-lg"
                     />
                   </div>
 
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-[#2e475d]">Type</label>
                     <Select
-                      value={editingScenario?.scenarioType || ''}
-                      onValueChange={(value: string) => {
-                        setEditingScenario(prev => prev ? { ...prev, scenarioType: value } : null);
-                      }}
+                      value={editingScenario?.scenarioType || 'simple'}
+                      onValueChange={(value) => setEditingScenario(prev => ({ ...prev!, scenarioType: value }))}
                     >
                       <SelectTrigger className="h-12 border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all rounded-lg">
                         <SelectValue placeholder="Select type" />
@@ -292,13 +304,26 @@ export default function ManageScenariosPage() {
                   </div>
 
                   <div className="space-y-2">
+                    <label className="text-sm font-medium text-[#2e475d]">Webhook Filters</label>
+                    <Card className="border-2 border-gray-200">
+                      <CardContent className="pt-6">
+                        <FilterBuilder
+                          initialFilters={editingScenario?.filters || []}
+                          fields={webhookFields}
+                          onChange={(filters) => setEditingScenario(prev => ({ ...prev!, filters }))}
+                        />
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  <div className="space-y-2">
                     <label className="text-sm font-medium text-[#2e475d]">Subject Line</label>
                     <Input
-                      value={editingScenario?.subjectLine || ''}
-                      onChange={(e) => setEditingScenario(prev => prev ? { ...prev, subjectLine: e.target.value } : null)}
                       required
-                      className="h-12 border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all rounded-lg"
                       placeholder="Enter subject line"
+                      value={editingScenario?.subjectLine || ''}
+                      onChange={(e) => setEditingScenario(prev => ({ ...prev!, subjectLine: e.target.value }))}
+                      className="h-12 border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all rounded-lg"
                     />
                   </div>
 
@@ -306,9 +331,7 @@ export default function ManageScenariosPage() {
                     <label className="text-sm font-medium text-[#2e475d]">Email Signature</label>
                     <Select
                       value={editingScenario?.signatureId || ''}
-                      onValueChange={(value: string) => {
-                        setEditingScenario(prev => prev ? { ...prev, signatureId: value } : null);
-                      }}
+                      onValueChange={(value) => setEditingScenario(prev => ({ ...prev!, signatureId: value }))}
                     >
                       <SelectTrigger className="h-12 border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all rounded-lg">
                         <SelectValue placeholder="Select signature" />
@@ -326,49 +349,47 @@ export default function ManageScenariosPage() {
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-[#2e475d]">Customization Prompt</label>
                     <Textarea
-                      value={editingScenario?.customizationPrompt || ''}
-                      onChange={(e) => setEditingScenario(prev => prev ? { ...prev, customizationPrompt: e.target.value } : null)}
                       required
-                      className="min-h-[200px] border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all rounded-lg font-mono"
                       placeholder="Enter customization prompt"
+                      value={editingScenario?.customizationPrompt || ''}
+                      onChange={(e) => setEditingScenario(prev => ({ ...prev!, customizationPrompt: e.target.value }))}
+                      className="min-h-[200px] border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all rounded-lg font-mono"
                     />
                   </div>
 
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-[#2e475d]">Email Examples Prompt</label>
                     <Textarea
-                      value={editingScenario?.emailExamplesPrompt || ''}
-                      onChange={(e) => setEditingScenario(prev => prev ? { ...prev, emailExamplesPrompt: e.target.value } : null)}
                       required
-                      className="min-h-[200px] border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all rounded-lg font-mono"
                       placeholder="Enter email examples prompt"
+                      value={editingScenario?.emailExamplesPrompt || ''}
+                      onChange={(e) => setEditingScenario(prev => ({ ...prev!, emailExamplesPrompt: e.target.value }))}
+                      className="min-h-[200px] border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all rounded-lg font-mono"
                     />
                   </div>
 
                   <div className="flex gap-3 pt-2">
-                    <Button 
-                      type="submit" 
+                    <Button
+                      type="submit"
                       disabled={isSubmitting}
                       className="bg-[#ff7a59] hover:bg-[#ff8f73] transition-all duration-200 text-white shadow-sm hover:shadow-md border-0 rounded-lg px-6 h-12 text-base"
                     >
                       {isSubmitting ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          {isCreating ? 'Creating...' : 'Updating...'}
-                        </>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : isCreating ? (
+                        'Create Scenario'
                       ) : (
-                        isCreating ? 'Create Scenario' : 'Update Scenario'
+                        'Update Scenario'
                       )}
                     </Button>
                     <Button
                       type="button"
-                      variant="outline"
                       onClick={() => {
                         setEditingScenario(null);
                         setSelectedScenario(null);
                         setIsCreating(false);
                       }}
-                      disabled={isSubmitting}
+                      variant="outline"
                       className="border-2 border-gray-200 hover:bg-gray-50 text-[#2e475d] hover:border-[#ff7a59] transition-all rounded-lg px-6 h-12 text-base"
                     >
                       Cancel
