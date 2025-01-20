@@ -2,10 +2,10 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Select } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Filter, FilterOperator, FilterGroup, createFilter } from '@/types/filters';
-import { X } from 'lucide-react';
+import { X, ChevronDown } from 'lucide-react';
+import { Label } from '@/components/ui/label';
 
 interface FilterBuilderProps {
   initialFilters?: Filter[];
@@ -42,17 +42,18 @@ export function FilterBuilder({ initialFilters = [], fields, onChange }: FilterB
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <Button onClick={addFilter} variant="outline" size="sm">
+        <Button onClick={addFilter} variant="outline" size="sm" className="h-12 px-6 text-base">
           Add Filter
         </Button>
         {filters.length > 1 && (
-          <Select
+          <select
             value={logic}
-            onValueChange={(value: 'AND' | 'OR') => setLogic(value)}
+            onChange={(e) => setLogic(e.target.value as 'AND' | 'OR')}
+            className="flex w-full items-center justify-between bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 h-12 border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all rounded-lg"
           >
             <option value="AND">AND</option>
             <option value="OR">OR</option>
-          </Select>
+          </select>
         )}
       </div>
 
@@ -60,31 +61,34 @@ export function FilterBuilder({ initialFilters = [], fields, onChange }: FilterB
         {filters.map((filter, index) => (
           <div key={filter.id} className="flex items-center gap-2 p-2 border rounded-md">
             {/* Field selector */}
-            <Select
+            <select
               value={filter.field}
-              onValueChange={(value) => updateFilter(filter.id, { field: value })}
+              onChange={(e) => updateFilter(filter.id, { field: e.target.value })}
+              className="flex w-full items-center justify-between bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 h-12 border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all rounded-lg"
             >
               {fields.map(field => (
                 <option key={field} value={field}>{field}</option>
               ))}
-            </Select>
+            </select>
 
             {/* Operator selector */}
-            <Select
+            <select
               value={filter.operator}
-              onValueChange={(value: FilterOperator) => 
+              onChange={(e) => {
+                const value = e.target.value as FilterOperator;
                 updateFilter(filter.id, { 
                   operator: value,
                   value: value === 'exists' || value === 'not_exists' ? undefined : filter.value 
-                })
-              }
+                });
+              }}
+              className="flex w-full items-center justify-between bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 h-12 border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all rounded-lg"
             >
               {operators.map(op => (
                 <option key={op} value={op}>
                   {op.replace('_', ' ')}
                 </option>
               ))}
-            </Select>
+            </select>
 
             {/* Value input for equals/not_equals */}
             {(filter.operator === 'equals' || filter.operator === 'not_equals') && (
@@ -93,7 +97,7 @@ export function FilterBuilder({ initialFilters = [], fields, onChange }: FilterB
                 value={filter.value || ''}
                 onChange={(e) => updateFilter(filter.id, { value: e.target.value })}
                 placeholder="Value..."
-                className="flex-1"
+                className="flex-1 h-12 border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all rounded-lg"
               />
             )}
 
@@ -102,7 +106,7 @@ export function FilterBuilder({ initialFilters = [], fields, onChange }: FilterB
               variant="ghost"
               size="sm"
               onClick={() => removeFilter(filter.id)}
-              className="h-8 w-8"
+              className="h-12 w-12 border-2 border-gray-200 hover:border-[#ff7a59] transition-all rounded-lg"
             >
               <X className="h-4 w-4" />
             </Button>
