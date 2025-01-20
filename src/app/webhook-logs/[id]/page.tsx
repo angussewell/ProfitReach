@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 // Define all possible fields with their display names and groups
 const FIELD_DEFINITIONS = [
   { id: 'scenarioName', label: 'Scenario', group: 'scenario' },
+  { id: 'status', label: 'Status', group: 'status' },
   { id: 'contactEmail', label: 'Contact Email', group: 'contact' },
   { id: 'contactName', label: 'Contact Name', group: 'contact' },
   { id: 'company', label: 'Company', group: 'company' },
@@ -64,12 +65,34 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
   const contactInfo = extractContactInfo(requestBody);
 
   // Prepare all fields with values
-  const fields = FIELD_DEFINITIONS.map(field => ({
-    ...field,
-    value: field.id === 'contactName' 
-      ? log.contactName 
-      : mappedFields[field.id] || 'N/A'
-  }));
+  const fields = FIELD_DEFINITIONS.map(field => {
+    let value = 'N/A';
+    
+    switch (field.id) {
+      case 'status':
+        value = log.status;
+        break;
+      case 'contactName':
+        value = contactInfo.contactName;
+        break;
+      case 'company':
+        value = contactInfo.company;
+        break;
+      case 'propertyManagementSoftware':
+        value = contactInfo.propertyManagementSoftware;
+        break;
+      case 'leadStatus':
+        value = contactInfo.leadStatus;
+        break;
+      case 'lifecycleStage':
+        value = contactInfo.lifecycleStage;
+        break;
+      default:
+        value = mappedFields[field.id] || 'N/A';
+    }
+    
+    return { ...field, value };
+  });
 
   return (
     <div className="p-6 space-y-6">
@@ -89,7 +112,7 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
           <CardHeader>
             <CardTitle>Details</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Timestamp */}
               <div className="space-y-1">
@@ -99,11 +122,20 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
                 </div>
               </div>
               
-              {/* Mapped Fields */}
+              {/* All other fields */}
               {fields.map((field, index) => (
                 <div key={index} className="space-y-1">
                   <Label className="text-sm text-muted-foreground">{field.label}</Label>
-                  <div className="text-sm font-medium">{field.value}</div>
+                  <div className={cn(
+                    "text-sm font-medium",
+                    field.id === 'status' && (
+                      field.value === 'success' 
+                        ? 'text-green-600' 
+                        : 'text-red-600'
+                    )
+                  )}>
+                    {field.value}
+                  </div>
                 </div>
               ))}
             </div>
