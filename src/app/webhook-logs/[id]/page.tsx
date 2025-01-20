@@ -4,16 +4,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 
-// Define all possible fields with their display names and groups
-const FIELD_DEFINITIONS = [
-  { id: 'scenarioName', label: 'Scenario', group: 'scenario' },
-  { id: 'status', label: 'Status', group: 'status' },
-  { id: 'contactEmail', label: 'Contact Email', group: 'contact' },
-  { id: 'contactName', label: 'Contact Name', group: 'contact' },
-  { id: 'company', label: 'Company', group: 'company' },
-  { id: 'propertyManagementSoftware', label: 'Property Management Software', group: 'company' },
-  { id: 'leadStatus', label: 'Lead Status', group: 'status' },
-  { id: 'lifecycleStage', label: 'Lifecycle Stage', group: 'status' }
+// Define fields in the exact order we want them displayed
+const DISPLAY_FIELDS = [
+  { key: 'scenarioName', label: 'Scenario' },
+  { key: 'contactEmail', label: 'Contact Email' },
+  { key: 'contactName', label: 'Contact Name' },
+  { key: 'company', label: 'Company' },
+  { key: 'propertyManagementSoftware', label: 'Property Management Software' },
+  { key: 'leadStatus', label: 'Lead Status' },
+  { key: 'lifecycleStage', label: 'Lifecycle Stage' }
 ];
 
 // Helper function to extract contact info from request body
@@ -64,39 +63,10 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
   const mappedFields = requestBody?.mappedFields || {};
   const contactInfo = extractContactInfo(requestBody);
 
-  // Prepare all fields with values
-  const fields = FIELD_DEFINITIONS.map(field => {
-    let value = 'N/A';
-    
-    switch (field.id) {
-      case 'status':
-        value = log.status;
-        break;
-      case 'contactName':
-        value = contactInfo.contactName;
-        break;
-      case 'company':
-        value = contactInfo.company;
-        break;
-      case 'propertyManagementSoftware':
-        value = contactInfo.propertyManagementSoftware;
-        break;
-      case 'leadStatus':
-        value = contactInfo.leadStatus;
-        break;
-      case 'lifecycleStage':
-        value = contactInfo.lifecycleStage;
-        break;
-      default:
-        value = mappedFields[field.id] || 'N/A';
-    }
-    
-    return { ...field, value };
-  });
-
   return (
     <div className="p-6 space-y-6">
       <div className="space-y-4">
+        {/* Header with Status */}
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold">Webhook Log Details</h1>
           <div className={cn(
@@ -107,34 +77,37 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
           </div>
         </div>
 
-        {/* Field Display */}
+        {/* Main Details Card */}
         <Card>
-          <CardHeader>
-            <CardTitle>Details</CardTitle>
-          </CardHeader>
           <CardContent className="pt-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Timestamp */}
+              {/* Time */}
               <div className="space-y-1">
                 <Label className="text-sm text-muted-foreground">Time</Label>
                 <div className="text-sm font-medium">
                   {new Date(log.createdAt).toLocaleString()}
                 </div>
               </div>
-              
-              {/* All other fields */}
-              {fields.map((field, index) => (
-                <div key={index} className="space-y-1">
-                  <Label className="text-sm text-muted-foreground">{field.label}</Label>
-                  <div className={cn(
-                    "text-sm font-medium",
-                    field.id === 'status' && (
-                      field.value === 'success' 
-                        ? 'text-green-600' 
-                        : 'text-red-600'
-                    )
-                  )}>
-                    {field.value}
+
+              {/* Status */}
+              <div className="space-y-1">
+                <Label className="text-sm text-muted-foreground">Status</Label>
+                <div className={cn(
+                  "text-sm font-medium",
+                  log.status === 'success' ? 'text-green-600' : 'text-red-600'
+                )}>
+                  {log.status}
+                </div>
+              </div>
+
+              {/* Mapped Fields */}
+              {DISPLAY_FIELDS.map((field) => (
+                <div key={field.key} className="space-y-1">
+                  <Label className="text-sm text-muted-foreground">
+                    {field.label}
+                  </Label>
+                  <div className="text-sm font-medium">
+                    {mappedFields[field.key] || 'N/A'}
                   </div>
                 </div>
               ))}
@@ -166,6 +139,7 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
           </Card>
         </div>
 
+        {/* Raw Data Card */}
         <Card>
           <CardHeader>
             <CardTitle>Raw Data</CardTitle>
