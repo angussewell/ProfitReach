@@ -15,7 +15,9 @@ const WEBHOOK_TEMPLATES = {
     scenarioName: 'make_sequence',
     leadStatus: 'lead_status',
     lifecycleStage: 'lifecycle_stage',
-    userWebsite: 'website'
+    userWebsite: 'website',
+    company: '{company}',
+    propertyManagementSoftware: '{pms}'
   }
 };
 
@@ -28,7 +30,8 @@ const SYSTEM_FIELDS = [
   { id: 'leadStatus', label: 'Lead Status', required: false },
   { id: 'lifecycleStage', label: 'Lifecycle Stage', required: false },
   { id: 'userWebsite', label: 'User Website', required: false },
-  { id: 'company', label: 'Company Name', required: false }
+  { id: 'company', label: 'Company Name', required: false },
+  { id: 'propertyManagementSoftware', label: 'Property Management Software', required: false }
 ];
 
 export default function SettingsPage() {

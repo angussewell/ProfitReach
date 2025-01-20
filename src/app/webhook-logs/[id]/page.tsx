@@ -7,17 +7,26 @@ import { cn } from '@/lib/utils';
 // Helper function to extract contact info from request body
 function extractContactInfo(requestBody: any) {
   const contactData = requestBody?.contactData || {};
-  const firstName = contactData?.first_name || contactData?.["first_name"];
-  const lastName = contactData?.last_name || contactData?.["last_name"];
-  const company = contactData?.company || contactData?.["company"];
-  const leadStatus = contactData?.lead_status || contactData?.["lead_status"];
-  const lifecycleStage = contactData?.lifecycle_stage || contactData?.["lifecycle_stage"];
+  const mappedFields = requestBody?.mappedFields || {};
   
+  // Extract from both contactData and mappedFields to ensure backward compatibility
   return {
-    contactName: [firstName, lastName].filter(Boolean).join(' ') || 'N/A',
-    company: company || 'Not available',
-    leadStatus: leadStatus || 'Empty',
-    lifecycleStage: lifecycleStage || 'Unknown'
+    // Contact details
+    contactName: mappedFields.contactName || [
+      contactData?.first_name || contactData?.["first_name"],
+      contactData?.last_name || contactData?.["last_name"]
+    ].filter(Boolean).join(' ') || 'N/A',
+    
+    // Company details
+    company: mappedFields.company || contactData?.company || contactData?.["company"] || 'Not available',
+    propertyManagementSoftware: mappedFields.propertyManagementSoftware || 
+      contactData?.pms || contactData?.["pms"] || 'Not specified',
+    
+    // Pipeline details
+    leadStatus: mappedFields.leadStatus || 
+      contactData?.lead_status || contactData?.["lead_status"] || 'Empty',
+    lifecycleStage: mappedFields.lifecycleStage || 
+      contactData?.lifecycle_stage || contactData?.["lifecycle_stage"] || 'Unknown'
   };
 }
 
@@ -85,7 +94,7 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
 
           <Card>
             <CardHeader>
-              <CardTitle>Contact Information</CardTitle>
+              <CardTitle>Contact & Company Information</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               <div>
@@ -100,10 +109,21 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
                   {log.contactEmail}
                 </div>
               </div>
-              <div>
-                <Label>Company</Label>
-                <div className="text-sm font-medium">
-                  {contactInfo.company}
+              <div className="pt-2 border-t">
+                <Label>Company Details</Label>
+                <div className="grid grid-cols-1 gap-2 mt-1">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Company Name</div>
+                    <div className="text-sm font-medium">
+                      {contactInfo.company}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Property Management Software</div>
+                    <div className="text-sm font-medium">
+                      {contactInfo.propertyManagementSoftware}
+                    </div>
+                  </div>
                 </div>
               </div>
             </CardContent>
