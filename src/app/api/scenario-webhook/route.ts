@@ -206,7 +206,11 @@ export async function POST(request: Request) {
       where: { name: scenarioName },
       include: {
         signature: true,
-        prompts: true
+        prompts: {
+          include: {
+            prompt: true // Include the related prompt details
+          }
+        }
       }
     });
 
@@ -250,9 +254,9 @@ export async function POST(request: Request) {
         ...scenario.signature,
         signatureContent: processWebhookVariables(scenario.signature.signatureContent, requestBody)
       } : null,
-      prompts: scenario.prompts.map(prompt => ({
-        ...prompt,
-        content: processWebhookVariables(prompt.content, requestBody)
+      prompts: scenario.prompts.map(scenarioPrompt => ({
+        ...scenarioPrompt.prompt, // Include the full prompt details
+        content: processWebhookVariables(scenarioPrompt.prompt.content, requestBody)
       }))
     };
 

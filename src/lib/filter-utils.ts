@@ -102,6 +102,11 @@ function findFieldValue(data: Record<string, any>, field: string): { exists: boo
   };
 }
 
+function normalizeForComparison(value: any): string {
+  if (value === null || value === undefined) return '';
+  return String(value).toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
 /**
  * Evaluates a single filter against normalized data
  */
@@ -110,7 +115,7 @@ function evaluateFilter(
   normalizedData: Record<string, any>
 ): { passed: boolean; reason: string } {
   // Log the start of filter evaluation
-  console.log('Evaluating filter:', {
+  log('info', 'Evaluating filter:', {
     field: filter.field,
     operator: filter.operator,
     value: filter.value,
@@ -138,16 +143,16 @@ function evaluateFilter(
     .find(value => value !== undefined && value !== null);
   
   // Log the field value found
-  console.log('Field value found:', {
+  log('info', 'Field value found:', {
     field: filter.field,
     variations: fieldVariations,
     exists: fieldExists,
-    value: fieldValue
+    value: fieldValue,
+    normalizedValue: normalizeForComparison(fieldValue)
   });
 
   switch (filter.operator) {
     case 'exists':
-      console.log('Exists check result:', { fieldExists });
       return {
         passed: fieldExists,
         reason: fieldExists ? 
@@ -156,7 +161,6 @@ function evaluateFilter(
       };
 
     case 'not exists':
-      console.log('Not exists check result:', { fieldExists });
       return {
         passed: !fieldExists,
         reason: !fieldExists ? 
@@ -165,12 +169,16 @@ function evaluateFilter(
       };
 
     case 'equals':
-      const equals = String(fieldValue).toLowerCase() === String(filter.value).toLowerCase();
-      console.log('Equals check result:', { 
-        fieldValue: String(fieldValue).toLowerCase(), 
-        compareValue: String(filter.value).toLowerCase(),
-        equals 
+      const normalizedField = normalizeForComparison(fieldValue);
+      const normalizedValue = normalizeForComparison(filter.value);
+      const equals = normalizedField === normalizedValue;
+      
+      log('info', 'Equals comparison:', {
+        original: { field: fieldValue, value: filter.value },
+        normalized: { field: normalizedField, value: normalizedValue },
+        equals
       });
+      
       return {
         passed: equals,
         reason: equals ? 
@@ -179,12 +187,16 @@ function evaluateFilter(
       };
 
     case 'not equals':
-      const notEquals = String(fieldValue).toLowerCase() !== String(filter.value).toLowerCase();
-      console.log('Not equals check result:', { 
-        fieldValue: String(fieldValue).toLowerCase(), 
-        compareValue: String(filter.value).toLowerCase(),
-        notEquals 
+      const neNormalizedField = normalizeForComparison(fieldValue);
+      const neNormalizedValue = normalizeForComparison(filter.value);
+      const notEquals = neNormalizedField !== neNormalizedValue;
+      
+      log('info', 'Not equals comparison:', {
+        original: { field: fieldValue, value: filter.value },
+        normalized: { field: neNormalizedField, value: neNormalizedValue },
+        notEquals
       });
+      
       return {
         passed: notEquals,
         reason: notEquals ? 
@@ -193,12 +205,16 @@ function evaluateFilter(
       };
 
     case 'contains':
-      const contains = String(fieldValue).toLowerCase().includes(String(filter.value).toLowerCase());
-      console.log('Contains check result:', { 
-        fieldValue: String(fieldValue).toLowerCase(), 
-        searchValue: String(filter.value).toLowerCase(),
-        contains 
+      const containsNormalizedField = normalizeForComparison(fieldValue);
+      const containsNormalizedValue = normalizeForComparison(filter.value);
+      const contains = containsNormalizedField.includes(containsNormalizedValue);
+      
+      log('info', 'Contains comparison:', {
+        original: { field: fieldValue, value: filter.value },
+        normalized: { field: containsNormalizedField, value: containsNormalizedValue },
+        contains
       });
+      
       return {
         passed: contains,
         reason: contains ? 
@@ -207,12 +223,16 @@ function evaluateFilter(
       };
 
     case 'not contains':
-      const notContains = !String(fieldValue).toLowerCase().includes(String(filter.value).toLowerCase());
-      console.log('Not contains check result:', { 
-        fieldValue: String(fieldValue).toLowerCase(), 
-        searchValue: String(filter.value).toLowerCase(),
-        notContains 
+      const ncNormalizedField = normalizeForComparison(fieldValue);
+      const ncNormalizedValue = normalizeForComparison(filter.value);
+      const notContains = !ncNormalizedField.includes(ncNormalizedValue);
+      
+      log('info', 'Not contains comparison:', {
+        original: { field: fieldValue, value: filter.value },
+        normalized: { field: ncNormalizedField, value: ncNormalizedValue },
+        notContains
       });
+      
       return {
         passed: notContains,
         reason: notContains ? 
@@ -221,7 +241,6 @@ function evaluateFilter(
       };
 
     default:
-      console.log('Unknown operator:', filter.operator);
       return {
         passed: false,
         reason: `Unknown operator: ${filter.operator}`
