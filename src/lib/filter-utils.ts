@@ -1,4 +1,5 @@
 import { Filter, FilterOperator } from '@/types/filters';
+import prisma from '@/lib/prisma';
 
 interface WebhookData {
   [key: string]: any;
@@ -189,24 +190,15 @@ function evaluateFilter(filter: Filter, data: Record<string, any>): { passed: bo
   }
 }
 
-/**
- * Evaluates a group of filters (AND logic within group)
- */
-function evaluateFilterGroup(filters: Filter[], data: Record<string, any>): { passed: boolean; reasons: string[] } {
-  const results = filters.map(filter => evaluateFilter(filter, data));
-  
-  log('info', 'Filter group evaluation', {
-    filterCount: filters.length,
-    results: results.map(r => ({ passed: r.passed, reason: r.reason }))
+// Add field mapping lookup
+async function getFieldMapping(systemField: string) {
+  const mapping = await prisma.fieldMapping.findFirst({
+    where: { systemField }
   });
-
-  return {
-    passed: results.every(r => r.passed),
-    reasons: results.map(r => r.reason)
-  };
+  return mapping?.webhookField;
 }
 
-// Single source of truth for filter handling
+// Update FilterPipeline to handle field mapping
 const FilterPipeline = {
   normalize: (filter: Filter): Filter => ({
     ...filter,
@@ -226,12 +218,27 @@ const FilterPipeline = {
     return filter;
   },
   
-  process: (filter: Filter, data: Record<string, any>): { passed: boolean; reason: string } => {
+  process: async (filter: Filter, data: Record<string, any>): Promise<{ passed: boolean; reason: string }> => {
     try {
       const normalized = FilterPipeline.normalize(filter);
       FilterPipeline.validate(normalized);
-      log('info', 'Processing filter', { original: filter, normalized });
-      return evaluateFilter(normalized, normalizeWebhookData(data));
+      
+      // Get webhook field from mapping
+      const webhookField = await getFieldMapping(normalized.field);
+      if (!webhookField) {
+        log('error', 'No field mapping found', { systemField: normalized.field });
+        return { passed: false, reason: `No mapping found for field ${normalized.field}` };
+      }
+      
+      // Use mapped field for evaluation
+      const mappedFilter = { ...normalized, field: webhookField };
+      log('info', 'Processing filter with mapping', { 
+        original: filter,
+        normalized,
+        mappedField: webhookField
+      });
+      
+      return evaluateFilter(mappedFilter, data);
     } catch (error) {
       log('error', 'Filter processing failed', { filter, error: String(error) });
       return { passed: false, reason: String(error) };
@@ -242,13 +249,13 @@ const FilterPipeline = {
 /**
  * Evaluates all filter groups (OR logic between groups)
  */
-export function evaluateFilters(
+export async function evaluateFilters(
   filterGroups: Array<{
     logic: string;
     filters: Filter[];
   }>,
   data: Record<string, any>
-): { passed: boolean; reason: string } {
+): Promise<{ passed: boolean; reason: string }> {
   log('info', 'Starting filter evaluation', { 
     groupCount: filterGroups?.length || 0,
     data 
@@ -258,17 +265,17 @@ export function evaluateFilters(
     return { passed: true, reason: 'No filters configured' };
   }
 
-  const results = filterGroups.map(group => {
-    const filterResults = group.filters.map(filter => 
+  const results = await Promise.all(filterGroups.map(async group => {
+    const filterResults = await Promise.all(group.filters.map(filter => 
       FilterPipeline.process(filter, data)
-    );
+    ));
 
     const passed = filterResults.every(r => r.passed);
     return {
       passed,
       reason: filterResults.map(r => r.reason).join(' AND ')
     };
-  });
+  }));
 
   const passed = results.some(r => r.passed);
   const reason = passed
