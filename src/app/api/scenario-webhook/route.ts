@@ -4,6 +4,7 @@ import { registerWebhookFields } from '@/lib/webhook-fields';
 import { evaluateFilters } from '@/lib/filter-utils';
 import { Filter } from '@/types/filters';
 import { Prisma } from '@prisma/client';
+import { processWebhookVariables } from '@/utils/variableReplacer';
 
 // Production-ready logging
 function log(level: 'error' | 'info' | 'warn', message: string, data?: any) {
@@ -188,12 +189,11 @@ export async function POST(request: Request) {
     });
 
     // Get the scenario with all necessary data
-    const scenario = await prisma.scenario.findFirst({
-      where: {
-        name: scenarioName
-      },
+    const scenario = await prisma.scenario.findUnique({
+      where: { name: scenarioName },
       include: {
-        signature: true
+        signature: true,
+        prompts: true
       }
     });
 
@@ -223,6 +223,29 @@ export async function POST(request: Request) {
         }
       }, { status: 404 });
     }
+
+    // Process variables in prompts and signature
+    const contactData = {
+      email: contactEmail,
+      name: contactName,
+      company: companyName
+    };
+
+    const processedScenario = {
+      ...scenario,
+      customizationPrompt: scenario.customizationPrompt ? 
+        processWebhookVariables(scenario.customizationPrompt, contactData) : '',
+      emailExamplesPrompt: scenario.emailExamplesPrompt ?
+        processWebhookVariables(scenario.emailExamplesPrompt, contactData) : '',
+      signature: scenario.signature ? {
+        ...scenario.signature,
+        signatureContent: processWebhookVariables(scenario.signature.signatureContent, contactData)
+      } : null,
+      prompts: scenario.prompts.map(prompt => ({
+        ...prompt,
+        content: processWebhookVariables(prompt.content, contactData)
+      }))
+    };
 
     // Parse and evaluate filters
     let filters: Filter[] = [];
@@ -337,13 +360,7 @@ export async function POST(request: Request) {
     // Prepare enriched data for forwarding
     const enrichedData = {
       ...requestBody,
-      scenario: {
-        type: scenario.scenarioType,
-        subjectLine: scenario.subjectLine,
-        customizationPrompt: scenario.customizationPrompt,
-        emailExamplesPrompt: scenario.emailExamplesPrompt,
-        signature: scenario.signature?.signatureContent
-      },
+      scenario: processedScenario,
       contact: {
         email: contactEmail,
         name: contactName,
@@ -437,14 +454,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       status: responseStatus,
-      scenario: {
-        name: scenario.name,
-        type: scenario.scenarioType,
-        subjectLine: scenario.subjectLine,
-        customizationPrompt: scenario.customizationPrompt,
-        emailExamplesPrompt: scenario.emailExamplesPrompt,
-        signature: scenario.signature?.signatureContent
-      },
+      scenario: processedScenario,
       contact: {
         email: contactEmail,
         name: contactName,
@@ -475,8 +485,8 @@ export async function POST(request: Request) {
     }
     
     return NextResponse.json({ 
-      status: 'error',
-      error: String(error)
+      message: error instanceof Error ? error.message : 'Unknown error occurred',
+      status: 'error'
     }, { status: 500 });
   }
 } 

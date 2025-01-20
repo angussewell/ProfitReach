@@ -94,4 +94,32 @@ export function processObjectVariables(
   });
   
   return processed;
+}
+
+/**
+ * Processes webhook data and replaces variables in prompts/scenarios
+ * @param text The text containing variables to replace
+ * @param contactData The webhook contact data
+ * @returns Text with variables replaced with their values
+ */
+export function processWebhookVariables(text: string, contactData: Record<string, any>): string {
+  // Extract all variables from the text
+  const variables = extractVariables(text);
+  
+  // Create a mapping of variables to their values from contactData
+  const variableMap: VariableMap = {};
+  variables.forEach(variable => {
+    const normalizedVar = variable.toLowerCase();
+    // Try direct access first, then nested path
+    const value = contactData[normalizedVar] ?? 
+                 contactData[variable] ??
+                 variable.split('.').reduce((obj, key) => obj?.[key], contactData);
+                 
+    if (value !== undefined) {
+      variableMap[variable] = String(value);
+    }
+  });
+  
+  // Replace variables using existing function
+  return replaceVariables(text, variableMap);
 } 

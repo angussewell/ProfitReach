@@ -116,19 +116,26 @@ function normalizeWebhookData(data: WebhookData): NormalizedData {
 function evaluateFilter(filter: Filter, normalizedData: NormalizedData): boolean {
   const { field, operator, value } = filter;
   
-  // Get the field value, trying multiple formats
-  const fieldValue = 
-    // Try direct access first
-    normalizedData[field] ||  // Exact match
-    (normalizedData as any).contactData?.[field] || // Direct contactData access with type assertion
-    // Then try normalized versions
-    normalizedData[field.toLowerCase()] || 
-    normalizedData[field.replace(/[{}]/g, '').toLowerCase()] ||
-    normalizedData[`contactData.${field.toLowerCase()}`] ||
-    normalizedData[`contactData.${field.replace(/[{}]/g, '').toLowerCase()}`] ||
-    normalizedData[field.replace(/[{}]/g, '')] || // Without braces
-    // Finally try nested path
-    field.split('.').reduce((obj: any, key: string) => (obj && typeof obj === 'object' ? obj[key] : undefined), normalizedData as any);
+  // Get the field value, checking existence explicitly
+  let fieldValue: any;
+  
+  // Try each format in sequence, only moving to next if undefined
+  if (field in normalizedData) {
+    fieldValue = normalizedData[field];
+  } else if (field in (normalizedData as any).contactData) {
+    fieldValue = (normalizedData as any).contactData[field];
+  } else if (field.toLowerCase() in normalizedData) {
+    fieldValue = normalizedData[field.toLowerCase()];
+  } else {
+    // Try normalized versions only if direct lookups fail
+    const normalized = field.replace(/[{}]/g, '').toLowerCase();
+    fieldValue = normalizedData[normalized] ?? 
+                normalizedData[`contactData.${normalized}`] ??
+                field.split('.').reduce((obj: any, key: string) => 
+                  (obj && typeof obj === 'object' ? obj[key] : undefined), 
+                  normalizedData as any
+                );
+  }
   
   log('info', 'Evaluating filter', { 
     field, 
@@ -136,24 +143,23 @@ function evaluateFilter(filter: Filter, normalizedData: NormalizedData): boolean
     value, 
     fieldValue,
     allFields: Object.keys(normalizedData),
-    normalizedData  // Log full normalized data for debugging
+    normalizedData
   });
 
   try {
     switch (operator) {
       case 'exists':
-        const exists = fieldValue !== null && fieldValue !== undefined && fieldValue !== '';
+        const exists = fieldValue !== undefined && fieldValue !== null && fieldValue !== '';
         log('info', `Filter exists check: ${exists}`, { field, fieldValue });
         return exists;
         
       case 'not_exists':
-        const notExists = !fieldValue || fieldValue === '';
+        const notExists = fieldValue === undefined || fieldValue === null || fieldValue === '';
         log('info', `Filter not_exists check: ${notExists}`, { field, fieldValue });
         return notExists;
         
       case 'equals':
-        // Handle case where fieldValue or value might be undefined
-        if (!fieldValue || !value) {
+        if (fieldValue === undefined || fieldValue === null || value === undefined || value === null) {
           log('info', 'Filter equals check: false (missing value)', { field, fieldValue, value });
           return false;
         }
@@ -162,8 +168,7 @@ function evaluateFilter(filter: Filter, normalizedData: NormalizedData): boolean
         return equals;
         
       case 'not_equals':
-        // Handle case where fieldValue or value might be undefined
-        if (!fieldValue || !value) {
+        if (fieldValue === undefined || fieldValue === null || value === undefined || value === null) {
           log('info', 'Filter not_equals check: true (missing value)', { field, fieldValue, value });
           return true;
         }
