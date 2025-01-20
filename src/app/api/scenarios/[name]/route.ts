@@ -35,7 +35,7 @@ export async function PUT(
 ) {
   try {
     const data = await request.json();
-    const { customizationPrompt, emailExamplesPrompt, signatureId, subjectLine } = data;
+    const { customizationPrompt, emailExamplesPrompt, signatureId, subjectLine, filters } = data;
 
     const scenario = await prisma.scenario.findFirst({
       where: {
@@ -52,6 +52,9 @@ export async function PUT(
     if (emailExamplesPrompt !== undefined) updateData.emailExamplesPrompt = emailExamplesPrompt;
     if (signatureId !== undefined) updateData.signatureId = signatureId || null;
     if (subjectLine !== undefined) updateData.subjectLine = subjectLine;
+    if (filters !== undefined) updateData.filters = filters;
+
+    console.log('Updating scenario with filters:', filters); // Debug log
 
     const updatedScenario = await prisma.scenario.update({
       where: { id: scenario.id },

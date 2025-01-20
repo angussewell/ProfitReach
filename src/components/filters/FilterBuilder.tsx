@@ -97,7 +97,7 @@ export function FilterBuilder({ initialFilters = [], fields, onChange }: FilterB
                 value={filter.value || ''}
                 onChange={(e) => updateFilter(filter.id, { value: e.target.value })}
                 placeholder="Value..."
-                className="flex-1 h-12 border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all rounded-lg"
+                className="w-full h-12 border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all rounded-lg"
               />
             )}
 
@@ -106,7 +106,7 @@ export function FilterBuilder({ initialFilters = [], fields, onChange }: FilterB
               variant="ghost"
               size="sm"
               onClick={() => removeFilter(filter.id)}
-              className="h-12 w-12 border-2 border-gray-200 hover:border-[#ff7a59] transition-all rounded-lg"
+              className="h-12 w-12 border-2 border-gray-200 hover:border-[#ff7a59] transition-all rounded-lg flex-shrink-0"
             >
               <X className="h-4 w-4" />
             </Button>

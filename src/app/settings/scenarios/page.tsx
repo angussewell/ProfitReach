@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Plus, Edit, Loader2, Search, X } from 'lucide-react';
 import { FilterBuilder } from '@/components/filters/FilterBuilder';
+import { Filter } from '@/types/filters';
 
 interface Signature {
   id: string;
@@ -25,7 +26,7 @@ interface Scenario {
   customizationPrompt: string;
   emailExamplesPrompt: string;
   signature?: Signature;
-  filters?: any;
+  filters: Filter[];
 }
 
 export default function ManageScenariosPage() {
@@ -151,10 +152,17 @@ export default function ManageScenariosPage() {
 
     try {
       setIsSubmitting(true);
+      
+      // Ensure filters is always an array
+      const scenarioData = {
+        ...editingScenario,
+        filters: editingScenario.filters || []
+      };
+
       const response = await fetch(`/api/scenarios/${encodeURIComponent(selectedScenario)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editingScenario),
+        body: JSON.stringify(scenarioData),
       });
 
       if (!response.ok) throw new Error('Failed to update scenario');
@@ -201,6 +209,7 @@ export default function ManageScenariosPage() {
                   signatureId: '',
                   customizationPrompt: '',
                   emailExamplesPrompt: '',
+                  filters: [],
                 });
               }}
               className="bg-[#ff7a59] hover:bg-[#ff8f73] transition-all duration-200 shadow-sm hover:shadow-md text-white border-0 rounded-lg px-6"
@@ -310,7 +319,12 @@ export default function ManageScenariosPage() {
                         <FilterBuilder
                           initialFilters={editingScenario?.filters || []}
                           fields={webhookFields}
-                          onChange={(filters) => setEditingScenario(prev => ({ ...prev!, filters }))}
+                          onChange={(newFilters) => {
+                            setEditingScenario(prev => ({
+                              ...prev!,
+                              filters: newFilters
+                            }));
+                          }}
                         />
                       </CardContent>
                     </Card>
