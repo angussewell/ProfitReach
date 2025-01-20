@@ -22,91 +22,38 @@ function log(level: 'error' | 'info' | 'warn', message: string, data?: any) {
 /**
  * Normalizes webhook data into a flat structure with standardized field access
  */
-function normalizeWebhookData(data: WebhookData): NormalizedData {
-  const normalized: NormalizedData = {};
+function normalizeWebhookData(data: Record<string, any>): Record<string, any> {
+  const normalized: Record<string, any> = {};
   
-  // Helper to safely get nested value
-  const getNestedValue = (obj: any, path: string): string | null => {
-    try {
-      // Try direct access first
-      let value = obj[path];
-      if (value !== undefined) return String(value);
-      
-      // Try with braces
-      value = obj[`{${path}}`];
-      if (value !== undefined) return String(value);
-      
-      // Try without braces if path has them
-      if (path.startsWith('{') && path.endsWith('}')) {
-        value = obj[path.slice(1, -1)];
-        if (value !== undefined) return String(value);
-      }
-      
-      // Try nested path
-      const nestedValue = path.split('.').reduce((o, i) => o?.[i], obj);
-      if (nestedValue !== undefined) return String(nestedValue);
-      
-      // Try lowercase variations
-      const lowerPath = path.toLowerCase();
-      value = obj[lowerPath] || 
-              obj[`{${lowerPath}}`] || 
-              obj[lowerPath.replace(/[{}]/g, '')] ||
-              lowerPath.split('.').reduce((o, i) => o?.[i.toLowerCase()], obj);
-              
-      return value !== undefined ? String(value) : null;
-    } catch (error) {
-      log('error', 'Error getting nested value', { path, error: String(error) });
-      return null;
-    }
+  // Helper to add a field with various formats
+  const addField = (key: string, value: any) => {
+    // Convert to lowercase for consistent lookup
+    const normalizedKey = key.toLowerCase();
+    // Remove any template braces
+    const cleanKey = normalizedKey.replace(/[{}]/g, '');
+    normalized[cleanKey] = value;
+    
+    // Log field addition for debugging
+    console.log(`Adding field: ${cleanKey} = ${value}`);
   };
 
-  // Extract contact data with better error handling
-  if (data.contactData) {
-    try {
-      // Basic fields with fallbacks
-      normalized.email = getNestedValue(data.contactData, 'email') || 
-                        getNestedValue(data.contactData, '{email}');
-      normalized.company = getNestedValue(data.contactData, 'company') || 
-                         getNestedValue(data.contactData, 'company_name') ||
-                         getNestedValue(data.contactData, 'PMS');
-      normalized.firstName = getNestedValue(data.contactData, 'first_name');
-      normalized.lastName = getNestedValue(data.contactData, 'last_name');
-      
-      // Custom/special fields
-      normalized.lifecycle_stage = getNestedValue(data.contactData, 'lifecycle_stage');
-      normalized.lead_status = getNestedValue(data.contactData, 'lead_status');
-      normalized.make_sequence = getNestedValue(data.contactData, 'make_sequence');
-      
-      // Add all remaining contactData fields
-      Object.entries(data.contactData).forEach(([key, value]) => {
-        if (value && typeof value !== 'object') {
-          const normalizedKey = key.replace(/[{}]/g, '').toLowerCase();
-          normalized[normalizedKey] = String(value);
-          normalized[`contactData.${normalizedKey}`] = String(value);
-        }
-      });
-    } catch (error) {
-      log('error', 'Error normalizing contact data', { error: String(error) });
+  // Process top-level fields
+  Object.entries(data).forEach(([key, value]) => {
+    if (key !== 'contactData') {
+      addField(key, value);
     }
-  }
-
-  // Add top-level fields
-  try {
-    Object.entries(data).forEach(([key, value]) => {
-      if (key !== 'contactData' && value && typeof value !== 'object') {
-        const normalizedKey = key.toLowerCase();
-        normalized[normalizedKey] = String(value);
-      }
-    });
-  } catch (error) {
-    log('error', 'Error normalizing top-level fields', { error: String(error) });
-  }
-
-  log('info', 'Normalized webhook data', { 
-    fieldCount: Object.keys(normalized).length,
-    fields: Object.keys(normalized)
   });
-  
+
+  // Process contact data fields
+  if (data.contactData && typeof data.contactData === 'object') {
+    Object.entries(data.contactData).forEach(([key, value]) => {
+      addField(key, value);
+    });
+  }
+
+  // Log normalized data for debugging
+  console.log('Normalized webhook data:', normalized);
+
   return normalized;
 }
 
@@ -158,54 +105,87 @@ function findFieldValue(data: Record<string, any>, field: string): { exists: boo
 /**
  * Evaluates a single filter against the data
  */
-function evaluateFilter(filter: Filter, data: Record<string, any>): { passed: boolean; reason: string } {
-  const { field, operator, value: expectedValue } = filter;
-  const { exists, value: actualValue } = findFieldValue(data, field);
-
-  log('info', 'Evaluating filter', {
-    field,
+function evaluateFilter(
+  filter: Filter,
+  normalizedData: Record<string, any>
+): { passed: boolean; reason: string } {
+  const { field, operator, value } = filter;
+  const normalizedField = field.toLowerCase().replace(/[{}]/g, '');
+  const fieldValue = normalizedData[normalizedField];
+  
+  console.log('Evaluating filter:', {
+    field: normalizedField,
     operator,
-    expectedValue,
-    exists,
-    actualValue
+    expectedValue: value,
+    actualValue: fieldValue,
+    exists: fieldValue !== undefined
   });
 
   switch (operator) {
-    case 'exists':
+    case 'exists': {
+      const exists = fieldValue !== undefined;
+      console.log(`Checking if ${field} exists:`, exists);
       return {
         passed: exists,
         reason: exists ? 
-          `Field '${field}' exists with value '${actualValue}'` :
-          `Field '${field}' does not exist`
+          `Field ${field} exists with value: ${fieldValue}` :
+          `Field ${field} does not exist`
       };
+    }
 
-    case 'not_exists':
+    case 'not_exists': {
+      const exists = fieldValue !== undefined;
+      console.log(`Checking if ${field} does not exist:`, !exists);
       return {
         passed: !exists,
         reason: !exists ?
-          `Field '${field}' does not exist` :
-          `Field '${field}' exists with value '${actualValue}'`
+          `Field ${field} does not exist` :
+          `Field ${field} exists with value: ${fieldValue}`
       };
+    }
 
-    case 'equals':
+    case 'equals': {
+      if (fieldValue === undefined) {
+        console.log(`Field ${field} does not exist for equals comparison`);
+        return {
+          passed: false,
+          reason: `Field ${field} does not exist for equals comparison`
+        };
+      }
+      const matches = String(fieldValue).toLowerCase() === String(value).toLowerCase();
+      console.log(`Checking if ${field} equals ${value}:`, matches);
       return {
-        passed: exists && String(actualValue).toLowerCase() === String(expectedValue).toLowerCase(),
-        reason: exists ?
-          `Field '${field}' value '${actualValue}' ${String(actualValue).toLowerCase() === String(expectedValue).toLowerCase() ? 'matches' : 'does not match'} expected '${expectedValue}'` :
-          `Field '${field}' does not exist to compare with '${expectedValue}'`
+        passed: matches,
+        reason: matches ?
+          `Field ${field} matches value: ${value}` :
+          `Field ${field} value: ${fieldValue} does not match expected: ${value}`
       };
+    }
 
-    case 'not_equals':
+    case 'not_equals': {
+      if (fieldValue === undefined) {
+        console.log(`Field ${field} does not exist, so it cannot equal ${value}`);
+        return {
+          passed: true,
+          reason: `Field ${field} does not exist, so it cannot equal ${value}`
+        };
+      }
+      const matches = String(fieldValue).toLowerCase() === String(value).toLowerCase();
+      console.log(`Checking if ${field} does not equal ${value}:`, !matches);
       return {
-        passed: exists && String(actualValue).toLowerCase() !== String(expectedValue).toLowerCase(),
-        reason: exists ?
-          `Field '${field}' value '${actualValue}' ${String(actualValue).toLowerCase() !== String(expectedValue).toLowerCase() ? 'does not match' : 'matches'} excluded value '${expectedValue}'` :
-          `Field '${field}' does not exist to compare with '${expectedValue}'`
+        passed: !matches,
+        reason: !matches ?
+          `Field ${field} value: ${fieldValue} does not match ${value}` :
+          `Field ${field} matches excluded value: ${value}`
       };
+    }
 
     default:
-      log('error', 'Unknown operator', { operator });
-      return { passed: false, reason: `Unknown operator: ${operator}` };
+      console.warn(`Unknown operator: ${operator}`);
+      return {
+        passed: false,
+        reason: `Unknown operator: ${operator}`
+      };
   }
 }
 
@@ -230,57 +210,57 @@ function evaluateFilterGroup(filters: Filter[], data: Record<string, any>): { pa
  * Evaluates all filter groups (OR logic between groups)
  */
 export function evaluateFilters(
-  filters: Filter[],
+  filterGroups: Array<{
+    logic: string;
+    filters: Filter[];
+  }>,
   data: Record<string, any>
 ): { passed: boolean; reason: string } {
-  try {
-    // Group filters by their group ID
-    const groups = filters.reduce((acc, filter) => {
-      const groupId = filter.group || 'default';
-      acc[groupId] = acc[groupId] || [];
-      acc[groupId].push(filter);
-      return acc;
-    }, {} as Record<string, Filter[]>);
+  // First normalize the data
+  const normalizedData = normalizeWebhookData(data);
+  
+  console.log('Starting filter evaluation:', {
+    groupCount: filterGroups.length,
+    normalizedData
+  });
 
-    log('info', 'Starting filter evaluation', {
-      totalFilters: filters.length,
-      groupCount: Object.keys(groups).length,
-      groups: Object.entries(groups).map(([id, filters]) => ({
-        groupId: id,
-        filterCount: filters.length,
-        filters: filters.map(f => ({ field: f.field, operator: f.operator, value: f.value }))
-      }))
-    });
-
-    // If no filters, pass by default
-    if (filters.length === 0) {
-      return { passed: true, reason: 'No filters to evaluate' };
-    }
-
-    // Evaluate each group
-    const groupResults = Object.entries(groups).map(([groupId, groupFilters]) => {
-      const result = evaluateFilterGroup(groupFilters, data);
-      return { groupId, ...result };
-    });
-
-    // Log detailed results
-    log('info', 'Filter evaluation complete', {
-      groupResults: groupResults.map(r => ({
-        groupId: r.groupId,
-        passed: r.passed,
-        reasons: r.reasons
-      }))
-    });
-
-    // Pass if any group passes (OR logic between groups)
-    const passed = groupResults.some(r => r.passed);
-    const reason = passed ?
-      `Passed filter group(s): ${groupResults.filter(r => r.passed).map(r => r.groupId).join(', ')}` :
-      `Failed all filter groups: ${groupResults.map(r => `[Group ${r.groupId}: ${r.reasons.join(' AND ')}]`).join(' OR ')}`;
-
-    return { passed, reason };
-  } catch (error) {
-    log('error', 'Filter evaluation error', { error: String(error) });
-    return { passed: false, reason: `Error evaluating filters: ${error}` };
+  // If no filters, pass by default
+  if (!filterGroups || filterGroups.length === 0) {
+    return { passed: true, reason: 'No filters configured' };
   }
+
+  // Track results of each group for detailed feedback
+  const groupResults = filterGroups.map(group => {
+    console.log('Evaluating filter group:', {
+      logic: group.logic,
+      filterCount: group.filters.length
+    });
+
+    // All filters in a group must pass (AND logic)
+    const filterResults = group.filters.map(filter => 
+      evaluateFilter(filter, normalizedData)
+    );
+
+    const groupPassed = filterResults.every(result => result.passed);
+    
+    console.log('Filter group result:', {
+      passed: groupPassed,
+      results: filterResults
+    });
+
+    return {
+      passed: groupPassed,
+      reason: filterResults.map(r => r.reason).join(' AND ')
+    };
+  });
+
+  // If any group passes, the whole filter passes (OR logic between groups)
+  const passed = groupResults.some(result => result.passed);
+  const reason = passed
+    ? `Passed: ${groupResults.find(r => r.passed)?.reason}`
+    : `Failed: ${groupResults.map(r => `(${r.reason})`).join(' OR ')}`;
+
+  console.log('Final filter evaluation result:', { passed, reason });
+  
+  return { passed, reason };
 } 
