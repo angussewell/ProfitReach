@@ -227,6 +227,8 @@ export async function POST(request: Request) {
     // Process variables in prompts and signature
     const processedScenario = {
       ...scenario,
+      subjectLine: scenario.subjectLine ? 
+        processWebhookVariables(scenario.subjectLine, requestBody) : '',
       customizationPrompt: scenario.customizationPrompt ? 
         processWebhookVariables(scenario.customizationPrompt, requestBody) : '',
       emailExamplesPrompt: scenario.emailExamplesPrompt ?
