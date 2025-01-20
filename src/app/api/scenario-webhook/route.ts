@@ -139,11 +139,26 @@ export async function POST(request: Request) {
 
     // Register new webhook fields
     try {
-      await fetch('/api/webhook-fields/sample', {
+      const baseUrl = process.env.VERCEL_URL 
+        ? `https://${process.env.VERCEL_URL}` 
+        : 'http://localhost:3000';
+      
+      const response = await fetch(`${baseUrl}/api/webhook-fields/sample`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
       });
+      
+      if (!response.ok) {
+        const error = await response.text();
+        logMessage('error', 'Failed to register webhook fields', { 
+          status: response.status,
+          error 
+        });
+      } else {
+        const result = await response.json();
+        logMessage('info', 'Successfully registered webhook fields', result);
+      }
     } catch (error) {
       logMessage('error', 'Failed to register webhook fields', { error: String(error) });
       // Non-critical error, continue processing

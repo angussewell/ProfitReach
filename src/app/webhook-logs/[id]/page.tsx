@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/db';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
@@ -50,14 +50,18 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
 
   const requestBody = log.requestBody as any;
   const mappedFields = requestBody?.mappedFields || {};
+  const contactInfo = extractContactInfo(requestBody);
 
-  // Group mapped fields by category
-  const fieldGroups = {
-    contact: ['contactName', 'contactEmail', 'contactFirstName', 'contactLastName'],
-    company: ['company', 'propertyManagementSoftware'],
-    status: ['leadStatus', 'lifecycleStage'],
-    scenario: ['scenarioName']
-  };
+  // Required fields to display prominently
+  const requiredFields = [
+    { label: 'Scenario Name', value: mappedFields.scenarioName || 'N/A' },
+    { label: 'Contact Email', value: mappedFields.contactEmail || 'N/A' },
+    { label: 'Contact Name', value: contactInfo.contactName },
+    { label: 'Time', value: new Date(log.createdAt).toLocaleString() },
+    { label: 'Lifecycle Stage', value: contactInfo.lifecycleStage },
+    { label: 'Property Management Software', value: contactInfo.propertyManagementSoftware },
+    { label: 'Lead Status', value: contactInfo.leadStatus }
+  ];
 
   return (
     <div className="p-6 space-y-6">
@@ -72,39 +76,24 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Basic Information</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <Label>Timestamp</Label>
-                <div className="text-sm font-medium">
-                  {new Date(log.createdAt).toLocaleString()}
-                </div>
-              </div>
-              
-              {Object.entries(fieldGroups).map(([group, fields]) => (
-                <div key={group} className="pt-2 border-t">
-                  <Label>{formatFieldName(group)} Information</Label>
-                  <div className="grid grid-cols-1 gap-2 mt-1">
-                    {fields.map(field => mappedFields[field] && (
-                      <div key={field}>
-                        <div className="text-xs text-muted-foreground">
-                          {formatFieldName(field)}
-                        </div>
-                        <div className="text-sm font-medium">
-                          {mappedFields[field]}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+        {/* Required Fields Display */}
+        <Card className="mb-4">
+          <CardHeader>
+            <CardTitle>Webhook Details</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {requiredFields.map((field, index) => (
+                <div key={index} className="space-y-1">
+                  <Label className="text-sm text-muted-foreground">{field.label}</Label>
+                  <div className="text-sm font-medium">{field.value}</div>
                 </div>
               ))}
-            </CardContent>
-          </Card>
+            </div>
+          </CardContent>
+        </Card>
 
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Card>
             <CardHeader>
               <CardTitle>Technical Details</CardTitle>

@@ -44,28 +44,36 @@ export default function SettingsPage() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [mappingsRes, fieldsRes] = await Promise.all([
-          fetch('/api/field-mappings'),
-          fetch('/api/webhook-fields/sample')
-        ]);
+        console.log('Fetching field mappings and webhook fields...');
         
-        if (mappingsRes.ok && fieldsRes.ok) {
-          const [mappingsData, fieldsData] = await Promise.all([
-            mappingsRes.json(),
-            fieldsRes.json()
-          ]);
-          
-          // Convert array of mappings to object for easier state management
-          const mappingsObj = mappingsData.reduce((acc: Record<string, string>, m: any) => {
-            acc[m.systemField] = m.webhookField;
-            return acc;
-          }, {});
-          
-          setMappings(mappingsObj);
-          setWebhookFields(fieldsData.fields);
+        // Fetch mappings first
+        const mappingsRes = await fetch('/api/field-mappings');
+        if (!mappingsRes.ok) {
+          throw new Error(`Failed to fetch mappings: ${mappingsRes.status}`);
+        }
+        const mappingsData = await mappingsRes.json();
+        console.log('Received mappings:', mappingsData);
+        
+        // Convert array of mappings to object
+        const mappingsObj = mappingsData.reduce((acc: Record<string, string>, m: any) => {
+          acc[m.systemField] = m.webhookField;
+          return acc;
+        }, {});
+        setMappings(mappingsObj);
+        
+        // Then fetch webhook fields
+        const fieldsRes = await fetch('/api/webhook-fields/sample');
+        if (!fieldsRes.ok) {
+          console.warn('Failed to fetch webhook fields:', fieldsRes.status);
+          // Don't throw here, just log warning and continue with empty fields
+        } else {
+          const fieldsData = await fieldsRes.json();
+          console.log('Received webhook fields:', fieldsData);
+          setWebhookFields(fieldsData.fields || []);
         }
       } catch (error) {
-        toast.error('Failed to load settings');
+        console.error('Failed to load settings:', error);
+        toast.error('Failed to load settings. Please try refreshing the page.');
       } finally {
         setLoading(false);
       }
@@ -76,6 +84,7 @@ export default function SettingsPage() {
 
   // Update local state
   const handleFieldChange = (systemField: string, webhookField: string) => {
+    console.log('Updating field mapping:', { systemField, webhookField });
     setMappings(prev => ({ ...prev, [systemField]: webhookField }));
   };
 
@@ -83,19 +92,29 @@ export default function SettingsPage() {
   const handleSave = async () => {
     setSaving(true);
     try {
+      console.log('Saving mappings:', mappings);
+      
       // Save all mappings in parallel
-      await Promise.all(
-        Object.entries(mappings).map(([systemField, webhookField]) =>
-          fetch('/api/field-mappings', {
+      const results = await Promise.all(
+        Object.entries(mappings).map(async ([systemField, webhookField]) => {
+          const response = await fetch('/api/field-mappings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ systemField, webhookField })
-          })
-        )
+          });
+          
+          if (!response.ok) {
+            throw new Error(`Failed to save mapping for ${systemField}: ${response.status}`);
+          }
+          return response.json();
+        })
       );
+      
+      console.log('Save results:', results);
       toast.success('Settings saved successfully');
     } catch (error) {
-      toast.error('Failed to save settings');
+      console.error('Failed to save settings:', error);
+      toast.error('Failed to save settings. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -103,6 +122,7 @@ export default function SettingsPage() {
 
   // Apply template
   const applyTemplate = (template: keyof typeof WEBHOOK_TEMPLATES) => {
+    console.log('Applying template:', template);
     setMappings(WEBHOOK_TEMPLATES[template]);
     toast.success('Template applied - click Save to apply changes');
   };
