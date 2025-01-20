@@ -5,6 +5,7 @@ export interface Filter {
   field: string;     // The field to filter on (e.g. 'lifecycle_stage')
   operator: FilterOperator;
   value?: string;    // Optional value for equals/not_equals operators
+  group?: string;    // Optional group ID for OR logic between groups
 }
 
 export interface FilterGroup {
