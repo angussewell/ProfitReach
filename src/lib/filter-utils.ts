@@ -8,6 +8,17 @@ interface NormalizedData {
   [key: string]: string | null;
 }
 
+// Production-ready logging
+function log(level: 'error' | 'info' | 'warn', message: string, data?: any) {
+  console[level](JSON.stringify({
+    timestamp: new Date().toISOString(),
+    level,
+    message,
+    environment: process.env.VERCEL_ENV || 'development',
+    ...data
+  }));
+}
+
 /**
  * Normalizes webhook data into a flat structure with standardized field access
  */
@@ -16,132 +27,175 @@ function normalizeWebhookData(data: WebhookData): NormalizedData {
   
   // Helper to safely get nested value
   const getNestedValue = (obj: any, path: string): string | null => {
-    const value = path.split('.').reduce((o, i) => o?.[i], obj);
-    return value ? String(value) : null;
+    try {
+      // Try direct access first
+      let value = obj[path];
+      if (value !== undefined) return String(value);
+      
+      // Try with braces
+      value = obj[`{${path}}`];
+      if (value !== undefined) return String(value);
+      
+      // Try without braces if path has them
+      if (path.startsWith('{') && path.endsWith('}')) {
+        value = obj[path.slice(1, -1)];
+        if (value !== undefined) return String(value);
+      }
+      
+      // Try nested path
+      const nestedValue = path.split('.').reduce((o, i) => o?.[i], obj);
+      if (nestedValue !== undefined) return String(nestedValue);
+      
+      // Try lowercase variations
+      const lowerPath = path.toLowerCase();
+      value = obj[lowerPath] || 
+              obj[`{${lowerPath}}`] || 
+              obj[lowerPath.replace(/[{}]/g, '')] ||
+              lowerPath.split('.').reduce((o, i) => o?.[i.toLowerCase()], obj);
+              
+      return value !== undefined ? String(value) : null;
+    } catch (error) {
+      log('error', 'Error getting nested value', { path, error: String(error) });
+      return null;
+    }
   };
 
-  // Extract contact data
+  // Extract contact data with better error handling
   if (data.contactData) {
-    // Basic fields
-    normalized.email = getNestedValue(data.contactData, 'email') || 
-                      getNestedValue(data.contactData, '{email}');
-    normalized.company = getNestedValue(data.contactData, 'company') || 
-                        getNestedValue(data.contactData, 'company_name') ||
-                        getNestedValue(data.contactData, 'PMS');
-    normalized.firstName = getNestedValue(data.contactData, 'first_name');
-    normalized.lastName = getNestedValue(data.contactData, 'last_name');
-    
-    // Custom/special fields
-    normalized.lifecycle_stage = getNestedValue(data.contactData, 'lifecycle_stage');
-    normalized.lead_status = getNestedValue(data.contactData, 'lead_status');
-    normalized.userWebhookUrl = getNestedValue(data, 'userWebhookUrl');
-
-    // Add all remaining contactData fields
-    Object.entries(data.contactData).forEach(([key, value]) => {
-      const normalizedKey = key.replace(/[{}]/g, '').toLowerCase();
-      if (value && typeof value !== 'object') {
-        normalized[normalizedKey] = String(value);
-      }
-    });
+    try {
+      // Basic fields with fallbacks
+      normalized.email = getNestedValue(data.contactData, 'email') || 
+                        getNestedValue(data.contactData, '{email}');
+      normalized.company = getNestedValue(data.contactData, 'company') || 
+                         getNestedValue(data.contactData, 'company_name') ||
+                         getNestedValue(data.contactData, 'PMS');
+      normalized.firstName = getNestedValue(data.contactData, 'first_name');
+      normalized.lastName = getNestedValue(data.contactData, 'last_name');
+      
+      // Custom/special fields
+      normalized.lifecycle_stage = getNestedValue(data.contactData, 'lifecycle_stage');
+      normalized.lead_status = getNestedValue(data.contactData, 'lead_status');
+      normalized.make_sequence = getNestedValue(data.contactData, 'make_sequence');
+      
+      // Add all remaining contactData fields
+      Object.entries(data.contactData).forEach(([key, value]) => {
+        if (value && typeof value !== 'object') {
+          const normalizedKey = key.replace(/[{}]/g, '').toLowerCase();
+          normalized[normalizedKey] = String(value);
+          normalized[`contactData.${normalizedKey}`] = String(value);
+        }
+      });
+    } catch (error) {
+      log('error', 'Error normalizing contact data', { error: String(error) });
+    }
   }
 
   // Add top-level fields
-  Object.entries(data).forEach(([key, value]) => {
-    if (key !== 'contactData' && value && typeof value !== 'object') {
-      normalized[key.toLowerCase()] = String(value);
-    }
-  });
+  try {
+    Object.entries(data).forEach(([key, value]) => {
+      if (key !== 'contactData' && value && typeof value !== 'object') {
+        const normalizedKey = key.toLowerCase();
+        normalized[normalizedKey] = String(value);
+      }
+    });
+  } catch (error) {
+    log('error', 'Error normalizing top-level fields', { error: String(error) });
+  }
 
-  console.log('Normalized webhook data:', normalized);
+  log('info', 'Normalized webhook data', { 
+    fieldCount: Object.keys(normalized).length,
+    fields: Object.keys(normalized)
+  });
+  
   return normalized;
 }
 
 /**
  * Evaluates a single filter against normalized data
  */
-export function evaluateFilter(filter: Filter, normalizedData: NormalizedData): boolean {
+function evaluateFilter(filter: Filter, normalizedData: NormalizedData): boolean {
   const { field, operator, value } = filter;
   
-  // Get field value, removing template syntax if present
-  const normalizedField = field.replace(/[{}]/g, '').toLowerCase();
-  const fieldValue = normalizedData[normalizedField];
+  // Get the field value, trying multiple formats
+  const fieldValue = 
+    normalizedData[field.toLowerCase()] || 
+    normalizedData[field.replace(/[{}]/g, '').toLowerCase()] ||
+    normalizedData[`contactData.${field.toLowerCase()}`] ||
+    normalizedData[`contactData.${field.replace(/[{}]/g, '').toLowerCase()}`];
   
-  console.log('Evaluating filter:', { 
-    field: normalizedField, 
+  log('info', 'Evaluating filter', { 
+    field, 
     operator, 
-    expectedValue: value, 
-    actualValue: fieldValue 
+    value, 
+    fieldValue,
+    allFields: Object.keys(normalizedData)
   });
 
-  switch (operator) {
-    case 'exists':
-      return fieldValue !== null;
-    
-    case 'not_exists':
-      return fieldValue === null;
-    
-    case 'equals':
-      return fieldValue !== null && fieldValue.toLowerCase() === String(value).toLowerCase();
-    
-    case 'not_equals':
-      return fieldValue === null || fieldValue.toLowerCase() !== String(value).toLowerCase();
-    
-    default:
-      console.warn('Unknown operator:', operator);
-      return true;
+  try {
+    switch (operator) {
+      case 'exists':
+        const exists = fieldValue !== null && fieldValue !== undefined && fieldValue !== '';
+        log('info', `Filter exists check: ${exists}`, { field, fieldValue });
+        return exists;
+      case 'not_exists':
+        const notExists = !fieldValue || fieldValue === '';
+        log('info', `Filter not_exists check: ${notExists}`, { field, fieldValue });
+        return notExists;
+      case 'equals':
+        const equals = fieldValue?.toLowerCase() === value?.toLowerCase();
+        log('info', `Filter equals check: ${equals}`, { field, fieldValue, value });
+        return equals;
+      case 'not_equals':
+        const notEquals = fieldValue?.toLowerCase() !== value?.toLowerCase();
+        log('info', `Filter not_equals check: ${notEquals}`, { field, fieldValue, value });
+        return notEquals;
+      default:
+        log('warn', 'Unknown operator', { operator });
+        return false;
+    }
+  } catch (error) {
+    log('error', 'Error evaluating filter', { 
+      field, 
+      operator, 
+      value, 
+      fieldValue, 
+      error: String(error) 
+    });
+    return false;
   }
 }
 
 /**
- * Evaluates an array of filters against webhook data
+ * Evaluates a list of filters against webhook data
  */
-export function evaluateFilters(
-  filters: Filter[],
-  data: WebhookData,
-  logic: 'AND' | 'OR' = 'AND'
-): { passed: boolean; reason?: string } {
-  if (!Array.isArray(filters) || filters.length === 0) {
-    console.log('No filters to evaluate');
+export function evaluateFilters(filters: Filter[], data: WebhookData) {
+  if (!filters || filters.length === 0) {
+    log('info', 'No filters to evaluate');
     return { passed: true };
   }
 
-  // Normalize data once for all filters
-  const normalizedData = normalizeWebhookData(data);
-  
-  console.log('Evaluating filters:', { 
-    filterCount: filters.length, 
-    logic,
-    filters 
-  });
+  try {
+    const normalizedData = normalizeWebhookData(data);
+    
+    // Evaluate each filter
+    for (const filter of filters) {
+      const passed = evaluateFilter(filter, normalizedData);
+      log('info', 'Filter result', { filter, passed });
+      
+      if (!passed) {
+        return {
+          passed: false,
+          reason: `Failed filter: ${filter.field} ${filter.operator} ${filter.value || ''}`
+        };
+      }
+    }
 
-  const results = filters.map(filter => ({
-    filter,
-    passed: evaluateFilter(filter, normalizedData)
-  }));
-
-  console.log('Filter results:', results);
-
-  const passed = logic === 'AND'
-    ? results.every(r => r.passed)
-    : results.some(r => r.passed);
-
-  if (!passed) {
-    const failedFilters = results
-      .filter(r => !r.passed)
-      .map(r => {
-        const { filter } = r;
-        const value = filter.operator === 'exists' || filter.operator === 'not_exists'
-          ? ''
-          : ` "${filter.value}"`;
-        return `${filter.field} ${filter.operator.replace('_', ' ')}${value}`;
-      })
-      .join(' AND ');
-
-    return {
-      passed: false,
-      reason: `Failed filters: ${failedFilters}`
+    return { passed: true };
+  } catch (error) {
+    log('error', 'Error evaluating filters', { error: String(error) });
+    return { 
+      passed: false, 
+      reason: `Error evaluating filters: ${String(error)}`
     };
   }
-
-  return { passed: true };
 } 

@@ -40,7 +40,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // Load existing mappings and sample webhook fields
+  // Load existing mappings and webhook fields
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -62,15 +62,17 @@ export default function SettingsPage() {
         setMappings(mappingsObj);
         
         // Then fetch webhook fields
-        const fieldsRes = await fetch('/api/webhook-fields/sample');
+        const fieldsRes = await fetch('/api/webhook-fields');
         if (!fieldsRes.ok) {
-          console.warn('Failed to fetch webhook fields:', fieldsRes.status);
-          // Don't throw here, just log warning and continue with empty fields
-        } else {
-          const fieldsData = await fieldsRes.json();
-          console.log('Received webhook fields:', fieldsData);
-          setWebhookFields(fieldsData.fields || []);
+          throw new Error(`Failed to fetch webhook fields: ${fieldsRes.status}`);
         }
+        
+        const fieldsData = await fieldsRes.json();
+        console.log('Received webhook fields:', fieldsData);
+        
+        // Ensure we have an array of fields
+        const fields = Array.isArray(fieldsData) ? fieldsData : [];
+        setWebhookFields(fields);
       } catch (error) {
         console.error('Failed to load settings:', error);
         toast.error('Failed to load settings. Please try refreshing the page.');
@@ -97,6 +99,11 @@ export default function SettingsPage() {
       // Save all mappings in parallel
       const results = await Promise.all(
         Object.entries(mappings).map(async ([systemField, webhookField]) => {
+          if (!webhookField) {
+            console.log('Skipping empty mapping:', systemField);
+            return null;
+          }
+
           const response = await fetch('/api/field-mappings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -110,7 +117,7 @@ export default function SettingsPage() {
         })
       );
       
-      console.log('Save results:', results);
+      console.log('Save results:', results.filter(Boolean));
       toast.success('Settings saved successfully');
     } catch (error) {
       console.error('Failed to save settings:', error);

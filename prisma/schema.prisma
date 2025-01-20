@@ -54,9 +54,9 @@ model WebhookLog {
   company      String   @default("Unknown")
   requestBody  Json
   responseBody Json     @default("{}")
-  errorMessage String?  // Keep this for backward compatibility
 
   @@index([scenarioName])
+  @@index([createdAt])
 }
 
 // Field mapping configuration for webhook data

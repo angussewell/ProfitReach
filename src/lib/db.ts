@@ -8,6 +8,18 @@ export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
     log: ['query', 'error', 'warn'],
+    datasources: {
+      db: {
+        url: process.env.DATABASE_URL
+      }
+    },
+    // Add connection pool configuration
+    connection: {
+      pool: {
+        min: 2,
+        max: 10
+      }
+    }
   });
 
 // Verify database connection on initialization
