@@ -1,28 +1,68 @@
 import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 
-// Sample webhook fields that can be mapped
-const SAMPLE_FIELDS = [
-  // Contact fields
-  'email',
-  'first_name',
-  'last_name',
-  'company',
-  'website',
+// Helper to extract all possible fields from a data structure
+function extractFields(data: any, prefix = ''): string[] {
+  if (!data || typeof data !== 'object') return [];
   
-  // Template fields
-  '{email}',
-  '{first_name}',
-  '{last_name}',
-  
-  // Status fields
-  'lead_status',
-  'lifecycle_stage',
-  
-  // Scenario fields
-  'make_sequence',
-  'scenario_name'
-];
+  return Object.entries(data).flatMap(([key, value]) => {
+    const fullKey = prefix ? `${prefix}.${key}` : key;
+    if (value && typeof value === 'object') {
+      return [fullKey, ...extractFields(value, fullKey)];
+    }
+    return [fullKey];
+  });
+}
 
 export async function GET() {
-  return NextResponse.json({ fields: SAMPLE_FIELDS });
+  try {
+    // Get fields from our registry
+    const fields = await prisma.webhookField.findMany({
+      orderBy: { lastSeen: 'desc' }
+    });
+    
+    return NextResponse.json({
+      fields: fields.map(f => f.field)
+    });
+  } catch (error) {
+    console.error('Failed to fetch webhook fields:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch webhook fields' },
+      { status: 500 }
+    );
+  }
+}
+
+// Endpoint to register new fields
+export async function POST(request: Request) {
+  try {
+    const data = await request.json();
+    const fields = extractFields(data);
+    
+    // Update field registry
+    await Promise.all(
+      fields.map(field =>
+        prisma.webhookField.upsert({
+          where: { field },
+          create: { 
+            field,
+            lastSeen: new Date(),
+            occurrences: 1
+          },
+          update: {
+            lastSeen: new Date(),
+            occurrences: { increment: 1 }
+          }
+        })
+      )
+    );
+    
+    return NextResponse.json({ success: true, fieldsRegistered: fields.length });
+  } catch (error) {
+    console.error('Failed to register webhook fields:', error);
+    return NextResponse.json(
+      { error: 'Failed to register webhook fields' },
+      { status: 500 }
+    );
+  }
 } 

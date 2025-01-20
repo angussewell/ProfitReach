@@ -30,6 +30,15 @@ function extractContactInfo(requestBody: any) {
   };
 }
 
+// Helper to format field name for display
+function formatFieldName(field: string): string {
+  return field
+    .replace(/([A-Z])/g, ' $1') // Add space before capital letters
+    .split(/[._-\s]/)           // Split on delimiters
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()) // Capitalize words
+    .join(' ');
+}
+
 export default async function WebhookLogPage({ params }: { params: { id: string } }) {
   const log = await prisma.webhookLog.findUnique({
     where: { id: params.id }
@@ -40,128 +49,102 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
   }
 
   const requestBody = log.requestBody as any;
-  const contactInfo = extractContactInfo(requestBody);
+  const mappedFields = requestBody?.mappedFields || {};
+
+  // Group mapped fields by category
+  const fieldGroups = {
+    contact: ['contactName', 'contactEmail', 'contactFirstName', 'contactLastName'],
+    company: ['company', 'propertyManagementSoftware'],
+    status: ['leadStatus', 'lifecycleStage'],
+    scenario: ['scenarioName']
+  };
 
   return (
     <div className="p-6 space-y-6">
       <div className="space-y-4">
-        <h1 className="text-2xl font-bold">Webhook Log Details</h1>
-        
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold">Webhook Log Details</h1>
+          <div className={cn(
+            "px-3 py-1 rounded-full text-sm font-medium",
+            log.status === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+          )}>
+            {log.status}
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Card>
             <CardHeader>
               <CardTitle>Basic Information</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
-              <div>
-                <Label>Status</Label>
-                <div className={cn(
-                  "text-sm font-medium",
-                  log.status === 'success' ? 'text-green-600' : 'text-red-600'
-                )}>
-                  {log.status}
-                </div>
-              </div>
-              <div>
-                <Label>Scenario Name</Label>
-                <div className="text-sm font-medium">{log.scenarioName}</div>
-              </div>
+            <CardContent className="space-y-4">
               <div>
                 <Label>Timestamp</Label>
                 <div className="text-sm font-medium">
                   {new Date(log.createdAt).toLocaleString()}
                 </div>
               </div>
-              <div className="pt-2 border-t">
-                <Label>Pipeline Status</Label>
-                <div className="grid grid-cols-2 gap-2 mt-1">
-                  <div>
-                    <div className="text-xs text-muted-foreground">Lead Status</div>
-                    <div className="text-sm font-medium">
-                      {contactInfo.leadStatus}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground">Lifecycle Stage</div>
-                    <div className="text-sm font-medium">
-                      {contactInfo.lifecycleStage}
-                    </div>
+              
+              {Object.entries(fieldGroups).map(([group, fields]) => (
+                <div key={group} className="pt-2 border-t">
+                  <Label>{formatFieldName(group)} Information</Label>
+                  <div className="grid grid-cols-1 gap-2 mt-1">
+                    {fields.map(field => mappedFields[field] && (
+                      <div key={field}>
+                        <div className="text-xs text-muted-foreground">
+                          {formatFieldName(field)}
+                        </div>
+                        <div className="text-sm font-medium">
+                          {mappedFields[field]}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              </div>
+              ))}
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>Contact & Company Information</CardTitle>
+              <CardTitle>Technical Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               <div>
-                <Label>Contact Name</Label>
-                <div className="text-sm font-medium">
-                  {contactInfo.contactName}
+                <Label>Webhook URL</Label>
+                <div className="text-sm font-medium break-all">
+                  {requestBody?.userWebhookUrl || 'Not provided'}
                 </div>
               </div>
-              <div>
-                <Label>Email</Label>
-                <div className="text-sm font-medium">
-                  {log.contactEmail}
-                </div>
-              </div>
-              <div className="pt-2 border-t">
-                <Label>Company Details</Label>
-                <div className="grid grid-cols-1 gap-2 mt-1">
-                  <div>
-                    <div className="text-xs text-muted-foreground">Company Name</div>
-                    <div className="text-sm font-medium">
-                      {contactInfo.company}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground">Property Management Software</div>
-                    <div className="text-sm font-medium">
-                      {contactInfo.propertyManagementSoftware}
-                    </div>
+              {log.errorMessage && (
+                <div className="pt-2 border-t">
+                  <Label>Error Message</Label>
+                  <div className="text-sm font-medium text-red-600">
+                    {log.errorMessage}
                   </div>
                 </div>
-              </div>
+              )}
             </CardContent>
           </Card>
         </div>
 
-        {log.errorMessage && (
-          <Card className="border-red-200">
-            <CardHeader>
-              <CardTitle className="text-red-600">Error Message</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <pre className="text-sm text-red-600 whitespace-pre-wrap">
-                {log.errorMessage}
+        <Card>
+          <CardHeader>
+            <CardTitle>Raw Data</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label>Request Body</Label>
+              <pre className="mt-2 p-4 bg-muted rounded-md text-sm whitespace-pre-wrap">
+                {JSON.stringify(requestBody, null, 2)}
               </pre>
-            </CardContent>
-          </Card>
-        )}
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Request Body</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <pre className="text-sm whitespace-pre-wrap">
-              {JSON.stringify(requestBody, null, 2)}
-            </pre>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Response Body</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <pre className="text-sm whitespace-pre-wrap">
-              {JSON.stringify(log.responseBody, null, 2)}
-            </pre>
+            </div>
+            <div>
+              <Label>Response Body</Label>
+              <pre className="mt-2 p-4 bg-muted rounded-md text-sm whitespace-pre-wrap">
+                {JSON.stringify(log.responseBody, null, 2)}
+              </pre>
+            </div>
           </CardContent>
         </Card>
       </div>

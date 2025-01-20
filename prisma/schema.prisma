@@ -89,3 +89,14 @@ model Attachment {
 
   @@index([scenarioId])
 }
+
+model WebhookField {
+  id          String   @id @default(cuid())
+  field       String   @unique
+  lastSeen    DateTime @default(now())
+  occurrences Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([lastSeen])
+}

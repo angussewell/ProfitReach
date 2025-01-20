@@ -137,6 +137,18 @@ export async function POST(request: Request) {
       );
     }
 
+    // Register new webhook fields
+    try {
+      await fetch('/api/webhook-fields/sample', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+    } catch (error) {
+      logMessage('error', 'Failed to register webhook fields', { error: String(error) });
+      // Non-critical error, continue processing
+    }
+
     // Get mapped values with detailed logging
     const [
       scenarioName,
@@ -287,13 +299,15 @@ export async function POST(request: Request) {
         requestBody: {
           ...data,
           mappedFields: {
+            scenarioName,
             contactEmail,
             contactName,
             contactFirstName,
             contactLastName,
             leadStatus: leadStatus || 'Empty',
             lifecycleStage: lifecycleStage || 'Unknown',
-            company
+            company,
+            propertyManagementSoftware: data.contactData?.PMS || 'Not specified'
           }
         },
         responseBody: forwardResult
