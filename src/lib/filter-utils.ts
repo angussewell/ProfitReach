@@ -61,45 +61,28 @@ function normalizeWebhookData(data: Record<string, any>): Record<string, any> {
  * Finds a field value in the data object, trying multiple formats
  */
 function findFieldValue(data: Record<string, any>, field: string): { exists: boolean; value: any } {
-  // Remove template syntax and normalize
-  const cleanField = field.replace(/[{}]/g, '');
-  
-  // Ordered list of places to look, maintaining original case
-  const locations = [
-    // Direct access with original case
-    data[field],
-    data[cleanField],
-    data.contactData?.[field],
-    data.contactData?.[cleanField],
-    
-    // Lowercase variations
-    data[field.toLowerCase()],
-    data[cleanField.toLowerCase()],
-    data.contactData?.[field.toLowerCase()],
-    data.contactData?.[cleanField.toLowerCase()],
-    
-    // Uppercase variations
-    data[field.toUpperCase()],
-    data[cleanField.toUpperCase()],
-    data.contactData?.[field.toUpperCase()],
-    data.contactData?.[cleanField.toUpperCase()]
-  ];
-
-  // Find first non-undefined value
-  const value = locations.find(v => v !== undefined);
-  
-  log('info', 'Field lookup result', {
-    field,
-    cleanField,
-    exists: value !== undefined,
-    value: value,
-    checkedLocations: locations.map(v => v !== undefined ? typeof v : 'undefined')
-  });
-
-  return {
-    exists: value !== undefined,
-    value: value
+  // Helper to check a data object for the field
+  const findInObject = (obj: Record<string, any>): { exists: boolean; value: any } => {
+    const normalized = normalizeValue(field);
+    const entries = Object.entries(obj);
+    const match = entries.find(([k]) => normalizeValue(k) === normalized);
+    return {
+      exists: !!match,
+      value: match ? match[1] : undefined
+    };
   };
+
+  // Check top level
+  const topLevel = findInObject(data);
+  if (topLevel.exists) return topLevel;
+
+  // Check contactData
+  if (data.contactData && typeof data.contactData === 'object') {
+    const inContactData = findInObject(data.contactData);
+    if (inContactData.exists) return inContactData;
+  }
+
+  return { exists: false, value: undefined };
 }
 
 function normalizeValue(value: any): string {
@@ -108,66 +91,55 @@ function normalizeValue(value: any): string {
 }
 
 function compareValues(actual: string | null | undefined, expected: string | null | undefined, operator: FilterOperator): { passed: boolean; reason: string } {
-  const normalizedActual = normalizeValue(actual);
-  const normalizedExpected = normalizeValue(expected);
+  // Handle null/undefined cases
+  if (actual === null || actual === undefined) actual = '';
+  if (expected === null || expected === undefined) expected = '';
+  
+  // Convert to strings for comparison
+  const actualStr = String(actual);
+  const expectedStr = String(expected);
+  
+  // Normalize for case-insensitive comparison
+  const normalizedActual = normalizeValue(actualStr);
+  const normalizedExpected = normalizeValue(expectedStr);
   
   log('info', 'Comparing values', {
-    original: { actual, expected },
+    original: { actual: actualStr, expected: expectedStr },
     normalized: { actual: normalizedActual, expected: normalizedExpected },
     operator
   });
 
   switch (operator) {
-    case 'exists':
-      return {
-        passed: normalizedActual !== '',
-        reason: normalizedActual !== '' ? 
-          `Field exists with value ${actual}` : 
-          `Field does not exist`
-      };
-
-    case 'not exists':
-      return {
-        passed: normalizedActual === '',
-        reason: normalizedActual === '' ? 
-          `Field does not exist` : 
-          `Field exists with value ${actual}`
-      };
-
     case 'equals':
-      const equals = normalizedActual === normalizedExpected;
       return {
-        passed: equals,
-        reason: equals ? 
-          `Value equals ${expected}` : 
-          `Value (${actual}) does not equal ${expected}`
+        passed: normalizedActual === normalizedExpected,
+        reason: normalizedActual === normalizedExpected ? 
+          `Value "${actualStr}" equals "${expectedStr}"` : 
+          `Value "${actualStr}" does not equal "${expectedStr}"`
       };
 
     case 'not equals':
-      const notEquals = normalizedActual !== normalizedExpected;
       return {
-        passed: notEquals,
-        reason: notEquals ? 
-          `Value (${actual}) is not equal to ${expected}` : 
-          `Value equals ${expected}`
+        passed: normalizedActual !== normalizedExpected,
+        reason: normalizedActual !== normalizedExpected ? 
+          `Value "${actualStr}" does not equal "${expectedStr}"` : 
+          `Value "${actualStr}" equals "${expectedStr}"`
       };
 
     case 'contains':
-      const contains = normalizedActual.includes(normalizedExpected);
       return {
-        passed: contains,
-        reason: contains ? 
-          `Value contains ${expected}` : 
-          `Value (${actual}) does not contain ${expected}`
+        passed: normalizedActual.includes(normalizedExpected),
+        reason: normalizedActual.includes(normalizedExpected) ? 
+          `Value "${actualStr}" contains "${expectedStr}"` : 
+          `Value "${actualStr}" does not contain "${expectedStr}"`
       };
 
     case 'not contains':
-      const notContains = !normalizedActual.includes(normalizedExpected);
       return {
-        passed: notContains,
-        reason: notContains ? 
-          `Value does not contain ${expected}` : 
-          `Value (${actual}) contains ${expected}`
+        passed: !normalizedActual.includes(normalizedExpected),
+        reason: !normalizedActual.includes(normalizedExpected) ? 
+          `Value "${actualStr}" does not contain "${expectedStr}"` : 
+          `Value "${actualStr}" contains "${expectedStr}"`
       };
 
     default:
@@ -179,17 +151,42 @@ function compareValues(actual: string | null | undefined, expected: string | nul
 }
 
 function evaluateFilter(filter: Filter, data: Record<string, any>): { passed: boolean; reason: string } {
-  const normalizedData = normalizeWebhookData(data);
-  const fieldValue = findFieldValue(normalizedData, filter.field).value;
+  const { exists, value } = findFieldValue(data, filter.field);
   
   log('info', 'Evaluating filter', {
     field: filter.field,
     operator: filter.operator,
     expectedValue: filter.value,
-    actualValue: fieldValue
+    actualValue: value,
+    exists
   });
 
-  return compareValues(fieldValue, filter.value, filter.operator);
+  switch (filter.operator) {
+    case 'exists':
+      return {
+        passed: exists,
+        reason: exists ? 
+          `Field ${filter.field} exists with value ${value}` : 
+          `Field ${filter.field} does not exist`
+      };
+
+    case 'not exists':
+      return {
+        passed: !exists,
+        reason: !exists ? 
+          `Field ${filter.field} does not exist` : 
+          `Field ${filter.field} exists with value ${value}`
+      };
+
+    default:
+      if (!exists) {
+        return {
+          passed: false,
+          reason: `Field ${filter.field} does not exist`
+        };
+      }
+      return compareValues(value, filter.value, filter.operator);
+  }
 }
 
 /**
