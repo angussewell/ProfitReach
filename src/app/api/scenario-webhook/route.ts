@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { prisma, log } from '@/lib/utils';
 import { registerWebhookFields } from '@/lib/webhook-fields';
 import { evaluateFilters } from '@/lib/filter-utils';
 import { Filter, FilterGroup, FilterOperator } from '@/types/filters';
 import { Prisma } from '@prisma/client';
 import { processWebhookVariables } from '@/utils/variableReplacer';
-import { log } from '@/lib/utils';
 
 interface WebhookRequestBody {
   contactData?: Record<string, any>;
@@ -134,9 +133,32 @@ function getContactInfo(data: any) {
 
 export async function POST(request: Request) {
   try {
+    // Validate request
+    if (!request.body) {
+      return NextResponse.json({ 
+        passed: false, 
+        reason: 'Missing request body' 
+      }, { status: 400 });
+    }
+
     const requestBody = await request.json();
     
-    // Normalize data structure once
+    // Validate required fields
+    if (!requestBody.contactData) {
+      return NextResponse.json({ 
+        passed: false, 
+        reason: 'Missing contactData in request' 
+      }, { status: 400 });
+    }
+
+    // Log incoming request
+    log('info', 'Received webhook request', {
+      make_sequence: requestBody.contactData.make_sequence,
+      email: requestBody.contactData.email,
+      pms: requestBody.contactData.PMS
+    });
+
+    // Normalize data structure
     const normalizedData = {
       contactData: {
         ...requestBody.contactData,
@@ -160,18 +182,37 @@ export async function POST(request: Request) {
     });
 
     if (!scenario) {
+      const error = `No scenario found for ${requestBody.contactData?.make_sequence}`;
+      log('error', error, { make_sequence: requestBody.contactData?.make_sequence });
       return NextResponse.json({
         passed: false,
-        reason: `No scenario found for ${requestBody.contactData?.make_sequence}`,
+        reason: error,
         data: normalizedData
       }, { status: 400 });
     }
 
-    // Parse filters
-    const filterGroups = scenario.filters ? JSON.parse(String(scenario.filters)) : [];
+    // Parse filters with error handling
+    let filterGroups = [];
+    try {
+      filterGroups = scenario.filters ? JSON.parse(String(scenario.filters)) : [];
+    } catch (error) {
+      log('error', 'Failed to parse filters', { 
+        error: String(error),
+        filters: scenario.filters 
+      });
+      filterGroups = [];
+    }
     
     // Evaluate filters using normalized data
     const { passed, reason } = await evaluateFilters(filterGroups, normalizedData);
+
+    // Log result
+    log('info', 'Filter evaluation complete', {
+      passed,
+      reason,
+      scenario: scenario.name,
+      filterGroups
+    });
 
     // Return consistent data structure
     return NextResponse.json({
@@ -183,7 +224,12 @@ export async function POST(request: Request) {
     });
 
   } catch (error) {
-    log('error', 'Webhook processing failed', { error: String(error) });
+    // Log the full error
+    log('error', 'Webhook processing failed', { 
+      error: String(error),
+      stack: error instanceof Error ? error.stack : undefined
+    });
+
     return NextResponse.json({ 
       passed: false,
       reason: String(error),
