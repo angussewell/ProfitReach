@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma';
 import { evaluateFilters, normalizeWebhookData } from '@/lib/filter-utils';
 import { Filter } from '@/types/filters';
 import { Prisma } from '@prisma/client';
+import { processWebhookVariables } from '@/utils/variableReplacer';
 
 // Mark route as dynamic
 export const dynamic = 'force-dynamic';
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
       userWebhookUrl 
     });
 
-    // Get scenario with filters
+    // Get scenario with filters and prompts
     let scenario;
     try {
       scenario = await prisma.scenario.findUnique({
@@ -53,7 +54,15 @@ export async function POST(req: NextRequest) {
           id: true,
           name: true,
           filters: true,
-          prompts: true
+          prompts: true,
+          subjectLine: true,
+          customizationPrompt: true,
+          emailExamplesPrompt: true,
+          signature: {
+            select: {
+              signatureContent: true
+            }
+          }
         }
       });
     } catch (e) {
@@ -161,6 +170,50 @@ export async function POST(req: NextRequest) {
       // Don't return error - continue with response
     }
 
+    // If filters passed, send outbound webhook
+    if (result.passed && userWebhookUrl) {
+      try {
+        // Process variables in all text fields
+        const processedScenario = {
+          ...scenario,
+          subjectLine: processWebhookVariables(scenario.subjectLine, contactData),
+          customizationPrompt: scenario.customizationPrompt ? processWebhookVariables(scenario.customizationPrompt, contactData) : null,
+          emailExamplesPrompt: scenario.emailExamplesPrompt ? processWebhookVariables(scenario.emailExamplesPrompt, contactData) : null,
+        signature: scenario.signature ? {
+            signatureContent: processWebhookVariables(scenario.signature.signatureContent, contactData)
+        } : null,
+          prompts: scenario.prompts.map(prompt => ({
+            ...prompt,
+            content: processWebhookVariables(prompt.content, contactData)
+      }))
+    };
+
+        // Send outbound webhook
+        const webhookResponse = await fetch(userWebhookUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            contactData,
+            scenario: processedScenario
+          })
+        });
+
+        if (!webhookResponse.ok) {
+          throw new Error(`Outbound webhook failed with status ${webhookResponse.status}`);
+        }
+
+        log('info', 'Outbound webhook sent successfully', {
+          url: userWebhookUrl,
+          scenario: processedScenario
+        });
+      } catch (e) {
+        log('error', 'Failed to send outbound webhook', { error: String(e) });
+        // Don't return error - continue with response
+      }
+    }
+
     return Response.json({
       data: normalizedData,
       passed: result.passed,
@@ -172,7 +225,7 @@ export async function POST(req: NextRequest) {
         normalizedDataKeys: Object.keys(normalizedData)
       }
     });
-
+    
   } catch (error) {
     // Enhanced error logging
     log('error', 'Webhook processing error', { 
