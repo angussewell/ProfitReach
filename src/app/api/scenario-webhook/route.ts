@@ -195,14 +195,14 @@ export async function POST(req: NextRequest) {
           subjectLine: processWebhookVariables(scenario.subjectLine, contactData),
           customizationPrompt: scenario.customizationPrompt ? processWebhookVariables(scenario.customizationPrompt, contactData) : null,
           emailExamplesPrompt: scenario.emailExamplesPrompt ? processWebhookVariables(scenario.emailExamplesPrompt, contactData) : null,
-          signature: scenario.signature ? {
+        signature: scenario.signature ? {
             signatureContent: processWebhookVariables(scenario.signature.signatureContent, contactData)
-          } : null,
+        } : null,
           prompts: scenario.prompts.map(prompt => ({
             ...prompt,
             content: processWebhookVariables(prompt.content, contactData)
-          }))
-        };
+      }))
+    };
 
         // Process variables in standalone prompts
         const processedPrompts = allPrompts.map(prompt => ({
