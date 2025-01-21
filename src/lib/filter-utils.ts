@@ -12,6 +12,14 @@ interface NormalizedData {
 }
 
 /**
+ * Single source of truth for string normalization
+ */
+function normalizeForComparison(value: any): string {
+  if (value === null || value === undefined) return '';
+  return String(value).toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
+/**
  * Normalizes webhook data into a flat structure with standardized field access
  */
 function normalizeWebhookData(data: Record<string, any>): Record<string, any> {
@@ -37,33 +45,39 @@ function normalizeWebhookData(data: Record<string, any>): Record<string, any> {
 }
 
 /**
- * Finds a field value in the data object, trying multiple formats
+ * Normalize a single value for comparison
  */
-function findFieldValue(data: Record<string, any>, field: string): { exists: boolean; value: any } {
-  // For PMS field, always look in contactData
-  if (field === 'PMS') {
-    const value = data.contactData?.PMS;
-    const exists = value !== undefined && value !== null;
-    return { exists, value };
-  }
-
-  // For other fields, use lodash get
-  const value = get(data, field);
-  const exists = value !== undefined && value !== null;
-  
-  log('info', 'Field lookup result', {
-    field,
-    exists,
-    value,
-    data: JSON.stringify(data)
-  });
-
-  return { exists, value };
-}
-
 function normalizeValue(value: any): string {
   if (value === null || value === undefined) return '';
   return String(value).toLowerCase().trim();
+}
+
+/**
+ * Normalize all data fields recursively
+ */
+function normalizeData(data: Record<string, any>): Record<string, any> {
+  const normalized: Record<string, any> = {};
+  
+  for (const [key, value] of Object.entries(data)) {
+    const normalizedKey = key.toLowerCase().trim();
+    normalized[normalizedKey] = typeof value === 'object' && value !== null
+      ? normalizeData(value)
+      : normalizeValue(value);
+  }
+  
+  return normalized;
+}
+
+/**
+ * Finds a field value in the data object, trying multiple formats
+ */
+function findFieldValue(data: Record<string, any>, field: string): string {
+  const normalizedField = field.toLowerCase().trim();
+  return normalizeValue(
+    data[normalizedField] ||
+    data.contactdata?.[normalizedField] ||
+    ''
+  );
 }
 
 function compareValues(actual: any, expected: any, operator: FilterOperator): { passed: boolean; reason: string } {
@@ -122,82 +136,48 @@ function compareValues(actual: any, expected: any, operator: FilterOperator): { 
   }
 }
 
-function evaluateFilter(filter: Filter, data: Record<string, any>): { passed: boolean; reason: string } {
-  const { exists, value } = findFieldValue(data, filter.field);
+// Evaluate a single filter
+function evaluateFilter(filter: Filter, data: Record<string, any>): { passed: boolean, reason: string } {
+  const actualValue = normalizeForComparison(
+    data.contactData?.[filter.field] || 
+    data[filter.field] || 
+    ''
+  );
   
-  log('info', 'Evaluating filter', {
-    filter,
-    exists,
-    value,
-    data: JSON.stringify(data)
+  const expectedValue = normalizeForComparison(filter.value);
+  
+  log('info', 'String comparison', {
+    field: filter.field,
+    rawActual: data.contactData?.[filter.field] || data[filter.field],
+    rawExpected: filter.value,
+    normalizedActual: actualValue,
+    normalizedExpected: expectedValue,
+    operator: filter.operator
   });
 
   switch (filter.operator) {
     case 'exists':
-      return {
-        passed: exists,
-        reason: exists ? 
-          `Field ${filter.field} exists with value ${value}` : 
-          `Field ${filter.field} does not exist`
+      return { 
+        passed: actualValue !== '', 
+        reason: `Field ${filter.field} ${actualValue !== '' ? 'exists' : 'does not exist'}`
       };
-
     case 'not exists':
-      return {
-        passed: !exists,
-        reason: !exists ? 
-          `Field ${filter.field} does not exist` : 
-          `Field ${filter.field} exists with value ${value}`
+      return { 
+        passed: actualValue === '', 
+        reason: `Field ${filter.field} ${actualValue === '' ? 'does not exist' : 'exists'}`
       };
-
+    case 'equals':
+      return { 
+        passed: actualValue === expectedValue,
+        reason: `${filter.field}: "${actualValue}" ${actualValue === expectedValue ? '=' : '≠'} "${expectedValue}"`
+      };
+    case 'not equals':
+      return { 
+        passed: actualValue !== expectedValue,
+        reason: `${filter.field}: "${actualValue}" ${actualValue !== expectedValue ? '≠' : '='} "${expectedValue}"`
+      };
     default:
-      if (!exists) {
-        return {
-          passed: false,
-          reason: `Field ${filter.field} does not exist`
-        };
-      }
-      
-      // For string comparisons, normalize both values
-      const actualValue = String(value).toLowerCase().trim();
-      const expectedValue = String(filter.value).toLowerCase().trim();
-      
-      log('info', 'Comparing values', {
-        actual: actualValue,
-        expected: expectedValue,
-        operator: filter.operator
-      });
-
-      switch (filter.operator) {
-        case 'equals':
-          return {
-            passed: actualValue === expectedValue,
-            reason: `${filter.field} ${actualValue === expectedValue ? 'matches' : 'does not match'} ${expectedValue}`
-          };
-          
-        case 'not equals':
-          return {
-            passed: actualValue !== expectedValue,
-            reason: `${filter.field} ${actualValue !== expectedValue ? 'does not match' : 'matches'} ${expectedValue}`
-          };
-          
-        case 'contains':
-          return {
-            passed: actualValue.includes(expectedValue),
-            reason: `${filter.field} ${actualValue.includes(expectedValue) ? 'contains' : 'does not contain'} ${expectedValue}`
-          };
-          
-        case 'not contains':
-          return {
-            passed: !actualValue.includes(expectedValue),
-            reason: `${filter.field} ${!actualValue.includes(expectedValue) ? 'does not contain' : 'contains'} ${expectedValue}`
-          };
-          
-        default:
-          return {
-            passed: false,
-            reason: `Unknown operator: ${filter.operator}`
-          };
-      }
+      return { passed: false, reason: `Unknown operator: ${filter.operator}` };
   }
 }
 
@@ -257,42 +237,38 @@ const FilterPipeline = {
   }
 };
 
-/**
- * Evaluates all filter groups (OR logic between groups)
- */
+// Evaluate filter groups
 export async function evaluateFilters(
-  filters: Filter[] | Array<{ logic: string; filters: Filter[] }>,
+  filterGroups: Array<{ logic: string; filters: Filter[] }>,
   data: Record<string, any>
 ): Promise<{ passed: boolean; reason: string }> {
-  log('info', 'Starting filter evaluation', { filters, data });
-
-  // Handle empty filters
-  if (!filters?.length) {
+  if (!filterGroups?.length) {
     return { passed: true, reason: 'No filters configured' };
   }
 
-  // Normalize to filter groups structure
-  const filterGroups = Array.isArray(filters) && !('logic' in filters[0])
-    ? [{ logic: 'AND', filters: filters as Filter[] }]
-    : filters as Array<{ logic: string; filters: Filter[] }>;
-
-  const results = filterGroups.map(group => {
+  const groupResults = filterGroups.map(group => {
     const filterResults = group.filters.map(filter => 
       evaluateFilter(filter, data)
     );
-
-    const passed = filterResults.every(r => r.passed);
-    return {
-      passed,
-      reason: filterResults.map(r => r.reason).join(' AND ')
-    };
+    
+    const groupPassed = filterResults.every(r => r.passed);
+    const groupReason = filterResults
+      .map(r => r.reason)
+      .join(' AND ');
+      
+    return { passed: groupPassed, reason: groupReason };
   });
 
-  const passed = results.some(r => r.passed);
-  const reason = passed
-    ? `Passed: ${results.find(r => r.passed)?.reason}`
-    : `Failed: ${results.map(r => `(${r.reason})`).join(' OR ')}`;
+  const passed = groupResults.some(r => r.passed);
+  const reason = groupResults
+    .map(r => `(${r.reason})`)
+    .join(' OR ');
 
-  log('info', 'Filter evaluation complete', { passed, reason });
+  log('info', 'Filter evaluation complete', {
+    passed,
+    reason,
+    groupResults
+  });
+
   return { passed, reason };
 } 

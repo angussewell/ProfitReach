@@ -177,7 +177,7 @@ export async function POST(request: Request) {
       }
     };
 
-    // Get scenario
+    // Get scenario and global prompts
     const scenario = await prisma.scenario.findFirst({
       where: {
         name: requestBody.contactData?.make_sequence
@@ -214,59 +214,38 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
+    // Get global prompts
+    const globalPrompts = await prisma.prompt.findMany();
+
     // Parse filters with error handling
     let filterGroups: Array<{ logic: string; filters: Filter[] }> = [];
     try {
-      // Parse filters from scenario
       const rawFilters = scenario.filters ? JSON.parse(String(scenario.filters)) : [];
       
-      // Log the raw filters for debugging
-      log('info', 'Raw filters from scenario', { 
-        filters: rawFilters,
-        type: typeof rawFilters,
-        isArray: Array.isArray(rawFilters)
-      });
-
-      // Ensure we have an array of filters
-      const filters: Filter[] = Array.isArray(rawFilters) ? rawFilters : [];
-      
-      // Create a single AND group with all filters
-      filterGroups = [{
-        logic: 'AND',
-        filters: filters.map(f => ({
-          id: f.id,
-          field: f.field,
-          operator: f.operator,
-          value: f.value
-        }))
-      }];
-
-      log('info', 'Structured filters for evaluation', { filterGroups });
+      // Create filter group if we have filters
+      if (Array.isArray(rawFilters) && rawFilters.length > 0) {
+        filterGroups = [{
+          logic: 'AND',
+          filters: rawFilters
+        }];
+      }
     } catch (error) {
-      log('error', 'Failed to parse filters', { 
-        error: String(error),
-        filters: scenario.filters 
-      });
-      filterGroups = [];
+      log('error', 'Failed to parse filters', { error: String(error) });
     }
-    
+
     // Evaluate filters using normalized data
     const { passed, reason } = await evaluateFilters(filterGroups, normalizedData);
 
     // Forward webhook if filters pass
     let forwardResult = null;
     if (passed && requestBody.userWebhookUrl) {
-      log('info', 'Forwarding webhook', { 
-        url: requestBody.userWebhookUrl,
-        scenario: scenario.name
-      });
-      
-      // Prepare enriched data
+      // Prepare enriched data with both types of prompts
       const enrichedData = {
         ...normalizedData,
         scenario: {
           name: scenario.name,
-          prompts: scenario.prompts
+          scenarioPrompts: scenario.prompts || [],
+          globalPrompts: globalPrompts || []
         }
       };
       
@@ -275,18 +254,13 @@ export async function POST(request: Request) {
         requestBody,
         enrichedData
       );
-      
-      log('info', 'Webhook forwarded', { 
-        result: forwardResult,
-        scenario: scenario.name
-      });
     }
 
     // Log result
     log('info', 'Filter evaluation complete', {
       passed,
       reason,
-      scenario: scenario.name,
+      scenario: scenario?.name,
       filterGroups,
       normalizedData,
       forwardResult
@@ -296,7 +270,7 @@ export async function POST(request: Request) {
     await prisma.webhookLog.create({
       data: {
         status: passed ? 'success' : 'blocked',
-        scenarioName: scenario.name,
+        scenarioName: scenario?.name || 'Unknown',
         contactEmail: contactInfo.email,
         contactName: contactInfo.name,
         company: contactInfo.company,
@@ -305,7 +279,7 @@ export async function POST(request: Request) {
           passed,
           reason,
           data: normalizedData,
-          filters: scenario.filters,
+          filters: scenario?.filters,
           forwardResult
         }
       }
@@ -316,8 +290,8 @@ export async function POST(request: Request) {
       passed,
       reason,
       data: normalizedData,
-      filters: scenario.filters,
-      prompts: scenario.prompts
+      filters: scenario?.filters,
+      prompts: scenario?.prompts
     });
 
   } catch (error) {
