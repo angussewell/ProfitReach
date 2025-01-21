@@ -221,20 +221,20 @@ const FilterPipeline = {
  * Evaluates all filter groups (OR logic between groups)
  */
 export async function evaluateFilters(
-  filterGroups: Array<{
-    logic: string;
-    filters: Filter[];
-  }>,
+  filters: Filter[] | Array<{ logic: string; filters: Filter[] }>,
   data: Record<string, any>
 ): Promise<{ passed: boolean; reason: string }> {
-  log('info', 'Starting filter evaluation', { 
-    groupCount: filterGroups?.length || 0,
-    data 
-  });
+  log('info', 'Starting filter evaluation', { filters, data });
 
-  if (!filterGroups?.length) {
+  // Handle empty filters
+  if (!filters?.length) {
     return { passed: true, reason: 'No filters configured' };
   }
+
+  // Normalize to filter groups structure
+  const filterGroups = Array.isArray(filters) && !('logic' in filters[0])
+    ? [{ logic: 'AND', filters: filters as Filter[] }]
+    : filters as Array<{ logic: string; filters: Filter[] }>;
 
   const results = filterGroups.map(group => {
     const filterResults = group.filters.map(filter => 
