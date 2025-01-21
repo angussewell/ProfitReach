@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
+import { SearchableSelect } from "@/components/ui/searchable-select";
 
 // Pre-configured templates
 const WEBHOOK_TEMPLATES = {
@@ -169,21 +169,12 @@ export default function SettingsPage() {
                   {field.required && <span className="text-red-500 ml-1">*</span>}
                 </label>
               </div>
-              <Select
+              <SearchableSelect
+                options={webhookFields}
                 value={mappings[field.id] || ''}
-                onValueChange={value => handleFieldChange(field.id, value)}
-              >
-                <SelectTrigger className="w-2/3">
-                  <SelectValue placeholder="Select webhook field" />
-                </SelectTrigger>
-                <SelectContent>
-                  {webhookFields.map(field => (
-                    <SelectItem key={field} value={field}>
-                      {field}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={(value) => handleFieldChange(field.id, value)}
+                placeholder="Select webhook field..."
+              />
             </div>
           ))}
         </div>

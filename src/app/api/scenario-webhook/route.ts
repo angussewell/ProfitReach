@@ -20,6 +20,19 @@ export async function POST(req: NextRequest) {
     try {
       body = await req.json();
       log('info', 'Received webhook request', { body });
+      
+      // Extract and save webhook fields
+      if (body.contactData) {
+        const fields = Object.keys(body.contactData);
+        await Promise.all(fields.map(field => 
+          prisma.webhookField.upsert({
+            where: { field },
+            create: { field },
+            update: {} // No updates needed
+          })
+        ));
+        log('info', 'Saved webhook fields', { fields });
+      }
     } catch (e) {
       log('error', 'Failed to parse request body', { error: String(e) });
       return Response.json({ 
@@ -196,7 +209,11 @@ export async function POST(req: NextRequest) {
           },
           body: JSON.stringify({
             contactData,
-            scenario: processedScenario
+            scenario: {
+              ...processedScenario,
+              prompts: undefined // Remove prompts from scenario
+            },
+            prompts: processedScenario.prompts // Add prompts at root level
           })
         });
 
