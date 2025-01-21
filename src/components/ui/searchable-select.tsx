@@ -45,18 +45,30 @@ export function SearchableSelect({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-full p-0">
-        <Command>
-          <CommandInput placeholder="Search fields..." />
+      <PopoverContent className="w-full p-0" align="start">
+        <Command
+          loop
+          shouldFilter={true}
+          className="w-full"
+          filter={(value, search) => 
+            value.toLowerCase().includes(search.toLowerCase()) ? 1 : 0
+          }
+        >
+          <CommandInput 
+            placeholder="Search fields..."
+            className="h-9"
+          />
           <CommandEmpty>{emptyMessage}</CommandEmpty>
           <CommandGroup className="max-h-60 overflow-auto">
             {options.map((option) => (
               <CommandItem
                 key={option}
-                onSelect={() => {
-                  onChange(option);
+                value={option}
+                onSelect={(currentValue) => {
+                  onChange(currentValue);
                   setOpen(false);
                 }}
+                className="cursor-pointer"
               >
                 <Check
                   className={cn(
