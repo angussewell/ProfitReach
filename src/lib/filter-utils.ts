@@ -11,17 +11,6 @@ interface NormalizedData {
   [key: string]: string | null;
 }
 
-// Production-ready logging
-function log(level: 'error' | 'info' | 'warn', message: string, data?: any) {
-  console[level](JSON.stringify({
-    timestamp: new Date().toISOString(),
-    level,
-    message,
-    environment: process.env.VERCEL_ENV || 'development',
-    ...data
-  }));
-}
-
 /**
  * Normalizes webhook data into a flat structure with standardized field access
  */
