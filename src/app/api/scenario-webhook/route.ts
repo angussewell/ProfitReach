@@ -215,18 +215,33 @@ export async function POST(request: Request) {
     }
 
     // Parse filters with error handling
-    let filterGroups = [];
+    let filterGroups: Array<{ logic: string; filters: Filter[] }> = [];
     try {
-      const filtersJson = scenario.filters;
-      const parsedFilters = filtersJson ? JSON.parse(String(filtersJson)) : [];
-      log('info', 'Parsed filters', { parsedFilters });
+      // Parse filters from scenario
+      const rawFilters = scenario.filters ? JSON.parse(String(scenario.filters)) : [];
       
-      // Ensure filters is an array
-      if (!Array.isArray(parsedFilters)) {
-        throw new Error('Filters must be an array');
-      }
+      // Log the raw filters for debugging
+      log('info', 'Raw filters from scenario', { 
+        filters: rawFilters,
+        type: typeof rawFilters,
+        isArray: Array.isArray(rawFilters)
+      });
+
+      // Ensure we have an array of filters
+      const filters: Filter[] = Array.isArray(rawFilters) ? rawFilters : [];
       
-      filterGroups = parsedFilters;
+      // Create a single AND group with all filters
+      filterGroups = [{
+        logic: 'AND',
+        filters: filters.map(f => ({
+          id: f.id,
+          field: f.field,
+          operator: f.operator,
+          value: f.value
+        }))
+      }];
+
+      log('info', 'Structured filters for evaluation', { filterGroups });
     } catch (error) {
       log('error', 'Failed to parse filters', { 
         error: String(error),
