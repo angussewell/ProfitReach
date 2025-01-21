@@ -71,9 +71,17 @@ export default function SettingsPage() {
       if (!response.ok) throw new Error('Failed to fetch field mappings');
       const data = await response.json();
       const newMappings: Record<string, string> = {};
+      
+      // Find matching system field from SYSTEM_FIELDS
       data.forEach((mapping: any) => {
-        newMappings[mapping.systemField] = mapping.webhookField;
+        const systemField = SYSTEM_FIELDS.find(
+          field => normalizeFieldName(field.id) === mapping.systemField
+        );
+        if (systemField) {
+          newMappings[systemField.id] = mapping.webhookField;
+        }
       });
+      
       setMappings(newMappings);
     } catch (error) {
       toast.error('Failed to load field mappings');
@@ -95,27 +103,33 @@ export default function SettingsPage() {
   // Update local state
   const handleFieldChange = async (systemField: string, webhookField: string) => {
     try {
-      const normalizedSystemField = normalizeFieldName(systemField);
-      const normalizedWebhookField = normalizeFieldName(webhookField);
+      console.log('Updating field mapping:', { systemField, webhookField });
       
-      const response = await fetch('/api/webhook-fields/mapping', {
+      // Save to backend
+      const response = await fetch('/api/field-mappings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          systemField: normalizedSystemField, 
-          webhookField: normalizedWebhookField 
+          systemField, 
+          webhookField 
         })
       });
 
-      if (!response.ok) throw new Error('Failed to update mapping');
+      if (!response.ok) {
+        console.error('Failed to update mapping:', response.status);
+        throw new Error('Failed to update mapping');
+      }
       
-      // Update local state
+      // Update local state with original value for display
       setMappings(prev => ({
         ...prev,
-        [normalizedSystemField]: normalizedWebhookField
+        [systemField]: webhookField
       }));
+
+      toast.success('Field mapping updated');
     } catch (error) {
       console.error('Error updating field mapping:', error);
+      toast.error('Failed to update field mapping');
     }
   };
 

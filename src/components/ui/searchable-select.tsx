@@ -23,12 +23,33 @@ export function SearchableSelect({
   const [search, setSearch] = React.useState("");
   const inputRef = React.useRef<HTMLInputElement>(null);
 
+  // Reset search when popover closes
+  React.useEffect(() => {
+    if (!open) {
+      setSearch("");
+    }
+  }, [open]);
+
+  // Focus input when popover opens
+  React.useEffect(() => {
+    if (open && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [open]);
+
   const filteredOptions = React.useMemo(() => {
     if (!search) return options;
+    const searchLower = search.toLowerCase();
     return options.filter(option => 
-      option.toLowerCase().includes(search.toLowerCase())
+      option.toLowerCase().includes(searchLower)
     );
   }, [options, search]);
+
+  const handleSelect = React.useCallback((option: string) => {
+    onChange(option);
+    setOpen(false);
+    setSearch("");
+  }, [onChange]);
 
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
@@ -37,47 +58,48 @@ export function SearchableSelect({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between"
+          className="w-full justify-between h-12 border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all rounded-lg"
         >
-          {value || placeholder}
+          <span className="truncate">{value || placeholder}</span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content className="w-[--radix-popover-trigger-width] p-0" align="start">
-          <div className="w-full border rounded-md bg-popover">
+        <Popover.Content 
+          className="w-[--radix-popover-trigger-width] p-0" 
+          align="start"
+          sideOffset={4}
+        >
+          <div className="w-full border rounded-md bg-popover shadow-md">
             <input
               ref={inputRef}
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search..."
-              className="w-full px-2 py-1 border-b bg-transparent focus:outline-none"
+              className="w-full px-3 py-2 border-b bg-transparent focus:outline-none focus:ring-2 focus:ring-[#ff7a59]/20 rounded-t-md"
               autoComplete="off"
             />
-            <div className="max-h-60 overflow-auto">
+            <div className="max-h-60 overflow-auto p-1">
               {filteredOptions.length === 0 ? (
-                <div className="py-6 text-center text-sm">{emptyMessage}</div>
+                <div className="py-6 text-center text-sm text-muted-foreground">{emptyMessage}</div>
               ) : (
                 filteredOptions.map(option => (
                   <div
                     key={option}
-                    onClick={() => {
-                      onChange(option);
-                      setOpen(false);
-                      setSearch("");
-                    }}
+                    onClick={() => handleSelect(option)}
                     className={cn(
-                      "flex items-center px-2 py-1.5 cursor-pointer hover:bg-accent",
-                      value === option && "bg-accent"
+                      "flex items-center px-3 py-2 cursor-pointer rounded-sm text-sm",
+                      "hover:bg-accent hover:text-accent-foreground",
+                      value === option && "bg-accent text-accent-foreground"
                     )}
                   >
                     <Check
                       className={cn(
-                        "mr-2 h-4 w-4",
+                        "mr-2 h-4 w-4 flex-shrink-0",
                         value === option ? "opacity-100" : "opacity-0"
                       )}
                     />
-                    {option}
+                    <span className="truncate">{option}</span>
                   </div>
                 ))
               )}
