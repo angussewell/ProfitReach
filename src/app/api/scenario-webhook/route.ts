@@ -1,145 +1,25 @@
-import { NextResponse } from 'next/server';
-import { prisma, log } from '@/lib/utils';
-import { registerWebhookFields } from '@/lib/webhook-fields';
-import { evaluateFilters } from '@/lib/filter-utils';
-import { Filter, FilterGroup, FilterOperator } from '@/types/filters';
+import { NextRequest } from 'next/server';
+import { log } from '@/lib/utils';
+import prisma from '@/lib/prisma';
+import { evaluateFilters, normalizeWebhookData } from '@/lib/filter-utils';
+import { Filter } from '@/types/filters';
 import { Prisma } from '@prisma/client';
-import { processWebhookVariables } from '@/utils/variableReplacer';
-import { normalizeWebhookData } from '@/lib/filter-utils';
 
-interface WebhookRequestBody {
-  contactData?: Record<string, any>;
-  [key: string]: any;
-}
+// Mark route as dynamic
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
-interface WebhookResponse {
-  message?: string;
-  error?: string;
-  details?: string;
-  status?: string;
-  response?: any;
-}
-
-// Helper function to get mapped field value
-async function getMappedValue(
-  data: Record<string, any>, 
-  systemField: string,
-  fallback?: string
-): Promise<string | undefined> {
-  try {
-    // Get mapping for this field
-    const mapping = await prisma.fieldMapping.findUnique({
-      where: { systemField }
-    });
-
-    if (!mapping) {
-      log('info', 'No mapping found for field', { systemField });
-      return fallback;
-    }
-
-    // Extract value using webhook field path
-    const webhookField = mapping.webhookField;
-    
-    // Try different field formats
-    const value = 
-      // Direct field access
-      data[webhookField] ||
-      data.contactData?.[webhookField] ||
-      // Template format
-      data.contactData?.[`{${webhookField}}`] ||
-      // Remove template brackets if present
-      data.contactData?.[webhookField.replace(/[{}]/g, '')] ||
-      // Try as a nested path
-      webhookField.split('.').reduce((obj, key) => obj?.[key], data);
-
-    if (value === undefined || value === null) {
-      log('info', 'No value found for mapped field', { systemField, webhookField });
-      return fallback;
-    }
-
-    return String(value);
-  } catch (error) {
-    log('error', 'Error getting mapped value', { 
-      systemField, 
-      error: String(error)
-    });
-    return fallback;
-  }
-}
-
-// Forward webhook to specified URL with enriched data
-async function forwardWebhook(url: string, originalData: any, enrichedData: any) {
-  try {
-    // Deep clone to prevent mutation
-    const forwardData = {
-      // Original webhook data preserved exactly as received
-      original: JSON.parse(JSON.stringify(originalData)),
-      // Enriched data with full context
-      enriched: {
-        ...enrichedData,
-        meta: {
-          timestamp: new Date().toISOString(),
-          environment: process.env.VERCEL_ENV || 'development',
-          version: '2.0'
-        }
-      }
-    };
-
-    log('info', 'Preparing to forward data', { 
-      dataSize: JSON.stringify(forwardData).length,
-      hasOriginal: !!forwardData.original,
-      hasEnriched: !!forwardData.enriched,
-      url 
-    });
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(forwardData)
-    });
-    
-    const responseText = await response.text();
-    log('info', 'Webhook forwarded', {
-      status: response.status,
-      ok: response.ok,
-      responseSize: responseText.length
-    });
-    
-    return { 
-      ok: response.ok,
-      status: response.status,
-      body: responseText
-    };
-  } catch (error) {
-    log('error', 'Failed to forward webhook', { error: String(error) });
-    return { 
-      ok: false, 
-      error: String(error)
-    };
-  }
-}
-
-function getContactInfo(data: any) {
-  const contactData = data.contactData || {};
-  
-  return {
-    email: contactData.email || contactData['{email}'] || 'Unknown',
-    name: [
-      contactData.first_name || contactData['{first_name}'],
-      contactData.last_name || contactData['{last_name}']
-    ].filter(Boolean).join(' ') || 'Unknown',
-    company: contactData.company || contactData.company_name || contactData.PMS || 'Unknown'
-  };
-}
-
-// Define the include type
-const scenarioInclude = {
+// Define type-safe include
+const include = Prisma.validator<Prisma.ScenarioInclude>()({
   filters: true,
   prompts: true
-} as const;
+});
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
+    // Log the start of request processing
+    log('info', 'Starting webhook request processing');
+
     const body = await req.json();
     log('info', 'Received webhook request', { body });
 
@@ -155,7 +35,7 @@ export async function POST(req: Request) {
     // Get scenario with filters
     const scenario = await prisma.scenario.findUnique({
       where: { name: scenarioName },
-      include: scenarioInclude
+      include
     });
 
     // Parse filters from JSON if needed
@@ -173,6 +53,7 @@ export async function POST(req: Request) {
     });
 
     if (!scenario) {
+      log('error', 'Scenario not found', { scenarioName });
       return Response.json({ 
         error: "Scenario not found",
         scenarioName 
@@ -219,10 +100,15 @@ export async function POST(req: Request) {
     });
 
   } catch (error) {
+    // Enhanced error logging
     log('error', 'Webhook processing error', { 
       error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined
+      stack: error instanceof Error ? error.stack : undefined,
+      timestamp: new Date().toISOString()
     });
-    return Response.json({ error: "Internal server error" }, { status: 500 });
+    return Response.json({ 
+      error: "Internal server error",
+      timestamp: new Date().toISOString()
+    }, { status: 500 });
   }
 } 
