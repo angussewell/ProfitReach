@@ -5,6 +5,7 @@ import { evaluateFilters } from '@/lib/filter-utils';
 import { Filter, FilterGroup, FilterOperator } from '@/types/filters';
 import { Prisma } from '@prisma/client';
 import { processWebhookVariables } from '@/utils/variableReplacer';
+import { normalizeWebhookData } from '@/lib/filter-utils';
 
 interface WebhookRequestBody {
   contactData?: Record<string, any>;
@@ -131,217 +132,97 @@ function getContactInfo(data: any) {
   };
 }
 
-export async function POST(request: Request) {
+// Define the include type
+const scenarioInclude = {
+  filters: true,
+  prompts: true
+} as const;
+
+export async function POST(req: Request) {
   try {
-    // Validate request
-    if (!request.body) {
-      return NextResponse.json({ 
-        passed: false, 
-        reason: 'Missing request body' 
-      }, { status: 400 });
-    }
+    const body = await req.json();
+    log('info', 'Received webhook request', { body });
 
-    const requestBody = await request.json();
-    
-    // Validate required fields
-    if (!requestBody.contactData) {
-      return NextResponse.json({ 
-        passed: false, 
-        reason: 'Missing contactData in request' 
-      }, { status: 400 });
-    }
+    const { contactData, userWebhookUrl } = body;
+    const scenarioName = contactData?.make_sequence;
 
-    // Extract contact info
-    const contactInfo = {
-      email: requestBody.contactData.email || 'Unknown',
-      name: [
-        requestBody.contactData.first_name,
-        requestBody.contactData.last_name
-      ].filter(Boolean).join(' ') || 'Unknown',
-      company: requestBody.contactData.company || 'Unknown'
-    };
-
-    // Log incoming request
-    log('info', 'Received webhook request', {
-      make_sequence: requestBody.contactData.make_sequence,
-      ...contactInfo
+    log('info', 'Extracted scenario name', { 
+      scenarioName,
+      contactData,
+      userWebhookUrl 
     });
 
-    // Normalize data structure
-    const normalizedData = {
-      contactData: {
-        ...requestBody.contactData,
-        PMS: requestBody.contactData?.PMS || 
-             requestBody.contactData?.propertyManagementSoftware || 
-             requestBody.propertyManagementSoftware
-      }
-    };
+    // Get scenario with filters
+    const scenario = await prisma.scenario.findUnique({
+      where: { name: scenarioName },
+      include: scenarioInclude
+    });
 
-    // Get scenario and global prompts
-    const scenario = await prisma.scenario.findFirst({
-      where: {
-        name: requestBody.contactData?.make_sequence
-      },
-      select: {
-        id: true,
-        name: true,
-        filters: true,
-        prompts: true
-      }
+    // Parse filters from JSON if needed
+    const parsedFilters = scenario?.filters 
+      ? (typeof scenario.filters === 'string' 
+          ? JSON.parse(scenario.filters) 
+          : scenario.filters) as Filter[]
+      : [];
+
+    log('info', 'Retrieved scenario', { 
+      found: !!scenario,
+      scenarioId: scenario?.id,
+      filterCount: parsedFilters.length,
+      filters: parsedFilters
     });
 
     if (!scenario) {
-      const error = `No scenario found for ${requestBody.contactData?.make_sequence}`;
-      log('error', error, { make_sequence: requestBody.contactData?.make_sequence });
-      
-      // Create error log
-      await prisma.webhookLog.create({
-        data: {
-          status: 'error',
-          scenarioName: requestBody.contactData?.make_sequence || 'Unknown',
-          contactEmail: contactInfo.email,
-          contactName: contactInfo.name,
-          company: contactInfo.company,
-          requestBody: requestBody,
-          responseBody: { error }
-        }
-      });
-
-      return NextResponse.json({
-        passed: false,
-        reason: error,
-        data: normalizedData
-      }, { status: 400 });
+      return Response.json({ 
+        error: "Scenario not found",
+        scenarioName 
+      }, { status: 404 });
     }
 
-    // Get global prompts
-    const globalPrompts = await prisma.prompt.findMany();
-
-    // Parse filters with error handling
-    let filterGroups: Array<{ logic: string; filters: Filter[] }> = [];
-    try {
-      // Parse filters from scenario
-      const rawFilters = scenario.filters ? JSON.parse(String(scenario.filters)) : [];
-      
-      log('info', 'Raw filters from scenario', { 
-        filters: rawFilters,
-        type: typeof rawFilters,
-        isArray: Array.isArray(rawFilters)
-      });
-
-      // Ensure we have valid filters
-      if (Array.isArray(rawFilters) && rawFilters.length > 0) {
-        // Create a single AND group with all filters
-        filterGroups = [{
-          logic: 'AND',
-          filters: rawFilters.map(f => ({
-            id: f.id,
-            field: f.field,
-            operator: f.operator as FilterOperator,
-            value: f.value
-          }))
-        }];
-
-        log('info', 'Created filter groups', { filterGroups });
-      } else {
-        log('warn', 'No valid filters found', { rawFilters });
-      }
-    } catch (error) {
-      log('error', 'Failed to parse filters', { 
-        error: String(error),
-        filters: scenario.filters 
-      });
-    }
-
-    // Evaluate filters using normalized data
-    const { passed, reason } = await evaluateFilters(filterGroups, normalizedData);
-
-    // Forward webhook if filters pass
-    let forwardResult = null;
-    if (passed && requestBody.userWebhookUrl) {
-      // Prepare enriched data with both types of prompts
-      const enrichedData = {
-        ...normalizedData,
-        scenario: {
-          name: scenario.name,
-          scenarioPrompts: scenario.prompts || [],
-          globalPrompts: globalPrompts || []
-        }
-      };
-      
-      forwardResult = await forwardWebhook(
-        requestBody.userWebhookUrl,
-        requestBody,
-        enrichedData
-      );
-    }
-
-    // Log result
-    log('info', 'Filter evaluation complete', {
-      passed,
-      reason,
-      scenario: scenario?.name,
-      filterGroups,
-      normalizedData,
-      forwardResult
+    // Normalize the webhook data
+    const normalizedData = normalizeWebhookData(contactData);
+    log('info', 'Normalized webhook data', { 
+      original: contactData,
+      normalized: normalizedData
     });
 
-    // Create webhook log
-    await prisma.webhookLog.create({
-      data: {
-        status: passed ? 'success' : 'blocked',
-        scenarioName: scenario?.name || 'Unknown',
-        contactEmail: contactInfo.email,
-        contactName: contactInfo.name,
-        company: contactInfo.company,
-        requestBody: requestBody,
-        responseBody: {
-          passed,
-          reason,
-          data: normalizedData,
-          filters: scenario?.filters,
-          forwardResult
-        }
-      }
+    // Structure filters into groups
+    const filterGroup = {
+      logic: 'and',
+      filters: parsedFilters
+    };
+
+    log('info', 'Created filter group', { 
+      filterGroup,
+      filterCount: parsedFilters.length
     });
 
-    // Return consistent data structure
-    return NextResponse.json({
-      passed,
-      reason,
+    // Evaluate filters
+    const result = await evaluateFilters([filterGroup], normalizedData);
+    
+    log('info', 'Filter evaluation result', { 
+      result,
+      filterGroup,
+      normalizedData
+    });
+
+    return Response.json({
       data: normalizedData,
-      filters: scenario?.filters,
-      prompts: scenario?.prompts
+      passed: result.passed,
+      reason: result.reason,
+      filters: parsedFilters,
+      debug: {
+        scenarioId: scenario.id,
+        filterCount: parsedFilters.length,
+        normalizedDataKeys: Object.keys(normalizedData)
+      }
     });
 
   } catch (error) {
-    // Log the full error
-    log('error', 'Webhook processing failed', { 
-      error: String(error),
+    log('error', 'Webhook processing error', { 
+      error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined
     });
-
-    // Create error log
-    try {
-      await prisma.webhookLog.create({
-        data: {
-          status: 'error',
-          scenarioName: 'Unknown',
-          contactEmail: 'Unknown',
-          contactName: 'Unknown',
-          company: 'Unknown',
-          requestBody: {},
-          responseBody: { error: String(error) }
-        }
-      });
-    } catch (logError) {
-      log('error', 'Failed to create error log', { error: String(logError) });
-    }
-
-    return NextResponse.json({ 
-      passed: false,
-      reason: String(error),
-      data: {}
-    }, { status: 500 });
+    return Response.json({ error: "Internal server error" }, { status: 500 });
   }
 } 

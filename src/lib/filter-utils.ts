@@ -22,7 +22,7 @@ function normalizeForComparison(value: any): string {
 /**
  * Normalizes webhook data into a flat structure with standardized field access
  */
-function normalizeWebhookData(data: Record<string, any>): Record<string, any> {
+export function normalizeWebhookData(data: Record<string, any>): Record<string, any> {
   // Create a clean copy of the data
   const normalized = {
     contactData: { ...data.contactData } || {}
