@@ -6,6 +6,9 @@ import { Filter } from '@/types/filters';
 import { Prisma } from '@prisma/client';
 import { processWebhookVariables } from '@/utils/variableReplacer';
 
+// Normalize field names consistently
+const normalizeFieldName = (field: string) => field.toLowerCase().replace(/[^a-z0-9]/g, '');
+
 // Mark route as dynamic
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -21,13 +24,13 @@ export async function POST(req: NextRequest) {
       body = await req.json();
       log('info', 'Received webhook request', { body });
       
-      // Extract and save webhook fields
+      // Extract and save webhook fields with normalized names
       if (body.contactData) {
         const fields = Object.keys(body.contactData);
         await Promise.all(fields.map(field => 
           prisma.webhookField.upsert({
-            where: { field },
-            create: { field },
+            where: { field: normalizeFieldName(field) },
+            create: { field: normalizeFieldName(field) },
             update: {} // No updates needed
           })
         ));

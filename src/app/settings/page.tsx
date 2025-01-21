@@ -34,6 +34,8 @@ const SYSTEM_FIELDS = [
   { id: 'propertyManagementSoftware', label: 'Property Management Software', required: false }
 ];
 
+const normalizeFieldName = (field: string) => field.toLowerCase().replace(/[^a-z0-9]/g, '');
+
 export default function SettingsPage() {
   const [webhookFields, setWebhookFields] = useState<string[]>([]);
   const [mappings, setMappings] = useState<Record<string, string>>({});
@@ -91,9 +93,30 @@ export default function SettingsPage() {
   };
 
   // Update local state
-  const handleFieldChange = (systemField: string, webhookField: string) => {
-    console.log('Updating field mapping:', { systemField, webhookField });
-    setMappings(prev => ({ ...prev, [systemField]: webhookField }));
+  const handleFieldChange = async (systemField: string, webhookField: string) => {
+    try {
+      const normalizedSystemField = normalizeFieldName(systemField);
+      const normalizedWebhookField = normalizeFieldName(webhookField);
+      
+      const response = await fetch('/api/webhook-fields/mapping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          systemField: normalizedSystemField, 
+          webhookField: normalizedWebhookField 
+        })
+      });
+
+      if (!response.ok) throw new Error('Failed to update mapping');
+      
+      // Update local state
+      setMappings(prev => ({
+        ...prev,
+        [normalizedSystemField]: normalizedWebhookField
+      }));
+    } catch (error) {
+      console.error('Error updating field mapping:', error);
+    }
   };
 
   // Save all changes

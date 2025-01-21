@@ -5,9 +5,7 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 
 // Helper to normalize field names for consistent lookup
-function normalizeFieldName(field: string): string {
-  return field.toLowerCase().trim();
-}
+const normalizeFieldName = (field: string) => field.toLowerCase().replace(/[^a-z0-9]/g, '');
 
 export default async function WebhookLogPage({ params }: { params: { id: string } }) {
   const log = await prisma.webhookLog.findUnique({
@@ -22,19 +20,11 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
   const mappedFields = requestBody?.mappedFields || {};
   
   // Helper to get mapped or fallback value
-  const getFieldValue = (mappedKey: string, fallbackPath: string) => {
-    const normalizedKey = normalizeFieldName(mappedKey);
-    const mappedValue = mappedFields[normalizedKey];
-    if (mappedValue) return mappedValue;
-    
-    // Try to get from contactData using fallback path
-    const pathParts = fallbackPath.split('.');
-    let value = requestBody;
-    for (const part of pathParts) {
-      value = value?.[part];
-      if (value === undefined) break;
-    }
-    return value || 'N/A';
+  const getFieldValue = (data: any, field: string) => {
+    const normalizedField = normalizeFieldName(field);
+    return data?.mappedFields?.[normalizedField] || 
+           data?.contactData?.[normalizedField] || 
+           'Unknown';
   };
 
   return (
@@ -78,7 +68,7 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
               <div className="space-y-1">
                 <Label className="text-sm text-muted-foreground">Scenario</Label>
                 <div className="text-sm font-medium">
-                  {getFieldValue('scenarioName', 'scenarioName') || log.scenarioName || 'N/A'}
+                  {getFieldValue(requestBody, 'scenarioName') || log.scenarioName || 'N/A'}
                 </div>
               </div>
 
@@ -86,7 +76,7 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
               <div className="space-y-1">
                 <Label className="text-sm text-muted-foreground">Contact Email</Label>
                 <div className="text-sm font-medium">
-                  {getFieldValue('contactEmail', 'contactData.email') || log.contactEmail || 'N/A'}
+                  {getFieldValue(requestBody, 'contactEmail') || log.contactEmail || 'N/A'}
                 </div>
               </div>
 
@@ -94,7 +84,7 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
               <div className="space-y-1">
                 <Label className="text-sm text-muted-foreground">Contact Name</Label>
                 <div className="text-sm font-medium">
-                  {getFieldValue('contactName', 'contactData.name') || log.contactName || 'N/A'}
+                  {getFieldValue(requestBody, 'contactName') || log.contactName || 'N/A'}
                 </div>
               </div>
 
@@ -102,7 +92,7 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
               <div className="space-y-1">
                 <Label className="text-sm text-muted-foreground">Company</Label>
                 <div className="text-sm font-medium">
-                  {getFieldValue('company', 'contactData.company') || getFieldValue('company', 'contactData.company') || 'N/A'}
+                  {getFieldValue(requestBody, 'company') || getFieldValue(requestBody, 'company') || 'N/A'}
                 </div>
               </div>
 
@@ -110,7 +100,7 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
               <div className="space-y-1">
                 <Label className="text-sm text-muted-foreground">Property Management Software</Label>
                 <div className="text-sm font-medium">
-                  {getFieldValue('propertyManagementSoftware', 'contactData.PMS')}
+                  {getFieldValue(requestBody, 'propertyManagementSoftware')}
                 </div>
               </div>
 
@@ -118,7 +108,7 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
               <div className="space-y-1">
                 <Label className="text-sm text-muted-foreground">Lead Status</Label>
                 <div className="text-sm font-medium">
-                  {getFieldValue('leadStatus', 'contactData.lead_status') || getFieldValue('leadStatus', 'contactData.lead_status') || 'N/A'}
+                  {getFieldValue(requestBody, 'leadStatus') || getFieldValue(requestBody, 'leadStatus') || 'N/A'}
                 </div>
               </div>
 
@@ -126,7 +116,7 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
               <div className="space-y-1">
                 <Label className="text-sm text-muted-foreground">Lifecycle Stage</Label>
                 <div className="text-sm font-medium">
-                  {getFieldValue('lifecycleStage', 'contactData.lifecycle_stage') || getFieldValue('lifecycleStage', 'contactData.lifecycle_stage') || 'N/A'}
+                  {getFieldValue(requestBody, 'lifecycleStage') || getFieldValue(requestBody, 'lifecycleStage') || 'N/A'}
                 </div>
               </div>
             </div>
