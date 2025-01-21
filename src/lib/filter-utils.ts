@@ -137,51 +137,85 @@ function compareValues(actual: any, expected: any, operator: FilterOperator): { 
 }
 
 // Evaluate a single filter
-function evaluateFilter(filter: Filter, data: Record<string, any>): { passed: boolean, reason: string } {
-  // Special handling for PMS field
-  const actualValue = filter.field === 'PMS' 
-    ? normalizeForComparison(data.contactData?.PMS)
-    : normalizeForComparison(
-        data.contactData?.[filter.field] || 
-        data[filter.field] || 
-        ''
-      );
+async function evaluateFilter(
+  filter: Filter,
+  data: Record<string, any>
+): Promise<{ passed: boolean; reason: string }> {
+  // Log filter evaluation start
+  log('info', 'Evaluating filter', { filter });
+
+  // Get the actual value from data
+  const actualValue = data[filter.field];
   
-  const expectedValue = normalizeForComparison(filter.value);
-  
-  log('info', 'Filter evaluation', {
+  // Log the value comparison
+  log('info', 'Comparing values', {
     field: filter.field,
-    operator: filter.operator,
-    rawActual: filter.field === 'PMS' ? data.contactData?.PMS : data.contactData?.[filter.field],
-    rawExpected: filter.value,
-    normalizedActual: actualValue,
-    normalizedExpected: expectedValue,
-    passed: actualValue === expectedValue
+    actual: actualValue,
+    expected: filter.value,
+    operator: filter.operator
   });
 
+  // Special handling for exists/not exists
+  if (filter.operator === 'exists') {
+    const passed = actualValue !== undefined && actualValue !== null;
+    return {
+      passed,
+      reason: `${filter.field} ${passed ? 'exists' : 'does not exist'}`
+    };
+  }
+
+  if (filter.operator === 'not exists') {
+    const passed = actualValue === undefined || actualValue === null;
+    return {
+      passed,
+      reason: `${filter.field} ${passed ? 'does not exist' : 'exists'}`
+    };
+  }
+
+  // For other operators, if value doesn't exist, fail
+  if (actualValue === undefined || actualValue === null) {
+    return {
+      passed: false,
+      reason: `${filter.field} is undefined or null`
+    };
+  }
+
+  // Normalize values for comparison
+  const normalizedActual = String(actualValue).toLowerCase().trim();
+  const normalizedExpected = String(filter.value).toLowerCase().trim();
+
+  // Evaluate based on operator
   switch (filter.operator) {
-    case 'exists':
-      return { 
-        passed: actualValue !== '', 
-        reason: `Field ${filter.field} ${actualValue !== '' ? 'exists' : 'does not exist'}`
-      };
-    case 'not exists':
-      return { 
-        passed: actualValue === '', 
-        reason: `Field ${filter.field} ${actualValue === '' ? 'does not exist' : 'exists'}`
-      };
     case 'equals':
-      return { 
-        passed: actualValue === expectedValue,
-        reason: `${filter.field}: "${actualValue}" ${actualValue === expectedValue ? '=' : '≠'} "${expectedValue}"`
+      return {
+        passed: normalizedActual === normalizedExpected,
+        reason: `${filter.field} ${normalizedActual === normalizedExpected ? 'equals' : 'does not equal'} ${filter.value}`
       };
+
     case 'not equals':
-      return { 
-        passed: actualValue !== expectedValue,
-        reason: `${filter.field}: "${actualValue}" ${actualValue !== expectedValue ? '≠' : '='} "${expectedValue}"`
+      return {
+        passed: normalizedActual !== normalizedExpected,
+        reason: `${filter.field} ${normalizedActual !== normalizedExpected ? 'does not equal' : 'equals'} ${filter.value}`
       };
+
+    case 'contains':
+      return {
+        passed: normalizedActual.includes(normalizedExpected),
+        reason: `${filter.field} ${normalizedActual.includes(normalizedExpected) ? 'contains' : 'does not contain'} ${filter.value}`
+      };
+
+    case 'not contains':
+      return {
+        passed: !normalizedActual.includes(normalizedExpected),
+        reason: `${filter.field} ${!normalizedActual.includes(normalizedExpected) ? 'does not contain' : 'contains'} ${filter.value}`
+      };
+
     default:
-      return { passed: false, reason: `Unknown operator: ${filter.operator}` };
+      log('warn', 'Unknown operator', { operator: filter.operator });
+      return {
+        passed: false,
+        reason: `Unknown operator: ${filter.operator}`
+      };
   }
 }
 
@@ -246,29 +280,63 @@ export async function evaluateFilters(
   filterGroups: Array<{ logic: string; filters: Filter[] }>,
   data: Record<string, any>
 ): Promise<{ passed: boolean; reason: string }> {
-  if (!filterGroups?.length) {
+  // Log the incoming filter groups for debugging
+  log('info', 'Evaluating filter groups', { 
+    filterGroups,
+    hasGroups: !!filterGroups?.length,
+    groupCount: filterGroups?.length || 0
+  });
+
+  // Validate filter groups
+  if (!Array.isArray(filterGroups)) {
+    log('warn', 'Filter groups is not an array', { filterGroups });
+    return { passed: true, reason: 'No valid filters configured' };
+  }
+
+  // Remove any empty or invalid groups
+  const validGroups = filterGroups.filter(group => 
+    group && Array.isArray(group.filters) && group.filters.length > 0
+  );
+
+  if (validGroups.length === 0) {
+    log('info', 'No valid filter groups found after validation');
     return { passed: true, reason: 'No filters configured' };
   }
 
-  const groupResults = filterGroups.map(group => {
-    const filterResults = group.filters.map(filter => 
-      evaluateFilter(filter, data)
+  // Evaluate each group
+  const groupResults = await Promise.all(validGroups.map(async group => {
+    // Log group evaluation
+    log('info', 'Evaluating filter group', {
+      logic: group.logic,
+      filterCount: group.filters.length
+    });
+
+    // Evaluate each filter in the group
+    const filterResults = await Promise.all(
+      group.filters.map(filter => evaluateFilter(filter, data))
     );
-    
+
+    // Group passes if all filters pass (AND logic)
     const groupPassed = filterResults.every(r => r.passed);
     const groupReason = filterResults
       .map(r => r.reason)
       .join(' AND ');
-      
-    return { passed: groupPassed, reason: groupReason };
-  });
 
+    log('info', 'Group evaluation result', {
+      passed: groupPassed,
+      reason: groupReason
+    });
+
+    return { passed: groupPassed, reason: groupReason };
+  }));
+
+  // Overall result passes if any group passes (OR logic between groups)
   const passed = groupResults.some(r => r.passed);
   const reason = groupResults
     .map(r => `(${r.reason})`)
     .join(' OR ');
 
-  log('info', 'Filter evaluation complete', {
+  log('info', 'Final evaluation result', {
     passed,
     reason,
     groupResults
