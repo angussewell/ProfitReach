@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { headers } from 'next/headers';
 
 // Production-ready logging
 function log(level: 'error' | 'info', message: string, data?: any) {
@@ -11,6 +12,8 @@ function log(level: 'error' | 'info', message: string, data?: any) {
     ...data
   }));
 }
+
+export const dynamic = 'force-dynamic'; // Disable static optimization
 
 export async function GET() {
   try {
@@ -47,8 +50,13 @@ export async function GET() {
       ...commonFields
     ])].sort();
 
-    log('info', 'Webhook fields fetched', { count: allFields.length });
-    return NextResponse.json(allFields);
+    log('info', 'Webhook fields fetched', { count: allFields.length, fields: allFields });
+
+    // Set cache control headers
+    const response = NextResponse.json(allFields);
+    response.headers.set('Cache-Control', 'no-store, must-revalidate');
+    response.headers.set('Pragma', 'no-cache');
+    return response;
   } catch (error) {
     log('error', 'Failed to fetch webhook fields', { error: String(error) });
     return NextResponse.json(

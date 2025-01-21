@@ -41,12 +41,22 @@ export default function SettingsPage() {
 
   const fetchWebhookFields = async () => {
     try {
+      console.log('Fetching webhook fields...');
       const response = await fetch('/api/webhook-fields', {
-        cache: 'no-store' // Disable caching
+        cache: 'no-store',
+        headers: {
+          'Pragma': 'no-cache',
+          'Cache-Control': 'no-cache'
+        }
       });
       if (!response.ok) throw new Error('Failed to fetch webhook fields');
       const fields = await response.json();
-      setWebhookFields(fields);
+      console.log('Received webhook fields:', fields);
+      setWebhookFields(prev => {
+        console.log('Updating webhook fields state:', { prev, new: fields });
+        return fields;
+      });
+      toast.success(`Loaded ${fields.length} webhook fields`);
     } catch (error) {
       toast.error('Failed to load webhook fields');
       console.error('Error fetching webhook fields:', error);
@@ -74,9 +84,10 @@ export default function SettingsPage() {
     fetchMappings();
   }, []); // Initial load
 
-  const handleRefresh = () => {
-    fetchWebhookFields();
-    toast.success('Webhook fields refreshed');
+  const handleRefresh = async () => {
+    console.log('Refreshing webhook fields...');
+    await fetchWebhookFields();
+    console.log('Webhook fields refresh complete');
   };
 
   // Update local state
