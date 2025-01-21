@@ -126,11 +126,10 @@ function evaluateFilter(filter: Filter, data: Record<string, any>): { passed: bo
   const { exists, value } = findFieldValue(data, filter.field);
   
   log('info', 'Evaluating filter', {
-    field: filter.field,
-    operator: filter.operator,
-    expectedValue: filter.value,
-    actualValue: value,
-    exists
+    filter,
+    exists,
+    value,
+    data: JSON.stringify(data)
   });
 
   switch (filter.operator) {
@@ -157,7 +156,48 @@ function evaluateFilter(filter: Filter, data: Record<string, any>): { passed: bo
           reason: `Field ${filter.field} does not exist`
         };
       }
-      return compareValues(value, filter.value, filter.operator);
+      
+      // For string comparisons, normalize both values
+      const actualValue = String(value).toLowerCase().trim();
+      const expectedValue = String(filter.value).toLowerCase().trim();
+      
+      log('info', 'Comparing values', {
+        actual: actualValue,
+        expected: expectedValue,
+        operator: filter.operator
+      });
+
+      switch (filter.operator) {
+        case 'equals':
+          return {
+            passed: actualValue === expectedValue,
+            reason: `${filter.field} ${actualValue === expectedValue ? 'matches' : 'does not match'} ${expectedValue}`
+          };
+          
+        case 'not equals':
+          return {
+            passed: actualValue !== expectedValue,
+            reason: `${filter.field} ${actualValue !== expectedValue ? 'does not match' : 'matches'} ${expectedValue}`
+          };
+          
+        case 'contains':
+          return {
+            passed: actualValue.includes(expectedValue),
+            reason: `${filter.field} ${actualValue.includes(expectedValue) ? 'contains' : 'does not contain'} ${expectedValue}`
+          };
+          
+        case 'not contains':
+          return {
+            passed: !actualValue.includes(expectedValue),
+            reason: `${filter.field} ${!actualValue.includes(expectedValue) ? 'does not contain' : 'contains'} ${expectedValue}`
+          };
+          
+        default:
+          return {
+            passed: false,
+            reason: `Unknown operator: ${filter.operator}`
+          };
+      }
   }
 }
 

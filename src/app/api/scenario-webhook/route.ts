@@ -217,7 +217,16 @@ export async function POST(request: Request) {
     // Parse filters with error handling
     let filterGroups = [];
     try {
-      filterGroups = scenario.filters ? JSON.parse(String(scenario.filters)) : [];
+      const filtersJson = scenario.filters;
+      const parsedFilters = filtersJson ? JSON.parse(String(filtersJson)) : [];
+      log('info', 'Parsed filters', { parsedFilters });
+      
+      // Ensure filters is an array
+      if (!Array.isArray(parsedFilters)) {
+        throw new Error('Filters must be an array');
+      }
+      
+      filterGroups = parsedFilters;
     } catch (error) {
       log('error', 'Failed to parse filters', { 
         error: String(error),
@@ -234,7 +243,8 @@ export async function POST(request: Request) {
       passed,
       reason,
       scenario: scenario.name,
-      filterGroups
+      filterGroups,
+      normalizedData
     });
 
     // Create webhook log
