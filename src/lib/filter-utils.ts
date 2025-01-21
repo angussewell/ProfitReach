@@ -144,20 +144,25 @@ async function evaluateFilter(
   // Log filter evaluation start
   log('info', 'Evaluating filter', { filter });
 
-  // Get the actual value from data
-  const actualValue = data[filter.field];
+  // Get the actual value, checking contactData first
+  const actualValue = data.contactData?.[filter.field] ?? data[filter.field];
   
-  // Log the value comparison
-  log('info', 'Comparing values', {
+  // Special handling for PMS field
+  const fieldValue = filter.field === 'PMS' 
+    ? (data.contactData?.PMS || data.contactData?.propertyManagementSoftware || data.propertyManagementSoftware)
+    : actualValue;
+
+  // Log the value lookup
+  log('info', 'Field value lookup', {
     field: filter.field,
-    actual: actualValue,
-    expected: filter.value,
-    operator: filter.operator
+    contactDataValue: data.contactData?.[filter.field],
+    rootValue: data[filter.field],
+    resolvedValue: fieldValue
   });
 
   // Special handling for exists/not exists
   if (filter.operator === 'exists') {
-    const passed = actualValue !== undefined && actualValue !== null;
+    const passed = fieldValue !== undefined && fieldValue !== null;
     return {
       passed,
       reason: `${filter.field} ${passed ? 'exists' : 'does not exist'}`
@@ -165,7 +170,7 @@ async function evaluateFilter(
   }
 
   if (filter.operator === 'not exists') {
-    const passed = actualValue === undefined || actualValue === null;
+    const passed = fieldValue === undefined || fieldValue === null;
     return {
       passed,
       reason: `${filter.field} ${passed ? 'does not exist' : 'exists'}`
@@ -173,7 +178,7 @@ async function evaluateFilter(
   }
 
   // For other operators, if value doesn't exist, fail
-  if (actualValue === undefined || actualValue === null) {
+  if (fieldValue === undefined || fieldValue === null) {
     return {
       passed: false,
       reason: `${filter.field} is undefined or null`
@@ -181,8 +186,18 @@ async function evaluateFilter(
   }
 
   // Normalize values for comparison
-  const normalizedActual = String(actualValue).toLowerCase().trim();
+  const normalizedActual = String(fieldValue).toLowerCase().trim();
   const normalizedExpected = String(filter.value).toLowerCase().trim();
+
+  // Log normalized values
+  log('info', 'Normalized values for comparison', {
+    original: fieldValue,
+    normalized: normalizedActual,
+    expected: {
+      original: filter.value,
+      normalized: normalizedExpected
+    }
+  });
 
   // Evaluate based on operator
   switch (filter.operator) {
