@@ -220,17 +220,37 @@ export async function POST(request: Request) {
     // Parse filters with error handling
     let filterGroups: Array<{ logic: string; filters: Filter[] }> = [];
     try {
+      // Parse filters from scenario
       const rawFilters = scenario.filters ? JSON.parse(String(scenario.filters)) : [];
       
-      // Create filter group if we have filters
+      log('info', 'Raw filters from scenario', { 
+        filters: rawFilters,
+        type: typeof rawFilters,
+        isArray: Array.isArray(rawFilters)
+      });
+
+      // Ensure we have valid filters
       if (Array.isArray(rawFilters) && rawFilters.length > 0) {
+        // Create a single AND group with all filters
         filterGroups = [{
           logic: 'AND',
-          filters: rawFilters
+          filters: rawFilters.map(f => ({
+            id: f.id,
+            field: f.field,
+            operator: f.operator as FilterOperator,
+            value: f.value
+          }))
         }];
+
+        log('info', 'Created filter groups', { filterGroups });
+      } else {
+        log('warn', 'No valid filters found', { rawFilters });
       }
     } catch (error) {
-      log('error', 'Failed to parse filters', { error: String(error) });
+      log('error', 'Failed to parse filters', { 
+        error: String(error),
+        filters: scenario.filters 
+      });
     }
 
     // Evaluate filters using normalized data

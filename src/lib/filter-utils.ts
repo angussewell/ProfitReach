@@ -138,21 +138,25 @@ function compareValues(actual: any, expected: any, operator: FilterOperator): { 
 
 // Evaluate a single filter
 function evaluateFilter(filter: Filter, data: Record<string, any>): { passed: boolean, reason: string } {
-  const actualValue = normalizeForComparison(
-    data.contactData?.[filter.field] || 
-    data[filter.field] || 
-    ''
-  );
+  // Special handling for PMS field
+  const actualValue = filter.field === 'PMS' 
+    ? normalizeForComparison(data.contactData?.PMS)
+    : normalizeForComparison(
+        data.contactData?.[filter.field] || 
+        data[filter.field] || 
+        ''
+      );
   
   const expectedValue = normalizeForComparison(filter.value);
   
-  log('info', 'String comparison', {
+  log('info', 'Filter evaluation', {
     field: filter.field,
-    rawActual: data.contactData?.[filter.field] || data[filter.field],
+    operator: filter.operator,
+    rawActual: filter.field === 'PMS' ? data.contactData?.PMS : data.contactData?.[filter.field],
     rawExpected: filter.value,
     normalizedActual: actualValue,
     normalizedExpected: expectedValue,
-    operator: filter.operator
+    passed: actualValue === expectedValue
   });
 
   switch (filter.operator) {
