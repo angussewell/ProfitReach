@@ -139,6 +139,28 @@ export async function POST(req: NextRequest) {
       normalizedData
     });
 
+    // Create webhook log
+    try {
+      await prisma.webhookLog.create({
+        data: {
+          status: result.passed ? 'success' : 'blocked',
+          scenarioName: scenario.name,
+          contactEmail: contactData.email || 'Unknown',
+          contactName: [contactData.first_name, contactData.last_name].filter(Boolean).join(' ') || 'Unknown',
+          company: contactData.company || 'Unknown',
+          requestBody: body,
+          responseBody: JSON.parse(JSON.stringify({
+            passed: result.passed,
+            reason: result.reason,
+            filters: parsedFilters
+          }))
+        }
+      });
+    } catch (e) {
+      log('error', 'Failed to create webhook log', { error: String(e) });
+      // Don't return error - continue with response
+    }
+
     return Response.json({
       data: normalizedData,
       passed: result.passed,
@@ -158,6 +180,24 @@ export async function POST(req: NextRequest) {
       stack: error instanceof Error ? error.stack : undefined,
       timestamp: new Date().toISOString()
     });
+
+    // Try to create error log
+    try {
+      await prisma.webhookLog.create({
+        data: {
+          status: 'error',
+          scenarioName: 'Unknown',
+          contactEmail: 'Unknown',
+          contactName: 'Unknown',
+          company: 'Unknown',
+          requestBody: {},
+          responseBody: { error: String(error) }
+        }
+      });
+    } catch (e) {
+      log('error', 'Failed to create error log', { error: String(e) });
+    }
+
     return Response.json({ 
       error: "Internal server error",
       details: error instanceof Error ? error.message : String(error),

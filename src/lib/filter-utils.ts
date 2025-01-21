@@ -23,22 +23,26 @@ function normalizeForComparison(value: any): string {
  * Normalizes webhook data into a flat structure with standardized field access
  */
 export function normalizeWebhookData(data: Record<string, any>): Record<string, any> {
+  // Log incoming data
+  log('info', 'Normalizing webhook data', { 
+    input: data,
+    hasContactData: !!data
+  });
+
   // Create a clean copy of the data
   const normalized = {
-    contactData: { ...data.contactData } || {}
+    contactData: {
+      ...data,  // Copy all fields directly
+      PMS: data.PMS || data.propertyManagementSoftware  // Special handling for PMS
+    }
   };
 
-  // Handle PMS field variations
-  normalized.contactData.PMS = 
-    data.contactData?.PMS || 
-    data.contactData?.propertyManagementSoftware || 
-    data.propertyManagementSoftware ||
-    normalized.contactData.PMS;
-
-  log('info', 'Normalized webhook data', { 
+  // Log normalized result
+  log('info', 'Data normalized', { 
     original: data,
     normalized,
-    pmsValue: normalized.contactData.PMS
+    pmsValue: normalized.contactData.PMS,
+    fields: Object.keys(normalized.contactData)
   });
 
   return normalized;
