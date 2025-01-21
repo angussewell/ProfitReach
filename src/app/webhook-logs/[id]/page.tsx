@@ -89,7 +89,7 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
               <div className="space-y-1">
                 <Label className="text-sm text-muted-foreground">Property Management Software</Label>
                 <div className="text-sm font-medium">
-                  {mappedFields.propertyManagementSoftware || requestBody?.contactData?.PMS || 'N/A'}
+                  {mappedFields.propertyManagementSoftware || requestBody?.contactData?.pms || 'N/A'}
                 </div>
               </div>
 
