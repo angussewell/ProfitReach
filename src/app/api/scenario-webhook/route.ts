@@ -186,20 +186,29 @@ export async function POST(req: NextRequest) {
     // If filters passed, send outbound webhook
     if (result.passed && userWebhookUrl) {
       try {
+        // Fetch all prompts
+        const allPrompts = await prisma.prompt.findMany();
+        
         // Process variables in all text fields
         const processedScenario = {
           ...scenario,
           subjectLine: processWebhookVariables(scenario.subjectLine, contactData),
           customizationPrompt: scenario.customizationPrompt ? processWebhookVariables(scenario.customizationPrompt, contactData) : null,
           emailExamplesPrompt: scenario.emailExamplesPrompt ? processWebhookVariables(scenario.emailExamplesPrompt, contactData) : null,
-        signature: scenario.signature ? {
+          signature: scenario.signature ? {
             signatureContent: processWebhookVariables(scenario.signature.signatureContent, contactData)
-        } : null,
+          } : null,
           prompts: scenario.prompts.map(prompt => ({
             ...prompt,
             content: processWebhookVariables(prompt.content, contactData)
-      }))
-    };
+          }))
+        };
+
+        // Process variables in standalone prompts
+        const processedPrompts = allPrompts.map(prompt => ({
+          ...prompt,
+          content: processWebhookVariables(prompt.content, contactData)
+        }));
 
         // Send outbound webhook
         const webhookResponse = await fetch(userWebhookUrl, {
@@ -209,11 +218,8 @@ export async function POST(req: NextRequest) {
           },
           body: JSON.stringify({
             contactData,
-            scenario: {
-              ...processedScenario,
-              prompts: undefined // Remove prompts from scenario
-            },
-            prompts: processedScenario.prompts // Add prompts at root level
+            scenario: processedScenario,
+            prompts: processedPrompts // Include all processed prompts
           })
         });
 
@@ -223,7 +229,8 @@ export async function POST(req: NextRequest) {
 
         log('info', 'Outbound webhook sent successfully', {
           url: userWebhookUrl,
-          scenario: processedScenario
+          scenario: processedScenario,
+          prompts: processedPrompts
         });
       } catch (e) {
         log('error', 'Failed to send outbound webhook', { error: String(e) });

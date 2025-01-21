@@ -35,54 +35,49 @@ const SYSTEM_FIELDS = [
 ];
 
 export default function SettingsPage() {
-  const [mappings, setMappings] = useState<Record<string, string>>({});
   const [webhookFields, setWebhookFields] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [mappings, setMappings] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
-  // Load existing mappings and webhook fields
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        console.log('Fetching field mappings and webhook fields...');
-        
-        // Fetch mappings first
-        const mappingsRes = await fetch('/api/field-mappings');
-        if (!mappingsRes.ok) {
-          throw new Error(`Failed to fetch mappings: ${mappingsRes.status}`);
-        }
-        const mappingsData = await mappingsRes.json();
-        console.log('Received mappings:', mappingsData);
-        
-        // Convert array of mappings to object
-        const mappingsObj = mappingsData.reduce((acc: Record<string, string>, m: any) => {
-          acc[m.systemField] = m.webhookField;
-          return acc;
-        }, {});
-        setMappings(mappingsObj);
-        
-        // Then fetch webhook fields
-        const fieldsRes = await fetch('/api/webhook-fields');
-        if (!fieldsRes.ok) {
-          throw new Error(`Failed to fetch webhook fields: ${fieldsRes.status}`);
-        }
-        
-        const fieldsData = await fieldsRes.json();
-        console.log('Received webhook fields:', fieldsData);
-        
-        // Ensure we have an array of fields
-        const fields = Array.isArray(fieldsData) ? fieldsData : [];
-        setWebhookFields(fields);
-      } catch (error) {
-        console.error('Failed to load settings:', error);
-        toast.error('Failed to load settings. Please try refreshing the page.');
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchWebhookFields = async () => {
+    try {
+      const response = await fetch('/api/webhook-fields', {
+        cache: 'no-store' // Disable caching
+      });
+      if (!response.ok) throw new Error('Failed to fetch webhook fields');
+      const fields = await response.json();
+      setWebhookFields(fields);
+    } catch (error) {
+      toast.error('Failed to load webhook fields');
+      console.error('Error fetching webhook fields:', error);
+    }
+  };
 
-    loadData();
-  }, []);
+  const fetchMappings = async () => {
+    try {
+      const response = await fetch('/api/field-mappings');
+      if (!response.ok) throw new Error('Failed to fetch field mappings');
+      const data = await response.json();
+      const newMappings: Record<string, string> = {};
+      data.forEach((mapping: any) => {
+        newMappings[mapping.systemField] = mapping.webhookField;
+      });
+      setMappings(newMappings);
+    } catch (error) {
+      toast.error('Failed to load field mappings');
+      console.error('Error fetching field mappings:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchWebhookFields();
+    fetchMappings();
+  }, []); // Initial load
+
+  const handleRefresh = () => {
+    fetchWebhookFields();
+    toast.success('Webhook fields refreshed');
+  };
 
   // Update local state
   const handleFieldChange = (systemField: string, webhookField: string) => {
@@ -134,15 +129,17 @@ export default function SettingsPage() {
     toast.success('Template applied - click Save to apply changes');
   };
 
-  if (loading) {
-    return <div className="p-8">Loading settings...</div>;
-  }
-
   return (
     <div className="p-8 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Webhook Field Mappings</h1>
         <div className="space-x-4">
+          <Button 
+            onClick={handleRefresh}
+            variant="outline"
+          >
+            Refresh Fields
+          </Button>
           <Button 
             onClick={() => applyTemplate('make')}
             variant="outline"
