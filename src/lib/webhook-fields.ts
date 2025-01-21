@@ -1,5 +1,10 @@
 import { prisma } from './db';
 
+// Helper to normalize field names
+function normalizeFieldName(field: string): string {
+  return field.toLowerCase().trim();
+}
+
 // Helper to extract all possible fields from a data structure
 export function extractFields(data: any, prefix = ''): string[] {
   if (!data || typeof data !== 'object') return [];
@@ -9,22 +14,13 @@ export function extractFields(data: any, prefix = ''): string[] {
   Object.entries(data).forEach(([key, value]) => {
     const fullKey = prefix ? `${prefix}.${key}` : key;
     
-    // Add the field with and without template syntax
-    fields.push(fullKey);
-    if (key.startsWith('{') && key.endsWith('}')) {
-      fields.push(key.slice(1, -1)); // Add without braces
-      fields.push(`${prefix}.${key.slice(1, -1)}`); // Add with prefix without braces
-    } else {
-      fields.push(`{${key}}`); // Add with braces
-      if (prefix) {
-        fields.push(`${prefix}.{${key}}`); // Add with prefix and braces
-      }
-    }
+    // Add the field with normalized name
+    fields.push(normalizeFieldName(fullKey));
     
     // Handle nested objects
     if (value && typeof value === 'object') {
       if (Array.isArray(value)) {
-        fields.push(fullKey);
+        fields.push(normalizeFieldName(fullKey));
       } else {
         fields.push(...extractFields(value, fullKey));
       }
@@ -47,10 +43,11 @@ function log(level: 'error' | 'info', message: string, data?: any) {
 
 async function registerField(field: string, retryCount = 0): Promise<any> {
   try {
+    const normalizedField = normalizeFieldName(field);
     return await prisma.webhookField.upsert({
-      where: { field },
+      where: { field: normalizedField },
       create: { 
-        field,
+        field: normalizedField,
         lastSeen: new Date(),
         occurrences: 1
       },
@@ -99,7 +96,6 @@ export async function registerWebhookFields(data: any) {
     };
   } catch (error) {
     log('error', 'Failed to register webhook fields', { error: String(error) });
-    // Don't throw, just return error status
     return {
       success: false,
       error: String(error),

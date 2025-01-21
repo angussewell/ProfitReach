@@ -12,6 +12,11 @@ function log(level: 'error' | 'info', message: string, data?: any) {
   }));
 }
 
+// Helper to normalize field names
+function normalizeFieldName(field: string): string {
+  return field.toLowerCase().trim();
+}
+
 // Get all field mappings
 export async function GET() {
   try {
@@ -37,14 +42,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid fields' }, { status: 400 });
     }
 
+    // Normalize both fields
+    const normalizedSystemField = normalizeFieldName(systemField);
+    const normalizedWebhookField = normalizeFieldName(webhookField);
+
     const mapping = await prisma.fieldMapping.upsert({
-      where: { systemField },
+      where: { systemField: normalizedSystemField },
       create: { 
-        systemField,
-        webhookField,
-        isRequired: ['contactEmail', 'scenarioName'].includes(systemField)
+        systemField: normalizedSystemField,
+        webhookField: normalizedWebhookField,
+        isRequired: ['contactemail', 'scenarioname'].includes(normalizedSystemField)
       },
-      update: { webhookField }
+      update: { webhookField: normalizedWebhookField }
     });
 
     return NextResponse.json(mapping);
