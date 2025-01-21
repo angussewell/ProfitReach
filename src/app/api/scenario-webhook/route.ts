@@ -253,13 +253,43 @@ export async function POST(request: Request) {
     // Evaluate filters using normalized data
     const { passed, reason } = await evaluateFilters(filterGroups, normalizedData);
 
+    // Forward webhook if filters pass
+    let forwardResult = null;
+    if (passed && requestBody.userWebhookUrl) {
+      log('info', 'Forwarding webhook', { 
+        url: requestBody.userWebhookUrl,
+        scenario: scenario.name
+      });
+      
+      // Prepare enriched data
+      const enrichedData = {
+        ...normalizedData,
+        scenario: {
+          name: scenario.name,
+          prompts: scenario.prompts
+        }
+      };
+      
+      forwardResult = await forwardWebhook(
+        requestBody.userWebhookUrl,
+        requestBody,
+        enrichedData
+      );
+      
+      log('info', 'Webhook forwarded', { 
+        result: forwardResult,
+        scenario: scenario.name
+      });
+    }
+
     // Log result
     log('info', 'Filter evaluation complete', {
       passed,
       reason,
       scenario: scenario.name,
       filterGroups,
-      normalizedData
+      normalizedData,
+      forwardResult
     });
 
     // Create webhook log
@@ -275,7 +305,8 @@ export async function POST(request: Request) {
           passed,
           reason,
           data: normalizedData,
-          filters: scenario.filters
+          filters: scenario.filters,
+          forwardResult
         }
       }
     });
