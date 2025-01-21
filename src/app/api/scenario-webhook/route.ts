@@ -151,11 +151,20 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
+    // Extract contact info
+    const contactInfo = {
+      email: requestBody.contactData.email || 'Unknown',
+      name: [
+        requestBody.contactData.first_name,
+        requestBody.contactData.last_name
+      ].filter(Boolean).join(' ') || 'Unknown',
+      company: requestBody.contactData.company || 'Unknown'
+    };
+
     // Log incoming request
     log('info', 'Received webhook request', {
       make_sequence: requestBody.contactData.make_sequence,
-      email: requestBody.contactData.email,
-      pms: requestBody.contactData.PMS
+      ...contactInfo
     });
 
     // Normalize data structure
@@ -184,6 +193,20 @@ export async function POST(request: Request) {
     if (!scenario) {
       const error = `No scenario found for ${requestBody.contactData?.make_sequence}`;
       log('error', error, { make_sequence: requestBody.contactData?.make_sequence });
+      
+      // Create error log
+      await prisma.webhookLog.create({
+        data: {
+          status: 'error',
+          scenarioName: requestBody.contactData?.make_sequence || 'Unknown',
+          contactEmail: contactInfo.email,
+          contactName: contactInfo.name,
+          company: contactInfo.company,
+          requestBody: requestBody,
+          responseBody: { error }
+        }
+      });
+
       return NextResponse.json({
         passed: false,
         reason: error,
@@ -214,6 +237,24 @@ export async function POST(request: Request) {
       filterGroups
     });
 
+    // Create webhook log
+    await prisma.webhookLog.create({
+      data: {
+        status: passed ? 'success' : 'blocked',
+        scenarioName: scenario.name,
+        contactEmail: contactInfo.email,
+        contactName: contactInfo.name,
+        company: contactInfo.company,
+        requestBody: requestBody,
+        responseBody: {
+          passed,
+          reason,
+          data: normalizedData,
+          filters: scenario.filters
+        }
+      }
+    });
+
     // Return consistent data structure
     return NextResponse.json({
       passed,
@@ -229,6 +270,23 @@ export async function POST(request: Request) {
       error: String(error),
       stack: error instanceof Error ? error.stack : undefined
     });
+
+    // Create error log
+    try {
+      await prisma.webhookLog.create({
+        data: {
+          status: 'error',
+          scenarioName: 'Unknown',
+          contactEmail: 'Unknown',
+          contactName: 'Unknown',
+          company: 'Unknown',
+          requestBody: {},
+          responseBody: { error: String(error) }
+        }
+      });
+    } catch (logError) {
+      log('error', 'Failed to create error log', { error: String(logError) });
+    }
 
     return NextResponse.json({ 
       passed: false,
