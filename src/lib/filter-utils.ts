@@ -1,6 +1,7 @@
 import { Filter, FilterOperator } from '@/types/filters';
 import prisma from '@/lib/prisma';
 import get from 'lodash/get';
+import { log } from '@/lib/utils';
 
 interface WebhookData {
   [key: string]: any;
@@ -50,6 +51,14 @@ function normalizeWebhookData(data: Record<string, any>): Record<string, any> {
  * Finds a field value in the data object, trying multiple formats
  */
 function findFieldValue(data: Record<string, any>, field: string): { exists: boolean; value: any } {
+  // For PMS field, always look in contactData
+  if (field === 'PMS') {
+    const value = data.contactData?.PMS;
+    const exists = value !== undefined && value !== null;
+    return { exists, value };
+  }
+
+  // For other fields, use lodash get
   const value = get(data, field);
   const exists = value !== undefined && value !== null;
   
@@ -60,64 +69,60 @@ function findFieldValue(data: Record<string, any>, field: string): { exists: boo
     data: JSON.stringify(data)
   });
 
-  return { exists, value: exists ? value : 'Unknown' };
+  return { exists, value };
 }
 
 function normalizeValue(value: any): string {
   if (value === null || value === undefined) return '';
-  return String(value).toLowerCase().trim().replace(/\s+/g, ' ');
+  return String(value).toLowerCase().trim();
 }
 
-function compareValues(actual: string | null | undefined, expected: string | null | undefined, operator: FilterOperator): { passed: boolean; reason: string } {
+function compareValues(actual: any, expected: any, operator: FilterOperator): { passed: boolean; reason: string } {
   // Handle null/undefined cases
   if (actual === null || actual === undefined) actual = '';
   if (expected === null || expected === undefined) expected = '';
   
-  // Convert to strings for comparison
-  const actualStr = String(actual);
-  const expectedStr = String(expected);
-  
-  // Normalize for case-insensitive comparison
-  const normalizedActual = normalizeValue(actualStr);
-  const normalizedExpected = normalizeValue(expectedStr);
+  // Convert to strings and normalize
+  const actualStr = normalizeValue(actual);
+  const expectedStr = normalizeValue(expected);
   
   log('info', 'Comparing values', {
-    original: { actual: actualStr, expected: expectedStr },
-    normalized: { actual: normalizedActual, expected: normalizedExpected },
+    original: { actual, expected },
+    normalized: { actualStr, expectedStr },
     operator
   });
 
   switch (operator) {
     case 'equals':
       return {
-        passed: normalizedActual === normalizedExpected,
-        reason: normalizedActual === normalizedExpected ? 
-          `Value "${actualStr}" equals "${expectedStr}"` : 
-          `Value "${actualStr}" does not equal "${expectedStr}"`
+        passed: actualStr === expectedStr,
+        reason: actualStr === expectedStr ? 
+          `Value "${actual}" equals "${expected}"` : 
+          `Value "${actual}" does not equal "${expected}"`
       };
 
     case 'not equals':
       return {
-        passed: normalizedActual !== normalizedExpected,
-        reason: normalizedActual !== normalizedExpected ? 
-          `Value "${actualStr}" does not equal "${expectedStr}"` : 
-          `Value "${actualStr}" equals "${expectedStr}"`
+        passed: actualStr !== expectedStr,
+        reason: actualStr !== expectedStr ? 
+          `Value "${actual}" does not equal "${expected}"` : 
+          `Value "${actual}" equals "${expected}"`
       };
 
     case 'contains':
       return {
-        passed: normalizedActual.includes(normalizedExpected),
-        reason: normalizedActual.includes(normalizedExpected) ? 
-          `Value "${actualStr}" contains "${expectedStr}"` : 
-          `Value "${actualStr}" does not contain "${expectedStr}"`
+        passed: actualStr.includes(expectedStr),
+        reason: actualStr.includes(expectedStr) ? 
+          `Value "${actual}" contains "${expected}"` : 
+          `Value "${actual}" does not contain "${expected}"`
       };
 
     case 'not contains':
       return {
-        passed: !normalizedActual.includes(normalizedExpected),
-        reason: !normalizedActual.includes(normalizedExpected) ? 
-          `Value "${actualStr}" does not contain "${expectedStr}"` : 
-          `Value "${actualStr}" contains "${expectedStr}"`
+        passed: !actualStr.includes(expectedStr),
+        reason: !actualStr.includes(expectedStr) ? 
+          `Value "${actual}" does not contain "${expected}"` : 
+          `Value "${actual}" contains "${expected}"`
       };
 
     default:
@@ -242,17 +247,17 @@ export async function evaluateFilters(
     return { passed: true, reason: 'No filters configured' };
   }
 
-  const results = await Promise.all(filterGroups.map(async group => {
-    const filterResults = await Promise.all(group.filters.map(filter => 
-      FilterPipeline.process(filter, data)
-    ));
+  const results = filterGroups.map(group => {
+    const filterResults = group.filters.map(filter => 
+      evaluateFilter(filter, data)
+    );
 
     const passed = filterResults.every(r => r.passed);
     return {
       passed,
       reason: filterResults.map(r => r.reason).join(' AND ')
     };
-  }));
+  });
 
   const passed = results.some(r => r.passed);
   const reason = passed
