@@ -142,8 +142,14 @@ export default function ManageScenariosPage() {
       if (!response.ok) throw new Error('Failed to fetch scenario details');
       const scenarioDetails = await response.json();
       
+      // Ensure filters is an array
+      const filters = Array.isArray(scenarioDetails.filters) ? scenarioDetails.filters : [];
+      
       setSelectedScenario(scenario.name);
-      setEditingScenario(scenarioDetails);
+      setEditingScenario({
+        ...scenarioDetails,
+        filters
+      });
     } catch (error) {
       console.error('Error fetching scenario details:', error);
       toast({
@@ -232,7 +238,7 @@ export default function ManageScenariosPage() {
                   signatureId: '',
                   customizationPrompt: '',
                   emailExamplesPrompt: '',
-                  filters: [],
+                  filters: [] as Filter[],
                 });
               }}
               className="bg-[#ff7a59] hover:bg-[#ff8f73] transition-all duration-200 shadow-sm hover:shadow-md text-white border-0 rounded-lg px-6"
