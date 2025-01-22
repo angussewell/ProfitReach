@@ -155,7 +155,7 @@ export async function POST(request: Request) {
         // Create new option with next display order
         const newOption: HubSpotPropertyOption = {
           label: name,
-          value: name.toLowerCase().replace(/\s+/g, '_'),
+          value: name,
           displayOrder: maxDisplayOrder + 1,
           hidden: false
         };
