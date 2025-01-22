@@ -16,8 +16,7 @@ const WEBHOOK_TEMPLATES = {
     leadStatus: 'lead_status',
     lifecycleStage: 'lifecycle_stage',
     userWebsite: 'website',
-    company: '{company}',
-    propertyManagementSoftware: '{pms}'
+    company: '{company}'
   }
 };
 
@@ -30,8 +29,7 @@ const SYSTEM_FIELDS = [
   { id: 'leadStatus', label: 'Lead Status', required: false },
   { id: 'lifecycleStage', label: 'Lifecycle Stage', required: false },
   { id: 'userWebsite', label: 'User Website', required: false },
-  { id: 'company', label: 'Company Name', required: false },
-  { id: 'propertyManagementSoftware', label: 'Property Management Software', required: false }
+  { id: 'company', label: 'Company Name', required: false }
 ];
 
 const normalizeFieldName = (field: string) => field.toLowerCase().replace(/[^a-z0-9]/g, '');

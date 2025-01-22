@@ -153,6 +153,7 @@ export default function LogsPage() {
             <SelectItem value="all">All statuses</SelectItem>
             <SelectItem value="success">Success</SelectItem>
             <SelectItem value="error">Error</SelectItem>
+            <SelectItem value="blocked">Blocked</SelectItem>
           </SelectContent>
         </Select>
         {data?.scenarios && (
@@ -193,10 +194,16 @@ export default function LogsPage() {
                     <div className="flex items-center">
                       {log.status === 'success' ? (
                         <CheckCircle2 className="w-4 h-4 text-green-500 mr-2" />
+                      ) : log.status === 'blocked' ? (
+                        <AlertCircle className="w-4 h-4 text-yellow-500 mr-2" />
                       ) : (
                         <AlertCircle className="w-4 h-4 text-red-500 mr-2" />
                       )}
-                      <span className={log.status === 'success' ? 'text-green-600' : 'text-red-600'}>
+                      <span className={
+                        log.status === 'success' ? 'text-green-600' : 
+                        log.status === 'blocked' ? 'text-yellow-600' :
+                        'text-red-600'
+                      }>
                         {log.status.charAt(0).toUpperCase() + log.status.slice(1)}
                       </span>
                     </div>

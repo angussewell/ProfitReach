@@ -8,6 +8,8 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ScrollText } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 
 interface WebhookLog {
   id: string;
@@ -55,62 +57,73 @@ export function LogDetailsDialog({ log }: LogDetailsDialogProps) {
           <DialogTitle>Webhook Log Details</DialogTitle>
         </DialogHeader>
         <div className="space-y-6">
-          <div className="grid grid-cols-2 gap-4">
-            {/* Basic Info */}
-            <div>
-              <h4 className="text-sm font-medium text-gray-500 mb-1">Time</h4>
-              <p className="text-base">{formatDate(log.createdAt)}</p>
-            </div>
-            <div>
-              <h4 className="text-sm font-medium text-gray-500 mb-1">Status</h4>
-              <p className={`text-base ${log.status === 'success' ? 'text-green-600' : 'text-red-600'}`}>
-                {log.status.charAt(0).toUpperCase() + log.status.slice(1)}
-              </p>
-            </div>
-
-            {/* Scenario Info */}
-            <div>
-              <h4 className="text-sm font-medium text-gray-500 mb-1">Scenario</h4>
-              <p className="text-base">{mappedFields.scenarioName || log.scenarioName || 'N/A'}</p>
-            </div>
-
-            {/* Contact Info */}
-            <div>
-              <h4 className="text-sm font-medium text-gray-500 mb-1">Contact Email</h4>
-              <p className="text-base">{mappedFields.contactEmail || log.contactEmail || 'N/A'}</p>
-            </div>
-            <div>
-              <h4 className="text-sm font-medium text-gray-500 mb-1">Contact Name</h4>
-              <p className="text-base">{mappedFields.contactName || log.contactName || 'N/A'}</p>
-            </div>
-
-            {/* Company Info */}
-            <div>
-              <h4 className="text-sm font-medium text-gray-500 mb-1">Company</h4>
-              <p className="text-base">{mappedFields.company || contactData.company || 'N/A'}</p>
-            </div>
-            <div>
-              <h4 className="text-sm font-medium text-gray-500 mb-1">Property Management Software</h4>
-              <p className="text-base">{mappedFields.propertyManagementSoftware || contactData.PMS || 'N/A'}</p>
-            </div>
-
-            {/* Status Info */}
-            <div>
-              <h4 className="text-sm font-medium text-gray-500 mb-1">Lead Status</h4>
-              <p className="text-base">{mappedFields.leadStatus || contactData.lead_status || 'N/A'}</p>
-            </div>
-            <div>
-              <h4 className="text-sm font-medium text-gray-500 mb-1">Lifecycle Stage</h4>
-              <p className="text-base">{mappedFields.lifecycleStage || contactData.lifecycle_stage || 'N/A'}</p>
-            </div>
-
-            {/* Error Message (if any) */}
-            {log.errorMessage && (
-              <div className="col-span-2">
-                <h4 className="text-sm font-medium text-gray-500 mb-1">Error Message</h4>
-                <p className="text-base text-red-600">{log.errorMessage}</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Time */}
+            <div className="space-y-1">
+              <Label className="text-sm text-muted-foreground">Time</Label>
+              <div className="text-sm font-medium">
+                {new Date(log.createdAt).toLocaleString()}
               </div>
-            )}
+            </div>
+
+            {/* Status */}
+            <div className="space-y-1">
+              <Label className="text-sm text-muted-foreground">Status</Label>
+              <div className={cn(
+                "text-sm font-medium",
+                log.status === 'success' ? 'text-green-600' : 'text-red-600'
+              )}>
+                {log.status || 'Unknown'}
+              </div>
+            </div>
+
+            {/* Scenario */}
+            <div className="space-y-1">
+              <Label className="text-sm text-muted-foreground">Scenario</Label>
+              <div className="text-sm font-medium">
+                {log.scenarioName || 'N/A'}
+              </div>
+            </div>
+
+            {/* Contact Email */}
+            <div className="space-y-1">
+              <Label className="text-sm text-muted-foreground">Contact Email</Label>
+              <div className="text-sm font-medium">
+                {log.contactEmail || 'N/A'}
+              </div>
+            </div>
+
+            {/* Contact Name */}
+            <div className="space-y-1">
+              <Label className="text-sm text-muted-foreground">Contact Name</Label>
+              <div className="text-sm font-medium">
+                {log.contactName || 'N/A'}
+              </div>
+            </div>
+
+            {/* Company */}
+            <div className="space-y-1">
+              <Label className="text-sm text-muted-foreground">Company</Label>
+              <div className="text-sm font-medium">
+                {contactData.company || 'N/A'}
+              </div>
+            </div>
+
+            {/* Lead Status */}
+            <div className="space-y-1">
+              <Label className="text-sm text-muted-foreground">Lead Status</Label>
+              <div className="text-sm font-medium">
+                {contactData.lead_status || 'N/A'}
+              </div>
+            </div>
+
+            {/* Lifecycle Stage */}
+            <div className="space-y-1">
+              <Label className="text-sm text-muted-foreground">Lifecycle Stage</Label>
+              <div className="text-sm font-medium">
+                {contactData.lifecycle_stage || 'N/A'}
+              </div>
+            </div>
           </div>
 
           {/* Raw Data */}

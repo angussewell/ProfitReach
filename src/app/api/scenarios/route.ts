@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { Prisma, Scenario } from '@prisma/client';
-import { hubspotClient } from '@/utils/hubspotClient';
+import hubspotClient from '@/utils/hubspotClient';
 import { prisma } from '@/lib/db';
 import { Filter } from '@/types/filters';
 
@@ -99,41 +99,38 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const formData = await request.formData();
-    const id = formData.get('id') as string;
-    const name = formData.get('name') as string;
-    const type = formData.get('type') as string;
-    const subjectLine = formData.get('subjectLine') as string;
-    const customizationPrompt = formData.get('customizationPrompt') as string;
-    const emailExamplesPrompt = formData.get('emailExamplesPrompt') as string;
-    const filtersJson = formData.get('filters') as string;
+    const data = await request.json();
+    const { name, scenarioType, subjectLine, customizationPrompt, emailExamplesPrompt, filters } = data;
 
-    // Parse filters
-    let filters: Filter[] = [];
-    try {
-      filters = JSON.parse(filtersJson);
-    } catch (e) {
-      console.error('Failed to parse filters:', e);
-      // Continue with empty filters array
+    // Validate required fields
+    if (!name || !scenarioType) {
+      return NextResponse.json(
+        { error: 'Name and scenario type are required' },
+        { status: 400 }
+      );
     }
 
-    const scenario = await prisma.scenario.update({
-      where: { id },
+    // Create the scenario
+    const scenario = await prisma.scenario.create({
       data: {
         name,
-        scenarioType: type,
-        subjectLine,
-        customizationPrompt,
-        emailExamplesPrompt,
-        filters: JSON.stringify(filters)
+        scenarioType,
+        subjectLine: subjectLine || '',
+        customizationPrompt: customizationPrompt || '',
+        emailExamplesPrompt: emailExamplesPrompt || '',
+        filters: filters ? JSON.stringify(filters) : '[]'
       }
     });
 
+    // Update cache
+    scenariosCache = [];
+    lastSyncTime = 0;
+
     return NextResponse.json(scenario);
   } catch (error) {
-    console.error('Failed to update scenario:', error);
+    console.error('Failed to create scenario:', error);
     return NextResponse.json(
-      { error: 'Failed to update scenario' },
+      { error: 'Failed to create scenario' },
       { status: 500 }
     );
   }

@@ -101,10 +101,20 @@ export default function ManageScenariosPage() {
       const response = await fetch('/api/scenarios', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editingScenario),
+        body: JSON.stringify({
+          name: editingScenario.name,
+          scenarioType: editingScenario.scenarioType,
+          subjectLine: editingScenario.subjectLine,
+          customizationPrompt: editingScenario.customizationPrompt,
+          emailExamplesPrompt: editingScenario.emailExamplesPrompt,
+          filters: editingScenario.filters || []
+        }),
       });
 
-      if (!response.ok) throw new Error('Failed to create scenario');
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to create scenario');
+      }
       
       toast({
         title: 'Success',
@@ -117,7 +127,7 @@ export default function ManageScenariosPage() {
     } catch (error) {
       toast({
         title: 'Error',
-        description: 'Failed to create scenario',
+        description: error instanceof Error ? error.message : 'Failed to create scenario',
         variant: 'destructive',
       });
     } finally {

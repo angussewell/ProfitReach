@@ -34,14 +34,6 @@ export async function GET() {
       'last_name',
       'email',
       'make_sequence',
-      'contactData.email',
-      'contactData.first_name',
-      'contactData.last_name',
-      'contactData.company',
-      'contactData.PMS',
-      'contactData.make_sequence',
-      'contactData.lifecycle_stage',
-      'contactData.lead_status'
     ];
 
     // Combine and deduplicate fields
