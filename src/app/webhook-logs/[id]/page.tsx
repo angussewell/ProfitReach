@@ -96,14 +96,6 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
                 </div>
               </div>
 
-              {/* Property Management Software */}
-              <div className="space-y-1">
-                <Label className="text-sm text-muted-foreground">Property Management Software</Label>
-                <div className="text-sm font-medium">
-                  {getFieldValue(requestBody, 'propertyManagementSoftware')}
-                </div>
-              </div>
-
               {/* Lead Status */}
               <div className="space-y-1">
                 <Label className="text-sm text-muted-foreground">Lead Status</Label>
