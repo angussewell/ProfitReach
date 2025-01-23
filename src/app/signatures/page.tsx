@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Plus, X, Search } from 'lucide-react';
+import { Plus, X, Search, Code2 } from 'lucide-react';
 
 interface Signature {
   id: string;
@@ -135,20 +135,20 @@ export default function SignaturesPage() {
       <div className="container mx-auto px-6 py-8 max-w-7xl">
         <div className="flex flex-col gap-6 mb-8">
           <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-bold text-[#2e475d]">Email Signatures</h1>
+            <h1 className="text-3xl font-bold text-[#2e475d]">Snippets</h1>
             <Button 
               onClick={() => setEditingSignature({ id: '', signatureName: '', signatureContent: '' })}
               className="bg-[#ff7a59] hover:bg-[#ff8f73] transition-all duration-200 shadow-sm hover:shadow-md text-white border-0 rounded-lg px-6"
             >
               <Plus className="w-4 h-4 mr-2" />
-              New Signature
+              New Snippet
             </Button>
           </div>
           <div className="relative max-w-2xl">
             <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             <Input
               className="pl-12 h-12 border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all duration-200 shadow-sm hover:shadow-md bg-white rounded-xl text-lg"
-              placeholder="Search signatures..."
+              placeholder="Search snippets..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -161,7 +161,7 @@ export default function SignaturesPage() {
               <CardHeader className="pb-4 border-b border-gray-100 sticky top-0 bg-white z-10">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-xl font-semibold text-[#2e475d]">
-                    {editingSignature.id ? 'Edit Signature' : 'Create New Signature'}
+                    {editingSignature.id ? 'Edit Snippet' : 'Create New Snippet'}
                   </CardTitle>
                   <Button 
                     variant="ghost" 
@@ -183,7 +183,7 @@ export default function SignaturesPage() {
                         ...editingSignature,
                         signatureName: e.target.value
                       })}
-                      placeholder="Enter signature name"
+                      placeholder="Enter snippet name"
                       className="h-12 border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all rounded-lg"
                       required
                     />
@@ -196,7 +196,7 @@ export default function SignaturesPage() {
                         ...editingSignature,
                         signatureContent: e.target.value
                       })}
-                      placeholder="Enter signature content"
+                      placeholder="Enter snippet content"
                       className="min-h-[400px] border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all rounded-lg font-mono"
                       required
                     />
@@ -206,7 +206,7 @@ export default function SignaturesPage() {
                       type="submit"
                       className="bg-[#ff7a59] hover:bg-[#ff8f73] transition-all duration-200 text-white shadow-sm hover:shadow-md border-0 rounded-lg px-6 h-12 text-base"
                     >
-                      {editingSignature.id ? 'Save Changes' : 'Create Signature'}
+                      {editingSignature.id ? 'Save Changes' : 'Create Snippet'}
                     </Button>
                     <Button 
                       type="button"
@@ -254,12 +254,12 @@ export default function SignaturesPage() {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="pt-0">
-                <div className="bg-gray-50/80 rounded-lg p-4 border border-gray-100">
-                  <div
-                    className="prose prose-sm max-w-none"
-                    dangerouslySetInnerHTML={{ __html: signature.signatureContent }}
-                  />
+              <CardContent>
+                <div className="bg-gray-50 rounded-lg p-4 max-h-[100px] overflow-hidden relative">
+                  <pre className="text-sm text-gray-600 font-mono whitespace-pre-wrap">
+                    {signature.signatureContent}
+                  </pre>
+                  <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-gray-50 to-transparent" />
                 </div>
               </CardContent>
             </Card>

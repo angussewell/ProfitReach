@@ -1,6 +1,6 @@
 import { Metadata } from 'next';
 import { Inter } from 'next/font/google';
-import { HomeIcon, ListIcon, Settings, MessageSquare, Sparkles, ScrollText } from 'lucide-react';
+import { HomeIcon, ListIcon, Settings, MessageSquare, Sparkles, ScrollText, Code2 } from 'lucide-react';
 import AppSidebar from '@/components/layout/AppSidebar';
 import { SidebarLink } from '@/components/ui/sidebar';
 import './globals.css';
@@ -17,7 +17,7 @@ const navigationItems = [
   { label: 'Dashboard', href: '/', icon: <HomeIcon /> },
   { label: 'All Scenarios', href: '/scenarios', icon: <ListIcon /> },
   { label: 'Manage Scenarios', href: '/settings/scenarios', icon: <Settings /> },
-  { label: 'Email Signatures', href: '/signatures', icon: <MessageSquare /> },
+  { label: 'Snippets', href: '/signatures', icon: <Code2 /> },
   { label: 'Prompts', href: '/prompts', icon: <Sparkles /> },
   { label: 'Webhook Logs', href: '/logs', icon: <ScrollText /> },
   { label: 'Settings', href: '/settings', icon: <Settings /> }

@@ -366,13 +366,13 @@ export default function ManageScenariosPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-[#2e475d]">Email Signature</label>
+                    <label className="text-sm font-medium text-[#2e475d]">Snippet</label>
                     <Select
                       value={editingScenario?.signatureId || ''}
                       onValueChange={(value) => setEditingScenario(prev => ({ ...prev!, signatureId: value }))}
                     >
                       <SelectTrigger className="h-12 border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all rounded-lg">
-                        <SelectValue placeholder="Select signature" />
+                        <SelectValue placeholder="Select snippet" />
                       </SelectTrigger>
                       <SelectContent>
                         {signatures.map((sig) => (
