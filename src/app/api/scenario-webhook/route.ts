@@ -212,10 +212,10 @@ export async function POST(req: NextRequest) {
     };
 
         // Process variables in standalone prompts
-        const processedPrompts = allPrompts.map(prompt => ({
-          ...prompt,
-          content: processWebhookVariables(prompt.content, contactData)
-        }));
+        const processedPrompts = allPrompts.reduce((acc, prompt) => {
+          acc[prompt.name] = processWebhookVariables(prompt.content, contactData);
+          return acc;
+        }, {} as Record<string, string>);
 
         // Send outbound webhook
         const webhookResponse = await fetch(userWebhookUrl, {
@@ -226,7 +226,7 @@ export async function POST(req: NextRequest) {
           body: JSON.stringify({
             contactData,
             scenario: processedScenario,
-            prompts: processedPrompts // Include all processed prompts
+            prompts: processedPrompts // Now a collection instead of an array
           })
         });
 
