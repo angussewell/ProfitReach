@@ -3,6 +3,17 @@ export function generateRandomState() {
 }
 
 export function generateAuthUrl() {
+  const clientId = process.env.NEXT_PUBLIC_GHL_CLIENT_ID;
+  const redirectUri = process.env.NEXT_PUBLIC_GHL_REDIRECT_URI;
+
+  if (!clientId || !redirectUri) {
+    console.error('Missing required environment variables:', {
+      clientId: !!clientId,
+      redirectUri: !!redirectUri
+    });
+    throw new Error('Missing required OAuth configuration');
+  }
+
   const scopes = [
     'businesses.readonly',
     'businesses.write',
@@ -32,8 +43,8 @@ export function generateAuthUrl() {
   ].join(' ');
 
   const params = new URLSearchParams({
-    client_id: process.env.NEXT_PUBLIC_GHL_CLIENT_ID!,
-    redirect_uri: process.env.NEXT_PUBLIC_GHL_REDIRECT_URI!,
+    client_id: clientId,
+    redirect_uri: redirectUri,
     scope: scopes,
     response_type: 'code',
     state: generateRandomState()
