@@ -28,7 +28,7 @@ export default function SequenceMetricCard({
         <div className="flex justify-between items-start">
           <CardTitle className="text-base">{name}</CardTitle>
           <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium transition-colors
-            ${trend === 'up' ? 'bg-hubspot-teal/10 text-hubspot-teal' : 
+            ${trend === 'up' ? 'bg-brand-accent/10 text-brand-accent' : 
               trend === 'down' ? 'bg-red-100 text-red-700' : 
               'bg-gray-100 text-gray-700'}`}>
             {trend === 'up' ? (
@@ -45,7 +45,7 @@ export default function SequenceMetricCard({
         <div>
           <div className="flex justify-between items-center mb-2">
             <span className="text-sm font-medium text-muted-foreground">Reply Rate</span>
-            <span className="text-sm font-semibold text-hubspot-orange">{replyRate}%</span>
+            <span className="text-sm font-semibold text-brand-primary">{replyRate}%</span>
           </div>
           <div className="progress-bar">
             <div 
@@ -58,14 +58,14 @@ export default function SequenceMetricCard({
         <div>
           <div className="flex justify-between items-center mb-2">
             <span className="text-sm font-medium text-muted-foreground">Active Contacts</span>
-            <span className="text-sm font-semibold text-hubspot-teal">{activeRate.toFixed(1)}%</span>
+            <span className="text-sm font-semibold text-brand-accent">{activeRate.toFixed(1)}%</span>
           </div>
           <div className="progress-bar">
             <div 
               className="progress-bar-fill"
               style={{ 
                 width: `${activeRate}%`,
-                background: 'linear-gradient(90deg, var(--hubspot-teal), var(--hubspot-dark-teal))'
+                background: 'linear-gradient(90deg, var(--brand-accent), var(--brand-accent-dark))'
               }}
             />
           </div>

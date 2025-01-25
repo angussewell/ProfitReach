@@ -1,6 +1,5 @@
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
-import prisma from '@/lib/prisma'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -27,7 +26,4 @@ export function log(level: 'error' | 'info' | 'warn', message: string, data?: an
     environment: process.env.VERCEL_ENV || 'development',
     ...data
   }));
-}
-
-// Re-export prisma instance
-export { prisma } 
+} 

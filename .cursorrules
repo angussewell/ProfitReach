@@ -8,37 +8,33 @@
 
 # 🎯 Project Overview
 
-This Next.js dashboard application tracks and manages cold outreach scenarios through HubSpot integration. The core focus is scenario management, tracking scenario effectiveness, and maintaining prompts/signatures for outreach campaigns.
+This Next.js application (ProfitReach) manages cold outreach campaigns through GoHighLevel integration. The core focus is scenario management, AI-powered messaging, contact research, and tracking scenario effectiveness through webhook-based metrics.
 
 ## Core Pages & Functionality
 
-#### 1. Dashboard
-- **Purpose**: High-level overview of outreach performance
-- **Key Metrics**:
-  - Total pipeline
-  - Conversion rate
-  - Opportunities
-  - Pipeline stages breakdown
-- **Lifecycle Stages Tracked**:
-  - Marketing Qualified Lead (marketingqualifiedlead)
-  - Sale Qualified Lead (205174134)
-  - Opportunity (39710605)
-  - Closed Lost (205609479)
-  - Customer (customer)
-  - Stale (39786496)
-  - Abandoned (42495546)
+#### 1. Research Page (New)
+- **Purpose**: AI-powered contact research
+- **Key Features**:
+  - Perplexity API integration
+  - Variable-based prompt system
+  - Contact field updates
+  - Research scenario handling
+- **Implementation**:
+  - Webhook-triggered research
+  - Dynamic prompt replacement
+  - Field mapping for results
 
 #### 2. All Scenarios
 - **Purpose**: Track effectiveness of each outreach scenario
 - **Key Metrics Per Scenario**:
-  - Total leads processed
+  - Total enrollments
   - Response count
-  - Currently active leads
+  - Currently active contacts
   - Response rates
 - **Data Source**: 
-  - past_sequences (multi-checkbox field)
-  - scenario_on_connection (tracks which scenario got response)
-  - currently_in_scenario (tracks active scenarios)
+  - GoHighLevel webhooks for enrollments
+  - GoHighLevel webhooks for responses
+  - Neon database for metrics tracking
 
 #### 3. Managed Scenarios
 - **Purpose**: Create and edit scenario configurations
@@ -69,10 +65,11 @@ This Next.js dashboard application tracks and manages cold outreach scenarios th
 - **Features**:
   - Add new prompts
   - Edit existing prompts
+  - Variable replacement system
   - Associate prompts with scenarios
 
 #### 6. Webhook Logs
-- **Purpose**: Monitor and debug Make.com scenario interactions
+- **Purpose**: Monitor and debug GoHighLevel scenario interactions
 - **Key Metrics**:
   - Success/failure status
   - Scenario performance
@@ -80,22 +77,15 @@ This Next.js dashboard application tracks and manages cold outreach scenarios th
   - Error tracking
 - **Data Display**:
   - Real-time log entries
-  - Contact information (name, email, company)
-  - Lead status and lifecycle stage
-  - Scenario details
-  - Request/response payloads
-- **Features**:
-  - Detailed log viewing
-  - Error analysis with highlighted error messages
-  - Full request/response inspection
+  - Webhook payload inspection
+  - Error analysis
   - Mapped fields visualization
-  - Scenario filtering
 
 #### 7. Settings
 - **Purpose**: Configure webhook field mappings and system defaults
 - **Key Features**:
   - Field mapping configuration
-  - Pre-configured templates (e.g., Make.com)
+  - Pre-configured templates
   - System field management
 - **Configurable Fields**:
   - Contact Email (required)
@@ -103,73 +93,47 @@ This Next.js dashboard application tracks and manages cold outreach scenarios th
   - Contact Last Name
   - Scenario Name (required)
   - Lead Status
-  - Lifecycle Stage
   - User Website
   - Company Name
-- **Management Features**:
-  - Template application
-  - Real-time field mapping
-  - Validation of required fields
-  - Bulk mapping updates
 
 ## 🔄 Data Flow & Integration
 
-### HubSpot Integration
-- **Custom Properties**:
-  - past_sequences: Tracks completed scenarios
-  - scenario_on_connection: Records which scenario received response
-  - currently_in_scenario: Tracks active scenarios
-  - date_of_connection: Response timing
-  - hs_lead_status: Connection status
+### GoHighLevel Integration
+- **OAuth 2.0 Authentication**:
+  - Authorization flow
+  - Token management
+  - Refresh token handling
+- **Webhook Implementation**:
+  - Enrollment tracking
+  - Response monitoring
+  - Contact updates
 
-### Make.com Integration
-- **Scenario Types**:
-  1. Simple email sending
-  2. Single attachment emails
-  3. Double attachment emails
-  4. Google Drive share emails
+### Perplexity Integration
+- **Research Automation**:
+  - Dynamic prompt generation
+  - Contact field updates
+  - Error handling
+  - Rate limiting
 
 ## 💻 Development Guidelines
 
 ### Performance Considerations
-- Handle thousands of contacts efficiently
-- Implement manual refresh mechanism
-- Optimize API calls to HubSpot
+- Implement webhook-based tracking
+- Minimize database operations
+- Optimize API calls to GoHighLevel
 - Cache response data appropriately
 
 ### Error Handling
-- Manage HubSpot API rate limits
-- Handle large data sets gracefully
+- Manage GoHighLevel API rate limits
+- Handle webhook failures gracefully
 - Provide clear error messages
 - Implement retry mechanisms
 
 ### UI/UX Requirements
 - Consistent styling across pages
-- HubSpot color scheme integration
-- High-end tech product aesthetic
+- Professional tech aesthetic
 - Responsive design
 - Clear data visualization
-
-## 🛠 Technical Implementation
-
-### API Integration
-- Use HubSpot Private App API
-- Implement efficient contact querying
-- Handle multi-property updates
-- Manage rate limiting
-
-### Data Management
-- Efficient contact counting
-- Scenario tracking
-- Response rate calculations
-- Pipeline stage management
-
-### Code Quality Standards
-- TypeScript for type safety
-- Comprehensive error handling
-- Clear documentation
-- Performance optimization
-- Regular testing
 
 # APPROACH
 - You always write clean, well-structured code that is easy for others to understand.

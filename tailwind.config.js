@@ -1,8 +1,12 @@
-import type { Config } from "tailwindcss";
-
-const config = {
+/** @type {import('tailwindcss').Config} */
+module.exports = {
   darkMode: ["class"],
-  content: ["./src/**/*.{ts,tsx}"],
+  content: [
+    './pages/**/*.{ts,tsx}',
+    './components/**/*.{ts,tsx}',
+    './app/**/*.{ts,tsx}',
+    './src/**/*.{ts,tsx}',
+  ],
   theme: {
     container: {
       center: true,
@@ -46,44 +50,20 @@ const config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        brand: {
-          primary: "var(--brand-primary)",
-          "primary-dark": "var(--brand-primary-dark)",
-          secondary: "var(--brand-secondary)",
-          "secondary-dark": "var(--brand-secondary-dark)",
-          accent: "var(--brand-accent)",
-          "accent-dark": "var(--brand-accent-dark)",
-          light: "var(--brand-light)",
-        },
+        'brand-primary': '#2563eb',
+        'brand-primary-dark': '#1d4ed8',
+        'brand-secondary': '#0ea5e9',
+        'brand-secondary-dark': '#0284c7',
+        'brand-accent': '#14b8a6',
+        'brand-accent-dark': '#0d9488',
+        'brand-light': '#f0f9ff',
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
-      keyframes: {
-        "accordion-down": {
-          from: { height: "0" },
-          to: { height: "var(--radix-accordion-content-height)" },
-        },
-        "accordion-up": {
-          from: { height: "var(--radix-accordion-content-height)" },
-          to: { height: "0" },
-        },
-        float: {
-          "0%, 100%": { transform: "translateY(0)" },
-          "50%": { transform: "translateY(-10px)" },
-        },
-      },
-      animation: {
-        "accordion-down": "accordion-down 0.2s ease-out",
-        "accordion-up": "accordion-up 0.2s ease-out",
-        float: "float 3s ease-in-out infinite",
-      },
     },
   },
   plugins: [require("tailwindcss-animate")],
-} satisfies Config;
-
-export default config;
-
+} 

@@ -8,6 +8,11 @@ const nextConfig = {
   },
   poweredByHeader: false,
   reactStrictMode: true,
+  logging: {
+    fetches: {
+      fullUrl: true,
+    },
+  },
   swcMinify: true,
   async headers() {
     return [

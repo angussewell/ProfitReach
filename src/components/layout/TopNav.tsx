@@ -12,7 +12,7 @@ export default function TopNav() {
           <button className="h-9 w-9 rounded-full hover:bg-accent hover:text-accent-foreground flex items-center justify-center">
             <Settings className="h-5 w-5" />
           </button>
-          <div className="h-8 w-8 rounded-full bg-gradient-to-r from-hubspot-orange to-hubspot-dark-orange" />
+          <div className="h-8 w-8 rounded-full bg-gradient-to-r from-brand-primary to-brand-primary-dark" />
         </div>
       </div>
     </nav>

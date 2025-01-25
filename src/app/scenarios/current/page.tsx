@@ -28,7 +28,7 @@ export default function CurrentScenarios() {
   const fetchScenarios = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/hubspot/contacts/scenarios');
+      const response = await fetch('/api/scenarios/current');
       const data = await response.json();
       setData(data);
     } catch (error) {

@@ -1,42 +1,52 @@
-# HubSpot Dashboard
+# ProfitReach Dashboard
 
-A modern dashboard for tracking HubSpot scenarios and contact engagement metrics.
+A modern dashboard for tracking outreach scenarios and contact engagement metrics.
 
 ## Features
 
-- View current active scenarios and contact counts
-- Track past scenarios with response rates
-- Monitor lifecycle stages of contacts
-- Real-time connection with HubSpot API
-- Responsive design with HubSpot styling
+- Scenario management and tracking
+- Contact engagement metrics
+- Real-time connection with GoHighLevel API
+- Responsive design with modern styling
+- Webhook integration
+- Email signature management
+- Prompt templates
 
-## Setup
+## Getting Started
 
 1. Clone the repository
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-3. Create a `.env` file with the following variables:
-   ```
-   HUBSPOT_PRIVATE_APP_TOKEN=your_private_app_token
-   ```
-4. Run the development server:
-   ```bash
-   npm run dev
-   ```
+2. Install dependencies: `npm install`
+3. Set up environment variables:
 
-## Environment Variables
+```bash
+# GoHighLevel Configuration
+GOHIGHLEVEL_API_KEY=your_api_key
 
-- `HUBSPOT_PRIVATE_APP_TOKEN`: Your HubSpot private app token (generate one in your HubSpot developer account)
+# Database Configuration
+DATABASE_URL=your_database_url
+```
 
-## Deployment
+### Environment Variables
 
-This application is configured for deployment on Vercel. Simply connect your GitHub repository to Vercel and add the required environment variables in the Vercel dashboard.
+- `GOHIGHLEVEL_API_KEY`: Your GoHighLevel API key
+- `DATABASE_URL`: Your PostgreSQL database connection string
 
-## Tech Stack
+## Development
 
-- Next.js 14 (App Router)
+```bash
+npm run dev
+```
+
+## Built With
+
+- Next.js 14
+- React 18
 - TypeScript
 - Tailwind CSS
-- HubSpot API
+- Prisma
+- PostgreSQL
+- GoHighLevel API
+
+## License
+
+This project is proprietary software. All rights reserved.

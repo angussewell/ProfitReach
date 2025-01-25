@@ -6,6 +6,7 @@ import React, { useState, createContext, useContext, ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import { usePathname } from "next/navigation";
+import Image from "next/image";
 
 interface Links {
   label: string;
@@ -107,13 +108,12 @@ export const DesktopSidebar = ({
       {...props}
     >
       <div className="flex items-center justify-center h-16 px-4 border-b border-[#2d4454]">
-        <img 
-          src={open ? "/HubSpot Logo Black and White.png" : "/HubSpot Logo.png"}
-          alt="HubSpot Logo" 
-          className={cn(
-            "transition-all duration-100",
-            open ? "w-36" : "w-8"
-          )} 
+        <Image
+          className="h-8 w-auto"
+          src={open ? "/ProfitHub Full Logo - White.png" : "/ProfitHub Icon.png"}
+          alt="ProfitHub Logo"
+          width={open ? 160 : 32}
+          height={32}
         />
       </div>
       <div className="flex-1 overflow-y-auto py-4 px-3">
@@ -143,10 +143,12 @@ export const MobileSidebar = ({
         {...props}
       >
         <div className="flex items-center">
-          <img 
-            src="/HubSpot Logo.png"
-            alt="HubSpot Logo" 
-            className="w-8 h-8"
+          <Image
+            className="h-8 w-auto"
+            src="/ProfitHub Icon.png"
+            alt="ProfitHub Logo"
+            width={32}
+            height={32}
           />
         </div>
         <Menu
@@ -170,10 +172,12 @@ export const MobileSidebar = ({
               )}
             >
               <div className="flex items-center justify-between mb-8">
-                <img 
-                  src="/HubSpot Logo Black and White.png"
-                  alt="HubSpot Logo" 
-                  className="w-36"
+                <Image
+                  className="h-8 w-auto"
+                  src="/ProfitHub Full Logo - White.png"
+                  alt="ProfitHub Logo"
+                  width={160}
+                  height={32}
                 />
                 <X
                   className="text-white cursor-pointer hover:text-[#cbd6e2] transition-colors"

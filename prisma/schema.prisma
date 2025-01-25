@@ -1,3 +1,6 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
 generator client {
   provider        = "prisma-client-js"
   previewFeatures = ["extendedWhereUnique"]
@@ -8,44 +11,101 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Signature {
-  id               String     @id @default(cuid())
-  signatureName    String
-  signatureContent String
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
-  scenarios        Scenario[]
+model account {
+  id              String       @id @default(cuid())
+  ghl_location_id String       @unique
+  access_token    String
+  refresh_token   String
+  token_expires_at DateTime
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  metrics         metric[]
+  webhookLogs     webhookLog[]
 }
 
-model Scenario {
-  id                  String     @id @default(cuid())
-  name                String     @unique
-  scenarioType        String     @default("simple")
-  subjectLine         String     @default("")
+model metric {
+  id           String   @id @default(cuid())
+  accountId    String
+  scenarioName String
+  enrollments  Int      @default(0)
+  replies      Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  account      account  @relation(fields: [accountId], references: [id])
+
+  @@unique([accountId, scenarioName])
+  @@index([scenarioName])
+}
+
+model signature {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  content     String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  scenarios   scenario[]
+}
+
+model scenario {
+  id                   String    @id @default(cuid())
+  name                 String    @unique
+  description          String?
+  type                 String    @default("simple")
+  status              String    @default("active")
   signatureId         String?
-  createdAt           DateTime   @default(now())
-  updatedAt           DateTime   @updatedAt
+  signature           signature? @relation(fields: [signatureId], references: [id])
   customizationPrompt String?
   emailExamplesPrompt String?
-  signature           Signature? @relation(fields: [signatureId], references: [id])
-  prompts            Prompt[]    @relation("ScenarioPrompts")
-  attachments        Attachment[]
-  filters             Json?      @default("[]")
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  attachments         attachment[]
 
   @@index([name])
 }
 
-model Prompt {
-  id        String     @id @default(cuid())
-  name      String
+model prompt {
+  id        String   @id @default(cuid())
+  name      String   @unique
   content   String
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  scenarios Scenario[] @relation("ScenarioPrompts")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
-model WebhookLog {
+model fieldMapping {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  mapping     Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model attachment {
+  id         String   @id @default(cuid())
+  name       String
+  type       String
+  url        String
+  scenarioId String
+  scenario   scenario @relation(fields: [scenarioId], references: [id])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([scenarioId])
+}
+
+model webhookField {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  required    Boolean  @default(false)
+  type        String   @default("string")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model webhookLog {
   id           String   @id @default(cuid())
+  accountId    String
   createdAt    DateTime @default(now())
   status       String   @default("error")
   scenarioName String   @default("Unknown")
@@ -54,50 +114,15 @@ model WebhookLog {
   company      String   @default("Unknown")
   requestBody  Json
   responseBody Json     @default("{}")
+  account      account  @relation(fields: [accountId], references: [id])
 
   @@index([scenarioName])
   @@index([createdAt])
-}
-
-// Field mapping configuration for webhook data
-model FieldMapping {
-  id            String   @id @default(cuid())
-  systemField   String   // Internal field name (e.g., "contactEmail")
-  webhookField  String   // External field name (e.g., "{email}")
-  description   String?  // Optional description of the field
-  isRequired    Boolean  @default(false)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  @@unique([systemField])
-  @@index([webhookField])
+  @@index([accountId])
 }
 
 model playing_with_neon {
   id    Int    @id @default(autoincrement())
   name  String
   value Float? @db.Real
-}
-
-model Attachment {
-  id         String   @id @default(cuid())
-  name       String
-  url        String
-  scenarioId String
-  scenario   Scenario @relation(fields: [scenarioId], references: [id])
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  @@index([scenarioId])
-}
-
-model WebhookField {
-  id          String   @id @default(cuid())
-  field       String   @unique
-  lastSeen    DateTime @default(now())
-  occurrences Int      @default(1)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([lastSeen])
 }

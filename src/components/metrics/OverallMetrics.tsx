@@ -24,10 +24,10 @@ export default function OverallMetrics({
       <Card className="group">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm font-medium">Active Sequences</CardTitle>
-          <TrendingUp className="h-4 w-4 text-hubspot-orange group-hover:scale-110 transition-transform" />
+          <TrendingUp className="h-4 w-4 text-brand-primary group-hover:scale-110 transition-transform" />
         </CardHeader>
         <CardContent>
-          <div className="text-3xl font-bold text-hubspot-orange animate-float">
+          <div className="text-3xl font-bold text-brand-primary animate-float">
             {totalSequences}
           </div>
           <p className="text-xs text-muted-foreground mt-1">
@@ -39,10 +39,10 @@ export default function OverallMetrics({
       <Card className="group">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm font-medium">Average Reply Rate</CardTitle>
-          <MessageCircle className="h-4 w-4 text-hubspot-teal group-hover:scale-110 transition-transform" />
+          <MessageCircle className="h-4 w-4 text-brand-accent group-hover:scale-110 transition-transform" />
         </CardHeader>
         <CardContent>
-          <div className="text-3xl font-bold text-hubspot-teal animate-float">
+          <div className="text-3xl font-bold text-brand-accent animate-float">
             {averageReplyRate}%
           </div>
           <p className="text-xs text-muted-foreground mt-1">
@@ -54,10 +54,10 @@ export default function OverallMetrics({
       <Card className="group">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm font-medium">Active Contacts</CardTitle>
-          <Users className="h-4 w-4 text-hubspot-blue group-hover:scale-110 transition-transform" />
+          <Users className="h-4 w-4 text-brand-secondary group-hover:scale-110 transition-transform" />
         </CardHeader>
         <CardContent>
-          <div className="text-3xl font-bold text-hubspot-blue animate-float">
+          <div className="text-3xl font-bold text-brand-secondary animate-float">
             {totalActiveContacts.toLocaleString()}
           </div>
           <p className="text-xs text-muted-foreground mt-1">
@@ -72,7 +72,7 @@ export default function OverallMetrics({
           <Trophy className="h-4 w-4 text-yellow-500 group-hover:scale-110 transition-transform" />
         </CardHeader>
         <CardContent>
-          <div className="text-lg font-semibold text-hubspot-blue truncate">
+          <div className="text-lg font-semibold text-brand-secondary truncate">
             {bestPerformingSequence.name}
           </div>
           <div className="flex items-baseline gap-1 mt-1">

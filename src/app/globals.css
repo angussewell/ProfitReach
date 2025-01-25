@@ -24,13 +24,13 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 222.2 84% 4.9%;
     --radius: 0.5rem;
-    --hubspot-orange: #ff7a59;
-    --hubspot-dark-orange: #ff8f73;
-    --hubspot-blue: #0091ae;
-    --hubspot-dark-blue: #00a4bd;
-    --hubspot-light-blue: #eaf0f6;
-    --hubspot-teal: #00bda5;
-    --hubspot-dark-teal: #00a98e;
+    --brand-primary: #2563eb;
+    --brand-primary-dark: #1d4ed8;
+    --brand-secondary: #0ea5e9;
+    --brand-secondary-dark: #0284c7;
+    --brand-accent: #14b8a6;
+    --brand-accent-dark: #0d9488;
+    --brand-light: #f0f9ff;
   }
 
   .dark {
@@ -54,6 +54,14 @@
     --input: 217.2 32.6% 17.5%;
     --ring: 212.7 26.8% 83.9%;
   }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
 }
 
 @layer components {
@@ -62,7 +70,7 @@
   }
 
   .progress-bar-fill {
-    @apply h-full bg-gradient-to-r from-hubspot-orange to-hubspot-dark-orange transition-all duration-300 ease-in-out;
+    @apply h-full bg-gradient-to-r from-brand-primary to-brand-primary-dark transition-all duration-300 ease-in-out;
   }
 
   .glass-effect {
