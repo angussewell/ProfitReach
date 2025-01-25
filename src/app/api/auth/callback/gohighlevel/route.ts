@@ -9,26 +9,56 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Authorization code required' }, { status: 400 });
   }
 
+  // Validate environment variables
+  const clientId = process.env.NEXT_PUBLIC_GHL_CLIENT_ID;
+  const clientSecret = process.env.GHL_CLIENT_SECRET;
+  const redirectUri = process.env.NEXT_PUBLIC_GHL_REDIRECT_URI;
+
+  if (!clientId || !clientSecret || !redirectUri) {
+    console.error('Missing required environment variables:', {
+      hasClientId: !!clientId,
+      hasClientSecret: !!clientSecret,
+      hasRedirectUri: !!redirectUri
+    });
+    return NextResponse.json({ error: 'OAuth configuration error' }, { status: 500 });
+  }
+
   try {
+    const requestBody = {
+      client_id: clientId,
+      client_secret: clientSecret,
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: redirectUri,
+    };
+
+    console.log('Token exchange request:', {
+      url: 'https://services.leadconnectorhq.com/oauth/token',
+      method: 'POST',
+      hasCode: !!code,
+      hasClientId: !!clientId,
+      hasClientSecret: !!clientSecret,
+      redirectUri
+    });
+
     const tokenResponse = await fetch('https://services.leadconnectorhq.com/oauth/token', {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
         'Version': '2021-07-28'
       },
-      body: JSON.stringify({
-        client_id: process.env.NEXT_PUBLIC_GHL_CLIENT_ID,
-        client_secret: process.env.GHL_CLIENT_SECRET,
-        grant_type: 'authorization_code',
-        code,
-        redirect_uri: process.env.NEXT_PUBLIC_GHL_REDIRECT_URI,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!tokenResponse.ok) {
       const error = await tokenResponse.text();
-      console.error('Token exchange failed:', error);
-      throw new Error('Failed to exchange code for token');
+      console.error('Token exchange failed:', {
+        status: tokenResponse.status,
+        statusText: tokenResponse.statusText,
+        error,
+        headers: Object.fromEntries(tokenResponse.headers)
+      });
+      throw new Error(`Token exchange failed: ${error}`);
     }
 
     const { access_token, refresh_token, expires_in } = await tokenResponse.json();
