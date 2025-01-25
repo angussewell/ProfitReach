@@ -24,13 +24,13 @@ export async function GET(request: Request) {
   }
 
   try {
-    const requestBody = {
+    const formData = new URLSearchParams({
       client_id: clientId,
       client_secret: clientSecret,
       grant_type: 'authorization_code',
       code,
       redirect_uri: redirectUri,
-    };
+    });
 
     console.log('Token exchange request:', {
       url: 'https://services.leadconnectorhq.com/oauth/token',
@@ -44,10 +44,10 @@ export async function GET(request: Request) {
     const tokenResponse = await fetch('https://services.leadconnectorhq.com/oauth/token', {
       method: 'POST',
       headers: { 
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded',
         'Version': '2021-07-28'
       },
-      body: JSON.stringify(requestBody),
+      body: formData.toString(),
     });
 
     if (!tokenResponse.ok) {
