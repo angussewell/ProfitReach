@@ -5,10 +5,11 @@ import jwt from 'jsonwebtoken';
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://profit-reach.vercel.app';
   
   if (!code) {
     console.error('No code provided in callback');
-    return NextResponse.redirect(new URL('/?error=no_code', request.url));
+    return NextResponse.redirect(`${baseUrl}/?error=no_code`);
   }
 
   // Validate environment variables
@@ -22,7 +23,7 @@ export async function GET(request: Request) {
       hasClientSecret: !!clientSecret,
       hasRedirectUri: !!redirectUri
     });
-    return NextResponse.redirect(new URL('/?error=config', request.url));
+    return NextResponse.redirect(`${baseUrl}/?error=config`);
   }
 
   try {
@@ -60,7 +61,7 @@ export async function GET(request: Request) {
         error,
         headers: Object.fromEntries(tokenResponse.headers)
       });
-      return NextResponse.redirect(new URL(`/?error=token_exchange&details=${encodeURIComponent(error)}`, request.url));
+      return NextResponse.redirect(`${baseUrl}/?error=token_exchange&details=${encodeURIComponent(error)}`);
     }
 
     const { access_token, refresh_token, expires_in } = await tokenResponse.json();
@@ -71,7 +72,7 @@ export async function GET(request: Request) {
 
     if (!locationId) {
       console.error('No location ID found in token:', { decodedToken });
-      return NextResponse.redirect(new URL('/?error=no_location', request.url));
+      return NextResponse.redirect(`${baseUrl}/?error=no_location`);
     }
 
     console.log('Creating account record:', {
@@ -93,10 +94,10 @@ export async function GET(request: Request) {
 
     console.log('Successfully stored tokens, redirecting to scenarios');
     
-    // Redirect to dashboard with success parameter
-    return NextResponse.redirect(new URL('/settings/scenarios?status=success', request.url));
+    // Redirect to dashboard with success parameter using absolute URL
+    return NextResponse.redirect(`${baseUrl}/settings/scenarios?status=success`);
   } catch (error) {
     console.error('OAuth callback error:', error);
-    return NextResponse.redirect(new URL(`/?error=unknown&details=${encodeURIComponent(error instanceof Error ? error.message : 'Unknown error')}`, request.url));
+    return NextResponse.redirect(`${baseUrl}/?error=unknown&details=${encodeURIComponent(error instanceof Error ? error.message : 'Unknown error')}`);
   }
 } 
