@@ -7,7 +7,8 @@ export async function GET(request: Request) {
   const code = searchParams.get('code');
   
   if (!code) {
-    return NextResponse.json({ error: 'Authorization code required' }, { status: 400 });
+    console.error('No code provided in callback');
+    return NextResponse.redirect(new URL('/?error=no_code', request.url));
   }
 
   // Validate environment variables
@@ -21,7 +22,7 @@ export async function GET(request: Request) {
       hasClientSecret: !!clientSecret,
       hasRedirectUri: !!redirectUri
     });
-    return NextResponse.json({ error: 'OAuth configuration error' }, { status: 500 });
+    return NextResponse.redirect(new URL('/?error=config', request.url));
   }
 
   try {
@@ -59,7 +60,7 @@ export async function GET(request: Request) {
         error,
         headers: Object.fromEntries(tokenResponse.headers)
       });
-      throw new Error(`Token exchange failed: ${error}`);
+      return NextResponse.redirect(new URL(`/?error=token_exchange&details=${encodeURIComponent(error)}`, request.url));
     }
 
     const { access_token, refresh_token, expires_in } = await tokenResponse.json();
@@ -69,8 +70,16 @@ export async function GET(request: Request) {
     const locationId = decodedToken?.authClassId;
 
     if (!locationId) {
-      throw new Error('Location ID not found in access token');
+      console.error('No location ID found in token:', { decodedToken });
+      return NextResponse.redirect(new URL('/?error=no_location', request.url));
     }
+
+    console.log('Creating account record:', {
+      locationId,
+      hasAccessToken: !!access_token,
+      hasRefreshToken: !!refresh_token,
+      expiresIn: expires_in
+    });
 
     // Store tokens in database
     await prisma.account.create({
@@ -82,13 +91,12 @@ export async function GET(request: Request) {
       },
     });
 
-    // Redirect to dashboard
-    return NextResponse.redirect(new URL('/settings/scenarios', request.url));
+    console.log('Successfully stored tokens, redirecting to scenarios');
+    
+    // Redirect to dashboard with success parameter
+    return NextResponse.redirect(new URL('/settings/scenarios?status=success', request.url));
   } catch (error) {
     console.error('OAuth callback error:', error);
-    return NextResponse.json({ 
-      error: 'Failed to exchange code for tokens',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 });
+    return NextResponse.redirect(new URL(`/?error=unknown&details=${encodeURIComponent(error instanceof Error ? error.message : 'Unknown error')}`, request.url));
   }
 } 
