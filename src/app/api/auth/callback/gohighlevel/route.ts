@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import jwt from 'jsonwebtoken';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -62,10 +63,19 @@ export async function GET(request: Request) {
     }
 
     const { access_token, refresh_token, expires_in } = await tokenResponse.json();
+    
+    // Decode the access token to get the location ID
+    const decodedToken = jwt.decode(access_token) as any;
+    const locationId = decodedToken?.authClassId;
+
+    if (!locationId) {
+      throw new Error('Location ID not found in access token');
+    }
 
     // Store tokens in database
     await prisma.account.create({
       data: {
+        ghl_location_id: locationId,
         access_token,
         refresh_token,
         token_expires_at: new Date(Date.now() + expires_in * 1000),

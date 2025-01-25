@@ -1351,3 +1351,81 @@ The OAuth process provides:
 - Token expiration handling capabilities[1]
 
 Recent updates indicate that developers should ensure their apps can handle both location-specific and agency-wide authentication flows to maintain proper access control and data security[12][14].
+
+For private, standard app listings in GoHighLevel, you need to use the OAuth token exchange endpoint at:
+
+```
+https://services.leadconnectorhq.com/oauth/token
+```
+
+This endpoint accepts a POST request and requires the following parameters:
+- Authorization code (received from the OAuth flow)
+- Client ID
+- Client Secret
+- Grant type
+- Redirect URI[5]
+
+A few important notes about the token system:
+
+- Access tokens expire after 24 hours[2][8]
+- Refresh tokens last up to one year and can be used to generate new access/refresh token pairs[2]
+- The OAuth 2.0-based API (v2) will eventually become the only supported version[9]
+
+Rate limits for the v2 API are set at:
+- 100 requests per 10 seconds (burst limit)
+- This limit applies per Marketplace app per resource (Location or Company)[9]
+
+To exchange an authorization code for access tokens with GoHighLevel's OAuth endpoint in 2024/2025, you need to make a POST request with the following specifications:
+
+## Request Format
+
+**Endpoint URL:**
+```
+https://services.leadconnectorhq.com/oauth/token
+```
+
+**Headers:**
+```http
+Content-Type: application/json
+Version: 2021-07-28
+```
+
+**Request Body:**
+```json
+{
+  "client_id": "<your_client_id>",
+  "client_secret": "<your_client_secret>",
+  "code": "<authorization_code>",
+  "grant_type": "authorization_code",
+  "redirect_uri": "<your_redirect_uri>"
+}
+```
+
+## Token Lifecycle
+
+The OAuth flow provides two types of tokens[1]:
+- **Access Token**: Valid for 24 hours
+- **Refresh Token**: Valid for up to 1 year
+
+## Token Refresh
+
+When the access token expires, you can obtain a new one by making a POST request to the same endpoint with:
+
+```json
+{
+  "grant_type": "refresh_token",
+  "client_id": "<your_client_id>",
+  "client_secret": "<your_client_secret>",
+  "refresh_token": "<your_refresh_token>"
+}
+```
+
+## Important Notes
+
+- Store both access and refresh tokens securely[3]
+- Implement automatic token refresh before the 24-hour expiration[4]
+- For private apps, you don't need to go through the marketplace approval process[5]
+- The Version header is required for all API v2 requests[5]
+- Rate limits are set to 100 requests per 10 seconds per location[10]
+
+For Next.js implementation, you should handle the OAuth flow on the server-side to keep your client credentials secure. Store the tokens in a secure database or environment variables, never exposing them to the client side.
