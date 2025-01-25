@@ -8,11 +8,10 @@ export async function GET() {
 
   const state = Math.random().toString(36).substring(7);
   
-  const authUrl = new URL('https://marketplace.gohighlevel.com/oauth/chooselocation');
-  authUrl.searchParams.append('response_type', 'code');
+  const authUrl = new URL('https://marketplace.leadconnectorhq.com/oauth/chooselocation');
   authUrl.searchParams.append('client_id', process.env.NEXT_PUBLIC_GHL_CLIENT_ID);
+  authUrl.searchParams.append('response_type', 'code');
   authUrl.searchParams.append('redirect_uri', process.env.NEXT_PUBLIC_GHL_REDIRECT_URI);
-  authUrl.searchParams.append('scope', 'businesses.readonly businesses.write contacts.readonly contacts.write locations.readonly locations.write');
   authUrl.searchParams.append('state', state);
 
   // Create response with redirect
