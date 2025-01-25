@@ -1,3 +1,5 @@
+import { generateAuthUrl } from '@/utils/auth';
+
 declare global {
   interface Window {
     GHLOAuth: {
@@ -13,15 +15,7 @@ declare global {
 
 export function GHLAuthButton() {
   const handleAuth = () => {
-    if (typeof window === 'undefined') return;
-
-    window.GHLOAuth.init({
-      client_id: process.env.NEXT_PUBLIC_GHL_CLIENT_ID!,
-      redirect_uri: process.env.NEXT_PUBLIC_GHL_REDIRECT_URI!,
-      scope: 'businesses.readonly businesses.write contacts.readonly contacts.write locations.readonly locations.write'
-    });
-
-    window.GHLOAuth.login();
+    window.location.href = generateAuthUrl();
   };
 
   return (
