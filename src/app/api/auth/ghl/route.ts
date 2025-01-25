@@ -12,10 +12,14 @@ export async function GET() {
   authUrl.searchParams.append('response_type', 'code');
   authUrl.searchParams.append('client_id', process.env.NEXT_PUBLIC_GHL_CLIENT_ID);
   authUrl.searchParams.append('redirect_uri', process.env.NEXT_PUBLIC_GHL_REDIRECT_URI);
-  authUrl.searchParams.append('scope', 'businesses.readonly businesses.write contacts.readonly contacts.write');
+  authUrl.searchParams.append('scope', 'businesses.readonly businesses.write contacts.readonly contacts.write locations.readonly locations.write');
   authUrl.searchParams.append('state', state);
 
-  const cookieStore = cookies();
+  // Create response with redirect
+  const response = NextResponse.redirect(authUrl.toString());
+
+  // Set cookie on the response
+  const cookieStore = await cookies();
   cookieStore.set('ghl_auth_state', state, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
@@ -23,5 +27,5 @@ export async function GET() {
     maxAge: 60 * 5, // 5 minutes
   });
 
-  return NextResponse.redirect(authUrl.toString());
+  return response;
 } 

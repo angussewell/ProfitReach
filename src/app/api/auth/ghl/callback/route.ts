@@ -8,7 +8,8 @@ export async function GET(request: Request) {
   const state = searchParams.get('state');
   const locationId = searchParams.get('location_id');
 
-  const cookieStore = cookies();
+  // Get cookies instance
+  const cookieStore = await cookies();
   const savedState = cookieStore.get('ghl_auth_state')?.value;
   
   if (!state || state !== savedState) {
@@ -56,11 +57,13 @@ export async function GET(request: Request) {
       },
     });
 
-    // Clear auth state cookie
-    cookieStore.delete('ghl_auth_state');
+    // Create response with redirect
+    const response = NextResponse.redirect(new URL('/settings/scenarios', request.url));
 
-    // Redirect to dashboard
-    return NextResponse.redirect(new URL('/settings/scenarios', request.url));
+    // Clear auth state cookie
+    response.cookies.delete('ghl_auth_state');
+
+    return response;
   } catch (error) {
     console.error('OAuth callback error:', error);
     return NextResponse.json({ 
