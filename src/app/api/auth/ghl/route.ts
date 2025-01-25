@@ -6,7 +6,12 @@ export async function GET() {
     return NextResponse.json({ error: 'Missing OAuth configuration' }, { status: 500 });
   }
 
-  const state = Math.random().toString(36).substring(7);
+  // Create state with redirect URI
+  const stateData = {
+    nonce: Math.random().toString(36).substring(7),
+    redirect_uri: process.env.NEXT_PUBLIC_GHL_REDIRECT_URI
+  };
+  const state = Buffer.from(JSON.stringify(stateData)).toString('base64');
   
   const authUrl = new URL('https://marketplace.leadconnectorhq.com/oauth/chooselocation');
   authUrl.searchParams.append('client_id', process.env.NEXT_PUBLIC_GHL_CLIENT_ID);

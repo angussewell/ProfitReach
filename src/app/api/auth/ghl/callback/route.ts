@@ -21,6 +21,10 @@ export async function GET(request: Request) {
   }
 
   try {
+    // Decode state to get redirect URI
+    const stateData = JSON.parse(Buffer.from(state, 'base64').toString());
+    const redirect_uri = stateData.redirect_uri;
+
     const tokenResponse = await fetch('https://services.gohighlevel.com/oauth/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -29,7 +33,7 @@ export async function GET(request: Request) {
         client_secret: process.env.GHL_CLIENT_SECRET,
         grant_type: 'authorization_code',
         code,
-        redirect_uri: process.env.NEXT_PUBLIC_GHL_REDIRECT_URI,
+        redirect_uri,
       }),
     });
 
