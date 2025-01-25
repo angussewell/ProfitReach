@@ -6,7 +6,9 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  poweredByHeader: false,
+  experimental: {
+    serverActions: true,
+  },
   reactStrictMode: true,
   logging: {
     fetches: {
