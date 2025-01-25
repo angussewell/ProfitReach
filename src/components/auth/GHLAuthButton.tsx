@@ -1,3 +1,5 @@
+'use client';
+
 import { generateAuthUrl } from '@/utils/auth';
 
 declare global {
