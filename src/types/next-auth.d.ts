@@ -11,4 +11,16 @@ declare module 'next-auth' {
       image?: string | null;
     };
   }
+
+  interface Profile {
+    location_id: string;
+    email?: string;
+    name?: string;
+  }
+
+  interface Account {
+    access_token: string;
+    refresh_token: string;
+    providerAccountId: string;
+  }
 } 

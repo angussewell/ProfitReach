@@ -95,6 +95,34 @@ export const authOptions: NextAuthOptions = {
     }
   ],
   callbacks: {
+    async signIn({ user, account, profile }) {
+      if (account && profile) {
+        try {
+          // Try to update existing account or create new one
+          await prisma.account.upsert({
+            where: {
+              ghl_location_id: profile.location_id,
+            },
+            update: {
+              access_token: account.access_token,
+              refresh_token: account.refresh_token,
+              token_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours from now
+            },
+            create: {
+              ghl_location_id: profile.location_id,
+              access_token: account.access_token,
+              refresh_token: account.refresh_token,
+              token_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours from now
+            },
+          });
+          return true;
+        } catch (error) {
+          console.error('Error in signIn callback:', error);
+          return false;
+        }
+      }
+      return true;
+    },
     async jwt({ token, account }) {
       if (account) {
         token.accessToken = account.access_token;
