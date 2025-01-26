@@ -1,4 +1,4 @@
-import { prisma } from './db';
+import { prisma } from '@/lib/prisma';
 
 // Helper to normalize field names
 function normalizeFieldName(field: string): string {

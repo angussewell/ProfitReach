@@ -1,11 +1,9 @@
 'use client';
 
-import { signIn } from 'next-auth/react';
-
 export function GHLAuthButton() {
   return (
     <button
-      onClick={() => signIn('gohighlevel')}
+      onClick={() => window.location.href = '/api/auth/ghl'}
       className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
     >
       Connect GoHighLevel

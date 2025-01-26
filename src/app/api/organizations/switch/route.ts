@@ -1,55 +1,52 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '../../auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 
-export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-
-  if (!session?.user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
+export async function POST(req: Request) {
   try {
-    const { organizationId } = await request.json();
-
-    if (!organizationId) {
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user) {
       return NextResponse.json(
-        { error: 'Organization ID is required' },
-        { status: 400 }
+        { error: 'Unauthorized' },
+        { status: 401 }
       );
     }
 
-    // Verify the organization exists and the user has access to it
-    const organization = await prisma.organization.findFirst({
-      where: {
-        id: organizationId,
-        users: {
-          some: {
-            id: session.user.id
-          }
-        }
-      },
+    const { organizationId } = await req.json();
+
+    // Verify organization exists
+    const organization = await prisma.organization.findUnique({
+      where: { id: organizationId }
     });
 
     if (!organization) {
       return NextResponse.json(
-        { error: 'Organization not found or access denied' },
+        { error: 'Organization not found' },
         { status: 404 }
       );
     }
 
-    // Update the user's organization
+    // Only admins can switch to any organization
+    if (session.user.role !== 'admin') {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    // Update user's organization
     await prisma.user.update({
       where: { id: session.user.id },
-      data: { organizationId },
+      data: { organizationId }
     });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json(organization);
   } catch (error) {
-    console.error('Error switching organization:', error);
+    console.error('Failed to switch organization:', error);
     return NextResponse.json(
-      { error: 'Error switching organization' },
+      { error: 'Failed to switch organization' },
       { status: 500 }
     );
   }

@@ -1,83 +1,91 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '../auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
-import bcrypt from 'bcryptjs';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 
-export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-
-  // Only admin users can create organizations
-  if (session?.user?.role !== 'admin') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
+export async function GET() {
   try {
-    const { name, adminEmail, adminPassword } = await request.json();
-
-    if (!name || !adminEmail || !adminPassword) {
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
+        { error: 'Unauthorized' },
+        { status: 401 }
       );
     }
 
-    // Hash the password
-    const hashedPassword = await bcrypt.hash(adminPassword, 10);
-
-    // Create organization and admin user in a transaction
-    const result = await prisma.$transaction(async (tx) => {
-      const organization = await tx.organization.create({
-        data: {
-          name,
-        },
+    if (session.user.role === 'admin') {
+      const organizations = await prisma.organization.findMany({
+        orderBy: { name: 'asc' }
       });
+      return NextResponse.json(organizations);
+    } 
+    
+    if (!session.user.organizationId) {
+      return NextResponse.json([]);
+    }
 
-      const user = await tx.user.create({
-        data: {
-          email: adminEmail,
-          password: hashedPassword,
-          role: 'admin',
-          organizationId: organization.id,
-        },
-      });
-
-      return { organization, user };
+    const organization = await prisma.organization.findUnique({
+      where: { id: session.user.organizationId }
     });
-
-    return NextResponse.json(result);
+    
+    return NextResponse.json([organization].filter(Boolean));
   } catch (error) {
-    console.error('Error creating organization:', error);
+    console.error('Failed to fetch organizations:', error);
     return NextResponse.json(
-      { error: 'Error creating organization' },
+      { error: 'Failed to fetch organizations' },
       { status: 500 }
     );
   }
 }
 
-export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-
-  if (!session?.user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
+export async function POST(req: Request) {
   try {
-    const organizations = await prisma.organization.findMany({
-      where: session.user.role === 'admin' ? {} : { id: session.user.organizationId },
-      select: {
-        id: true,
-        name: true,
-        ghlConnected: true,
-        createdAt: true,
-      },
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user || session.user.role !== 'admin') {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    const { name } = await req.json();
+    
+    if (!name) {
+      return NextResponse.json(
+        { error: 'Organization name is required' },
+        { status: 400 }
+      );
+    }
+
+    // Check if organization already exists
+    const existing = await prisma.organization.findUnique({
+      where: { name }
     });
 
-    return NextResponse.json(organizations);
+    if (existing) {
+      return NextResponse.json(
+        { error: 'Organization with this name already exists' },
+        { status: 400 }
+      );
+    }
+    
+    const organization = await prisma.organization.create({
+      data: { name }
+    });
+
+    // Update the admin user's organization
+    await prisma.user.update({
+      where: { id: session.user.id },
+      data: { organizationId: organization.id }
+    });
+
+    return NextResponse.json(organization);
   } catch (error) {
-    console.error('Error fetching organizations:', error);
+    console.error('Failed to create organization:', error);
     return NextResponse.json(
-      { error: 'Error fetching organizations' },
+      { error: 'Failed to create organization' },
       { status: 500 }
     );
   }

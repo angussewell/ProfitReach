@@ -12,7 +12,8 @@ interface Scenario {
   id: string;
   name: string;
   type: string;
-  lastUpdated: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export default function ManageScenarios() {
@@ -23,7 +24,7 @@ export default function ManageScenarios() {
     try {
       const response = await fetch('/api/scenarios');
       const data = await response.json();
-      setScenarios(data.scenarios || []);
+      setScenarios(data || []);
     } catch (error) {
       console.error('Error fetching scenarios:', error);
     } finally {
@@ -34,6 +35,19 @@ export default function ManageScenarios() {
   React.useEffect(() => {
     fetchScenarios();
   }, []);
+
+  // Format date consistently using client-side only code
+  const formatDate = (dateString: string) => {
+    try {
+      // Only run on client side
+      if (typeof window !== 'undefined') {
+        return new Date(dateString).toLocaleString();
+      }
+      return dateString;
+    } catch (error) {
+      return dateString;
+    }
+  };
 
   if (loading) {
     return (
@@ -79,11 +93,9 @@ export default function ManageScenarios() {
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-gray-500">{scenario.type}</p>
-                {scenario.lastUpdated && (
-                  <p className="text-sm text-gray-500 mt-2">
-                    Last updated: {new Date(scenario.lastUpdated).toLocaleString()}
-                  </p>
-                )}
+                <p className="text-sm text-gray-500 mt-2">
+                  Last updated: {formatDate(scenario.updatedAt)}
+                </p>
               </CardContent>
             </Card>
           </Link>

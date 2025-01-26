@@ -1,12 +1,21 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import jwt from 'jsonwebtoken';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://profit-reach.vercel.app';
   
+  // Get the current session to get organization ID
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.organizationId) {
+    console.error('No organization ID found in session');
+    return NextResponse.redirect(`${baseUrl}/?error=no_organization`);
+  }
+
   if (!code) {
     console.error('No code provided in callback');
     return NextResponse.redirect(`${baseUrl}/?error=no_code`);
@@ -27,30 +36,19 @@ export async function GET(request: Request) {
   }
 
   try {
-    const formData = new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      grant_type: 'authorization_code',
-      code,
-      redirect_uri: redirectUri,
-    });
-
-    console.log('Token exchange request:', {
-      url: 'https://services.leadconnectorhq.com/oauth/token',
-      method: 'POST',
-      hasCode: !!code,
-      hasClientId: !!clientId,
-      hasClientSecret: !!clientSecret,
-      redirectUri
-    });
-
     const tokenResponse = await fetch('https://services.leadconnectorhq.com/oauth/token', {
       method: 'POST',
       headers: { 
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Type': 'application/json',
         'Version': '2021-07-28'
       },
-      body: formData.toString(),
+      body: JSON.stringify({
+        client_id: clientId,
+        client_secret: clientSecret,
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: redirectUri,
+      }),
     });
 
     if (!tokenResponse.ok) {
@@ -69,27 +67,42 @@ export async function GET(request: Request) {
     // Decode the access token to get the location ID
     const decodedToken = jwt.decode(access_token) as any;
     const locationId = decodedToken?.authClassId;
+    const locationName = decodedToken?.locationName || null;
 
     if (!locationId) {
       console.error('No location ID found in token:', { decodedToken });
       return NextResponse.redirect(`${baseUrl}/?error=no_location`);
     }
 
-    console.log('Creating account record:', {
+    console.log('Creating GHL integration record:', {
       locationId,
       hasAccessToken: !!access_token,
       hasRefreshToken: !!refresh_token,
       expiresIn: expires_in
     });
 
-    // Store tokens in database
-    await prisma.account.create({
-      data: {
-        ghl_location_id: locationId,
-        access_token,
-        refresh_token,
-        token_expires_at: new Date(Date.now() + expires_in * 1000),
+    // Store tokens in GHLIntegration table
+    await prisma.GHLIntegration.upsert({
+      where: {
+        organizationId_locationId: {
+          organizationId: session.user.organizationId,
+          locationId
+        }
       },
+      update: {
+        accessToken: access_token,
+        refreshToken: refresh_token,
+        expiresAt: new Date(Date.now() + expires_in * 1000),
+        locationName
+      },
+      create: {
+        organizationId: session.user.organizationId,
+        locationId,
+        locationName,
+        accessToken: access_token,
+        refreshToken: refresh_token,
+        expiresAt: new Date(Date.now() + expires_in * 1000)
+      }
     });
 
     console.log('Successfully stored tokens, redirecting to scenarios');

@@ -1,31 +1,23 @@
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
 import './globals.css';
-import Script from 'next/script';
-import AuthProvider from '@/components/providers/SessionProvider';
+import { Inter } from 'next/font/google';
+import { Providers } from '@/components/providers/Providers';
 
 const inter = Inter({ subsets: ['latin'] });
 
-export const metadata: Metadata = {
+export const metadata = {
   title: 'ProfitReach',
   description: 'AI-powered cold outreach automation',
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <head>
-        <Script 
-          src="https://marketplace.gohighlevel.com/js/oauth_sdk.js" 
-          strategy="beforeInteractive"
-        />
-      </head>
-      <body className={`${inter.className} min-h-screen bg-background`} suppressHydrationWarning>
-        <AuthProvider>{children}</AuthProvider>
+    <html lang="en">
+      <body className={inter.className}>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

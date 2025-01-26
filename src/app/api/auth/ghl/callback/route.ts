@@ -25,9 +25,12 @@ export async function GET(request: Request) {
     const stateData = JSON.parse(Buffer.from(state, 'base64').toString());
     const redirect_uri = stateData.redirect_uri;
 
-    const tokenResponse = await fetch('https://services.gohighlevel.com/oauth/token', {
+    const tokenResponse = await fetch('https://services.leadconnectorhq.com/oauth/token', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Version': '2021-07-28'
+      },
       body: JSON.stringify({
         client_id: process.env.NEXT_PUBLIC_GHL_CLIENT_ID,
         client_secret: process.env.GHL_CLIENT_SECRET,

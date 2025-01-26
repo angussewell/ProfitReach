@@ -1,7 +1,16 @@
 'use client';
 
-import { PropsWithChildren } from 'react';
+import { SessionProvider } from 'next-auth/react';
+import { OrganizationProvider } from '@/contexts/OrganizationContext';
+import { Toaster } from 'sonner';
 
-export default function Providers({ children }: PropsWithChildren) {
-  return <>{children}</>;
+export function Providers({ children }: { children: React.ReactNode }) {
+  return (
+    <SessionProvider>
+      <OrganizationProvider>
+        {children}
+        <Toaster position="top-right" />
+      </OrganizationProvider>
+    </SessionProvider>
+  );
 } 

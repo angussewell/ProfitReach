@@ -1,12 +1,18 @@
 import 'next-auth';
 import type { DefaultSession } from 'next-auth'
+import { User as PrismaUser } from '@prisma/client';
 
 declare module 'next-auth' {
+  interface User extends Omit<PrismaUser, 'emailVerified' | 'createdAt' | 'updatedAt'> {
+    organizationName?: string;
+  }
+
   interface Session {
-    user: {
-      id: string
-      role: string
-      organizationId: string | null
+    user: User & {
+      id: string;
+      role: string;
+      organizationId: string;
+      organizationName?: string;
     } & DefaultSession['user']
     accessToken?: string | null
     refreshToken?: string | null
@@ -28,8 +34,9 @@ declare module 'next-auth' {
 
 declare module 'next-auth/jwt' {
   interface JWT {
-    id: string
-    role: string
-    organizationId: string | null
+    id: string;
+    role: string;
+    organizationId: string;
+    organizationName?: string;
   }
 } 

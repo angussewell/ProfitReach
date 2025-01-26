@@ -1,67 +1,82 @@
-import { prisma } from './db';
+import { NextAuthOptions } from 'next-auth';
+import CredentialsProvider from 'next-auth/providers/credentials';
+import { prisma } from '@/lib/prisma';
+import bcrypt from 'bcryptjs';
 
-const GHL_CLIENT_ID = process.env.NEXT_PUBLIC_GHL_CLIENT_ID;
-const GHL_REDIRECT_URI = process.env.NEXT_PUBLIC_GHL_REDIRECT_URI;
+export const authOptions: NextAuthOptions = {
+  providers: [
+    CredentialsProvider({
+      name: 'credentials',
+      credentials: {
+        email: { label: 'Email', type: 'email' },
+        password: { label: 'Password', type: 'password' }
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) {
+          throw new Error('Invalid credentials');
+        }
 
-export async function refreshToken(locationId: string) {
-  const account = await prisma.account.findUnique({
-    where: { ghl_location_id: locationId },
-  });
+        const user = await prisma.user.findUnique({
+          where: { email: credentials.email },
+          include: {
+            organization: true,
+          },
+        });
 
-  if (!account) {
-    throw new Error('Account not found');
-  }
+        if (!user || !user.password) {
+          throw new Error('Invalid credentials');
+        }
 
-  const tokenResponse = await fetch('https://services.gohighlevel.com/oauth/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      client_id: GHL_CLIENT_ID,
-      client_secret: process.env.GHL_CLIENT_SECRET,
-      grant_type: 'refresh_token',
-      refresh_token: account.refresh_token,
+        const isValid = await bcrypt.compare(credentials.password, user.password);
+
+        if (!isValid) {
+          throw new Error('Invalid credentials');
+        }
+
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          organizationId: user.organizationId,
+          organizationName: user.organization?.name
+        };
+      },
     }),
-  });
+  ],
+  callbacks: {
+    async jwt({ token, user, trigger, session }) {
+      if (user) {
+        // Initial sign in
+        token.id = user.id;
+        token.role = user.role;
+        token.organizationId = user.organizationId;
+        token.organizationName = user.organizationName;
+      } else if (trigger === 'update' && session?.user) {
+        // Session update - use the provided session data
+        token.organizationId = session.user.organizationId;
+        token.organizationName = session.user.organizationName;
+      }
 
-  if (!tokenResponse.ok) {
-    throw new Error('Failed to refresh token');
-  }
-
-  const { access_token, refresh_token, expires_in } = await tokenResponse.json();
-  const token_expires_at = new Date(Date.now() + expires_in * 1000);
-
-  return prisma.account.update({
-    where: { ghl_location_id: locationId },
-    data: {
-      access_token,
-      refresh_token,
-      token_expires_at,
+      return token;
     },
-  });
-}
-
-export async function getValidToken(locationId: string): Promise<string> {
-  const account = await prisma.account.findUnique({
-    where: { ghl_location_id: locationId },
-  });
-
-  if (!account) {
-    throw new Error('Account not found');
+    async session({ session, token }) {
+      return {
+        ...session,
+        user: {
+          ...session.user,
+          id: token.id,
+          role: token.role,
+          organizationId: token.organizationId,
+          organizationName: token.organizationName
+        }
+      };
+    }
+  },
+  pages: {
+    signIn: '/login',
+  },
+  session: {
+    strategy: 'jwt'
   }
-
-  if (account.token_expires_at > new Date()) {
-    return account.access_token;
-  }
-
-  const refreshedAccount = await refreshToken(locationId);
-  return refreshedAccount.access_token;
-}
-
-export const initiateGHLAuth = () => {
-  const state = Math.random().toString(36).substring(7);
-  localStorage.setItem('ghl_auth_state', state);
-  
-  const authUrl = `https://marketplace.gohighlevel.com/oauth/chooselocation?response_type=code&client_id=${GHL_CLIENT_ID}&redirect_uri=${GHL_REDIRECT_URI}&scope=businesses.readonly businesses.write&state=${state}`;
-  
-  window.location.href = authUrl;
 }; 

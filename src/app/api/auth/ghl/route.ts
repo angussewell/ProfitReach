@@ -13,10 +13,27 @@ export async function GET() {
   };
   const state = Buffer.from(JSON.stringify(stateData)).toString('base64');
   
+  // Define required scopes for our app
+  const scopes = [
+    'businesses.readonly',
+    'businesses.write',
+    'contacts.readonly',
+    'contacts.write',
+    'locations.readonly',
+    'locations.write',
+    'conversations.readonly',
+    'conversations.write',
+    'opportunities.readonly',
+    'opportunities.write',
+    'oauth.readonly',
+    'oauth.write'
+  ].join(' ');
+
   const authUrl = new URL('https://marketplace.leadconnectorhq.com/oauth/chooselocation');
   authUrl.searchParams.append('client_id', process.env.NEXT_PUBLIC_GHL_CLIENT_ID);
   authUrl.searchParams.append('response_type', 'code');
   authUrl.searchParams.append('redirect_uri', process.env.NEXT_PUBLIC_GHL_REDIRECT_URI);
+  authUrl.searchParams.append('scope', scopes);
   authUrl.searchParams.append('state', state);
 
   // Create response with redirect

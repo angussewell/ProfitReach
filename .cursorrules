@@ -6,134 +6,206 @@
 - ALWAYS start by writing two detailed paragraphs, thinking about the next steps.
 - DO NOT jump to conclusions, DO NOT assume you've found the error. Keep an open mind, and always use logic and reason to figure out the best course of action.
 
-# 🎯 Project Overview
+# Profit Reach Application Overview
 
-This Next.js application (ProfitReach) manages cold outreach campaigns through GoHighLevel integration. The core focus is scenario management, AI-powered messaging, contact research, and tracking scenario effectiveness through webhook-based metrics.
+## Core Architecture
 
-## Core Pages & Functionality
+- **Framework**: Next.js
+- **Database**: Neon (PostgreSQL)
+- **Primary Integration**: GoHighLevel CRM
+- **Purpose**: Automated outbound communication management with AI-enhanced capabilities
 
-#### 1. Research Page (New)
-- **Purpose**: AI-powered contact research
-- **Key Features**:
-  - Perplexity API integration
-  - Variable-based prompt system
-  - Contact field updates
-  - Research scenario handling
-- **Implementation**:
-  - Webhook-triggered research
-  - Dynamic prompt replacement
-  - Field mapping for results
+## Core Functionality Flow
 
-#### 2. All Scenarios
-- **Purpose**: Track effectiveness of each outreach scenario
-- **Key Metrics Per Scenario**:
-  - Total enrollments
-  - Response count
-  - Currently active contacts
-  - Response rates
-- **Data Source**: 
-  - GoHighLevel webhooks for enrollments
-  - GoHighLevel webhooks for responses
-  - Neon database for metrics tracking
+### 1. Webhook Processing System
 
-#### 3. Managed Scenarios
-- **Purpose**: Create and edit scenario configurations
-- **Editable Elements**:
-  - Subject line
-  - Scenario type selection:
-    - Simple email
-    - One attachment
-    - Two attachments
-    - Google Drive share
-  - Email signature
-  - Customization prompt
-  - Email examples prompt
-- **Management Features**:
-  - Add new scenarios
-  - Edit existing scenarios
-  - Configure scenario settings
+### Inbound Webhook Handler
 
-#### 4. Email Signatures
-- **Purpose**: Manage email signature templates
-- **Features**:
-  - Create new signatures
-  - Edit existing signatures
-  - Associate signatures with scenarios
+- Receives webhooks from GoHighLevel
+- Processes contact information
+- Matches incoming data to specific scenarios
+- Validates data against defined filters
+- Stores webhook logs in Neon database
 
-#### 5. Prompts
-- **Purpose**: Manage overview prompts for scenarios
-- **Features**:
-  - Add new prompts
-  - Edit existing prompts
-  - Variable replacement system
-  - Associate prompts with scenarios
+### Outbound Webhook Handler
 
-#### 6. Webhook Logs
-- **Purpose**: Monitor and debug GoHighLevel scenario interactions
-- **Key Metrics**:
-  - Success/failure status
-  - Scenario performance
-  - Contact engagement
-  - Error tracking
-- **Data Display**:
-  - Real-time log entries
-  - Webhook payload inspection
-  - Error analysis
-  - Mapped fields visualization
+Outputs three primary data types:
 
-#### 7. Settings
-- **Purpose**: Configure webhook field mappings and system defaults
-- **Key Features**:
-  - Field mapping configuration
-  - Pre-configured templates
-  - System field management
-- **Configurable Fields**:
-  - Contact Email (required)
-  - Contact First Name
-  - Contact Last Name
-  - Scenario Name (required)
-  - Lead Status
-  - User Website
-  - Company Name
+1. Scenario Information
+    - Complete scenario configuration
+    - Associated prompts
+    - Filter settings
+2. User Input Data
+    - Processed contact information
+    - Variable replacements
+3. Snippet Data
+    - Pre-configured content blocks
+    - Dynamic content elements
 
-## 🔄 Data Flow & Integration
+### 2. Scenario Management
 
-### GoHighLevel Integration
-- **OAuth 2.0 Authentication**:
-  - Authorization flow
-  - Token management
-  - Refresh token handling
-- **Webhook Implementation**:
-  - Enrollment tracking
-  - Response monitoring
-  - Contact updates
+### Scenario Structure
 
-### Perplexity Integration
-- **Research Automation**:
-  - Dynamic prompt generation
-  - Contact field updates
-  - Error handling
-  - Rate limiting
+- Unique identifier
+- Name (unique in system)
+- Filter configuration (AND/OR logic)
+- Associated prompts
+- Subject line templates
+- Customization settings
 
-## 💻 Development Guidelines
+### Filter System
 
-### Performance Considerations
-- Implement webhook-based tracking
-- Minimize database operations
-- Optimize API calls to GoHighLevel
-- Cache response data appropriately
+Complex conditional logic supporting:
 
-### Error Handling
-- Manage GoHighLevel API rate limits
-- Handle webhook failures gracefully
-- Provide clear error messages
-- Implement retry mechanisms
+- Equals/Not Equals
+- Contains/Does Not Contain
+- Exists/Does Not Exist
+- AND/OR combinations
+- Multiple condition chains
 
-### UI/UX Requirements
-- Consistent styling across pages
-- Professional tech aesthetic
-- Responsive design
-- Clear data visualization
+### 3. Variable Processing System
+
+- Identifies variables in prompts
+- Matches variables to inbound webhook data
+- Performs real-time replacements
+- Validates required fields
+- Handles missing data gracefully
+
+## Key Features
+
+### 1. Research Capability
+
+- Triggered by specific scenario types
+- Integration with Perplexity API
+- Automated data gathering
+- CRM field updates
+- Custom prompt processing
+
+### 2. Webhook Logging System
+
+Tracks:
+
+- Inbound webhooks
+- Outbound webhooks
+- Success/failure status
+- Blocking events
+- Error messages
+- Complete request/response data
+
+### 3. Prompt Management
+
+- Global prompt library
+- Scenario-specific prompts
+- Variable system integration
+- Template management
+- Version tracking
+
+## Application Structure
+
+### Pages and Navigation
+
+1. **Settings Page**
+- Integration management
+- GoHighLevel configuration
+- System preferences
+- API settings
+1. **Webhook Logs Page**
+- Real-time log viewing
+- Status monitoring
+- Error tracking
+- Performance metrics
+1. **Research Page**
+- Perplexity API integration
+- Research prompt management
+- Result processing
+- CRM update tracking
+1. **Manage Scenarios Page**
+- Scenario creation/editing
+- Filter configuration
+- Prompt association
+- Webhook setup
+1. **Prompts Page**
+- Global prompt management
+- Variable system
+- Template library
+- Content optimization
+1. **All Scenarios Page**
+- Performance metrics
+- Success rates
+- Contact tracking
+- Response monitoring
+
+## Database Architecture
+
+### Key Models
+
+1. **Scenarios**
+- Name (unique)
+- Type configuration
+- Filter settings (JSON)
+- Associated prompts
+- Webhook configurations
+1. **Prompts**
+- Content storage
+- Variable definitions
+- Scenario associations
+- Version tracking
+1. **WebhookLogs**
+- Request/response data
+- Status tracking
+- Error logging
+- Performance metrics
+1. **FieldMappings**
+- System field definitions
+- Webhook field mappings
+- Required field flags
+- Field descriptions
+
+### Integration Points
+
+1. **GoHighLevel Integration**
+- Webhook handling
+- Contact synchronization
+- Scenario enrollment
+- Response tracking
+1. **Perplexity API Integration**
+- Research automation
+- Data processing
+- CRM updates
+- Response handling
+
+## Performance Features
+
+1. **Webhook Processing**
+- Asynchronous handling
+- Rate limiting
+- Error recovery
+- Load balancing
+1. **Data Management**
+- Efficient caching
+- Batch processing
+- Optimized queries
+- Real-time updates
+1. **Variable System**
+- Fast replacement
+- Error handling
+- Default values
+- Validation checks
+
+## Metrics and Analytics
+
+1. **Scenario Performance**
+- Contact processing rates
+- Success metrics
+- Response tracking
+- Error rates
+1. **System Health**
+- Webhook success rates
+- API performance
+- Database metrics
+- Integration status
+
+This overview provides a detailed foundation for understanding the Profit Reach application's architecture and functionality. The system is designed to be scalable, maintainable, and efficient in handling automated outbound communication workflows with sophisticated AI integration capabilities.
 
 # APPROACH
 - You always write clean, well-structured code that is easy for others to understand.
