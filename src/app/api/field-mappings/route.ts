@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { prisma } from '@/lib/prisma';
 
 // Production-ready logging
 function log(level: 'error' | 'info', message: string, data?: any) {
@@ -22,7 +22,7 @@ export async function GET() {
   try {
     log('info', 'Fetching field mappings');
     const mappings = await prisma.fieldMapping.findMany({
-      orderBy: { systemField: 'asc' }
+      orderBy: { createdAt: 'asc' }
     });
     return NextResponse.json(mappings);
   } catch (error) {
@@ -37,26 +37,23 @@ export async function POST(request: Request) {
     const body = await request.json();
     log('info', 'Creating/updating field mapping', { body });
     
-    const { systemField, webhookField } = body;
-    if (!systemField?.trim() || !webhookField?.trim()) {
-      return NextResponse.json({ error: 'Invalid fields' }, { status: 400 });
+    const { name, mapping } = body;
+    if (!name?.trim()) {
+      return NextResponse.json({ error: 'Name is required' }, { status: 400 });
     }
 
-    // Normalize both fields
-    const normalizedSystemField = normalizeFieldName(systemField);
-    const normalizedWebhookField = normalizeFieldName(webhookField);
+    const normalizedName = normalizeFieldName(name);
 
-    const mapping = await prisma.fieldMapping.upsert({
-      where: { systemField: normalizedSystemField },
+    const fieldMapping = await prisma.fieldMapping.upsert({
+      where: { name: normalizedName },
       create: { 
-        systemField: normalizedSystemField,
-        webhookField: normalizedWebhookField,
-        isRequired: ['contactemail', 'scenarioname'].includes(normalizedSystemField)
+        name: normalizedName,
+        mapping
       },
-      update: { webhookField: normalizedWebhookField }
+      update: { mapping }
     });
 
-    return NextResponse.json(mapping);
+    return NextResponse.json(fieldMapping);
   } catch (error) {
     log('error', 'Failed to update field mapping', { error: String(error) });
     return NextResponse.json({ error: 'Database operation failed' }, { status: 500 });

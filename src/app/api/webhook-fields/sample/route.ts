@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { prisma } from '@/lib/prisma';
 import { registerWebhookFields } from '@/lib/webhook-fields';
 
 // Helper to extract all possible fields from a data structure
@@ -25,13 +25,12 @@ function extractFields(data: any, prefix = ''): string[] {
 
 export async function GET() {
   try {
-    // Get fields from our registry
     const fields = await prisma.webhookField.findMany({
-      orderBy: { lastSeen: 'desc' }
+      orderBy: { createdAt: 'desc' }
     });
     
     return NextResponse.json({
-      fields: fields.map(f => f.field)
+      fields: fields.map(f => f.name)
     });
   } catch (error) {
     console.error('Failed to fetch webhook fields:', error);

@@ -17,7 +17,6 @@ const nextConfig = {
       fullUrl: true,
     },
   },
-  swcMinify: true,
   async headers() {
     return [
       {

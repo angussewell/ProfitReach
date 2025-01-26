@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { prisma } from '@/lib/prisma';
 
 // Production logging helper
 function logMessage(level: 'error' | 'info', message: string, data?: any) {
@@ -12,31 +12,28 @@ function logMessage(level: 'error' | 'info', message: string, data?: any) {
   }));
 }
 
-// Validate signature data with detailed feedback
+// Validate signature data
 function validateSignature(data: any) {
   const errors: string[] = [];
   
-  // Check if data exists
   if (!data) {
     errors.push('No signature data provided');
     return errors;
   }
 
-  // Validate signature name
-  if (!data.signatureName) {
+  if (!data.name) {
     errors.push('Signature name is required');
-  } else if (typeof data.signatureName !== 'string') {
+  } else if (typeof data.name !== 'string') {
     errors.push('Signature name must be a string');
-  } else if (!data.signatureName.trim()) {
+  } else if (!data.name.trim()) {
     errors.push('Signature name cannot be empty');
   }
   
-  // Validate signature content
-  if (!data.signatureContent) {
+  if (!data.content) {
     errors.push('Signature content is required');
-  } else if (typeof data.signatureContent !== 'string') {
+  } else if (typeof data.content !== 'string') {
     errors.push('Signature content must be a string');
-  } else if (!data.signatureContent.trim()) {
+  } else if (!data.content.trim()) {
     errors.push('Signature content cannot be empty');
   }
   
@@ -48,7 +45,7 @@ export async function GET() {
   try {
     logMessage('info', 'Fetching signatures');
     const signatures = await prisma.signature.findMany({
-      orderBy: { signatureName: 'asc' }
+      orderBy: { name: 'asc' }
     });
     logMessage('info', 'Signatures fetched successfully', { count: signatures.length });
     return NextResponse.json(signatures);
@@ -61,24 +58,12 @@ export async function GET() {
   }
 }
 
-// Unified handler for creating and updating signatures
+// Create or update signature
 export async function POST(request: Request) {
   try {
-    // Parse request body
-    const rawText = await request.text();
-    let data;
-    try {
-      data = JSON.parse(rawText);
-      logMessage('info', 'Processing signature request', { data });
-    } catch (parseError) {
-      logMessage('error', 'Invalid JSON in request', { error: String(parseError) });
-      return NextResponse.json({ 
-        error: 'Invalid JSON in request body',
-        details: String(parseError)
-      }, { status: 400 });
-    }
+    const data = await request.json();
+    logMessage('info', 'Processing signature request', { data });
 
-    // Validate request
     const errors = validateSignature(data);
     if (errors.length > 0) {
       logMessage('error', 'Signature validation failed', { errors });
@@ -88,16 +73,14 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
-    // Prepare signature data
     const signatureData = {
-      signatureName: data.signatureName.trim(),
-      signatureContent: data.signatureContent.trim()
+      name: data.name.trim(),
+      content: data.content.trim()
     };
 
-    // Create or update signature based on presence of ID
     const signature = await prisma.signature.upsert({
       where: { 
-        id: data.id || 'new' // Use 'new' for create, ensuring no ID match
+        id: data.id || 'new'
       },
       create: signatureData,
       update: signatureData
@@ -106,10 +89,7 @@ export async function POST(request: Request) {
     logMessage('info', `Signature ${data.id ? 'updated' : 'created'} successfully`, { id: signature.id });
     return NextResponse.json(signature);
   } catch (error) {
-    logMessage('error', 'Failed to process signature', { 
-      error: String(error),
-      stack: (error as Error).stack
-    });
+    logMessage('error', 'Failed to process signature', { error: String(error) });
     return NextResponse.json(
       { error: 'Failed to process signature', details: String(error) },
       { status: 500 }
@@ -139,10 +119,7 @@ export async function DELETE(request: Request) {
     logMessage('info', 'Signature deleted successfully', { id });
     return NextResponse.json({ success: true });
   } catch (error) {
-    logMessage('error', 'Failed to delete signature', { 
-      error: String(error),
-      stack: (error as Error).stack
-    });
+    logMessage('error', 'Failed to delete signature', { error: String(error) });
     return NextResponse.json(
       { error: 'Failed to delete signature', details: String(error) },
       { status: 500 }

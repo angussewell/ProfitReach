@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { prisma } from '@/lib/prisma';
 import type { Prisma, Prompt } from '@prisma/client';
 
 // Get all prompts
@@ -61,4 +61,4 @@ export async function PUT(request: Request) {
       { status: 500 }
     );
   }
-} 
+}
