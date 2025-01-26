@@ -1,6 +1,5 @@
 import NextAuth, { DefaultSession } from 'next-auth';
 import type { NextAuthOptions } from 'next-auth';
-import type { Adapter, AdapterAccount } from '@auth/core/adapters';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import { prisma } from '@/lib/prisma';
 
@@ -19,50 +18,8 @@ const clientSecret = process.env.GOHIGHLEVEL_CLIENT_SECRET || '';
 const TOKEN_URL = "https://services.leadconnectorhq.com/oauth/token";
 const USERINFO_URL = "https://services.leadconnectorhq.com/oauth/userinfo";
 
-// Create custom adapter
-function CustomAdapter(p: typeof prisma) {
-  const adapter = PrismaAdapter(p);
-  return {
-    ...adapter,
-    async linkAccount(data: AdapterAccount): Promise<void> {
-      await p.$executeRaw`
-        INSERT INTO "Account" (
-          "id",
-          "userId",
-          "type",
-          "provider",
-          "providerAccountId",
-          "access_token",
-          "refresh_token",
-          "expires_at",
-          "token_type",
-          "scope"
-        ) VALUES (
-          gen_random_uuid(),
-          ${data.userId},
-          'oauth',
-          'gohighlevel',
-          ${data.providerAccountId},
-          ${data.access_token},
-          ${data.refresh_token},
-          ${data.expires_at},
-          ${data.token_type},
-          ${data.scope}
-        )
-        ON CONFLICT ("provider", "providerAccountId") 
-        DO UPDATE SET
-          "access_token" = EXCLUDED.access_token,
-          "refresh_token" = EXCLUDED.refresh_token,
-          "expires_at" = EXCLUDED.expires_at,
-          "token_type" = EXCLUDED.token_type,
-          "scope" = EXCLUDED.scope;
-      `;
-    }
-  } satisfies Adapter;
-}
-
 export const authOptions: NextAuthOptions = {
-  adapter: CustomAdapter(prisma),
+  adapter: PrismaAdapter(prisma),
   debug: true,
   session: {
     strategy: "database",
@@ -100,15 +57,48 @@ export const authOptions: NextAuthOptions = {
       }
     }
   ],
+  events: {
+    async signIn({ user, account, profile }) {
+      if (account && profile) {
+        // Delete any existing accounts for this user
+        await prisma.$executeRaw`
+          DELETE FROM "Account"
+          WHERE "userId" = ${user.id}
+          AND "provider" = 'gohighlevel';
+        `;
+
+        // Create new account with all required fields
+        await prisma.$executeRaw`
+          INSERT INTO "Account" (
+            "id",
+            "userId",
+            "type",
+            "provider",
+            "providerAccountId",
+            "access_token",
+            "refresh_token",
+            "expires_at",
+            "token_type",
+            "scope"
+          ) VALUES (
+            gen_random_uuid(),
+            ${user.id},
+            'oauth',
+            'gohighlevel',
+            ${profile.location_id},
+            ${account.access_token},
+            ${account.refresh_token},
+            ${account.expires_at},
+            ${account.token_type},
+            ${account.scope}
+          );
+        `;
+      }
+    }
+  },
   callbacks: {
     async session({ session, user }) {
-      type AccountResult = {
-        access_token: string | null;
-        refresh_token: string | null;
-        providerAccountId: string;
-      };
-
-      const accounts = await prisma.$queryRaw<AccountResult[]>`
+      const accounts = await prisma.$queryRaw<{ access_token: string | null; refresh_token: string | null; providerAccountId: string }[]>`
         SELECT access_token, refresh_token, "providerAccountId"
         FROM "Account"
         WHERE "userId" = ${user.id}
