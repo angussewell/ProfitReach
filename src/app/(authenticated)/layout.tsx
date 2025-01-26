@@ -15,19 +15,21 @@ import {
   Briefcase
 } from 'lucide-react';
 
+// Force dynamic rendering for authenticated routes
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+
 export default function AuthenticatedLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { data: session, status } = useSession();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/');
-    }
-  }, [status, router]);
+  const { data: session, status } = useSession({
+    required: true,
+    onUnauthenticated() {
+      window.location.href = '/';
+    },
+  });
 
   if (status === 'loading') {
     return (
@@ -35,10 +37,6 @@ export default function AuthenticatedLayout({
         <div className="text-xl font-semibold">Loading...</div>
       </div>
     );
-  }
-
-  if (!session) {
-    return null;
   }
 
   const navigationItems = [
