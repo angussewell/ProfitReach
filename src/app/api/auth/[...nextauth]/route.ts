@@ -112,6 +112,9 @@ export const authOptions: NextAuthOptions = {
       };
     },
     async redirect({ url, baseUrl }) {
+      if (url.includes('status=success')) {
+        return `${baseUrl}/scenarios`;
+      }
       if (url.startsWith(baseUrl)) {
         return `${baseUrl}/scenarios`;
       }
