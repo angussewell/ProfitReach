@@ -1,7 +1,19 @@
-import NextAuth from 'next-auth';
+import NextAuth, { DefaultSession } from 'next-auth';
 import type { NextAuthOptions } from 'next-auth';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import { prisma } from '@/lib/prisma';
+
+// Extend the built-in session type
+declare module 'next-auth' {
+  interface Session extends DefaultSession {
+    accessToken?: string;
+    refreshToken?: string;
+    locationId?: string;
+    user: DefaultSession['user'] & {
+      id: string;
+    };
+  }
+}
 
 const clientId = process.env.GOHIGHLEVEL_CLIENT_ID || '';
 const clientSecret = process.env.GOHIGHLEVEL_CLIENT_SECRET || '';
@@ -21,7 +33,11 @@ export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   debug: true,
   session: {
-    strategy: "jwt"
+    strategy: "jwt",
+    maxAge: 24 * 60 * 60, // 24 hours
+  },
+  jwt: {
+    maxAge: 24 * 60 * 60, // 24 hours
   },
   providers: [
     {
@@ -69,7 +85,7 @@ export const authOptions: NextAuthOptions = {
           
           const tokens = await response.json();
           console.log("Token success response:", tokens);
-          return { tokens };
+          return tokens;
         }
       },
       userinfo: {
@@ -127,15 +143,26 @@ export const authOptions: NextAuthOptions = {
       }
     },
     async jwt({ token, account, user }) {
-      if (account) {
-        token.accessToken = account.access_token;
-        token.refreshToken = account.refresh_token;
-        token.locationId = account.providerAccountId;
+      // Initial sign in
+      if (account && user) {
+        return {
+          ...token,
+          accessToken: account.access_token,
+          refreshToken: account.refresh_token,
+          locationId: account.providerAccountId,
+          userId: user.id,
+          email: user.email,
+          name: user.name,
+          expires: Date.now() + 24 * 60 * 60 * 1000
+        };
       }
-      if (user) {
-        token.name = user.name;
-        token.email = user.email;
+
+      // Return previous token if not expired
+      if (token?.expires && Date.now() < (token.expires as number)) {
+        return token;
       }
+
+      // Token expired, try to refresh
       return token;
     },
     async session({ session, token }) {
@@ -143,23 +170,25 @@ export const authOptions: NextAuthOptions = {
         ...session,
         user: {
           ...session.user,
-          id: token.sub,
+          id: token.userId as string,
         },
-        accessToken: token.accessToken,
-        refreshToken: token.refreshToken,
-        locationId: token.locationId,
-        expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        accessToken: token.accessToken as string,
+        refreshToken: token.refreshToken as string,
+        locationId: token.locationId as string,
+        expires: new Date(token.expires as number).toISOString(),
       };
     },
     async redirect({ url, baseUrl }) {
-      // After successful auth, redirect to scenarios
-      if (url.startsWith(baseUrl)) {
-        return `${baseUrl}/scenarios`;
-      }
-      // If it's an OAuth callback URL, process it
+      // Handle OAuth callback
       if (url.startsWith('/api/auth')) {
         return url;
       }
+      
+      // After successful auth, always redirect to scenarios
+      if (url.includes('success') || url.startsWith(baseUrl)) {
+        return `${baseUrl}/scenarios`;
+      }
+
       // Default to base URL
       return baseUrl;
     }
