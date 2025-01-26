@@ -26,8 +26,10 @@ const HEADERS = {
 const TOKEN_URL = "https://services.leadconnectorhq.com/oauth/token";
 const USERINFO_URL = "https://services.leadconnectorhq.com/oauth/userinfo";
 
+const adapter = PrismaAdapter(prisma);
+
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma),
+  adapter,
   debug: true,
   session: {
     strategy: "database",
@@ -68,8 +70,17 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async signIn({ user, account, profile }: any) {
       if (account && profile) {
-        account.type = "oauth";
-        account.providerAccountId = profile.location_id;
+        await prisma.$executeRaw`
+          INSERT INTO "Account" ("userId", "type", "provider", "providerAccountId", "access_token", "refresh_token", "expires_at", "token_type", "scope")
+          VALUES (${user.id}, 'oauth', 'gohighlevel', ${profile.location_id}, ${account.access_token}, ${account.refresh_token}, ${account.expires_at}, ${account.token_type}, ${account.scope})
+          ON CONFLICT ("provider", "providerAccountId") 
+          DO UPDATE SET
+            "access_token" = EXCLUDED.access_token,
+            "refresh_token" = EXCLUDED.refresh_token,
+            "expires_at" = EXCLUDED.expires_at,
+            "token_type" = EXCLUDED.token_type,
+            "scope" = EXCLUDED.scope;
+        `;
       }
       return true;
     },
