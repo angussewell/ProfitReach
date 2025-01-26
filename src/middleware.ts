@@ -1,26 +1,39 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { getToken } from 'next-auth/jwt';
+
+// List of public routes that don't require authentication
+const publicRoutes = ['/api/auth', '/', '/login', '/error'];
 
 export const runtime = 'experimental-edge';
 
 export async function middleware(request: NextRequest) {
-  // Skip auth check for public routes
-  if (
-    request.nextUrl.pathname.startsWith('/api/auth') ||
-    request.nextUrl.pathname === '/'
-  ) {
+  // Check if the requested path is public
+  const isPublicPath = publicRoutes.some(route => 
+    request.nextUrl.pathname.startsWith(route)
+  );
+
+  if (isPublicPath) {
     return NextResponse.next();
   }
 
-  // Check for auth cookie
-  const hasAuth = request.cookies.has('ghl_auth');
-  
-  if (!hasAuth) {
-    // If no auth cookie exists, redirect to home page
-    return NextResponse.redirect(new URL('/', request.url));
-  }
+  try {
+    // Verify the session token
+    const token = await getToken({
+      req: request,
+      secret: process.env.NEXTAUTH_SECRET
+    });
 
-  return NextResponse.next();
+    if (!token) {
+      // Redirect to home page if not authenticated
+      return NextResponse.redirect(new URL('/', request.url));
+    }
+
+    return NextResponse.next();
+  } catch (error) {
+    console.error('Auth middleware error:', error);
+    return NextResponse.redirect(new URL('/error', request.url));
+  }
 }
 
 export const config = {

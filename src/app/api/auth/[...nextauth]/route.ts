@@ -110,6 +110,12 @@ export const authOptions: NextAuthOptions = {
         refreshToken: token.refreshToken,
         locationId: token.locationId,
       };
+    },
+    async redirect({ url, baseUrl }) {
+      if (url.startsWith(baseUrl)) {
+        return `${baseUrl}/scenarios`;
+      }
+      return baseUrl;
     }
   },
   pages: {
