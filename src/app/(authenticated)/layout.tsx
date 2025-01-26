@@ -3,7 +3,6 @@
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import AppSidebar from '@/components/layout/AppSidebar';
 import Link from 'next/link';
 import { 
   LayoutGrid, 
@@ -51,7 +50,11 @@ export default function AuthenticatedLayout({
 
   return (
     <div className="flex min-h-screen">
-      <AppSidebar>
+      {/* Sidebar */}
+      <div className="w-64 bg-white border-r">
+        <div className="p-4">
+          <h2 className="text-xl font-bold text-gray-800">ProfitReach</h2>
+        </div>
         <nav className="space-y-1 px-2">
           {navigationItems.map((item) => {
             const Icon = item.icon;
@@ -67,8 +70,10 @@ export default function AuthenticatedLayout({
             );
           })}
         </nav>
-      </AppSidebar>
-      <main className="flex-1 overflow-y-auto">
+      </div>
+
+      {/* Main content */}
+      <main className="flex-1 overflow-y-auto bg-gray-50">
         {children}
       </main>
     </div>

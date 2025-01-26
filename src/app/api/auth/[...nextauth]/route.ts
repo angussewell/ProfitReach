@@ -140,12 +140,11 @@ export const authOptions: NextAuthOptions = {
       };
     },
     async redirect({ url, baseUrl }) {
-      if (url.includes('status=success')) {
+      // Always redirect to /scenarios after successful authentication
+      if (url.includes('status=success') || url.startsWith(baseUrl)) {
         return `${baseUrl}/scenarios`;
       }
-      if (url.startsWith(baseUrl)) {
-        return `${baseUrl}/scenarios`;
-      }
+      // Prevent open redirects
       return baseUrl;
     }
   },
