@@ -1,47 +1,69 @@
-const { PrismaClient } = require('@prisma/client');
-const bcrypt = require('bcryptjs');
+const { PrismaClient } = require('@prisma/client')
+const bcrypt = require('bcryptjs')
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient()
 
 async function main() {
-  const email = process.env.ADMIN_EMAIL;
-  const password = process.env.ADMIN_PASSWORD;
-  const name = process.env.ADMIN_NAME || 'Admin User';
+  // Create or update admin organization
+  const adminOrg = await prisma.organization.upsert({
+    where: { name: 'Admin Organization' },
+    update: {},
+    create: { name: 'Admin Organization' }
+  })
 
-  if (!email || !password) {
-    console.error('Please set ADMIN_EMAIL and ADMIN_PASSWORD environment variables');
-    process.exit(1);
-  }
+  // Create or update admin user
+  const adminUser = await prisma.user.upsert({
+    where: { email: process.env.ADMIN_EMAIL || 'admin@profitreach.com' },
+    update: {
+      name: process.env.ADMIN_NAME || 'Admin User',
+      password: await bcrypt.hash(process.env.ADMIN_PASSWORD || 'admin123', 10),
+      role: 'admin',
+      organizationId: adminOrg.id
+    },
+    create: {
+      name: process.env.ADMIN_NAME || 'Admin User',
+      email: process.env.ADMIN_EMAIL || 'admin@profitreach.com',
+      password: await bcrypt.hash(process.env.ADMIN_PASSWORD || 'admin123', 10),
+      role: 'admin',
+      organizationId: adminOrg.id
+    }
+  })
 
-  try {
-    // Create admin organization
-    const organization = await prisma.organization.create({
-      data: {
-        name: 'Admin Organization',
-      },
-    });
+  console.log('Admin user created/updated successfully:', adminUser)
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+  // Create or update test organization
+  const testOrg = await prisma.organization.upsert({
+    where: { name: 'Alpine Gen' },
+    update: {},
+    create: { name: 'Alpine Gen' }
+  })
 
-    // Create admin user
-    const user = await prisma.user.create({
-      data: {
-        email,
-        name,
-        password: hashedPassword,
-        role: 'admin',
-        organizationId: organization.id,
-      },
-    });
+  // Create or update test user
+  const testUser = await prisma.user.upsert({
+    where: { email: 'angus@alpinegen.com' },
+    update: {
+      name: 'Angus Sewell',
+      password: await bcrypt.hash('S@ccoFresco16', 10),
+      role: 'user',
+      organizationId: testOrg.id
+    },
+    create: {
+      name: 'Angus Sewell',
+      email: 'angus@alpinegen.com',
+      password: await bcrypt.hash('S@ccoFresco16', 10),
+      role: 'user',
+      organizationId: testOrg.id
+    }
+  })
 
-    console.log('Admin user created successfully:', user);
-  } catch (error) {
-    console.error('Error creating admin user:', error);
-    process.exit(1);
-  } finally {
-    await prisma.$disconnect();
-  }
+  console.log('Test user created/updated successfully:', testUser)
 }
 
-main(); 
+main()
+  .catch((e) => {
+    console.error(e)
+    process.exit(1)
+  })
+  .finally(async () => {
+    await prisma.$disconnect()
+  }) 
