@@ -20,6 +20,9 @@ const USERINFO_URL = "https://services.leadconnectorhq.com/oauth/userinfo";
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   debug: true,
+  session: {
+    strategy: "jwt"
+  },
   providers: [
     {
       id: "gohighlevel",
@@ -46,7 +49,6 @@ export const authOptions: NextAuthOptions = {
           };
           
           console.log("Token request params:", tokenParams);
-          console.log("Token URL:", TOKEN_URL);
           
           const response = await fetch(TOKEN_URL, {
             method: "POST",
@@ -82,69 +84,83 @@ export const authOptions: NextAuthOptions = {
           return response.json();
         }
       },
-      clientId: clientId,
-      clientSecret: clientSecret,
+      clientId,
+      clientSecret,
       profile(profile) {
         console.log("Processing profile:", profile);
         return {
           id: profile.location_id,
           email: profile.email || `location.${profile.location_id}@gohighlevel.com`,
           name: profile.name || `GoHighLevel Location ${profile.location_id}`,
+          locationId: profile.location_id
         };
       }
     }
   ],
   callbacks: {
     async signIn({ user, account, profile }) {
-      if (account && profile) {
-        try {
-          // Try to update existing account or create new one
-          await prisma.account.upsert({
-            where: {
-              ghl_location_id: profile.location_id,
-            },
-            update: {
-              access_token: account.access_token,
-              refresh_token: account.refresh_token,
-              token_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours from now
-            },
-            create: {
-              ghl_location_id: profile.location_id,
-              access_token: account.access_token,
-              refresh_token: account.refresh_token,
-              token_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours from now
-            },
-          });
-          return true;
-        } catch (error) {
-          console.error('Error in signIn callback:', error);
-          return false;
-        }
+      if (!account || !profile) return false;
+      
+      try {
+        // Store the account info
+        await prisma.account.upsert({
+          where: {
+            ghl_location_id: profile.location_id
+          },
+          update: {
+            access_token: account.access_token,
+            refresh_token: account.refresh_token,
+            token_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+          },
+          create: {
+            ghl_location_id: profile.location_id,
+            access_token: account.access_token,
+            refresh_token: account.refresh_token,
+            token_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+          },
+        });
+        
+        return true;
+      } catch (error) {
+        console.error('Error in signIn callback:', error);
+        return false;
       }
-      return true;
     },
-    async jwt({ token, account }) {
+    async jwt({ token, account, user }) {
       if (account) {
         token.accessToken = account.access_token;
         token.refreshToken = account.refresh_token;
         token.locationId = account.providerAccountId;
+      }
+      if (user) {
+        token.name = user.name;
+        token.email = user.email;
       }
       return token;
     },
     async session({ session, token }) {
       return {
         ...session,
+        user: {
+          ...session.user,
+          id: token.sub,
+        },
         accessToken: token.accessToken,
         refreshToken: token.refreshToken,
         locationId: token.locationId,
+        expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       };
     },
     async redirect({ url, baseUrl }) {
-      // Always redirect to /scenarios after successful authentication
-      if (url.includes('status=success') || url.startsWith(baseUrl)) {
+      // After successful auth, redirect to scenarios
+      if (url.startsWith(baseUrl)) {
         return `${baseUrl}/scenarios`;
       }
-      // Prevent open redirects
+      // If it's an OAuth callback URL, process it
+      if (url.startsWith('/api/auth')) {
+        return url;
+      }
+      // Default to base URL
       return baseUrl;
     }
   },
