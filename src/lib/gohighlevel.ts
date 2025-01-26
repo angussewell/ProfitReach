@@ -1,4 +1,4 @@
-import { getValidToken } from './auth';
+import { prisma } from '@/lib/prisma';
 import {
   GHLContact,
   GHLTask,
@@ -11,13 +11,83 @@ import { cookies } from 'next/headers';
 export class GoHighLevelClient {
   private baseUrl = 'https://services.gohighlevel.com/v1';
   private locationId: string;
+  private organizationId: string;
 
-  constructor(locationId: string) {
+  constructor(locationId: string, organizationId: string) {
     this.locationId = locationId;
+    this.organizationId = organizationId;
+  }
+
+  private async refreshToken(integration: any): Promise<string> {
+    const clientId = process.env.NEXT_PUBLIC_GHL_CLIENT_ID;
+    const clientSecret = process.env.GHL_CLIENT_SECRET;
+
+    if (!clientId || !clientSecret) {
+      throw new Error('Missing GoHighLevel client credentials');
+    }
+
+    const response = await fetch('https://services.leadconnectorhq.com/oauth/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Version': '2021-07-28'
+      },
+      body: JSON.stringify({
+        client_id: clientId,
+        client_secret: clientSecret,
+        grant_type: 'refresh_token',
+        refresh_token: integration.refreshToken,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to refresh token: ${response.statusText}`);
+    }
+
+    const { access_token, refresh_token, expires_in } = await response.json();
+
+    // Update tokens in database
+    await prisma.gHLIntegration.update({
+      where: {
+        organizationId_locationId: {
+          organizationId: this.organizationId,
+          locationId: this.locationId
+        }
+      },
+      data: {
+        accessToken: access_token,
+        refreshToken: refresh_token,
+        expiresAt: new Date(Date.now() + expires_in * 1000)
+      }
+    });
+
+    return access_token;
+  }
+
+  private async getValidToken(): Promise<string> {
+    const integration = await prisma.gHLIntegration.findUnique({
+      where: {
+        organizationId_locationId: {
+          organizationId: this.organizationId,
+          locationId: this.locationId
+        }
+      }
+    });
+
+    if (!integration) {
+      throw new Error('No GoHighLevel integration found');
+    }
+
+    // Check if token is expired or will expire in the next minute
+    if (integration.expiresAt.getTime() <= Date.now() + 60000) {
+      return this.refreshToken(integration);
+    }
+
+    return integration.accessToken;
   }
 
   private async getHeaders(): Promise<HeadersInit> {
-    const token = await getValidToken(this.locationId);
+    const token = await this.getValidToken();
     return {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
@@ -85,15 +155,17 @@ export class GoHighLevelClient {
 // Singleton instance cache
 const clientInstances: Record<string, GoHighLevelClient> = {};
 
-export function getGoHighLevelClient(): GoHighLevelClient {
-  const locationId = cookies().get('ghl_auth')?.value;
+export async function getGoHighLevelClient(organizationId: string): Promise<GoHighLevelClient> {
+  const cookieStore = await cookies();
+  const locationId = cookieStore.get('ghl_auth')?.value;
   if (!locationId) {
     throw new Error('No GoHighLevel location ID found');
   }
 
-  if (!clientInstances[locationId]) {
-    clientInstances[locationId] = new GoHighLevelClient(locationId);
+  const key = `${organizationId}:${locationId}`;
+  if (!clientInstances[key]) {
+    clientInstances[key] = new GoHighLevelClient(locationId, organizationId);
   }
 
-  return clientInstances[locationId];
+  return clientInstances[key];
 } 

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { GHLAuthButton } from '@/components/auth/GHLAuthButton';
+import { useSession } from 'next-auth/react';
 
 // Pre-configured templates
 const WEBHOOK_TEMPLATES = {
@@ -38,6 +39,7 @@ function normalizeFieldName(name: string) {
 }
 
 export default function SettingsPage() {
+  const { data: session } = useSession();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [ghlIntegration, setGhlIntegration] = useState<any>(null);
@@ -46,8 +48,13 @@ export default function SettingsPage() {
 
   useEffect(() => {
     async function fetchData() {
+      if (!session?.user?.organizationId) {
+        setLoading(false);
+        return;
+      }
+
       try {
-        const response = await fetch('/api/ghl-integration');
+        const response = await fetch(`/api/ghl-integration?organizationId=${session.user.organizationId}`);
         const data = await response.json();
         
         if (data.error) {
@@ -64,12 +71,17 @@ export default function SettingsPage() {
     }
     
     fetchData();
-  }, []);
+  }, [session?.user?.organizationId]);
 
   const handleDisconnect = async () => {
+    if (!session?.user?.organizationId) {
+      toast.error('No organization ID found');
+      return;
+    }
+
     try {
       setSaving(true);
-      const response = await fetch('/api/ghl-integration', {
+      const response = await fetch(`/api/ghl-integration?organizationId=${session.user.organizationId}`, {
         method: 'DELETE'
       });
       
@@ -97,6 +109,16 @@ export default function SettingsPage() {
     );
   }
 
+  if (!session?.user?.organizationId) {
+    return (
+      <div className="p-4">
+        <Card className="p-6">
+          <div>Please select an organization to manage integrations.</div>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4">
       <Card className="p-6">
@@ -110,6 +132,7 @@ export default function SettingsPage() {
         ) : (
           <div>
             <p className="text-green-600 mb-4">✓ Connected to GoHighLevel</p>
+            <p className="text-sm text-gray-600 mb-2">Location: {ghlIntegration.locationName || 'Unknown'}</p>
             <Button
               onClick={handleDisconnect}
               variant="destructive"
