@@ -5,6 +5,11 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { prisma } from '@/lib/prisma';
+import { redirect } from 'next/navigation';
+import { GHLAuthButton } from '@/components/auth/GHLAuthButton';
 
 // Pre-configured templates
 const WEBHOOK_TEMPLATES = {
@@ -34,7 +39,18 @@ const SYSTEM_FIELDS = [
 
 const normalizeFieldName = (field: string) => field.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user) {
+    redirect('/auth/login');
+  }
+
+  const ghlIntegration = await prisma.gHLIntegration.findFirst({
+    where: { organizationId: session.user.organizationId! },
+    orderBy: { createdAt: 'desc' }
+  });
+
   const [webhookFields, setWebhookFields] = useState<string[]>([]);
   const [mappings, setMappings] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -176,52 +192,96 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="p-8 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Webhook Field Mappings</h1>
-        <div className="space-x-4">
-          <Button 
-            onClick={handleRefresh}
-            variant="outline"
-          >
-            Refresh Fields
-          </Button>
-          <Button 
-            onClick={() => applyTemplate('make')}
-            variant="outline"
-          >
-            Apply Make.com Template
-          </Button>
-          <Button 
-            onClick={handleSave}
-            disabled={saving}
-            className="bg-[#ff7a59] hover:bg-[#ff8f73] text-white"
-          >
-            {saving ? 'Saving...' : 'Save Changes'}
-          </Button>
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-lg font-medium leading-6 text-gray-900">
+          GoHighLevel Integration
+        </h3>
+        <div className="mt-2 max-w-xl text-sm text-gray-500">
+          <p>
+            Connect your GoHighLevel account to enable automated outreach campaigns.
+          </p>
+        </div>
+        <div className="mt-5">
+          {ghlIntegration ? (
+            <div className="rounded-md bg-green-50 p-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg
+                    className="h-5 w-5 text-green-400"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-green-800">
+                    Connected to GoHighLevel
+                  </h3>
+                  <div className="mt-2 text-sm text-green-700">
+                    <p>Location: {ghlIntegration.locationName || ghlIntegration.locationId}</p>
+                    <p>Connected on: {new Date(ghlIntegration.createdAt).toLocaleDateString()}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <GHLAuthButton />
+          )}
         </div>
       </div>
-      
-      <Card className="p-6">
-        <div className="space-y-6">
-          {SYSTEM_FIELDS.map(field => (
-            <div key={field.id} className="flex items-center gap-4">
-              <div className="w-1/3">
-                <label className="text-sm font-medium">
-                  {field.label}
-                  {field.required && <span className="text-red-500 ml-1">*</span>}
-                </label>
-              </div>
-              <SearchableSelect
-                options={webhookFields}
-                value={mappings[field.id] || ''}
-                onChange={(value) => handleFieldChange(field.id, value)}
-                placeholder="Select webhook field..."
-              />
-            </div>
-          ))}
+      <div className="p-8 max-w-4xl mx-auto">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold">Webhook Field Mappings</h1>
+          <div className="space-x-4">
+            <Button 
+              onClick={handleRefresh}
+              variant="outline"
+            >
+              Refresh Fields
+            </Button>
+            <Button 
+              onClick={() => applyTemplate('make')}
+              variant="outline"
+            >
+              Apply Make.com Template
+            </Button>
+            <Button 
+              onClick={handleSave}
+              disabled={saving}
+              className="bg-[#ff7a59] hover:bg-[#ff8f73] text-white"
+            >
+              {saving ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </div>
         </div>
-      </Card>
+        
+        <Card className="p-6">
+          <div className="space-y-6">
+            {SYSTEM_FIELDS.map(field => (
+              <div key={field.id} className="flex items-center gap-4">
+                <div className="w-1/3">
+                  <label className="text-sm font-medium">
+                    {field.label}
+                    {field.required && <span className="text-red-500 ml-1">*</span>}
+                  </label>
+                </div>
+                <SearchableSelect
+                  options={webhookFields}
+                  value={mappings[field.id] || ''}
+                  onChange={(value) => handleFieldChange(field.id, value)}
+                  placeholder="Select webhook field..."
+                />
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
     </div>
   );
 } 

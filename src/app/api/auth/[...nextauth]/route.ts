@@ -1,11 +1,23 @@
-import NextAuth, { DefaultSession } from 'next-auth';
+import NextAuth, { DefaultSession, User as NextAuthUser } from 'next-auth';
 import type { NextAuthOptions } from 'next-auth';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import { prisma } from '@/lib/prisma';
+import CredentialsProvider from "next-auth/providers/credentials";
+import bcrypt from 'bcryptjs';
+
+interface User extends NextAuthUser {
+  role: string;
+  organizationId: string | null;
+}
 
 // Extend the built-in session type
 declare module 'next-auth' {
   interface Session extends DefaultSession {
+    user: {
+      id: string;
+      role: string;
+      organizationId: string | null;
+    } & DefaultSession["user"]
     accessToken?: string | null;
     refreshToken?: string | null;
     locationId?: string | null;
@@ -22,24 +34,45 @@ export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   debug: true,
   session: {
-    strategy: "database",
+    strategy: "jwt",
     maxAge: 24 * 60 * 60, // 24 hours
   },
-  events: {
-    async signIn({ user, account }) {
-      if (!account) return;
-      
-      // Update the account with the required type field
-      await prisma.$executeRaw`
-        UPDATE "Account"
-        SET type = 'oauth'
-        WHERE "userId" = ${user.id}
-        AND provider = 'gohighlevel'
-        AND type IS NULL;
-      `;
-    }
-  },
   providers: [
+    CredentialsProvider({
+      name: 'Credentials',
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" }
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) {
+          throw new Error('Please enter an email and password')
+        }
+
+        const user = await prisma.user.findUnique({
+          where: { email: credentials.email },
+          include: { organization: true }
+        });
+
+        if (!user || !user.password) {
+          throw new Error('No user found with this email')
+        }
+
+        const passwordMatch = await bcrypt.compare(credentials.password, user.password)
+
+        if (!passwordMatch) {
+          throw new Error('Incorrect password')
+        }
+
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          organizationId: user.organizationId,
+        }
+      }
+    }),
     {
       id: "gohighlevel",
       name: "GoHighLevel",
@@ -72,32 +105,59 @@ export const authOptions: NextAuthOptions = {
     }
   ],
   callbacks: {
-    async session({ session, user }) {
-      const accounts = await prisma.$queryRaw<{ access_token: string | null; refresh_token: string | null; providerAccountId: string }[]>`
-        SELECT access_token, refresh_token, "providerAccountId"
-        FROM "Account"
-        WHERE "userId" = ${user.id}
-        AND provider = 'gohighlevel'
-        ORDER BY id DESC
-        LIMIT 1
-      `;
-
-      if (!accounts || !accounts.length) {
-        return session;
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id;
+        token.role = (user as User).role;
+        token.organizationId = (user as User).organizationId;
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      if (token) {
+        session.user.id = token.id as string;
+        session.user.role = token.role as string;
+        session.user.organizationId = token.organizationId as string | null;
       }
 
-      const account = accounts[0];
+      // If user has GHL connected, get the tokens
+      if (session.user.organizationId) {
+        const ghlIntegration = await prisma.gHLIntegration.findFirst({
+          where: { organizationId: session.user.organizationId },
+          orderBy: { createdAt: 'desc' }
+        });
 
-      return {
-        ...session,
-        user: {
-          ...session.user,
-          id: user.id
-        },
-        accessToken: account.access_token ?? null,
-        refreshToken: account.refresh_token ?? null,
-        locationId: account.providerAccountId ?? null,
-      };
+        if (ghlIntegration) {
+          session.accessToken = ghlIntegration.accessToken;
+          session.refreshToken = ghlIntegration.refreshToken;
+          session.locationId = ghlIntegration.locationId;
+        }
+      }
+
+      return session;
+    },
+    async signIn({ user, account }) {
+      // Store GHL integration data when user connects their account
+      if (account?.provider === 'gohighlevel' && user?.id) {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: user.id },
+          include: { organization: true }
+        });
+
+        if (dbUser?.organizationId && account.access_token && account.refresh_token) {
+          await prisma.gHLIntegration.create({
+            data: {
+              locationId: account.providerAccountId,
+              locationName: user.name,
+              accessToken: account.access_token,
+              refreshToken: account.refresh_token,
+              expiresAt: new Date(Date.now() + (account.expires_at || 0) * 1000),
+              organizationId: dbUser.organizationId
+            }
+          });
+        }
+      }
+      return true;
     },
     async redirect({ url, baseUrl }) {
       if (url.includes('callback') || url.includes('error')) {
@@ -107,7 +167,7 @@ export const authOptions: NextAuthOptions = {
     }
   },
   pages: {
-    signIn: '/',
+    signIn: '/auth/login',
   }
 };
 

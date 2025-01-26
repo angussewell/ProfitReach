@@ -1,15 +1,16 @@
 import 'next-auth';
+import type { DefaultSession } from 'next-auth'
 
 declare module 'next-auth' {
   interface Session {
-    accessToken?: string;
-    refreshToken?: string;
-    locationId?: string;
-    user?: {
-      name?: string | null;
-      email?: string | null;
-      image?: string | null;
-    };
+    user: {
+      id: string
+      role: string
+      organizationId: string | null
+    } & DefaultSession['user']
+    accessToken?: string | null
+    refreshToken?: string | null
+    locationId?: string | null
   }
 
   interface Profile {
@@ -22,5 +23,13 @@ declare module 'next-auth' {
     access_token: string;
     refresh_token: string;
     providerAccountId: string;
+  }
+}
+
+declare module 'next-auth/jwt' {
+  interface JWT {
+    id: string
+    role: string
+    organizationId: string | null
   }
 } 

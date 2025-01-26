@@ -38,14 +38,32 @@ model Session {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+model Organization {
+  id            String    @id @default(cuid())
+  name          String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  users         User[]
+  metrics       Metric[]
+  scenarios     Scenario[]
+  webhookLogs   WebhookLog[]
+  ghlIntegrations GHLIntegration[]
+}
+
 model User {
   id            String    @id @default(cuid())
   name          String?
   email         String?   @unique
+  password      String?
   emailVerified DateTime?
   image         String?
+  role          String    @default("user")
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
   accounts      Account[]
   sessions      Session[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
 
 model VerificationToken {
@@ -56,46 +74,51 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-model metric {
-  id           String   @id @default(cuid())
-  accountId    String
-  scenarioName String
-  enrollments  Int      @default(0)
-  replies      Int      @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+model Metric {
+  id             String   @id @default(cuid())
+  accountId      String
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  scenarioName   String
+  enrollments    Int      @default(0)
+  replies        Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@unique([accountId, scenarioName])
   @@index([scenarioName])
 }
 
-model signature {
+model Signature {
   id          String    @id @default(cuid())
   name        String    @unique
   content     String
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
-  scenarios   scenario[]
+  scenarios   Scenario[]
 }
 
-model scenario {
+model Scenario {
   id                   String    @id @default(cuid())
-  name                 String    @unique
+  name                 String    
   description          String?
   type                 String    @default("simple")
-  status              String    @default("active")
-  signatureId         String?
-  signature           signature? @relation(fields: [signatureId], references: [id])
-  customizationPrompt String?
-  emailExamplesPrompt String?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-  attachments         attachment[]
+  status               String    @default("active")
+  signatureId          String?
+  signature            Signature? @relation(fields: [signatureId], references: [id])
+  customizationPrompt  String?
+  emailExamplesPrompt  String?
+  organizationId       String
+  organization         Organization @relation(fields: [organizationId], references: [id])
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  attachments          Attachment[]
 
+  @@unique([name, organizationId])
   @@index([name])
 }
 
-model prompt {
+model Prompt {
   id        String   @id @default(cuid())
   name      String   @unique
   content   String
@@ -103,7 +126,7 @@ model prompt {
   updatedAt DateTime @updatedAt
 }
 
-model fieldMapping {
+model FieldMapping {
   id          String   @id @default(cuid())
   name        String   @unique
   description String?
@@ -112,20 +135,20 @@ model fieldMapping {
   updatedAt   DateTime @updatedAt
 }
 
-model attachment {
+model Attachment {
   id         String   @id @default(cuid())
   name       String
   type       String
   url        String
   scenarioId String
-  scenario   scenario @relation(fields: [scenarioId], references: [id])
+  scenario   Scenario @relation(fields: [scenarioId], references: [id])
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
   @@index([scenarioId])
 }
 
-model webhookField {
+model WebhookField {
   id          String   @id @default(cuid())
   name        String   @unique
   description String?
@@ -135,25 +158,47 @@ model webhookField {
   updatedAt   DateTime @updatedAt
 }
 
-model webhookLog {
-  id           String   @id @default(cuid())
-  accountId    String
-  createdAt    DateTime @default(now())
-  status       String   @default("error")
-  scenarioName String   @default("Unknown")
-  contactEmail String   @default("Unknown")
-  contactName  String   @default("Unknown")
-  company      String   @default("Unknown")
-  requestBody  Json
-  responseBody Json     @default("{}")
+model WebhookLog {
+  id             String   @id @default(cuid())
+  accountId      String
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  ghlIntegrationId String
+  ghlIntegration  GHLIntegration @relation(fields: [ghlIntegrationId], references: [id])
+  createdAt      DateTime @default(now())
+  status         String   @default("error")
+  scenarioName   String   @default("Unknown")
+  contactEmail   String   @default("Unknown")
+  contactName    String   @default("Unknown")
+  company        String   @default("Unknown")
+  requestBody    Json
+  responseBody   Json     @default("{}")
 
   @@index([scenarioName])
   @@index([createdAt])
   @@index([accountId])
+  @@index([ghlIntegrationId])
 }
 
-model playing_with_neon {
+model PlayingWithNeon {
   id    Int    @id @default(autoincrement())
   name  String
   value Float? @db.Real
+}
+
+model GHLIntegration {
+  id            String    @id @default(cuid())
+  locationId    String
+  locationName  String?
+  accessToken   String    @db.Text
+  refreshToken  String    @db.Text
+  expiresAt     DateTime
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  webhookLogs    WebhookLog[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([organizationId, locationId])
+  @@index([locationId])
 }
