@@ -1,6 +1,5 @@
 import NextAuth, { DefaultSession } from 'next-auth';
 import type { NextAuthOptions } from 'next-auth';
-import { PrismaAdapter } from '@auth/prisma-adapter';
 import { prisma } from '@/lib/prisma';
 
 // Extend the built-in session type
@@ -9,7 +8,7 @@ declare module 'next-auth' {
     accessToken?: string;
     refreshToken?: string;
     locationId?: string;
-    user: DefaultSession['user'] & {
+    user?: DefaultSession['user'] & {
       id: string;
     };
   }
@@ -30,13 +29,9 @@ const TOKEN_URL = "https://services.leadconnectorhq.com/oauth/token";
 const USERINFO_URL = "https://services.leadconnectorhq.com/oauth/userinfo";
 
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma),
   debug: true,
   session: {
     strategy: "jwt",
-    maxAge: 24 * 60 * 60, // 24 hours
-  },
-  jwt: {
     maxAge: 24 * 60 * 60, // 24 hours
   },
   providers: [
@@ -64,7 +59,6 @@ export const authOptions: NextAuthOptions = {
       clientId,
       clientSecret,
       profile(profile) {
-        console.log("Processing profile:", profile);
         return {
           id: profile.location_id,
           email: profile.email || `location.${profile.location_id}@gohighlevel.com`,
@@ -79,61 +73,38 @@ export const authOptions: NextAuthOptions = {
       if (!account || !profile) return false;
       
       try {
-        // Store the account info
-        const result = await prisma.account.upsert({
+        // Store tokens in database
+        await prisma.account.upsert({
           where: {
             ghl_location_id: profile.location_id
           },
           update: {
             access_token: account.access_token,
             refresh_token: account.refresh_token,
-            token_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+            token_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000)
           },
           create: {
             ghl_location_id: profile.location_id,
             access_token: account.access_token,
             refresh_token: account.refresh_token,
-            token_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
-          },
+            token_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000)
+          }
         });
-        
-        // Ensure we have a valid result before proceeding
-        if (!result) {
-          console.error('Failed to create/update account record');
-          return false;
-        }
 
         return true;
       } catch (error) {
-        console.error('Error in signIn callback:', error);
-        // Don't fail on unique constraint - this is actually a success case
-        if (error instanceof Error && error.message.includes('Unique constraint failed')) {
-          return true;
-        }
+        console.error('Error storing tokens:', error);
         return false;
       }
     },
-    async jwt({ token, account, user }) {
-      // Initial sign in
+    async jwt({ token, account, user, profile }) {
       if (account && user) {
-        return {
-          ...token,
-          accessToken: account.access_token,
-          refreshToken: account.refresh_token,
-          locationId: account.providerAccountId,
-          userId: user.id,
-          email: user.email,
-          name: user.name,
-          expires: Date.now() + 24 * 60 * 60 * 1000
-        };
+        token.accessToken = account.access_token;
+        token.refreshToken = account.refresh_token;
+        token.locationId = profile?.location_id;
+        token.userId = user.id;
+        token.expires = Date.now() + 24 * 60 * 60 * 1000;
       }
-
-      // Return previous token if not expired
-      if (token?.expires && Date.now() < (token.expires as number)) {
-        return token;
-      }
-
-      // Token expired, try to refresh
       return token;
     },
     async session({ session, token }) {
@@ -154,14 +125,7 @@ export const authOptions: NextAuthOptions = {
       if (url.includes('callback') || url.includes('error')) {
         return `${baseUrl}/scenarios`;
       }
-
-      // If trying to access protected route while unauthenticated
-      if (url.startsWith(baseUrl)) {
-        return url;
-      }
-
-      // Default to base URL
-      return baseUrl;
+      return url.startsWith(baseUrl) ? url : baseUrl;
     }
   },
   pages: {
