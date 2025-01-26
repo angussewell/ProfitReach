@@ -1,9 +1,8 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { toast } from 'sonner';
-import { switchOrganization as switchOrganizationAction } from '@/app/actions/switchOrganization';
 
 interface Organization {
   id: string;
@@ -14,11 +13,8 @@ interface OrganizationContextType {
   organizations: Organization[];
   currentOrganization: Organization | null;
   loading: boolean;
-  switching: boolean;
   error: string | null;
-  fetchOrganizations: () => Promise<void>;
   switchOrganization: (orgId: string) => Promise<void>;
-  createOrganization: (name: string) => Promise<void>;
 }
 
 const OrganizationContext = createContext<OrganizationContextType | undefined>(undefined);
@@ -27,125 +23,107 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
   const { data: session, update: updateSession } = useSession();
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
-  const [switching, setSwitching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const currentOrganization = useMemo(() => {
-    const org = organizations.find(org => org.id === session?.user?.organizationId) || null;
-    console.log('Current organization computed:', {
-      sessionOrgId: session?.user?.organizationId,
-      foundOrg: org?.name,
-      availableOrgs: organizations.map(o => ({ id: o.id, name: o.name }))
-    });
-    return org;
-  }, [organizations, session?.user?.organizationId]);
-
-  const fetchOrganizations = async () => {
-    console.log('Fetching organizations...');
-    try {
-      setLoading(true);
-      setError(null);
-      const res = await fetch('/api/organizations');
-      const data = await res.json();
-      
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to fetch organizations');
-      }
-      
-      console.log('Organizations fetched:', data.map((o: Organization) => ({ id: o.id, name: o.name })));
-      setOrganizations(data);
-    } catch (err) {
-      console.error('Failed to fetch organizations:', err);
-      setError('Failed to fetch organizations');
-      setOrganizations([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const switchOrganization = async (orgId: string) => {
-    if (!orgId || switching) return;
-    
-    console.log('Starting organization switch to:', orgId);
-    try {
-      setSwitching(true);
-      setError(null);
-      
-      const updatedUser = await switchOrganizationAction(orgId);
-      console.log('Switch successful, updating session with:', updatedUser);
-      
-      // Update session with new user data
-      await updateSession({
-        ...session,
-        user: {
-          ...session?.user,
-          ...updatedUser
-        }
-      });
-      
-      toast.success(`Switched to ${updatedUser.organizationName}`);
-    } catch (err) {
-      console.error('Failed to switch organization:', err);
-      setError('Failed to switch organization');
-      toast.error('Failed to switch organization');
-    } finally {
-      setSwitching(false);
-    }
-  };
-
-  const createOrganization = async (name: string) => {
-    if (!name) return;
-    
-    try {
-      setError(null);
-      const res = await fetch('/api/organizations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name })
-      });
-      
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to create organization');
-      }
-
-      const newOrg = await res.json();
-      setOrganizations(prev => [...prev, newOrg]);
-      toast.success(`Created organization ${name}`);
-      
-      // Switch to new organization
-      await switchOrganization(newOrg.id);
-    } catch (err) {
-      console.error('Failed to create organization:', err);
-      setError('Failed to create organization');
-      toast.error('Failed to create organization');
-    }
-  };
+  const currentOrganization = organizations.find(
+    org => org.id === session?.user?.organizationId
+  ) || null;
 
   useEffect(() => {
-    console.log('Session changed:', {
-      userId: session?.user?.id,
-      orgId: session?.user?.organizationId
-    });
-    
+    const fetchOrganizations = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const res = await fetch('/api/organizations');
+        const data = await res.json();
+        
+        if (!res.ok) {
+          throw new Error(data.error || 'Failed to fetch organizations');
+        }
+        
+        setOrganizations(data);
+      } catch (err) {
+        console.error('Failed to fetch organizations:', err);
+        setError('Failed to fetch organizations');
+        setOrganizations([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     if (session?.user) {
       fetchOrganizations();
     }
   }, [session]);
 
-  const value = {
-    organizations,
-    currentOrganization,
-    loading,
-    switching,
-    error,
-    fetchOrganizations,
-    switchOrganization,
-    createOrganization
+  const switchOrganization = async (orgId: string) => {
+    try {
+      setError(null);
+      console.log('Starting organization switch to:', orgId);
+      
+      // First verify the organization exists
+      const verifyRes = await fetch(`/api/organizations?id=${orgId}`);
+      const verifyData = await verifyRes.json();
+      
+      if (!verifyRes.ok || !verifyData) {
+        console.error('Organization verification failed:', verifyData);
+        throw new Error('Invalid organization ID');
+      }
+
+      // Perform the switch
+      const res = await fetch('/api/organizations/switch', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache'
+        },
+        body: JSON.stringify({ organizationId: orgId })
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        console.error('Switch organization response error:', {
+          status: res.status,
+          statusText: res.statusText,
+          error: errorData
+        });
+        throw new Error(errorData.error || 'Failed to switch organization');
+      }
+
+      const data = await res.json();
+      console.log('Switch organization success:', data);
+
+      // Update session with proper trigger
+      await updateSession({
+        ...data,
+        trigger: 'update'
+      });
+      
+      // Wait for a short delay to ensure JWT callback completes
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      toast.success(`Switched to ${data.organizationName}`);
+      
+      // Use router for navigation instead of window.reload
+      window.location.href = '/scenarios';
+    } catch (err) {
+      console.error('Organization switch failed:', err);
+      setError(err instanceof Error ? err.message : 'Failed to switch organization');
+      toast.error(err instanceof Error ? err.message : 'Failed to switch organization');
+      throw err;
+    }
   };
 
   return (
-    <OrganizationContext.Provider value={value}>
+    <OrganizationContext.Provider
+      value={{
+        organizations,
+        currentOrganization,
+        loading,
+        error,
+        switchOrganization
+      }}
+    >
       {children}
     </OrganizationContext.Provider>
   );

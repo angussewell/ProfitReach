@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider        = "prisma-client-js"
   previewFeatures = ["extendedWhereUnique"]
@@ -12,20 +9,19 @@ datasource db {
 }
 
 model Account {
-  id                 String  @id @default(cuid())
-  userId             String
-  type               String
-  provider           String
-  providerAccountId  String
-  refresh_token      String?  @db.Text
-  access_token       String?  @db.Text
-  expires_at         Int?
-  token_type         String?
-  scope              String?
-  id_token           String?  @db.Text
-  session_state      String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
 }
@@ -39,31 +35,31 @@ model Session {
 }
 
 model Organization {
-  id            String    @id @default(cuid())
-  name          String    @unique
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  users         User[]
-  metrics       Metric[]
-  scenarios     Scenario[]
-  webhookLogs   WebhookLog[]
+  id              String           @id @default(cuid())
+  name            String           @unique
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
   ghlIntegrations GHLIntegration[]
+  metrics         Metric[]
+  scenarios       Scenario[]
+  users           User[]
+  webhookLogs     WebhookLog[]
 }
 
 model User {
-  id             String       @id @default(cuid())
+  id             String        @id @default(cuid())
   name           String?
-  email          String       @unique
+  email          String?       @unique
   password       String?
   emailVerified  DateTime?
   image          String?
-  role           String       @default("user")
-  organization   Organization? @relation(fields: [organizationId], references: [id])
+  role           String        @default("user")
   organizationId String?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
   accounts       Account[]
   sessions       Session[]
+  organization   Organization? @relation(fields: [organizationId], references: [id])
 }
 
 model VerificationToken {
@@ -76,34 +72,46 @@ model VerificationToken {
 
 model Metric {
   id             String       @id @default(cuid())
+  accountId      String
   organizationId String
-  type           String
   scenarioName   String
-  contactEmail   String
-  createdAt      DateTime    @default(now())
+  enrollments    Int          @default(0)
+  replies        Int          @default(0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime
   organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([accountId, scenarioName])
+  @@index([scenarioName])
 }
 
 model Signature {
   id        String     @id @default(cuid())
-  name      String
-  content   String     @db.Text
-  scenarios Scenario[]
+  name      String     @unique
+  content   String
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
+  scenarios Scenario[]
 }
 
 model Scenario {
-  id             String       @id @default(cuid())
-  name           String
-  type           String
-  organizationId String
-  signatureId    String?
-  signature      Signature?   @relation(fields: [signatureId], references: [id])
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  attachments    Attachment[]
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  id                  String       @id @default(cuid())
+  name                String
+  description         String?
+  type                String       @default("simple")
+  status              String       @default("active")
+  signatureId         String?
+  customizationPrompt String?
+  emailExamplesPrompt String?
+  organizationId      String
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+  attachments         Attachment[]
+  organization        Organization @relation(fields: [organizationId], references: [id])
+  signature           Signature?   @relation(fields: [signatureId], references: [id])
+
+  @@unique([name, organizationId])
+  @@index([name])
 }
 
 model Prompt {
@@ -126,11 +134,14 @@ model FieldMapping {
 model Attachment {
   id         String   @id @default(cuid())
   name       String
+  type       String
   url        String
   scenarioId String
-  scenario   Scenario @relation(fields: [scenarioId], references: [id])
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+  scenario   Scenario @relation(fields: [scenarioId], references: [id])
+
+  @@index([scenarioId])
 }
 
 model WebhookField {
@@ -144,14 +155,25 @@ model WebhookField {
 }
 
 model WebhookLog {
-  id             String       @id @default(cuid())
-  organizationId String
-  scenarioName   String
-  contactEmail   String
-  status         String
-  payload        Json
-  createdAt      DateTime    @default(now())
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  id               String         @id @default(cuid())
+  accountId        String
+  organizationId   String
+  createdAt        DateTime       @default(now())
+  status           String         @default("error")
+  scenarioName     String         @default("Unknown")
+  contactEmail     String         @default("Unknown")
+  contactName      String         @default("Unknown")
+  company          String         @default("Unknown")
+  requestBody      Json
+  responseBody     Json           @default("{}")
+  ghlIntegrationId String
+  GHLIntegration   GHLIntegration @relation(fields: [ghlIntegrationId], references: [id])
+  organization     Organization   @relation(fields: [organizationId], references: [id])
+
+  @@index([accountId])
+  @@index([createdAt])
+  @@index([ghlIntegrationId])
+  @@index([scenarioName])
 }
 
 model PlayingWithNeon {
@@ -168,9 +190,10 @@ model GHLIntegration {
   refreshToken   String
   expiresAt      DateTime
   organizationId String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
   organization   Organization @relation(fields: [organizationId], references: [id])
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  WebhookLog     WebhookLog[]
 
   @@unique([organizationId, locationId])
   @@index([locationId])
