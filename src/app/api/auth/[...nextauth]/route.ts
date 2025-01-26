@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 
 // Extend the built-in session type
 declare module 'next-auth' {
-  interface Session extends DefaultSession {
+  interface Session {
     accessToken?: string;
     refreshToken?: string;
     locationId?: string;
@@ -49,56 +49,17 @@ export const authOptions: NextAuthOptions = {
         params: { 
           client_id: clientId,
           scope: "businesses.readonly businesses.write companies.readonly custom-menu-link.write custom-menu-link.readonly emails/builder.readonly emails/builder.write users.readonly users.write workflows.readonly oauth.readonly oauth.write opportunities.readonly opportunities.write locations/customFields.write locations/customFields.readonly locations/customValues.write locations/customValues.readonly conversations/message.readonly conversations/message.write conversations/reports.readonly conversations/livechat.write conversations.write conversations.readonly campaigns.readonly",
-          response_type: "code",
-          redirect_uri: process.env.GOHIGHLEVEL_REDIRECT_URI
+          response_type: "code"
         }
       },
       token: {
         url: TOKEN_URL,
-        async request({ params }) {
-          const tokenParams = {
-            ...params,
-            grant_type: "authorization_code",
-            client_id: clientId,
-            client_secret: clientSecret,
-            redirect_uri: process.env.GOHIGHLEVEL_REDIRECT_URI
-          };
-          
-          console.log("Token request params:", tokenParams);
-          
-          const response = await fetch(TOKEN_URL, {
-            method: "POST",
-            headers: HEADERS,
-            body: new URLSearchParams(tokenParams as Record<string, string>)
-          });
-          
-          if (!response.ok) {
-            const error = await response.text();
-            console.error("Token error response:", {
-              status: response.status,
-              statusText: response.statusText,
-              headers: Object.fromEntries(response.headers.entries()),
-              error
-            });
-            throw new Error(`Token request failed: ${error}`);
-          }
-          
-          const tokens = await response.json();
-          console.log("Token success response:", tokens);
-          return tokens;
+        params: { 
+          grant_type: "authorization_code",
         }
       },
       userinfo: {
-        url: USERINFO_URL,
-        async request({ tokens }) {
-          const response = await fetch(USERINFO_URL, {
-            headers: {
-              ...HEADERS,
-              "Authorization": `Bearer ${tokens.access_token}`
-            }
-          });
-          return response.json();
-        }
+        url: USERINFO_URL
       },
       clientId,
       clientSecret,
