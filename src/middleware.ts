@@ -1,44 +1,32 @@
+import { withAuth } from 'next-auth/middleware';
 import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
-import { getToken } from 'next-auth/jwt';
 
-// List of public routes that don't require authentication
-const publicRoutes = ['/api/auth', '/', '/login', '/error'];
-
-export const runtime = 'experimental-edge';
-
-export async function middleware(request: NextRequest) {
-  // Check if the requested path is public
-  const isPublicPath = publicRoutes.some(route => 
-    request.nextUrl.pathname.startsWith(route)
-  );
-
-  if (isPublicPath) {
-    return NextResponse.next();
-  }
-
-  try {
-    // Verify the session token
-    const token = await getToken({
-      req: request,
-      secret: process.env.NEXTAUTH_SECRET
-    });
-
-    if (!token) {
-      // Redirect to home page if not authenticated
-      return NextResponse.redirect(new URL('/', request.url));
+export default withAuth(
+  function middleware(req) {
+    // If they're hitting the root path and are authenticated,
+    // redirect them to /scenarios
+    if (req.nextUrl.pathname === '/') {
+      return NextResponse.redirect(new URL('/scenarios', req.url));
     }
-
     return NextResponse.next();
-  } catch (error) {
-    console.error('Auth middleware error:', error);
-    return NextResponse.redirect(new URL('/error', request.url));
+  },
+  {
+    callbacks: {
+      authorized: ({ token }) => !!token
+    },
   }
-}
+);
 
 export const config = {
   matcher: [
-    '/api/:path*',
-    '/((?!_next/static|_next/image|favicon.ico).*)',
+    /*
+     * Match all request paths except for the ones starting with:
+     * - api/auth (auth endpoints)
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - public folder
+     */
+    '/((?!api/auth|_next/static|_next/image|favicon.ico|public).*)',
   ],
 }; 
