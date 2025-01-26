@@ -2,7 +2,6 @@
 
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
 import Link from 'next/link';
 import { 
   LayoutGrid, 
@@ -25,13 +24,16 @@ export default function AuthenticatedLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { data: session, status } = useSession({
-    required: true,
-    onUnauthenticated() {
-      window.location.href = '/';
-    },
-  });
+  const { data: session, status } = useSession();
+  const router = useRouter();
 
+  // Redirect to home if not authenticated
+  if (status === 'unauthenticated') {
+    router.replace('/');
+    return null;
+  }
+
+  // Show loading state while checking session
   if (status === 'loading') {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -40,63 +42,64 @@ export default function AuthenticatedLayout({
     );
   }
 
-  const navigationItems = [
-    { href: '/scenarios', label: 'All Scenarios', icon: LayoutGrid },
-    { href: '/scenarios/manage', label: 'Manage Scenarios', icon: Briefcase },
-    { href: '/research', label: 'Research', icon: Search },
-    { href: '/settings', label: 'Settings', icon: Settings },
-    { href: '/webhooks', label: 'Webhooks', icon: Webhook },
-    { href: '/prompts', label: 'Prompts', icon: MessageSquare },
-    { href: '/snippets', label: 'Snippets', icon: FileText },
-  ];
-
   return (
-    <div className="flex min-h-screen">
+    <div className="min-h-screen flex">
       {/* Sidebar */}
-      <div className="w-64 bg-white border-r flex flex-col">
-        <div className="p-4 border-b">
-          <h2 className="text-xl font-bold text-gray-800">ProfitReach</h2>
+      <div className="w-64 bg-gray-900 text-white p-6">
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold">ProfitReach</h1>
         </div>
         
-        {/* Navigation */}
-        <nav className="flex-1 space-y-1 px-2 py-4">
-          {navigationItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-              >
-                <Icon className="mr-3 h-5 w-5" />
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
+        <nav className="space-y-6">
+          <div className="space-y-2">
+            <Link href="/scenarios" className="flex items-center space-x-2 text-gray-300 hover:text-white">
+              <LayoutGrid size={20} />
+              <span>All Scenarios</span>
+            </Link>
+            
+            <Link href="/settings/scenarios" className="flex items-center space-x-2 text-gray-300 hover:text-white">
+              <Settings size={20} />
+              <span>Manage Scenarios</span>
+            </Link>
 
-        {/* User section */}
-        <div className="border-t p-4">
-          <div className="flex items-center mb-4">
-            <User className="h-5 w-5 text-gray-500 mr-2" />
-            <span className="text-sm font-medium text-gray-700">
-              {session?.user?.name || 'User'}
-            </span>
+            <Link href="/prompts" className="flex items-center space-x-2 text-gray-300 hover:text-white">
+              <MessageSquare size={20} />
+              <span>Prompts</span>
+            </Link>
+
+            <Link href="/webhooks" className="flex items-center space-x-2 text-gray-300 hover:text-white">
+              <Webhook size={20} />
+              <span>Webhook Logs</span>
+            </Link>
+
+            <Link href="/research" className="flex items-center space-x-2 text-gray-300 hover:text-white">
+              <Search size={20} />
+              <span>Research</span>
+            </Link>
           </div>
-          <button
-            onClick={() => signOut()}
-            className="flex items-center w-full px-2 py-2 text-sm font-medium text-red-600 rounded-md hover:bg-red-50"
-          >
-            <LogOut className="mr-3 h-5 w-5" />
-            Sign Out
-          </button>
-        </div>
+
+          <div className="pt-6 border-t border-gray-700">
+            <div className="flex items-center justify-between text-sm text-gray-400 mb-4">
+              <div className="flex items-center space-x-2">
+                <User size={16} />
+                <span>{session?.user?.name || 'User'}</span>
+              </div>
+              <button 
+                onClick={() => signOut({ callbackUrl: '/' })}
+                className="flex items-center space-x-1 text-gray-400 hover:text-white"
+              >
+                <LogOut size={16} />
+                <span>Logout</span>
+              </button>
+            </div>
+          </div>
+        </nav>
       </div>
 
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto bg-gray-50">
+      <div className="flex-1 bg-gray-100">
         {children}
-      </main>
+      </div>
     </div>
   );
 } 

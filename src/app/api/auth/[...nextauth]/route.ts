@@ -80,7 +80,7 @@ export const authOptions: NextAuthOptions = {
       
       try {
         // Store the account info
-        await prisma.account.upsert({
+        const result = await prisma.account.upsert({
           where: {
             ghl_location_id: profile.location_id
           },
@@ -97,9 +97,19 @@ export const authOptions: NextAuthOptions = {
           },
         });
         
+        // Ensure we have a valid result before proceeding
+        if (!result) {
+          console.error('Failed to create/update account record');
+          return false;
+        }
+
         return true;
       } catch (error) {
         console.error('Error in signIn callback:', error);
+        // Don't fail on unique constraint - this is actually a success case
+        if (error instanceof Error && error.message.includes('Unique constraint failed')) {
+          return true;
+        }
         return false;
       }
     },
