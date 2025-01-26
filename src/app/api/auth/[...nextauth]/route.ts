@@ -1,5 +1,6 @@
 import NextAuth, { DefaultSession } from 'next-auth';
 import type { NextAuthOptions } from 'next-auth';
+import type { Adapter, AdapterAccount } from '@auth/core/adapters';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import { prisma } from '@/lib/prisma';
 
@@ -18,8 +19,50 @@ const clientSecret = process.env.GOHIGHLEVEL_CLIENT_SECRET || '';
 const TOKEN_URL = "https://services.leadconnectorhq.com/oauth/token";
 const USERINFO_URL = "https://services.leadconnectorhq.com/oauth/userinfo";
 
+// Create custom adapter
+function CustomAdapter(p: typeof prisma) {
+  const adapter = PrismaAdapter(p);
+  return {
+    ...adapter,
+    async linkAccount(data: AdapterAccount): Promise<void> {
+      await p.$executeRaw`
+        INSERT INTO "Account" (
+          "id",
+          "userId",
+          "type",
+          "provider",
+          "providerAccountId",
+          "access_token",
+          "refresh_token",
+          "expires_at",
+          "token_type",
+          "scope"
+        ) VALUES (
+          gen_random_uuid(),
+          ${data.userId},
+          'oauth',
+          'gohighlevel',
+          ${data.providerAccountId},
+          ${data.access_token},
+          ${data.refresh_token},
+          ${data.expires_at},
+          ${data.token_type},
+          ${data.scope}
+        )
+        ON CONFLICT ("provider", "providerAccountId") 
+        DO UPDATE SET
+          "access_token" = EXCLUDED.access_token,
+          "refresh_token" = EXCLUDED.refresh_token,
+          "expires_at" = EXCLUDED.expires_at,
+          "token_type" = EXCLUDED.token_type,
+          "scope" = EXCLUDED.scope;
+      `;
+    }
+  } satisfies Adapter;
+}
+
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma),
+  adapter: CustomAdapter(prisma),
   debug: true,
   session: {
     strategy: "database",
@@ -58,25 +101,14 @@ export const authOptions: NextAuthOptions = {
     }
   ],
   callbacks: {
-    async signIn({ user, account, profile }: any) {
-      if (account && profile) {
-        // Create or update the account manually
-        await prisma.$executeRaw`
-          INSERT INTO "Account" ("id", "userId", "type", "provider", "providerAccountId", "access_token", "refresh_token", "expires_at", "token_type", "scope")
-          VALUES (gen_random_uuid(), ${user.id}, 'oauth', 'gohighlevel', ${profile.location_id}, ${account.access_token}, ${account.refresh_token}, ${account.expires_at}, ${account.token_type}, ${account.scope})
-          ON CONFLICT ("provider", "providerAccountId") 
-          DO UPDATE SET
-            "access_token" = EXCLUDED.access_token,
-            "refresh_token" = EXCLUDED.refresh_token,
-            "expires_at" = EXCLUDED.expires_at,
-            "token_type" = EXCLUDED.token_type,
-            "scope" = EXCLUDED.scope;
-        `;
-      }
-      return true;
-    },
     async session({ session, user }) {
-      const account = await prisma.$queryRaw`
+      type AccountResult = {
+        access_token: string | null;
+        refresh_token: string | null;
+        providerAccountId: string;
+      };
+
+      const accounts = await prisma.$queryRaw<AccountResult[]>`
         SELECT access_token, refresh_token, "providerAccountId"
         FROM "Account"
         WHERE "userId" = ${user.id}
@@ -85,9 +117,11 @@ export const authOptions: NextAuthOptions = {
         LIMIT 1
       `;
 
-      if (!account || !Array.isArray(account) || account.length === 0) {
+      if (!accounts || !accounts.length) {
         return session;
       }
+
+      const account = accounts[0];
 
       return {
         ...session,
@@ -95,9 +129,9 @@ export const authOptions: NextAuthOptions = {
           ...session.user,
           id: user.id
         },
-        accessToken: account[0].access_token ?? null,
-        refreshToken: account[0].refresh_token ?? null,
-        locationId: account[0].providerAccountId ?? null,
+        accessToken: account.access_token ?? null,
+        refreshToken: account.refresh_token ?? null,
+        locationId: account.providerAccountId ?? null,
       };
     },
     async redirect({ url, baseUrl }) {
