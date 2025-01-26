@@ -9,8 +9,11 @@ declare module 'next-auth' {
     accessToken?: string;
     refreshToken?: string;
     locationId?: string;
-    user: DefaultSession['user'] & {
+    user: {
       id: string;
+      name?: string | null;
+      email?: string | null;
+      image?: string | null;
     };
   }
 }
@@ -51,9 +54,7 @@ export const authOptions: NextAuthOptions = {
       },
       token: {
         url: TOKEN_URL,
-        params: { 
-          grant_type: "authorization_code",
-        }
+        params: { grant_type: "authorization_code" }
       },
       userinfo: {
         url: USERINFO_URL
@@ -71,44 +72,7 @@ export const authOptions: NextAuthOptions = {
     }
   ],
   callbacks: {
-    async signIn({ user, account, profile }) {
-      if (!account || !profile) return false;
-      
-      try {
-        // Let PrismaAdapter handle the user creation
-        // We just need to ensure the tokens are stored
-        await prisma.account.upsert({
-          where: {
-            provider_providerAccountId: {
-              provider: "gohighlevel",
-              providerAccountId: profile.location_id
-            }
-          },
-          update: {
-            access_token: account.access_token,
-            refresh_token: account.refresh_token,
-            expires_at: Math.floor(Date.now() / 1000 + 24 * 60 * 60),
-            userId: user.id
-          },
-          create: {
-            provider: "gohighlevel",
-            providerAccountId: profile.location_id,
-            type: "oauth",
-            access_token: account.access_token,
-            refresh_token: account.refresh_token,
-            expires_at: Math.floor(Date.now() / 1000 + 24 * 60 * 60),
-            userId: user.id
-          }
-        });
-
-        return true;
-      } catch (error) {
-        console.error('Error in signIn callback:', error);
-        return false;
-      }
-    },
     async session({ session, user }) {
-      // Get the most recent account for this user
       const account = await prisma.account.findFirst({
         where: { userId: user.id },
         orderBy: { id: 'desc' }
@@ -120,9 +84,9 @@ export const authOptions: NextAuthOptions = {
           ...session.user,
           id: user.id,
         },
-        accessToken: account?.access_token,
-        refreshToken: account?.refresh_token,
-        locationId: account?.providerAccountId,
+        accessToken: account?.access_token ?? null,
+        refreshToken: account?.refresh_token ?? null,
+        locationId: account?.providerAccountId ?? null,
       };
     },
     async redirect({ url, baseUrl }) {
