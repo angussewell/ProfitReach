@@ -1,6 +1,6 @@
 'use client';
 
-import { useSession } from 'next-auth/react';
+import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import Link from 'next/link';
@@ -11,7 +11,9 @@ import {
   Webhook, 
   FileText,
   Search,
-  Briefcase
+  Briefcase,
+  LogOut,
+  User
 } from 'lucide-react';
 
 // Force dynamic rendering for authenticated routes
@@ -51,11 +53,13 @@ export default function AuthenticatedLayout({
   return (
     <div className="flex min-h-screen">
       {/* Sidebar */}
-      <div className="w-64 bg-white border-r">
-        <div className="p-4">
+      <div className="w-64 bg-white border-r flex flex-col">
+        <div className="p-4 border-b">
           <h2 className="text-xl font-bold text-gray-800">ProfitReach</h2>
         </div>
-        <nav className="space-y-1 px-2">
+        
+        {/* Navigation */}
+        <nav className="flex-1 space-y-1 px-2 py-4">
           {navigationItems.map((item) => {
             const Icon = item.icon;
             return (
@@ -70,6 +74,23 @@ export default function AuthenticatedLayout({
             );
           })}
         </nav>
+
+        {/* User section */}
+        <div className="border-t p-4">
+          <div className="flex items-center mb-4">
+            <User className="h-5 w-5 text-gray-500 mr-2" />
+            <span className="text-sm font-medium text-gray-700">
+              {session?.user?.name || 'User'}
+            </span>
+          </div>
+          <button
+            onClick={() => signOut()}
+            className="flex items-center w-full px-2 py-2 text-sm font-medium text-red-600 rounded-md hover:bg-red-50"
+          >
+            <LogOut className="mr-3 h-5 w-5" />
+            Sign Out
+          </button>
+        </div>
       </div>
 
       {/* Main content */}
