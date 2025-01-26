@@ -15,21 +15,11 @@ declare module 'next-auth' {
 const clientId = process.env.GOHIGHLEVEL_CLIENT_ID || '';
 const clientSecret = process.env.GOHIGHLEVEL_CLIENT_SECRET || '';
 
-const HEADERS = {
-  "Version": "2021-07-28",
-  "Accept": "application/json",
-  "Content-Type": "application/x-www-form-urlencoded",
-  "Authorization": `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
-  "User-Agent": "NextJS-App"
-} as const;
-
 const TOKEN_URL = "https://services.leadconnectorhq.com/oauth/token";
 const USERINFO_URL = "https://services.leadconnectorhq.com/oauth/userinfo";
 
-const adapter = PrismaAdapter(prisma);
-
 export const authOptions: NextAuthOptions = {
-  adapter,
+  adapter: PrismaAdapter(prisma),
   debug: true,
   session: {
     strategy: "database",
@@ -57,7 +47,7 @@ export const authOptions: NextAuthOptions = {
       },
       clientId,
       clientSecret,
-      profile(profile) {
+      profile(profile: any) {
         return {
           id: profile.location_id,
           email: profile.email || `location.${profile.location_id}@gohighlevel.com`,
@@ -70,9 +60,10 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async signIn({ user, account, profile }: any) {
       if (account && profile) {
+        // Create or update the account manually
         await prisma.$executeRaw`
-          INSERT INTO "Account" ("userId", "type", "provider", "providerAccountId", "access_token", "refresh_token", "expires_at", "token_type", "scope")
-          VALUES (${user.id}, 'oauth', 'gohighlevel', ${profile.location_id}, ${account.access_token}, ${account.refresh_token}, ${account.expires_at}, ${account.token_type}, ${account.scope})
+          INSERT INTO "Account" ("id", "userId", "type", "provider", "providerAccountId", "access_token", "refresh_token", "expires_at", "token_type", "scope")
+          VALUES (gen_random_uuid(), ${user.id}, 'oauth', 'gohighlevel', ${profile.location_id}, ${account.access_token}, ${account.refresh_token}, ${account.expires_at}, ${account.token_type}, ${account.scope})
           ON CONFLICT ("provider", "providerAccountId") 
           DO UPDATE SET
             "access_token" = EXCLUDED.access_token,
@@ -85,13 +76,7 @@ export const authOptions: NextAuthOptions = {
       return true;
     },
     async session({ session, user }) {
-      type AccountResult = {
-        access_token: string | null;
-        refresh_token: string | null;
-        providerAccountId: string;
-      };
-
-      const accounts = await prisma.$queryRaw<AccountResult[]>`
+      const account = await prisma.$queryRaw`
         SELECT access_token, refresh_token, "providerAccountId"
         FROM "Account"
         WHERE "userId" = ${user.id}
@@ -100,9 +85,7 @@ export const authOptions: NextAuthOptions = {
         LIMIT 1
       `;
 
-      const account = accounts[0];
-
-      if (!account) {
+      if (!account || !Array.isArray(account) || account.length === 0) {
         return session;
       }
 
@@ -112,9 +95,9 @@ export const authOptions: NextAuthOptions = {
           ...session.user,
           id: user.id
         },
-        accessToken: account.access_token ?? null,
-        refreshToken: account.refresh_token ?? null,
-        locationId: account.providerAccountId ?? null,
+        accessToken: account[0].access_token ?? null,
+        refreshToken: account[0].refresh_token ?? null,
+        locationId: account[0].providerAccountId ?? null,
       };
     },
     async redirect({ url, baseUrl }) {
