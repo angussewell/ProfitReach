@@ -25,6 +25,20 @@ export const authOptions: NextAuthOptions = {
     strategy: "database",
     maxAge: 24 * 60 * 60, // 24 hours
   },
+  events: {
+    async signIn({ user, account }) {
+      if (!account) return;
+      
+      // Update the account with the required type field
+      await prisma.$executeRaw`
+        UPDATE "Account"
+        SET type = 'oauth'
+        WHERE "userId" = ${user.id}
+        AND provider = 'gohighlevel'
+        AND type IS NULL;
+      `;
+    }
+  },
   providers: [
     {
       id: "gohighlevel",
@@ -57,45 +71,6 @@ export const authOptions: NextAuthOptions = {
       }
     }
   ],
-  events: {
-    async signIn({ user, account, profile }) {
-      if (account && profile) {
-        // Delete any existing accounts for this user
-        await prisma.$executeRaw`
-          DELETE FROM "Account"
-          WHERE "userId" = ${user.id}
-          AND "provider" = 'gohighlevel';
-        `;
-
-        // Create new account with all required fields
-        await prisma.$executeRaw`
-          INSERT INTO "Account" (
-            "id",
-            "userId",
-            "type",
-            "provider",
-            "providerAccountId",
-            "access_token",
-            "refresh_token",
-            "expires_at",
-            "token_type",
-            "scope"
-          ) VALUES (
-            gen_random_uuid(),
-            ${user.id},
-            'oauth',
-            'gohighlevel',
-            ${profile.location_id},
-            ${account.access_token},
-            ${account.refresh_token},
-            ${account.expires_at},
-            ${account.token_type},
-            ${account.scope}
-          );
-        `;
-      }
-    }
-  },
   callbacks: {
     async session({ session, user }) {
       const accounts = await prisma.$queryRaw<{ access_token: string | null; refresh_token: string | null; providerAccountId: string }[]>`
