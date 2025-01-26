@@ -1,7 +1,6 @@
 'use client';
 
 import { useSession } from 'next-auth/react';
-import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { LoginButton } from '@/components/login-button';
 
@@ -9,11 +8,11 @@ export default function HomePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
-  useEffect(() => {
-    if (status === 'authenticated') {
-      router.push('/scenarios');
-    }
-  }, [status, router]);
+  // Only redirect if we're on the home page and authenticated
+  if (status === 'authenticated') {
+    router.replace('/scenarios');
+    return null;
+  }
 
   if (status === 'loading') {
     return (
@@ -21,10 +20,6 @@ export default function HomePage() {
         <div className="text-xl font-semibold">Loading...</div>
       </div>
     );
-  }
-
-  if (status === 'authenticated') {
-    return null; // Will redirect in useEffect
   }
 
   return (

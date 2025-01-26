@@ -179,14 +179,14 @@ export const authOptions: NextAuthOptions = {
       };
     },
     async redirect({ url, baseUrl }) {
-      // Handle OAuth callback
-      if (url.startsWith('/api/auth')) {
-        return url;
-      }
-      
-      // After successful auth, always redirect to scenarios
-      if (url.includes('success') || url.startsWith(baseUrl)) {
+      // Always redirect to /scenarios after successful auth
+      if (url.includes('callback') || url.includes('error')) {
         return `${baseUrl}/scenarios`;
+      }
+
+      // If trying to access protected route while unauthenticated
+      if (url.startsWith(baseUrl)) {
+        return url;
       }
 
       // Default to base URL
@@ -195,7 +195,6 @@ export const authOptions: NextAuthOptions = {
   },
   pages: {
     signIn: '/',
-    error: '/error',
   }
 };
 
