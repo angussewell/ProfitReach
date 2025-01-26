@@ -1,5 +1,6 @@
 import NextAuth, { DefaultSession } from 'next-auth';
 import type { NextAuthOptions } from 'next-auth';
+import { PrismaAdapter } from '@auth/prisma-adapter';
 import { prisma } from '@/lib/prisma';
 
 // Extend the built-in session type
@@ -8,7 +9,7 @@ declare module 'next-auth' {
     accessToken?: string;
     refreshToken?: string;
     locationId?: string;
-    user?: DefaultSession['user'] & {
+    user: DefaultSession['user'] & {
       id: string;
     };
   }
@@ -29,9 +30,10 @@ const TOKEN_URL = "https://services.leadconnectorhq.com/oauth/token";
 const USERINFO_URL = "https://services.leadconnectorhq.com/oauth/userinfo";
 
 export const authOptions: NextAuthOptions = {
+  adapter: PrismaAdapter(prisma),
   debug: true,
   session: {
-    strategy: "jwt",
+    strategy: "database",
     maxAge: 24 * 60 * 60, // 24 hours
   },
   providers: [
@@ -63,7 +65,7 @@ export const authOptions: NextAuthOptions = {
           id: profile.location_id,
           email: profile.email || `location.${profile.location_id}@gohighlevel.com`,
           name: profile.name || `GoHighLevel Location ${profile.location_id}`,
-          locationId: profile.location_id
+          image: null
         };
       }
     }
@@ -73,55 +75,57 @@ export const authOptions: NextAuthOptions = {
       if (!account || !profile) return false;
       
       try {
-        // Store tokens in database
+        // Let PrismaAdapter handle the user creation
+        // We just need to ensure the tokens are stored
         await prisma.account.upsert({
           where: {
-            ghl_location_id: profile.location_id
+            provider_providerAccountId: {
+              provider: "gohighlevel",
+              providerAccountId: profile.location_id
+            }
           },
           update: {
             access_token: account.access_token,
             refresh_token: account.refresh_token,
-            token_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000)
+            expires_at: Math.floor(Date.now() / 1000 + 24 * 60 * 60),
+            userId: user.id
           },
           create: {
-            ghl_location_id: profile.location_id,
+            provider: "gohighlevel",
+            providerAccountId: profile.location_id,
+            type: "oauth",
             access_token: account.access_token,
             refresh_token: account.refresh_token,
-            token_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000)
+            expires_at: Math.floor(Date.now() / 1000 + 24 * 60 * 60),
+            userId: user.id
           }
         });
 
         return true;
       } catch (error) {
-        console.error('Error storing tokens:', error);
+        console.error('Error in signIn callback:', error);
         return false;
       }
     },
-    async jwt({ token, account, user, profile }) {
-      if (account && user) {
-        token.accessToken = account.access_token;
-        token.refreshToken = account.refresh_token;
-        token.locationId = profile?.location_id;
-        token.userId = user.id;
-        token.expires = Date.now() + 24 * 60 * 60 * 1000;
-      }
-      return token;
-    },
-    async session({ session, token }) {
+    async session({ session, user }) {
+      // Get the most recent account for this user
+      const account = await prisma.account.findFirst({
+        where: { userId: user.id },
+        orderBy: { id: 'desc' }
+      });
+
       return {
         ...session,
         user: {
           ...session.user,
-          id: token.userId as string,
+          id: user.id,
         },
-        accessToken: token.accessToken as string,
-        refreshToken: token.refreshToken as string,
-        locationId: token.locationId as string,
-        expires: new Date(token.expires as number).toISOString(),
+        accessToken: account?.access_token,
+        refreshToken: account?.refresh_token,
+        locationId: account?.providerAccountId,
       };
     },
     async redirect({ url, baseUrl }) {
-      // Always redirect to /scenarios after successful auth
       if (url.includes('callback') || url.includes('error')) {
         return `${baseUrl}/scenarios`;
       }
