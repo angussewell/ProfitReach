@@ -9,12 +9,6 @@ declare module 'next-auth' {
     accessToken?: string;
     refreshToken?: string;
     locationId?: string;
-    user: {
-      id: string;
-      name?: string | null;
-      email?: string | null;
-      image?: string | null;
-    };
   }
 }
 
@@ -72,63 +66,14 @@ export const authOptions: NextAuthOptions = {
     }
   ],
   callbacks: {
-    async signIn({ user, account }) {
-      if (!account) return false;
-
-      try {
-        await prisma.account.create({
-          data: {
-            userId: user.id,
-            type: "oauth",
-            provider: "gohighlevel",
-            providerAccountId: user.id,
-            access_token: account.access_token,
-            refresh_token: account.refresh_token,
-            expires_at: Math.floor(Date.now() / 1000 + 24 * 60 * 60),
-            token_type: account.token_type || "Bearer",
-            scope: account.scope,
-          },
-        });
-        return true;
-      } catch (error) {
-        if (error instanceof Error && error.message.includes('Unique constraint failed')) {
-          // Account already exists, update it
-          await prisma.account.update({
-            where: {
-              provider_providerAccountId: {
-                provider: "gohighlevel",
-                providerAccountId: user.id
-              }
-            },
-            data: {
-              access_token: account.access_token,
-              refresh_token: account.refresh_token,
-              expires_at: Math.floor(Date.now() / 1000 + 24 * 60 * 60),
-              token_type: account.token_type || "Bearer",
-              scope: account.scope,
-            }
-          });
-          return true;
-        }
-        console.error('Error in signIn callback:', error);
-        return false;
-      }
-    },
     async session({ session, user }) {
       const account = await prisma.account.findFirst({
-        where: {
-          userId: user.id,
-          provider: "gohighlevel"
-        },
+        where: { userId: user.id },
         orderBy: { id: 'desc' }
       });
 
       return {
         ...session,
-        user: {
-          ...session.user,
-          id: user.id,
-        },
         accessToken: account?.access_token ?? null,
         refreshToken: account?.refresh_token ?? null,
         locationId: account?.providerAccountId ?? null,
