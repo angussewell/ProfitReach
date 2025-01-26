@@ -6,9 +6,9 @@ import { prisma } from '@/lib/prisma';
 // Extend the built-in session type
 declare module 'next-auth' {
   interface Session extends DefaultSession {
-    accessToken?: string;
-    refreshToken?: string;
-    locationId?: string;
+    accessToken?: string | null;
+    refreshToken?: string | null;
+    locationId?: string | null;
   }
 }
 
@@ -47,11 +47,11 @@ export const authOptions: NextAuthOptions = {
         }
       },
       token: {
-        url: "https://services.leadconnectorhq.com/oauth/token",
+        url: TOKEN_URL,
         params: { grant_type: "authorization_code" }
       },
       userinfo: {
-        url: "https://services.leadconnectorhq.com/oauth/userinfo"
+        url: USERINFO_URL
       },
       clientId,
       clientSecret,
@@ -66,17 +66,44 @@ export const authOptions: NextAuthOptions = {
     }
   ],
   callbacks: {
+    async signIn({ user, account, profile }: any) {
+      if (account && profile) {
+        account.type = "oauth";
+        account.providerAccountId = profile.location_id;
+      }
+      return true;
+    },
     async session({ session, user }) {
-      const account = await prisma.account.findFirst({
-        where: { userId: user.id },
-        orderBy: { id: 'desc' }
-      });
+      type AccountResult = {
+        access_token: string | null;
+        refresh_token: string | null;
+        providerAccountId: string;
+      };
+
+      const accounts = await prisma.$queryRaw<AccountResult[]>`
+        SELECT access_token, refresh_token, "providerAccountId"
+        FROM "Account"
+        WHERE "userId" = ${user.id}
+        AND provider = 'gohighlevel'
+        ORDER BY id DESC
+        LIMIT 1
+      `;
+
+      const account = accounts[0];
+
+      if (!account) {
+        return session;
+      }
 
       return {
         ...session,
-        accessToken: account?.access_token ?? null,
-        refreshToken: account?.refresh_token ?? null,
-        locationId: account?.providerAccountId ?? null,
+        user: {
+          ...session.user,
+          id: user.id
+        },
+        accessToken: account.access_token ?? null,
+        refreshToken: account.refresh_token ?? null,
+        locationId: account.providerAccountId ?? null,
       };
     },
     async redirect({ url, baseUrl }) {
