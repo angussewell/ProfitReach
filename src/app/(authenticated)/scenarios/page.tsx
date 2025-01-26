@@ -1,6 +1,3 @@
-export const dynamic = 'force-dynamic';
-export const fetchCache = 'force-no-store';
-
 'use client';
 
 import React from 'react';
@@ -10,6 +7,10 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/use-toast';
 import { RefreshCw, Search, MessageSquare, Users, TrendingUp } from 'lucide-react';
 import { motion } from 'framer-motion';
+
+// Force dynamic rendering through route segment config
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
 
 interface Scenario {
   name: string;
