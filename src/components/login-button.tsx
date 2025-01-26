@@ -1,15 +1,14 @@
 'use client';
 
 import { signIn } from 'next-auth/react';
-import { Button } from '@/components/ui/button';
 
 export function LoginButton() {
   return (
-    <Button
+    <button
       onClick={() => signIn('gohighlevel')}
-      className="bg-[#ff7a59] hover:bg-[#ff8f73] text-white"
+      className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition-colors"
     >
       Connect with GoHighLevel
-    </Button>
+    </button>
   );
 } 

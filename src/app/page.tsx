@@ -8,12 +8,7 @@ export default function HomePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
-  // Only redirect if we're on the home page and authenticated
-  if (status === 'authenticated') {
-    router.replace('/scenarios');
-    return null;
-  }
-
+  // Show loading state while session is being fetched
   if (status === 'loading') {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -22,6 +17,17 @@ export default function HomePage() {
     );
   }
 
+  // Redirect to scenarios if authenticated
+  if (status === 'authenticated' && session) {
+    router.replace('/scenarios');
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-xl font-semibold">Redirecting to dashboard...</div>
+      </div>
+    );
+  }
+
+  // Show login page if not authenticated
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
       <div className="text-center mb-8">
