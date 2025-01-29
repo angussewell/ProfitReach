@@ -9,7 +9,7 @@ import {
 import { cookies } from 'next/headers';
 
 export class GoHighLevelClient {
-  private baseUrl = 'https://services.gohighlevel.com/v1';
+  private baseUrl = 'https://services.leadconnectorhq.com/v2';
   private locationId: string;
   private organizationId: string;
 
