@@ -87,7 +87,7 @@ export const authOptions: AuthOptions = {
       authorization: {
         url: 'https://marketplace.gohighlevel.com/oauth/chooselocation',
         params: {
-          scope: 'businesses.readonly businesses.write contacts.readonly contacts.write locations.readonly locations.write conversations.readonly conversations.write locations/tasks.readonly locations/tasks.write',
+          scope: 'businesses.readonly businesses.write contacts.readonly contacts.write locations.readonly locations.write conversations.readonly conversations.write locations/tasks.readonly locations/tasks.write oauth.readonly oauth.write',
           response_type: 'code',
           user_type: 'Location',
           loginWindowOpenMode: 'self'
@@ -114,6 +114,7 @@ export const authOptions: AuthOptions = {
           formData.append('grant_type', 'authorization_code');
           formData.append('code', params.code as string);
           formData.append('redirect_uri', client.redirect_uri as string);
+          formData.append('user_type', 'Location'); // Add user_type to token request
           
           console.log('Token Request URL:', tokenUrl);
           console.log('Token Request Body:', formData.toString());
