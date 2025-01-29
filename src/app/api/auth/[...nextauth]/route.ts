@@ -99,7 +99,11 @@ export const authOptions: AuthOptions = {
           grant_type: 'authorization_code'
         },
         async request({ params, provider, client }) {
-          console.log('Token Request Params:', { params, clientId: client.client_id });
+          console.log('Token Request Starting:', { 
+            code: params.code,
+            clientId: client.client_id,
+            redirectUri: client.redirect_uri 
+          });
           
           const tokenUrl = 'https://services.leadconnectorhq.com/oauth/token';
           
@@ -107,30 +111,39 @@ export const authOptions: AuthOptions = {
           const formData = new URLSearchParams();
           formData.append('client_id', client.client_id as string);
           formData.append('client_secret', client.client_secret as string);
-          formData.append('grant_type', params.grant_type as string);
+          formData.append('grant_type', 'authorization_code');
           formData.append('code', params.code as string);
-          formData.append('redirect_uri', client.redirect_uri as string); // Always include redirect_uri
+          formData.append('redirect_uri', client.redirect_uri as string);
           
           console.log('Token Request URL:', tokenUrl);
           console.log('Token Request Body:', formData.toString());
           
-          const response = await fetch(tokenUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
-              'Version': '2021-07-28'
-            },
-            body: formData
-          });
-          
-          const tokens = await response.json();
-          console.log('Token Response:', { status: response.status, ok: response.ok, tokens });
-          
-          if (!response.ok) {
-            console.error('Token Error:', tokens);
-            throw tokens;
+          try {
+            const response = await fetch(tokenUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Version': '2021-07-28'
+              },
+              body: formData
+            });
+            
+            const tokens = await response.json();
+            console.log('Token Response:', { 
+              status: response.status, 
+              ok: response.ok,
+              error: !response.ok ? tokens : undefined
+            });
+            
+            if (!response.ok) {
+              throw new Error(JSON.stringify(tokens));
+            }
+            
+            return tokens;
+          } catch (error) {
+            console.error('Token Exchange Error:', error);
+            throw error;
           }
-          return tokens;
         }
       },
       userinfo: {
@@ -170,7 +183,11 @@ export const authOptions: AuthOptions = {
   ],
   callbacks: {
     async signIn({ user, account, profile }) {
-      console.log('SignIn Callback:', { user, account, profile });
+      console.log('SignIn Callback:', { 
+        userId: user?.id,
+        accountType: account?.provider,
+        hasProfile: !!profile 
+      });
       return true;
     },
     async jwt({ token, user, account, profile, trigger, session }) {
