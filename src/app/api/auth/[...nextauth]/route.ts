@@ -9,6 +9,7 @@ declare module 'next-auth' {
       email?: string;
       ghlAccessToken?: string;
       ghlRefreshToken?: string;
+      organizationId?: string;
     };
   }
 }
@@ -21,6 +22,7 @@ declare module 'next-auth/jwt' {
     ghlAccessToken?: string;
     ghlRefreshToken?: string;
     accessTokenExpires?: number;
+    organizationId?: string;
   }
 }
 
@@ -105,13 +107,15 @@ export const authOptions: AuthOptions = {
           ...token,
           ghlAccessToken: refreshedTokens.access_token,
           ghlRefreshToken: refreshedTokens.refresh_token,
-          accessTokenExpires: Date.now() + refreshedTokens.expires_in * 1000
+          accessTokenExpires: Date.now() + refreshedTokens.expires_in * 1000,
+          organizationId: token.organizationId
         };
       } catch (error) {
         console.error('Error refreshing access token:', error);
         return {
           ...token,
-          error: 'RefreshAccessTokenError'
+          error: 'RefreshAccessTokenError',
+          organizationId: token.organizationId
         };
       }
     },
@@ -120,7 +124,8 @@ export const authOptions: AuthOptions = {
         ...session.user,
         id: token.id,
         ghlAccessToken: token.ghlAccessToken,
-        ghlRefreshToken: token.ghlRefreshToken
+        ghlRefreshToken: token.ghlRefreshToken,
+        organizationId: token.organizationId
       };
       return session;
     }

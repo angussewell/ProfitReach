@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
 interface Organization {
@@ -21,6 +22,7 @@ interface OrganizationContextType {
 const OrganizationContext = createContext<OrganizationContextType | undefined>(undefined);
 
 export function OrganizationProvider({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const { data: session, update: updateSession } = useSession();
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,6 +63,7 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
   const switchOrganization = async (orgId: string) => {
     try {
       setError(null);
+      setSwitching(true);
       console.log('Starting organization switch to:', orgId);
       
       // First verify the organization exists
@@ -106,13 +109,16 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
 
       toast.success(`Switched to ${data.organizationName}`);
       
-      // Use router for navigation instead of window.reload
-      window.location.href = '/scenarios';
+      // Use Next.js router instead of window.location
+      router.push('/scenarios');
+      router.refresh();
     } catch (err) {
       console.error('Organization switch failed:', err);
       setError(err instanceof Error ? err.message : 'Failed to switch organization');
       toast.error(err instanceof Error ? err.message : 'Failed to switch organization');
       throw err;
+    } finally {
+      setSwitching(false);
     }
   };
 
