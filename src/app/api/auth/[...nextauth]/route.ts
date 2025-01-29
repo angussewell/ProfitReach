@@ -58,16 +58,17 @@ export const authOptions: AuthOptions = {
         url: 'https://marketplace.leadconnectorhq.com/oauth/chooselocation',
         params: {
           scope: 'companies.readonly locations.readonly',
-          response_type: 'code'
+          response_type: 'code',
+          userType: 'Location'
         }
       },
       token: {
-        url: 'https://services.leadconnectorhq.com/oauth/token',
+        url: 'https://services.gohighlevel.com/oauth/token',
         params: { grant_type: 'authorization_code' },
         async request({ params, provider, client }) {
           console.log('Token Request Params:', { params, clientId: client.client_id });
           
-          const tokenUrl = 'https://services.leadconnectorhq.com/oauth/token';
+          const tokenUrl = 'https://services.gohighlevel.com/oauth/token';
           
           // Convert params to URLSearchParams
           const formData = new URLSearchParams();
@@ -86,6 +87,7 @@ export const authOptions: AuthOptions = {
             method: 'POST',
             headers: {
               'Content-Type': 'application/x-www-form-urlencoded',
+              'Accept': 'application/json',
               'Version': '2021-07-28'
             },
             body: formData
@@ -102,7 +104,7 @@ export const authOptions: AuthOptions = {
         }
       },
       userinfo: {
-        url: 'https://services.leadconnectorhq.com/oauth/userinfo'
+        url: 'https://services.gohighlevel.com/oauth/userinfo'
       },
       checks: ['state'],
       clientId: process.env.NEXT_PUBLIC_GHL_CLIENT_ID,
