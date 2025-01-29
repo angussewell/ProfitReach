@@ -36,12 +36,11 @@ export const authOptions: AuthOptions = {
       clientId: process.env.NEXT_PUBLIC_GHL_CLIENT_ID,
       clientSecret: process.env.GHL_CLIENT_SECRET,
       authorization: {
-        url: 'https://marketplace.gohighlevel.com/oauth/chooselocation',
+        url: 'https://services.leadconnectorhq.com/oauth/authorize',
         params: {
           scope: 'businesses.readonly businesses.write contacts.readonly contacts.write locations.readonly locations.write conversations.readonly conversations.write locations/tasks.readonly locations/tasks.write oauth.readonly oauth.write',
           response_type: 'code',
-          user_type: 'Location',
-          loginWindowOpenMode: 'self'
+          user_type: 'Location'
         }
       },
       token: {
