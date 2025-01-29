@@ -4,6 +4,36 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 
+declare module 'next-auth' {
+  interface Session {
+    user: {
+      id: string;
+      email?: string;
+      name?: string;
+      role: string;
+      organizationId?: string;
+      organizationName?: string;
+      ghlAccessToken?: string;
+      ghlRefreshToken?: string;
+    };
+    _timestamp?: number;
+  }
+}
+
+declare module 'next-auth/jwt' {
+  interface JWT {
+    id: string;
+    email?: string;
+    name?: string;
+    role: string;
+    organizationId?: string;
+    organizationName?: string;
+    ghlAccessToken?: string;
+    ghlRefreshToken?: string;
+    _timestamp?: number;
+  }
+}
+
 export const authOptions: AuthOptions = {
   providers: [
     CredentialsProvider({
@@ -155,6 +185,12 @@ export const authOptions: AuthOptions = {
         profile
       });
 
+      // Store the access token from GoHighLevel OAuth
+      if (account && account.provider === 'gohighlevel') {
+        token.ghlAccessToken = account.access_token;
+        token.ghlRefreshToken = account.refresh_token;
+      }
+
       if (user) {
         // Initial sign in
         token.id = user.id;
@@ -200,7 +236,9 @@ export const authOptions: AuthOptions = {
           name: token.name || undefined,
           role: token.role,
           organizationId: token.organizationId || undefined,
-          organizationName: token.organizationName
+          organizationName: token.organizationName,
+          ghlAccessToken: token.ghlAccessToken,
+          ghlRefreshToken: token.ghlRefreshToken
         };
         session._timestamp = token._timestamp;
       }
