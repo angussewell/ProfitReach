@@ -31,6 +31,7 @@ declare module 'next-auth/jwt' {
     ghlAccessToken?: string;
     ghlRefreshToken?: string;
     _timestamp?: number;
+    accessTokenExpires?: number;
   }
 }
 
@@ -152,27 +153,23 @@ export const authOptions: AuthOptions = {
       userinfo: {
         url: 'https://services.leadconnectorhq.com/oauth/userinfo',
         async request({ tokens, provider }) {
-          const userinfoUrl = 'https://services.leadconnectorhq.com/oauth/userinfo';
-          const response = await fetch(userinfoUrl, {
+          const userinfoUrl = typeof provider.userinfo === 'string' 
+            ? provider.userinfo 
+            : provider.userinfo?.url;
+            
+          const response = await fetch(userinfoUrl as string, {
             headers: {
-              'Authorization': `Bearer ${tokens.access_token}`,
-              'Version': '2021-07-28',
-              'Accept': 'application/json'
+              Authorization: `Bearer ${tokens.access_token}`,
+              Version: '2021-07-28'
             }
           });
           
-          const profile = await response.json();
-          console.log('Userinfo Response:', { 
-            status: response.status, 
-            ok: response.ok,
-            error: !response.ok ? profile : undefined 
-          });
-          
           if (!response.ok) {
-            console.error('Userinfo Error Details:', profile);
-            throw new Error(`Userinfo request failed: ${JSON.stringify(profile)}`);
+            console.error('Userinfo Error:', await response.json());
+            throw new Error('Failed to fetch user information');
           }
-          return profile;
+          
+          return response.json();
         }
       },
       checks: ['state'],
@@ -180,12 +177,14 @@ export const authOptions: AuthOptions = {
       clientSecret: process.env.GHL_CLIENT_SECRET,
       profile(profile) {
         return {
-          id: profile.sub,
+          id: profile.locationId || profile.id,
           name: profile.name,
           email: profile.email,
           role: 'user',
-          organizationId: undefined
-        }
+          organizationId: undefined,
+          ghlAccessToken: undefined,
+          ghlRefreshToken: undefined
+        };
       }
     }
   ],
@@ -198,67 +197,74 @@ export const authOptions: AuthOptions = {
       });
       return true;
     },
-    async jwt({ token, user, account, profile, trigger, session }) {
-      console.log('JWT Callback:', {
-        trigger,
-        tokenId: token?.id,
-        userId: user?.id,
-        sessionUserId: session?.user?.id,
-        timestamp: session?._timestamp,
-        account,
-        profile
-      });
-
-      // Store the access token from GoHighLevel OAuth
-      if (account && account.provider === 'gohighlevel') {
-        token.ghlAccessToken = account.access_token;
-        token.ghlRefreshToken = account.refresh_token;
+    async jwt({ token, user, account }) {
+      // Initial sign in
+      if (account && user) {
+        return {
+          ...token,
+          ...user,
+          ghlAccessToken: account.access_token,
+          ghlRefreshToken: account.refresh_token,
+          accessTokenExpires: Date.now() + (account.expires_in as number) * 1000
+        };
       }
 
-      if (user) {
-        // Initial sign in
-        token.id = user.id;
-        token.email = user.email;
-        token.name = user.name;
-        token.role = user.role;
-        token.organizationId = user.organizationId;
-        token.organizationName = user.organizationName;
+      // Return previous token if access token has not expired
+      if (token.accessTokenExpires && Date.now() < token.accessTokenExpires) {
+        return token;
       }
-      
-      if (trigger === 'update') {
-        // Always fetch fresh data on update
-        const dbUser = await prisma.user.findUnique({
-          where: { id: token.id },
-          include: { organization: true }
+
+      // Access token expired, try to refresh it
+      try {
+        const formData = new URLSearchParams();
+        formData.append('client_id', process.env.NEXT_PUBLIC_GHL_CLIENT_ID!);
+        formData.append('client_secret', process.env.GHL_CLIENT_SECRET!);
+        formData.append('grant_type', 'refresh_token');
+        formData.append('refresh_token', token.ghlRefreshToken as string);
+        formData.append('user_type', 'Location');
+
+        const response = await fetch('https://services.leadconnectorhq.com/oauth/token', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Version': '2021-07-28'
+          },
+          body: formData
         });
 
-        if (dbUser) {
-          token.id = dbUser.id;
-          token.email = dbUser.email || undefined;
-          token.name = dbUser.name || undefined;
-          token.role = dbUser.role;
-          token.organizationId = dbUser.organizationId || undefined;
-          token.organizationName = dbUser.organization?.name;
+        const refreshedTokens = await response.json();
+
+        if (!response.ok) {
+          throw refreshedTokens;
         }
+
+        console.log('Token refreshed successfully');
+        
+        return {
+          ...token,
+          ghlAccessToken: refreshedTokens.access_token,
+          ghlRefreshToken: refreshedTokens.refresh_token,
+          accessTokenExpires: Date.now() + refreshedTokens.expires_in * 1000
+        };
+      } catch (error) {
+        console.error('Error refreshing access token:', error);
+        return {
+          ...token,
+          error: 'RefreshAccessTokenError'
+        };
       }
-      
-      return token;
     },
     async session({ session, token }) {
-      if (token) {
-        session.user = {
-          id: token.id,
-          email: token.email || undefined,
-          name: token.name || undefined,
-          role: token.role,
-          organizationId: token.organizationId || undefined,
-          organizationName: token.organizationName,
-          ghlAccessToken: token.ghlAccessToken,
-          ghlRefreshToken: token.ghlRefreshToken
-        };
-        session._timestamp = token._timestamp;
-      }
-
+      session.user = {
+        ...session.user,
+        id: token.id,
+        role: token.role,
+        organizationId: token.organizationId,
+        organizationName: token.organizationName,
+        ghlAccessToken: token.ghlAccessToken,
+        ghlRefreshToken: token.ghlRefreshToken
+      };
+      session._timestamp = Date.now();
       return session;
     }
   },
