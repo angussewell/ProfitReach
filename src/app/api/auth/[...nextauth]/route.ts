@@ -55,18 +55,18 @@ export const authOptions: AuthOptions = {
       type: 'oauth',
       version: '2.0',
       authorization: {
-        url: 'https://marketplace.leadconnectorhq.com/oauth/chooselocation',
+        url: 'https://marketplace.leadconnectorhq.com/oauth/authorize',
         params: {
           scope: 'businesses.readonly businesses.write contacts.readonly contacts.write locations.readonly locations.write conversations.readonly conversations.write tasks.readonly tasks.write',
           response_type: 'code',
-          userType: 'Location'
+          userType: 'Company'
         }
       },
       token: {
         url: 'https://services.leadconnectorhq.com/oauth/token',
         params: { 
           grant_type: 'authorization_code',
-          userType: 'Location'
+          userType: 'Company'
         },
         async request({ params, provider, client }) {
           console.log('Token Request Params:', { params, clientId: client.client_id });
@@ -79,7 +79,7 @@ export const authOptions: AuthOptions = {
           formData.append('client_secret', client.client_secret as string);
           formData.append('grant_type', params.grant_type as string);
           formData.append('code', params.code as string);
-          formData.append('userType', 'Location');
+          formData.append('userType', 'Company');
           if (client.redirect_uri && typeof client.redirect_uri === 'string') {
             formData.append('redirect_uri', client.redirect_uri);
           }
