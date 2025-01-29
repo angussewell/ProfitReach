@@ -86,13 +86,38 @@ export const authOptions: AuthOptions = {
         url: 'https://marketplace.leadconnectorhq.com/oauth/chooselocation',
         params: {
           scope: GHL_SCOPES.join(' '),
-          response_type: 'code',
-          userType: 'Location'
+          response_type: 'code'
         }
       },
       token: {
         url: 'https://services.leadconnectorhq.com/oauth/token',
-        params: { grant_type: 'authorization_code' }
+        params: { grant_type: 'authorization_code' },
+        async request({ params, provider, client }) {
+          const tokenUrl = (typeof provider.token === 'string' ? provider.token : provider.token?.url) || 'https://services.leadconnectorhq.com/oauth/token';
+          
+          // Convert params to URLSearchParams
+          const formData = new URLSearchParams();
+          formData.append('client_id', client.client_id as string);
+          formData.append('client_secret', client.client_secret as string);
+          formData.append('grant_type', params.grant_type as string);
+          formData.append('code', params.code as string);
+          if (client.redirect_uri && typeof client.redirect_uri === 'string') {
+            formData.append('redirect_uri', client.redirect_uri);
+          }
+          
+          const response = await fetch(tokenUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'Version': '2021-07-28'
+            },
+            body: formData
+          });
+          
+          const tokens = await response.json();
+          if (!response.ok) throw tokens;
+          return tokens;
+        }
       },
       userinfo: {
         url: 'https://services.leadconnectorhq.com/oauth/userinfo'
