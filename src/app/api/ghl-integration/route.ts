@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
-import { cookies } from 'next/headers';
 
 export async function GET(request: Request) {
   try {
@@ -18,17 +17,6 @@ export async function GET(request: Request) {
       where: { organizationId },
       orderBy: { createdAt: 'desc' }
     });
-
-    if (ghlIntegration) {
-      // Set the location ID cookie for the client
-      const cookieStore = await cookies();
-      cookieStore.set('ghl_auth', ghlIntegration.locationId, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        path: '/'
-      });
-    }
 
     return NextResponse.json({ ghlIntegration });
   } catch (error) {
@@ -50,10 +38,6 @@ export async function DELETE(request: Request) {
     await prisma.gHLIntegration.deleteMany({
       where: { organizationId }
     });
-
-    // Clear the location ID cookie
-    const cookieStore = await cookies();
-    cookieStore.delete('ghl_auth');
 
     return NextResponse.json({ success: true });
   } catch (error) {

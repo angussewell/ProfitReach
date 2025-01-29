@@ -6,7 +6,6 @@ import {
   GHLMessage,
   GHLCustomValue,
 } from '../types/gohighlevel';
-import { cookies } from 'next/headers';
 
 export class GoHighLevelClient {
   private baseUrl = 'https://services.leadconnectorhq.com/v2';
@@ -156,15 +155,18 @@ export class GoHighLevelClient {
 const clientInstances: Record<string, GoHighLevelClient> = {};
 
 export async function getGoHighLevelClient(organizationId: string): Promise<GoHighLevelClient> {
-  const cookieStore = await cookies();
-  const locationId = cookieStore.get('ghl_auth')?.value;
-  if (!locationId) {
-    throw new Error('No GoHighLevel location ID found');
+  const integration = await prisma.gHLIntegration.findFirst({
+    where: { organizationId },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  if (!integration) {
+    throw new Error('No GoHighLevel integration found for this organization');
   }
 
-  const key = `${organizationId}:${locationId}`;
+  const key = `${organizationId}:${integration.locationId}`;
   if (!clientInstances[key]) {
-    clientInstances[key] = new GoHighLevelClient(locationId, organizationId);
+    clientInstances[key] = new GoHighLevelClient(integration.locationId, organizationId);
   }
 
   return clientInstances[key];
