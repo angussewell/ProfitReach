@@ -57,18 +57,17 @@ export const authOptions: AuthOptions = {
       authorization: {
         url: 'https://marketplace.leadconnectorhq.com/oauth/chooselocation',
         params: {
-          scope: 'companies.readonly locations.readonly businesses.readonly businesses.write contacts.readonly contacts.write locations.write conversations.readonly conversations.write locations/tasks.readonly locations/tasks.write',
-          response_type: 'code',
-          userType: 'Location'
+          scope: 'businesses.readonly businesses.write contacts.readonly contacts.write locations.readonly locations.write conversations.readonly conversations.write tasks.readonly tasks.write',
+          response_type: 'code'
         }
       },
       token: {
-        url: 'https://services.leadconnectorhq.com/oauth/token',
+        url: 'https://backend.leadconnectorhq.com/oauth/token',
         params: { grant_type: 'authorization_code' },
         async request({ params, provider, client }) {
           console.log('Token Request Params:', { params, clientId: client.client_id });
           
-          const tokenUrl = 'https://services.leadconnectorhq.com/oauth/token';
+          const tokenUrl = 'https://backend.leadconnectorhq.com/oauth/token';
           
           // Convert params to URLSearchParams
           const formData = new URLSearchParams();
@@ -103,9 +102,9 @@ export const authOptions: AuthOptions = {
         }
       },
       userinfo: {
-        url: 'https://services.leadconnectorhq.com/oauth/userinfo',
+        url: 'https://backend.leadconnectorhq.com/oauth/userinfo',
         async request({ tokens, provider }) {
-          const userinfoUrl = 'https://services.leadconnectorhq.com/oauth/userinfo';
+          const userinfoUrl = 'https://backend.leadconnectorhq.com/oauth/userinfo';
           const response = await fetch(userinfoUrl, {
             headers: {
               'Authorization': `Bearer ${tokens.access_token}`,
