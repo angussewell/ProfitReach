@@ -234,17 +234,9 @@ export const authOptions: AuthOptions = {
         }
       }
       
-      console.log('JWT Token after update:', token);
-      
       return token;
     },
     async session({ session, token }) {
-      console.log('Session Callback:', {
-        tokenId: token?.id,
-        sessionUserId: session?.user?.id,
-        timestamp: token?._timestamp
-      });
-
       if (token) {
         session.user = {
           id: token.id,
@@ -259,23 +251,19 @@ export const authOptions: AuthOptions = {
         session._timestamp = token._timestamp;
       }
 
-      console.log('Session after update:', {
-        id: session.user.id,
-        email: session.user.email,
-        role: session.user.role,
-        organizationId: session.user.organizationId,
-        timestamp: session._timestamp
-      });
-
       return session;
     }
   },
   pages: {
-    signIn: '/login'
+    signIn: '/login',
+    error: '/login' // Redirect all errors to login
   },
   session: {
-    strategy: 'jwt'
-  }
+    strategy: 'jwt',
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+    updateAge: 24 * 60 * 60 // 24 hours
+  },
+  debug: true // Enable debug mode temporarily
 };
 
 const handler = NextAuth(authOptions);
