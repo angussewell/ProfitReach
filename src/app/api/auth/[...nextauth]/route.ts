@@ -57,16 +57,17 @@ export const authOptions: AuthOptions = {
       authorization: {
         url: 'https://marketplace.leadconnectorhq.com/oauth/chooselocation',
         params: {
-          scope: 'businesses.readonly businesses.write contacts.readonly contacts.write locations.readonly locations.write conversations.readonly conversations.write locations/tasks.readonly locations/tasks.write',
-          response_type: 'code',
-          userType: 'Location'
+          scope: 'companies.readonly locations.readonly',
+          response_type: 'code'
         }
       },
       token: {
-        url: 'https://backend.leadconnectorhq.com/oauth/token',
+        url: 'https://services.leadconnectorhq.com/oauth/token',
         params: { grant_type: 'authorization_code' },
         async request({ params, provider, client }) {
-          const tokenUrl = 'https://backend.leadconnectorhq.com/oauth/token';
+          console.log('Token Request Params:', { params, clientId: client.client_id });
+          
+          const tokenUrl = 'https://services.leadconnectorhq.com/oauth/token';
           
           // Convert params to URLSearchParams
           const formData = new URLSearchParams();
@@ -78,6 +79,9 @@ export const authOptions: AuthOptions = {
             formData.append('redirect_uri', client.redirect_uri);
           }
           
+          console.log('Token Request URL:', tokenUrl);
+          console.log('Token Request Body:', formData.toString());
+          
           const response = await fetch(tokenUrl, {
             method: 'POST',
             headers: {
@@ -88,12 +92,17 @@ export const authOptions: AuthOptions = {
           });
           
           const tokens = await response.json();
-          if (!response.ok) throw tokens;
+          console.log('Token Response:', { status: response.status, ok: response.ok });
+          
+          if (!response.ok) {
+            console.error('Token Error:', tokens);
+            throw tokens;
+          }
           return tokens;
         }
       },
       userinfo: {
-        url: 'https://backend.leadconnectorhq.com/oauth/userinfo'
+        url: 'https://services.leadconnectorhq.com/oauth/userinfo'
       },
       checks: ['state'],
       clientId: process.env.NEXT_PUBLIC_GHL_CLIENT_ID,
