@@ -85,7 +85,7 @@ export const authOptions: AuthOptions = {
       type: 'oauth',
       version: '2.0',
       authorization: {
-        url: 'https://services.leadconnectorhq.com/oauth/chooselocation',
+        url: 'https://marketplace.gohighlevel.com/oauth/chooselocation',
         params: {
           scope: 'businesses.readonly businesses.write contacts.readonly contacts.write locations.readonly locations.write conversations.readonly conversations.write locations/tasks.readonly locations/tasks.write',
           response_type: 'code',
@@ -123,7 +123,8 @@ export const authOptions: AuthOptions = {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'Version': '2021-07-28'
+                'Version': '2021-07-28',
+                'Accept': 'application/json'
               },
               body: formData
             });
@@ -136,7 +137,8 @@ export const authOptions: AuthOptions = {
             });
             
             if (!response.ok) {
-              throw new Error(JSON.stringify(tokens));
+              console.error('Token Error Details:', tokens);
+              throw new Error(`Token exchange failed: ${JSON.stringify(tokens)}`);
             }
             
             return tokens;
@@ -153,16 +155,21 @@ export const authOptions: AuthOptions = {
           const response = await fetch(userinfoUrl, {
             headers: {
               'Authorization': `Bearer ${tokens.access_token}`,
-              'Version': '2021-07-28'
+              'Version': '2021-07-28',
+              'Accept': 'application/json'
             }
           });
           
           const profile = await response.json();
-          console.log('Userinfo Response:', { status: response.status, ok: response.ok, profile });
+          console.log('Userinfo Response:', { 
+            status: response.status, 
+            ok: response.ok,
+            error: !response.ok ? profile : undefined 
+          });
           
           if (!response.ok) {
-            console.error('Userinfo Error:', profile);
-            throw profile;
+            console.error('Userinfo Error Details:', profile);
+            throw new Error(`Userinfo request failed: ${JSON.stringify(profile)}`);
           }
           return profile;
         }
