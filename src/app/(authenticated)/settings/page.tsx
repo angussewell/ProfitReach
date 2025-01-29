@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { GHLAuthButton } from '@/components/auth/GHLAuthButton';
 import { useSession } from 'next-auth/react';
+import { useOrganization } from '@/contexts/OrganizationContext';
 
 // Pre-configured templates
 const WEBHOOK_TEMPLATES = {

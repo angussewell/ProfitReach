@@ -10,25 +10,9 @@ export default function Sidebar() {
   const { data: session } = useSession();
   const pathname = usePathname();
   const { 
-    organizations,
     currentOrganization,
-    loading,
-    switching,
-    switchOrganization,
-    createOrganization
+    loading
   } = useOrganization();
-
-  const handleOrgChange = (orgId: string) => {
-    if (!orgId) return;
-    switchOrganization(orgId);
-  };
-
-  const handleCreateOrg = async () => {
-    const name = prompt('Enter organization name:');
-    if (name) {
-      await createOrganization(name);
-    }
-  };
 
   const routes = [
     { href: '/scenarios', label: 'Scenarios', icon: <LayoutGrid size={20} /> },
@@ -44,37 +28,12 @@ export default function Sidebar() {
     <aside className="flex h-screen w-64 flex-col border-r bg-white">
       {/* Organization Switcher */}
       <div className="p-4 border-b">
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-2">
           <Building size={20} />
           <span className="font-medium">
             {loading ? 'Loading...' : currentOrganization?.name || 'No Organization'}
           </span>
         </div>
-
-        {session?.user?.role === 'admin' && (
-          <div className="space-y-2">
-            <select 
-              className="w-full p-2 border rounded"
-              onChange={(e) => handleOrgChange(e.target.value)}
-              value={currentOrganization?.id || ''}
-              disabled={switching || loading}
-            >
-              <option value="">Select Organization</option>
-              {organizations.map((org) => (
-                <option key={org.id} value={org.id}>
-                  {org.name}
-                </option>
-              ))}
-            </select>
-            <button
-              onClick={handleCreateOrg}
-              className="w-full p-2 text-sm text-blue-600 hover:text-blue-700"
-              disabled={switching || loading}
-            >
-              + Create Organization
-            </button>
-          </div>
-        )}
       </div>
 
       <nav className="flex-1 p-4 space-y-2">
