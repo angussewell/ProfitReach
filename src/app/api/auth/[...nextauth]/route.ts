@@ -5,9 +5,13 @@ import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 
 const GHL_SCOPES = [
+  // Required base scopes for location selection
+  'companies.readonly',
+  'locations.readonly',
+  
+  // Additional scopes for our functionality
   'contacts.readonly',
   'contacts.write',
-  'locations.readonly',
   'locations.write',
   'businesses.readonly',
   'businesses.write',
