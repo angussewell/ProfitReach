@@ -7,30 +7,14 @@ import bcrypt from 'bcryptjs';
 const GHL_SCOPES = [
   'businesses.readonly',
   'businesses.write',
-  'custom-menu-link.write',
-  'custom-menu-link.readonly',
-  'emails/builder.readonly',
-  'emails/builder.write',
-  'users.readonly',
-  'users.write',
-  'workflows.readonly',
-  'oauth.readonly',
-  'oauth.write',
-  'opportunities.readonly',
-  'opportunities.write',
-  'locations/customFields.write',
-  'locations/customFields.readonly',
-  'locations/customValues.write',
-  'locations/customValues.readonly',
-  'conversations/message.readonly',
-  'conversations/message.write',
-  'conversations/reports.readonly',
-  'conversations/livechat.write',
-  'conversations.write',
+  'contacts.readonly',
+  'contacts.write',
+  'locations.readonly',
+  'locations.write',
   'conversations.readonly',
-  'campaigns.readonly',
-  'companies.readonly',
-  'locations.readonly'
+  'conversations.write',
+  'tasks.readonly',
+  'tasks.write'
 ];
 
 export const authOptions: AuthOptions = {
@@ -87,14 +71,15 @@ export const authOptions: AuthOptions = {
         url: 'https://marketplace.leadconnectorhq.com/oauth/chooselocation',
         params: {
           scope: GHL_SCOPES.join(' '),
-          response_type: 'code'
+          response_type: 'code',
+          userType: 'Location'
         }
       },
       token: {
         url: 'https://backend.leadconnectorhq.com/oauth/token',
         params: { grant_type: 'authorization_code' },
         async request({ params, provider, client }) {
-          const tokenUrl = (typeof provider.token === 'string' ? provider.token : provider.token?.url) || 'https://services.leadconnectorhq.com/oauth/token';
+          const tokenUrl = 'https://backend.leadconnectorhq.com/oauth/token';
           
           // Convert params to URLSearchParams
           const formData = new URLSearchParams();
