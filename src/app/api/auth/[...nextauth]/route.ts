@@ -85,7 +85,7 @@ export const authOptions: AuthOptions = {
       type: 'oauth',
       version: '2.0',
       authorization: {
-        url: 'https://marketplace.leadconnectorhq.com/oauth/chooselocation',
+        url: 'https://marketplace.gohighlevel.com/oauth/chooselocation',
         params: {
           scope: 'businesses.readonly businesses.write contacts.readonly contacts.write locations.readonly locations.write conversations.readonly conversations.write locations/tasks.readonly locations/tasks.write',
           response_type: 'code',
@@ -103,25 +103,16 @@ export const authOptions: AuthOptions = {
           
           const tokenUrl = 'https://services.leadconnectorhq.com/oauth/token';
           
-          // Convert params to URLSearchParams and ensure proper encoding
+          // Convert params to URLSearchParams
           const formData = new URLSearchParams();
           formData.append('client_id', client.client_id as string);
           formData.append('client_secret', client.client_secret as string);
           formData.append('grant_type', params.grant_type as string);
           formData.append('code', params.code as string);
-          formData.append('user_type', 'Location');
-          
-          // Ensure redirect_uri is properly encoded
-          if (client.redirect_uri && typeof client.redirect_uri === 'string') {
-            formData.append('redirect_uri', encodeURIComponent(client.redirect_uri));
-          }
+          formData.append('redirect_uri', client.redirect_uri as string); // Always include redirect_uri
           
           console.log('Token Request URL:', tokenUrl);
           console.log('Token Request Body:', formData.toString());
-          console.log('Token Request Headers:', {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Version': '2021-07-28'
-          });
           
           const response = await fetch(tokenUrl, {
             method: 'POST',
@@ -133,12 +124,7 @@ export const authOptions: AuthOptions = {
           });
           
           const tokens = await response.json();
-          console.log('Token Response:', { 
-            status: response.status, 
-            ok: response.ok, 
-            tokens,
-            headers: Object.fromEntries(response.headers)
-          });
+          console.log('Token Response:', { status: response.status, ok: response.ok, tokens });
           
           if (!response.ok) {
             console.error('Token Error:', tokens);
