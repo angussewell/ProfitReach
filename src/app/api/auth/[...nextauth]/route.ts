@@ -88,8 +88,7 @@ export const authOptions: AuthOptions = {
         url: 'https://marketplace.leadconnectorhq.com/oauth/chooselocation',
         params: {
           scope: 'businesses.readonly contacts.readonly contacts.write locations.readonly locations.write',
-          response_type: 'code',
-          userType: 'Company'
+          response_type: 'code'
         }
       },
       token: {
