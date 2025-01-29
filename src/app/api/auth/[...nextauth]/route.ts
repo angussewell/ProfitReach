@@ -55,7 +55,7 @@ export const authOptions: AuthOptions = {
       type: 'oauth',
       version: '2.0',
       authorization: {
-        url: 'https://marketplace.leadconnectorhq.com/oauth/authorize',
+        url: 'https://services.leadconnectorhq.com/oauth/authorize',
         params: {
           scope: 'businesses.readonly contacts.readonly contacts.write locations.readonly locations.write',
           response_type: 'code',
