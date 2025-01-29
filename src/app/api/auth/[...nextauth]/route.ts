@@ -3,7 +3,34 @@ import { AuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
-import { GHL_SCOPES } from '@/utils/auth';
+
+const GHL_SCOPES = [
+  'businesses.readonly',
+  'businesses.write',
+  'custom-menu-link.write',
+  'custom-menu-link.readonly',
+  'emails/builder.readonly',
+  'emails/builder.write',
+  'users.readonly',
+  'users.write',
+  'workflows.readonly',
+  'oauth.readonly',
+  'oauth.write',
+  'opportunities.readonly',
+  'opportunities.write',
+  'locations/customFields.write',
+  'locations/customFields.readonly',
+  'locations/customValues.write',
+  'locations/customValues.readonly',
+  'conversations/message.readonly',
+  'conversations/message.write',
+  'conversations/reports.readonly',
+  'conversations/livechat.write',
+  'conversations.write',
+  'conversations.readonly',
+  'campaigns.readonly',
+  'companies.readonly'
+];
 
 export const authOptions: AuthOptions = {
   providers: [
@@ -58,11 +85,19 @@ export const authOptions: AuthOptions = {
       authorization: {
         url: 'https://marketplace.leadconnectorhq.com/oauth/chooselocation',
         params: {
-          scope: GHL_SCOPES.join(' ')
+          scope: GHL_SCOPES.join(' '),
+          response_type: 'code',
+          userType: 'Location'
         }
       },
-      token: 'https://services.leadconnectorhq.com/oauth/token',
-      userinfo: 'https://services.leadconnectorhq.com/oauth/userinfo',
+      token: {
+        url: 'https://services.leadconnectorhq.com/oauth/token',
+        params: { grant_type: 'authorization_code' }
+      },
+      userinfo: {
+        url: 'https://services.leadconnectorhq.com/oauth/userinfo'
+      },
+      checks: ['state'],
       clientId: process.env.NEXT_PUBLIC_GHL_CLIENT_ID,
       clientSecret: process.env.GHL_CLIENT_SECRET,
       profile(profile) {
