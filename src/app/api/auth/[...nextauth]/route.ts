@@ -85,7 +85,7 @@ export const authOptions: AuthOptions = {
       type: 'oauth',
       version: '2.0',
       authorization: {
-        url: 'https://marketplace.leadconnectorhq.com/oauth/chooselocation',
+        url: 'https://marketplace.gohighlevel.com/oauth/chooselocation',
         params: {
           scope: 'businesses.readonly businesses.write contacts.readonly contacts.write locations.readonly locations.write conversations.readonly conversations.write locations/tasks.readonly locations/tasks.write',
           response_type: 'code',
@@ -102,15 +102,18 @@ export const authOptions: AuthOptions = {
           
           const tokenUrl = 'https://services.leadconnectorhq.com/oauth/token';
           
+          // Ensure we have the correct redirect URI
+          const redirectUri = process.env.NEXTAUTH_URL 
+            ? `${process.env.NEXTAUTH_URL}/api/auth/callback/gohighlevel`
+            : client.redirect_uri;
+          
           // Convert params to URLSearchParams
           const formData = new URLSearchParams();
           formData.append('client_id', client.client_id as string);
           formData.append('client_secret', client.client_secret as string);
           formData.append('grant_type', params.grant_type as string);
           formData.append('code', params.code as string);
-          if (client.redirect_uri && typeof client.redirect_uri === 'string') {
-            formData.append('redirect_uri', client.redirect_uri);
-          }
+          formData.append('redirect_uri', redirectUri as string);
           
           console.log('Token Request URL:', tokenUrl);
           console.log('Token Request Body:', formData.toString());
