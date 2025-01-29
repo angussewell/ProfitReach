@@ -58,16 +58,20 @@ export const authOptions: AuthOptions = {
         url: 'https://marketplace.leadconnectorhq.com/oauth/chooselocation',
         params: {
           scope: 'businesses.readonly businesses.write contacts.readonly contacts.write locations.readonly locations.write conversations.readonly conversations.write tasks.readonly tasks.write',
-          response_type: 'code'
+          response_type: 'code',
+          userType: 'Location'
         }
       },
       token: {
-        url: 'https://backend.leadconnectorhq.com/oauth/token',
-        params: { grant_type: 'authorization_code' },
+        url: 'https://services.leadconnectorhq.com/oauth/token',
+        params: { 
+          grant_type: 'authorization_code',
+          userType: 'Location'
+        },
         async request({ params, provider, client }) {
           console.log('Token Request Params:', { params, clientId: client.client_id });
           
-          const tokenUrl = 'https://backend.leadconnectorhq.com/oauth/token';
+          const tokenUrl = 'https://services.leadconnectorhq.com/oauth/token';
           
           // Convert params to URLSearchParams
           const formData = new URLSearchParams();
@@ -75,6 +79,7 @@ export const authOptions: AuthOptions = {
           formData.append('client_secret', client.client_secret as string);
           formData.append('grant_type', params.grant_type as string);
           formData.append('code', params.code as string);
+          formData.append('userType', 'Location');
           if (client.redirect_uri && typeof client.redirect_uri === 'string') {
             formData.append('redirect_uri', client.redirect_uri);
           }
@@ -102,9 +107,9 @@ export const authOptions: AuthOptions = {
         }
       },
       userinfo: {
-        url: 'https://backend.leadconnectorhq.com/oauth/userinfo',
+        url: 'https://services.leadconnectorhq.com/oauth/userinfo',
         async request({ tokens, provider }) {
-          const userinfoUrl = 'https://backend.leadconnectorhq.com/oauth/userinfo';
+          const userinfoUrl = 'https://services.leadconnectorhq.com/oauth/userinfo';
           const response = await fetch(userinfoUrl, {
             headers: {
               'Authorization': `Bearer ${tokens.access_token}`,
