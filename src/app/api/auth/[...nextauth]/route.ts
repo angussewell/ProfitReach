@@ -13,8 +13,8 @@ const GHL_SCOPES = [
   'locations.write',
   'conversations.readonly',
   'conversations.write',
-  'tasks.readonly',
-  'tasks.write'
+  'locations/tasks.readonly',
+  'locations/tasks.write'
 ];
 
 export const authOptions: AuthOptions = {
