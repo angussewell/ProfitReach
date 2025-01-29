@@ -5,20 +5,32 @@ import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 
 const GHL_SCOPES = [
-  // Required base scopes for location selection
-  'companies.readonly',
-  'locations.readonly',
-  
-  // Additional scopes for our functionality
-  'contacts.readonly',
-  'contacts.write',
-  'locations.write',
   'businesses.readonly',
   'businesses.write',
-  'conversations.readonly',
+  'custom-menu-link.write',
+  'custom-menu-link.readonly',
+  'emails/builder.readonly',
+  'emails/builder.write',
+  'users.readonly',
+  'users.write',
+  'workflows.readonly',
+  'oauth.readonly',
+  'oauth.write',
+  'opportunities.readonly',
+  'opportunities.write',
+  'locations/customFields.write',
+  'locations/customFields.readonly',
+  'locations/customValues.write',
+  'locations/customValues.readonly',
+  'conversations/message.readonly',
+  'conversations/message.write',
+  'conversations/reports.readonly',
+  'conversations/livechat.write',
   'conversations.write',
-  'tasks.readonly',
-  'tasks.write'
+  'conversations.readonly',
+  'campaigns.readonly',
+  'companies.readonly',
+  'locations.readonly'
 ];
 
 export const authOptions: AuthOptions = {
@@ -75,12 +87,11 @@ export const authOptions: AuthOptions = {
         url: 'https://marketplace.leadconnectorhq.com/oauth/chooselocation',
         params: {
           scope: GHL_SCOPES.join(' '),
-          response_type: 'code',
-          userType: 'Location'
+          response_type: 'code'
         }
       },
       token: {
-        url: 'https://services.leadconnectorhq.com/oauth/token',
+        url: 'https://backend.leadconnectorhq.com/oauth/token',
         params: { grant_type: 'authorization_code' },
         async request({ params, provider, client }) {
           const tokenUrl = (typeof provider.token === 'string' ? provider.token : provider.token?.url) || 'https://services.leadconnectorhq.com/oauth/token';
@@ -110,7 +121,7 @@ export const authOptions: AuthOptions = {
         }
       },
       userinfo: {
-        url: 'https://services.leadconnectorhq.com/oauth/userinfo'
+        url: 'https://backend.leadconnectorhq.com/oauth/userinfo'
       },
       checks: ['state'],
       clientId: process.env.NEXT_PUBLIC_GHL_CLIENT_ID,
