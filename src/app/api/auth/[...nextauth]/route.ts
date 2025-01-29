@@ -4,19 +4,6 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 
-const GHL_SCOPES = [
-  'businesses.readonly',
-  'businesses.write',
-  'contacts.readonly',
-  'contacts.write',
-  'locations.readonly',
-  'locations.write',
-  'conversations.readonly',
-  'conversations.write',
-  'locations/tasks.readonly',
-  'locations/tasks.write'
-];
-
 export const authOptions: AuthOptions = {
   providers: [
     CredentialsProvider({
@@ -70,7 +57,7 @@ export const authOptions: AuthOptions = {
       authorization: {
         url: 'https://marketplace.leadconnectorhq.com/oauth/chooselocation',
         params: {
-          scope: GHL_SCOPES.join(' '),
+          scope: 'businesses.readonly businesses.write contacts.readonly contacts.write locations.readonly locations.write conversations.readonly conversations.write locations/tasks.readonly locations/tasks.write',
           response_type: 'code',
           userType: 'Location'
         }
