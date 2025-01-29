@@ -44,6 +44,7 @@ model Organization {
   scenarios       Scenario[]
   users           User[]
   webhookLogs     WebhookLog[]
+  researchResults ResearchResult[]
 }
 
 model User {
@@ -197,4 +198,16 @@ model GHLIntegration {
 
   @@unique([organizationId, locationId])
   @@index([locationId])
+}
+
+model ResearchResult {
+  id            String      @id
+  query         String
+  result        String      @db.Text
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  organization  Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+
+  @@index([organizationId])
 }
