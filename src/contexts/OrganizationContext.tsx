@@ -15,6 +15,7 @@ interface OrganizationContextType {
   loading: boolean;
   error: string | null;
   switchOrganization: (orgId: string) => Promise<void>;
+  createOrganization: (name: string) => Promise<void>;
 }
 
 const OrganizationContext = createContext<OrganizationContextType | undefined>(undefined);
@@ -24,6 +25,7 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [switching, setSwitching] = useState(false);
 
   const currentOrganization = organizations.find(
     org => org.id === session?.user?.organizationId
@@ -114,6 +116,45 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
     }
   };
 
+  const createOrganization = async (name: string) => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const res = await fetch('/api/organizations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name }),
+      });
+      
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to create organization');
+      }
+      
+      // Refresh organizations list
+      const orgsRes = await fetch('/api/organizations');
+      const orgsData = await orgsRes.json();
+      
+      if (!orgsRes.ok) {
+        throw new Error(orgsData.error || 'Failed to fetch organizations');
+      }
+      
+      setOrganizations(orgsData);
+      toast.success('Organization created successfully');
+    } catch (err) {
+      console.error('Failed to create organization:', err);
+      setError(err instanceof Error ? err.message : 'Failed to create organization');
+      toast.error(err instanceof Error ? err.message : 'Failed to create organization');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <OrganizationContext.Provider
       value={{
@@ -121,7 +162,8 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
         currentOrganization,
         loading,
         error,
-        switchOrganization
+        switchOrganization,
+        createOrganization
       }}
     >
       {children}
