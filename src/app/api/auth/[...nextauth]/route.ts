@@ -57,18 +57,18 @@ export const authOptions: AuthOptions = {
       authorization: {
         url: 'https://marketplace.leadconnectorhq.com/oauth/chooselocation',
         params: {
-          scope: 'companies.readonly locations.readonly',
+          scope: 'companies.readonly locations.readonly businesses.readonly businesses.write contacts.readonly contacts.write locations.write conversations.readonly conversations.write locations/tasks.readonly locations/tasks.write',
           response_type: 'code',
           userType: 'Location'
         }
       },
       token: {
-        url: 'https://services.gohighlevel.com/oauth/token',
+        url: 'https://services.leadconnectorhq.com/oauth/token',
         params: { grant_type: 'authorization_code' },
         async request({ params, provider, client }) {
           console.log('Token Request Params:', { params, clientId: client.client_id });
           
-          const tokenUrl = 'https://services.gohighlevel.com/oauth/token';
+          const tokenUrl = 'https://services.leadconnectorhq.com/oauth/token';
           
           // Convert params to URLSearchParams
           const formData = new URLSearchParams();
@@ -87,7 +87,6 @@ export const authOptions: AuthOptions = {
             method: 'POST',
             headers: {
               'Content-Type': 'application/x-www-form-urlencoded',
-              'Accept': 'application/json',
               'Version': '2021-07-28'
             },
             body: formData
@@ -104,7 +103,25 @@ export const authOptions: AuthOptions = {
         }
       },
       userinfo: {
-        url: 'https://services.gohighlevel.com/oauth/userinfo'
+        url: 'https://services.leadconnectorhq.com/oauth/userinfo',
+        async request({ tokens, provider }) {
+          const userinfoUrl = 'https://services.leadconnectorhq.com/oauth/userinfo';
+          const response = await fetch(userinfoUrl, {
+            headers: {
+              'Authorization': `Bearer ${tokens.access_token}`,
+              'Version': '2021-07-28'
+            }
+          });
+          
+          const profile = await response.json();
+          console.log('Userinfo Response:', { status: response.status, ok: response.ok, profile });
+          
+          if (!response.ok) {
+            console.error('Userinfo Error:', profile);
+            throw profile;
+          }
+          return profile;
+        }
       },
       checks: ['state'],
       clientId: process.env.NEXT_PUBLIC_GHL_CLIENT_ID,
