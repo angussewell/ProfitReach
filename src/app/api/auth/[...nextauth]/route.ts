@@ -3,6 +3,7 @@ import { AuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
+import { GHL_SCOPES } from '@/utils/auth';
 
 export const authOptions: AuthOptions = {
   providers: [
@@ -48,16 +49,47 @@ export const authOptions: AuthOptions = {
           organizationName: user.organization?.name
         };
       }
-    })
+    }),
+    {
+      id: 'gohighlevel',
+      name: 'GoHighLevel',
+      type: 'oauth',
+      version: '2.0',
+      authorization: {
+        url: 'https://marketplace.leadconnectorhq.com/oauth/chooselocation',
+        params: {
+          scope: GHL_SCOPES.join(' ')
+        }
+      },
+      token: 'https://services.leadconnectorhq.com/oauth/token',
+      userinfo: 'https://services.leadconnectorhq.com/oauth/userinfo',
+      clientId: process.env.NEXT_PUBLIC_GHL_CLIENT_ID,
+      clientSecret: process.env.GHL_CLIENT_SECRET,
+      profile(profile) {
+        return {
+          id: profile.sub,
+          name: profile.name,
+          email: profile.email,
+          role: 'user',
+          organizationId: undefined
+        }
+      }
+    }
   ],
   callbacks: {
-    async jwt({ token, user, trigger, session }) {
+    async signIn({ user, account, profile }) {
+      console.log('SignIn Callback:', { user, account, profile });
+      return true;
+    },
+    async jwt({ token, user, account, profile, trigger, session }) {
       console.log('JWT Callback:', {
         trigger,
         tokenId: token?.id,
         userId: user?.id,
         sessionUserId: session?.user?.id,
-        timestamp: session?._timestamp
+        timestamp: session?._timestamp,
+        account,
+        profile
       });
 
       if (user) {
@@ -122,7 +154,7 @@ export const authOptions: AuthOptions = {
     }
   },
   pages: {
-    signIn: '/auth/login'
+    signIn: '/login'
   },
   session: {
     strategy: 'jwt'
