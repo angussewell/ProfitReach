@@ -85,7 +85,7 @@ export const authOptions: AuthOptions = {
       type: 'oauth',
       version: '2.0',
       authorization: {
-        url: 'https://marketplace.gohighlevel.com/oauth/chooselocation',
+        url: 'https://services.leadconnectorhq.com/oauth/chooselocation',
         params: {
           scope: 'businesses.readonly businesses.write contacts.readonly contacts.write locations.readonly locations.write conversations.readonly conversations.write locations/tasks.readonly locations/tasks.write',
           response_type: 'code',
