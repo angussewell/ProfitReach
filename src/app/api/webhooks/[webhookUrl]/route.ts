@@ -22,8 +22,11 @@ const contactSchema = z.object({
   }).optional(),
 }).passthrough();
 
-// Array of contacts schema
-const webhookSchema = z.array(contactSchema);
+// Accept either a single contact object or an array of contacts
+const webhookSchema = z.union([
+  contactSchema,
+  z.array(contactSchema)
+]);
 
 export async function POST(
   request: Request,
@@ -70,7 +73,10 @@ export async function POST(
       );
     }
 
-    const webhookData = validationResult.data;
+    // Convert single object to array if needed
+    const webhookData = Array.isArray(validationResult.data) 
+      ? validationResult.data 
+      : [validationResult.data];
     
     // Register all fields for future use
     await registerWebhookFields(webhookData[0]);
