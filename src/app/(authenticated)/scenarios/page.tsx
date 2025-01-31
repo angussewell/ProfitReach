@@ -9,36 +9,45 @@ import { useToast } from '@/components/ui/use-toast';
 interface Scenario {
   id: string;
   name: string;
-  type: string;
+  description: string | null;
+  touchpointType: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface ScenarioAnalytics {
+  id: string;
+  name: string;
   totalContacts: number;
+  activeContacts: number;
   responseCount: number;
-  responseRate: number;
+  createdAt: string;
   updatedAt: string;
 }
 
 export default function ScenariosPage() {
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  const [analytics, setAnalytics] = useState<ScenarioAnalytics[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
   useEffect(() => {
-    const fetchScenarios = async () => {
+    const fetchData = async () => {
       try {
-        const response = await fetch('/api/scenarios');
-        if (!response.ok) throw new Error('Failed to fetch scenarios');
-        const data = await response.json();
-        
-        // Calculate response rate for each scenario
-        const scenariosWithRate = data.map((scenario: Omit<Scenario, 'responseRate'>) => ({
-          ...scenario,
-          responseRate: scenario.totalContacts > 0 
-            ? (scenario.responseCount / scenario.totalContacts) * 100 
-            : 0
-        }));
-        
-        setScenarios(scenariosWithRate);
+        // Fetch scenarios
+        const scenariosResponse = await fetch('/api/scenarios');
+        if (!scenariosResponse.ok) throw new Error('Failed to fetch scenarios');
+        const scenariosData = await scenariosResponse.json();
+        setScenarios(scenariosData);
+
+        // Fetch analytics
+        const analyticsResponse = await fetch('/api/scenarios/analytics');
+        if (!analyticsResponse.ok) throw new Error('Failed to fetch analytics');
+        const analyticsData = await analyticsResponse.json();
+        setAnalytics(analyticsData);
       } catch (error) {
-        console.error('Error fetching scenarios:', error);
+        console.error('Error fetching data:', error);
         toast({
           title: 'Error',
           description: 'Failed to load scenarios',
@@ -49,15 +58,20 @@ export default function ScenariosPage() {
       }
     };
 
-    fetchScenarios();
+    fetchData();
   }, [toast]);
 
-  // Calculate overall metrics
-  const totalContacts = scenarios.reduce((sum, scenario) => sum + scenario.totalContacts, 0);
-  const totalResponses = scenarios.reduce((sum, scenario) => sum + scenario.responseCount, 0);
+  // Calculate overall metrics from analytics
+  const totalContacts = analytics.reduce((sum, scenario) => sum + scenario.totalContacts, 0);
+  const totalResponses = analytics.reduce((sum, scenario) => sum + scenario.responseCount, 0);
   const overallResponseRate = totalContacts > 0 ? (totalResponses / totalContacts) * 100 : 0;
-  const averageResponseRate = scenarios.length > 0 
-    ? scenarios.reduce((sum, scenario) => sum + scenario.responseRate, 0) / scenarios.length 
+  const averageResponseRate = analytics.length > 0 
+    ? analytics.reduce((sum, scenario) => {
+        const rate = scenario.totalContacts > 0 
+          ? (scenario.responseCount / scenario.totalContacts) * 100 
+          : 0;
+        return sum + rate;
+      }, 0) / analytics.length 
     : 0;
 
   const getMetricColor = (metric: 'contacts' | 'responses' | 'rate', value: number) => {
@@ -162,50 +176,62 @@ export default function ScenariosPage() {
                 <p className="text-slate-500">No scenarios found</p>
               </Card>
             ) : (
-              scenarios.map((scenario) => (
-                <Card
-                  key={scenario.id}
-                  className="border-2 border-slate-100 bg-white shadow-md hover:shadow-lg transition-all duration-200 rounded-xl overflow-hidden"
-                >
-                  <CardHeader className="pb-4">
-                    <CardTitle className="text-lg font-semibold text-slate-800">
-                      {scenario.name}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <div>
-                        <div className="text-sm font-medium text-slate-500">Total Contacts</div>
-                        <div className={`text-lg font-semibold ${getMetricColor('contacts', scenario.totalContacts)}`}>
-                          {scenario.totalContacts.toLocaleString()}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium text-slate-500">Responses</div>
-                        <div className={`text-lg font-semibold ${getMetricColor('responses', scenario.responseCount)}`}>
-                          {scenario.responseCount.toLocaleString()}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium text-slate-500">Response Rate</div>
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full ${getMetricColor('rate', scenario.responseRate)}`}
-                              style={{
-                                width: `${scenario.responseRate}%`,
-                              }}
-                            />
+              scenarios.map((scenario) => {
+                const scenarioAnalytics = analytics.find(a => a.id === scenario.id) || {
+                  totalContacts: 0,
+                  responseCount: 0,
+                  activeContacts: 0
+                };
+                
+                const responseRate = scenarioAnalytics.totalContacts > 0
+                  ? (scenarioAnalytics.responseCount / scenarioAnalytics.totalContacts) * 100
+                  : 0;
+
+                return (
+                  <Card
+                    key={scenario.id}
+                    className="border-2 border-slate-100 bg-white shadow-md hover:shadow-lg transition-all duration-200 rounded-xl overflow-hidden"
+                  >
+                    <CardHeader className="pb-4">
+                      <CardTitle className="text-lg font-semibold text-slate-800">
+                        {scenario.name}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        <div>
+                          <div className="text-sm font-medium text-slate-500">Total Contacts</div>
+                          <div className={`text-lg font-semibold ${getMetricColor('contacts', scenarioAnalytics.totalContacts)}`}>
+                            {scenarioAnalytics.totalContacts.toLocaleString()}
                           </div>
-                          <span className={`text-sm font-medium ${getMetricColor('rate', scenario.responseRate)}`}>
-                            {scenario.responseRate.toFixed(1)}%
-                          </span>
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-slate-500">Responses</div>
+                          <div className={`text-lg font-semibold ${getMetricColor('responses', scenarioAnalytics.responseCount)}`}>
+                            {scenarioAnalytics.responseCount.toLocaleString()}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-slate-500">Response Rate</div>
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${getMetricColor('rate', responseRate)}`}
+                                style={{
+                                  width: `${responseRate}%`,
+                                }}
+                              />
+                            </div>
+                            <span className={`text-sm font-medium ${getMetricColor('rate', responseRate)}`}>
+                              {responseRate.toFixed(1)}%
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
+                    </CardContent>
+                  </Card>
+                );
+              })
             )}
           </div>
         </div>
