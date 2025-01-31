@@ -93,12 +93,12 @@ export async function POST(
       const isPositiveReply = contact.customData?.type === 'positive_reply' || 
                              contact.customData?.replyType === 'positive';
 
-      // Create webhook log
+      // Create webhook log with initial status
       const webhookLog = await prisma.webhookLog.create({
         data: {
           accountId: contact.contact_id || 'unknown',
           organizationId: organization.id,
-          status: isPositiveReply ? 'positive_reply' : 'received',
+          status: 'received',
           scenarioName,
           contactEmail: contact.email || 'Unknown',
           contactName: `${contact.first_name || ''} ${contact.last_name || ''}`.trim() || 'Unknown',
@@ -108,28 +108,52 @@ export async function POST(
         }
       });
 
-      // Update metrics for positive replies
-      if (isPositiveReply) {
-        await prisma.metric.upsert({
-          where: {
-            accountId_scenarioName: {
-              accountId: contact.contact_id || 'unknown',
-              scenarioName
+      // Check if webhook URL is provided
+      if (!contact.customData?.webhookURL) {
+        await prisma.webhookLog.update({
+          where: { id: webhookLog.id },
+          data: { status: 'blocked', responseBody: { error: 'No webhook URL provided' } }
+        });
+        return webhookLog;
+      }
+
+      // Send outbound webhook
+      try {
+        const outboundResponse = await fetch(contact.customData.webhookURL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(contact)
+        });
+
+        if (!outboundResponse.ok) {
+          await prisma.webhookLog.update({
+            where: { id: webhookLog.id },
+            data: { 
+              status: 'error',
+              responseBody: { 
+                error: `Outbound webhook failed with status ${outboundResponse.status}`,
+                response: await outboundResponse.text()
+              }
             }
-          },
-          create: {
-            accountId: contact.contact_id || 'unknown',
-            organizationId: organization.id,
-            scenarioName,
-            enrollments: 0,
-            replies: 1,
-            updatedAt: new Date()
-          },
-          update: {
-            replies: {
-              increment: 1
-            },
-            updatedAt: new Date()
+          });
+          return webhookLog;
+        }
+
+        // Update to success status
+        await prisma.webhookLog.update({
+          where: { id: webhookLog.id },
+          data: { 
+            status: 'success',
+            responseBody: { response: await outboundResponse.json() }
+          }
+        });
+        
+      } catch (error) {
+        await prisma.webhookLog.update({
+          where: { id: webhookLog.id },
+          data: { 
+            status: 'error',
+            responseBody: { error: error instanceof Error ? error.message : 'Unknown error' }
           }
         });
       }
