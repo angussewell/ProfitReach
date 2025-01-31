@@ -104,7 +104,7 @@ export async function POST(
           contactName: `${contact.first_name || ''} ${contact.last_name || ''}`.trim() || 'Unknown',
           company: contact.company_name || 'Unknown',
           requestBody: contact as unknown as Prisma.JsonObject,
-          ghlIntegrationId: ghlIntegration?.id || ''
+          ...(ghlIntegration && { ghlIntegrationId: ghlIntegration.id })
         }
       });
 
