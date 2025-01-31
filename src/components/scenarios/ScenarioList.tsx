@@ -15,7 +15,6 @@ interface Scenario {
   } | null;
   attachment?: {
     name: string;
-    url: string;
   } | null;
 }
 

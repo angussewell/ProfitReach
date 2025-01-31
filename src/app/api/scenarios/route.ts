@@ -64,8 +64,7 @@ export async function GET() {
         attachment: {
           select: {
             id: true,
-            name: true,
-            url: true
+            name: true
           }
         }
       },
@@ -157,20 +156,22 @@ export async function PUT(req: Request) {
     }
 
     // Update scenario
+    const updateData = {
+      name: data.name,
+      description: data.description,
+      customizationPrompt: data.customizationPrompt,
+      emailExamplesPrompt: data.emailExamplesPrompt,
+      subjectLine: data.subjectLine,
+      isFollowUp: data.isFollowUp === 'on' ? true : false,
+      snippet: data.snippetId ? { connect: { id: data.snippetId } } : { disconnect: true },
+      attachment: data.attachmentId ? { connect: { id: data.attachmentId } } : { disconnect: true },
+      attachmentName: data.attachmentName,
+      filters: data.filters ? JSON.parse(data.filters) : {}
+    } as const satisfies Omit<Prisma.ScenarioUpdateInput, 'filters'> & { filters: any };
+
     const scenario = await prisma.scenario.update({
       where: { id: data.id },
-      data: {
-        name: data.name,
-        description: data.description,
-        customizationPrompt: data.customizationPrompt,
-        emailExamplesPrompt: data.emailExamplesPrompt,
-        subjectLine: data.subjectLine,
-        isFollowUp: data.isFollowUp === 'on' ? true : false,
-        snippetId: data.snippetId || null,
-        attachmentId: data.attachmentId || null,
-        attachmentName: data.attachmentName,
-        filters: data.filters || '[]',
-      },
+      data: updateData,
       include: {
         signature: {
           select: {
@@ -189,8 +190,7 @@ export async function PUT(req: Request) {
         attachment: {
           select: {
             id: true,
-            name: true,
-            url: true
+            name: true
           }
         }
       }
