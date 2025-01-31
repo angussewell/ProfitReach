@@ -35,24 +35,40 @@ export default function ScenariosPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch scenarios
+        setLoading(true);
+        
+        // Fetch scenarios first
         const scenariosResponse = await fetch('/api/scenarios');
-        if (!scenariosResponse.ok) throw new Error('Failed to fetch scenarios');
+        if (!scenariosResponse.ok) {
+          const error = await scenariosResponse.json();
+          throw new Error(error.details || 'Failed to fetch scenarios');
+        }
         const scenariosData = await scenariosResponse.json();
         setScenarios(scenariosData);
 
-        // Fetch analytics
-        const analyticsResponse = await fetch('/api/scenarios/analytics');
-        if (!analyticsResponse.ok) throw new Error('Failed to fetch analytics');
-        const analyticsData = await analyticsResponse.json();
-        setAnalytics(analyticsData);
+        // Only fetch analytics if we have scenarios
+        if (scenariosData.length > 0) {
+          const analyticsResponse = await fetch('/api/scenarios/analytics');
+          if (!analyticsResponse.ok) {
+            const error = await analyticsResponse.json();
+            throw new Error(error.details || 'Failed to fetch analytics');
+          }
+          const analyticsData = await analyticsResponse.json();
+          setAnalytics(analyticsData);
+        } else {
+          // If no scenarios, set empty analytics
+          setAnalytics([]);
+        }
       } catch (error) {
         console.error('Error fetching data:', error);
         toast({
           title: 'Error',
-          description: 'Failed to load scenarios',
+          description: error instanceof Error ? error.message : 'Failed to load scenarios',
           variant: 'destructive',
         });
+        // Set empty states on error
+        setScenarios([]);
+        setAnalytics([]);
       } finally {
         setLoading(false);
       }

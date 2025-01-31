@@ -18,13 +18,38 @@ interface Property {
   options: PropertyOption[];
 }
 
+// Helper function for logging
+function log(level: 'error' | 'info', message: string, data?: any) {
+  console[level](JSON.stringify({
+    timestamp: new Date().toISOString(),
+    level,
+    message,
+    environment: process.env.VERCEL_ENV || 'development',
+    ...data
+  }));
+}
+
 export async function GET() {
   try {
+    log('info', 'Fetching scenarios - start');
     const session = await getServerSession(authOptions);
     
-    if (!session?.user?.organizationId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session) {
+      log('error', 'No session found');
+      return NextResponse.json({ error: 'Unauthorized - No session' }, { status: 401 });
     }
+
+    if (!session.user) {
+      log('error', 'No user in session', { session });
+      return NextResponse.json({ error: 'Unauthorized - No user' }, { status: 401 });
+    }
+
+    if (!session.user.organizationId) {
+      log('error', 'No organization ID in session', { session });
+      return NextResponse.json({ error: 'Unauthorized - No organization' }, { status: 401 });
+    }
+
+    log('info', 'Fetching scenarios from database', { organizationId: session.user.organizationId });
 
     const scenarios = await prisma.scenario.findMany({
       where: { organizationId: session.user.organizationId },
@@ -47,6 +72,8 @@ export async function GET() {
       orderBy: { createdAt: 'desc' }
     });
 
+    log('info', 'Successfully fetched scenarios', { count: scenarios.length });
+
     const formattedScenarios = scenarios.map(scenario => ({
       ...scenario,
       createdAt: scenario.createdAt.toISOString(),
@@ -55,7 +82,10 @@ export async function GET() {
 
     return NextResponse.json(formattedScenarios);
   } catch (error) {
-    console.error('Error fetching scenarios:', error);
+    log('error', 'Error fetching scenarios', { 
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined
+    });
     return NextResponse.json({ 
       error: 'Failed to fetch scenarios',
       details: error instanceof Error ? error.message : String(error)
