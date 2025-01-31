@@ -16,8 +16,16 @@ interface Scenario {
   status: string;
   createdAt: string;
   updatedAt: string;
+}
+
+interface ScenarioAnalytics {
+  id: string;
+  name: string;
   totalContacts: number;
+  activeContacts: number;
   responseCount: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface ScenarioResponse {
@@ -33,20 +41,28 @@ const SCENARIO_COLORS = {
 };
 
 export function ScenariosClient() {
-  const [data, setData] = React.useState<ScenarioResponse | null>(null);
+  const [scenarios, setScenarios] = React.useState<Scenario[]>([]);
+  const [analytics, setAnalytics] = React.useState<ScenarioAnalytics[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
   const { toast } = useToast();
 
-  const fetchScenarios = async (forceRefresh = false) => {
+  const fetchData = async (forceRefresh = false) => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/scenarios${forceRefresh ? '?refresh=1' : ''}`);
-      if (!response.ok) throw new Error('Failed to fetch scenarios');
-      const data = await response.json();
-      setData(data);
+      // Fetch scenarios
+      const scenariosResponse = await fetch(`/api/scenarios${forceRefresh ? '?refresh=1' : ''}`);
+      if (!scenariosResponse.ok) throw new Error('Failed to fetch scenarios');
+      const scenariosData = await scenariosResponse.json();
+      setScenarios(scenariosData);
+
+      // Fetch analytics
+      const analyticsResponse = await fetch(`/api/scenarios/analytics${forceRefresh ? '?refresh=1' : ''}`);
+      if (!analyticsResponse.ok) throw new Error('Failed to fetch analytics');
+      const analyticsData = await analyticsResponse.json();
+      setAnalytics(analyticsData);
     } catch (error) {
-      console.error('Error fetching scenarios:', error);
+      console.error('Error fetching data:', error);
       toast({
         title: 'Error',
         description: 'Failed to load scenarios',
@@ -58,20 +74,20 @@ export function ScenariosClient() {
   };
 
   React.useEffect(() => {
-    fetchScenarios();
+    fetchData();
   }, []);
 
   const filteredScenarios = React.useMemo(() => {
-    if (!data?.scenarios || !searchQuery.trim()) return data?.scenarios || [];
+    if (!scenarios || !searchQuery.trim()) return scenarios;
     const query = searchQuery.toLowerCase();
-    return data.scenarios.filter(scenario => 
+    return scenarios.filter(scenario => 
       scenario.name.toLowerCase().includes(query)
     );
-  }, [data?.scenarios, searchQuery]);
+  }, [scenarios, searchQuery]);
 
-  // Calculate total metrics
-  const totalContacts = data?.scenarios.reduce((sum, scenario) => sum + scenario.totalContacts, 0) || 0;
-  const totalResponses = data?.scenarios.reduce((sum, scenario) => sum + scenario.responseCount, 0) || 0;
+  // Calculate total metrics from analytics
+  const totalContacts = analytics.reduce((sum, scenario) => sum + scenario.totalContacts, 0);
+  const totalResponses = analytics.reduce((sum, scenario) => sum + scenario.responseCount, 0);
   const responseRate = totalContacts > 0 ? (totalResponses / totalContacts) * 100 : 0;
 
   const formatLastUpdated = (dateStr: string) => {
@@ -119,15 +135,15 @@ export function ScenariosClient() {
           <p className="text-base text-gray-600">
             Track and manage your email scenarios
           </p>
-          {data?.lastUpdated && (
+          {analytics.length > 0 && (
             <p className="text-sm text-gray-500 mt-1">
-              Last updated: {formatLastUpdated(data.lastUpdated)}
-              {data.fromCache && ' (cached)'}
+              Last updated: {formatLastUpdated(analytics[0].updatedAt)}
+              {analytics.length > 1 && ' (cached)'}
             </p>
           )}
         </div>
         <Button
-          onClick={() => fetchScenarios(true)}
+          onClick={() => fetchData(true)}
           className="bg-red-500 hover:bg-red-600 text-white transition-colors"
         >
           <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
@@ -215,58 +231,65 @@ export function ScenariosClient() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {filteredScenarios.map((scenario) => (
-          <Card key={scenario.name} className="relative overflow-hidden">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg font-medium">{scenario.name}</CardTitle>
-                <MessageSquare className="h-4 w-4 text-muted-foreground" />
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Updated: {new Date(scenario.updatedAt).toLocaleString()}
-              </p>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div>
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium">Total Contacts</p>
-                    <span className="text-2xl font-bold text-orange-500">
-                      {scenario.totalContacts.toLocaleString()}
-                    </span>
+        {filteredScenarios.map((scenario) => {
+          const scenarioAnalytics = analytics.find(a => a.id === scenario.id) || {
+            totalContacts: 0,
+            responseCount: 0
+          };
+          
+          return (
+            <Card key={scenario.name} className="relative overflow-hidden">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg font-medium">{scenario.name}</CardTitle>
+                  <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Updated: {new Date(scenario.updatedAt).toLocaleString()}
+                </p>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium">Total Contacts</p>
+                      <span className="text-2xl font-bold text-orange-500">
+                        {scenarioAnalytics.totalContacts.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium">Responses</p>
+                      <span className="text-2xl font-bold text-green-500">
+                        {scenarioAnalytics.responseCount.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium">Response Rate</p>
+                      <span className="text-2xl font-bold text-purple-500">
+                        {((scenarioAnalytics.responseCount / scenarioAnalytics.totalContacts) * 100 || 0).toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden mt-2">
+                      <motion.div
+                        className="h-full bg-gradient-to-r from-purple-500 to-purple-400"
+                        style={{
+                          width: `${(scenarioAnalytics.responseCount / scenarioAnalytics.totalContacts) * 100 || 0}%`
+                        }}
+                        initial={{ width: 0 }}
+                        animate={{ width: `${(scenarioAnalytics.responseCount / scenarioAnalytics.totalContacts) * 100 || 0}%` }}
+                        transition={{ duration: 0.5, delay: 0.2 }}
+                      />
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium">Responses</p>
-                    <span className="text-2xl font-bold text-green-500">
-                      {scenario.responseCount.toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-                <div>
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium">Response Rate</p>
-                    <span className="text-2xl font-bold text-purple-500">
-                      {((scenario.responseCount / scenario.totalContacts) * 100).toFixed(1)}%
-                    </span>
-                  </div>
-                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden mt-2">
-                    <motion.div
-                      className="h-full bg-gradient-to-r from-purple-500 to-purple-400"
-                      style={{
-                        width: `${(scenario.responseCount / scenario.totalContacts) * 100}%`
-                      }}
-                      initial={{ width: 0 }}
-                      animate={{ width: `${(scenario.responseCount / scenario.totalContacts) * 100}%` }}
-                      transition={{ duration: 0.5, delay: 0.2 }}
-                    />
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );

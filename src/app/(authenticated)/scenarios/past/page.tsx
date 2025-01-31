@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/use-toast';
-import { RefreshCw, CheckSquare, MessageSquare, Users, Search } from 'lucide-react';
+import { RefreshCw, CheckSquare, MessageSquare, Users, Search, Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface Scenario {
@@ -25,7 +25,7 @@ interface ScenarioResponse {
 }
 
 export default function PastScenariosPage() {
-  const [data, setData] = React.useState<ScenarioResponse | null>(null);
+  const [scenarios, setScenarios] = React.useState<Scenario[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
   const { toast } = useToast();
@@ -33,10 +33,10 @@ export default function PastScenariosPage() {
   const fetchScenarios = async (forceRefresh = false) => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/scenarios${forceRefresh ? '?refresh=1' : ''}`);
+      const response = await fetch(`/api/scenarios/analytics${forceRefresh ? '?refresh=1' : ''}`);
       if (!response.ok) throw new Error('Failed to fetch scenarios');
       const data = await response.json();
-      setData(data);
+      setScenarios(data);
     } catch (error) {
       console.error('Error fetching scenarios:', error);
       toast({
@@ -54,16 +54,16 @@ export default function PastScenariosPage() {
   }, []);
 
   const filteredScenarios = React.useMemo(() => {
-    if (!data?.scenarios || !searchQuery.trim()) return data?.scenarios || [];
+    if (!scenarios || !searchQuery.trim()) return scenarios;
     const query = searchQuery.toLowerCase();
-    return data.scenarios.filter(scenario => 
+    return scenarios.filter(scenario => 
       scenario.name.toLowerCase().includes(query)
     );
-  }, [data?.scenarios, searchQuery]);
+  }, [scenarios, searchQuery]);
 
   // Calculate total metrics
-  const totalContacts = data?.scenarios.reduce((sum, scenario) => sum + scenario.totalContacts, 0) || 0;
-  const totalResponses = data?.scenarios.reduce((sum, scenario) => sum + scenario.responseCount, 0) || 0;
+  const totalContacts = scenarios.reduce((sum, scenario) => sum + scenario.totalContacts, 0);
+  const totalResponses = scenarios.reduce((sum, scenario) => sum + scenario.responseCount, 0);
   const responseRate = totalContacts > 0 ? (totalResponses / totalContacts) * 100 : 0;
 
   const formatLastUpdated = (dateStr: string) => {
@@ -110,10 +110,9 @@ export default function PastScenariosPage() {
           <p className="text-base text-gray-600">
             Track completed scenario performance
           </p>
-          {data?.lastUpdated && (
+          {scenarios.length > 0 && (
             <p className="text-sm text-gray-500 mt-1">
-              Last updated: {formatLastUpdated(data.lastUpdated)}
-              {data.fromCache && ' (cached)'}
+              Last updated: {formatLastUpdated(scenarios[0].updatedAt)}
             </p>
           )}
         </div>
@@ -191,7 +190,7 @@ export default function PastScenariosPage() {
           <Card className="bg-gradient-to-br from-red-500 to-red-600 text-white">
             <CardHeader className="pb-2">
               <CardTitle className="text-lg font-medium opacity-90 flex items-center">
-                <CheckSquare className="w-5 h-5 mr-2 opacity-80" />
+                <Clock className="w-5 h-5 mr-2 opacity-80" />
                 Response Rate
               </CardTitle>
             </CardHeader>
@@ -242,10 +241,10 @@ export default function PastScenariosPage() {
                   <motion.div
                     className="h-full bg-gradient-to-r from-red-500 to-red-600"
                     style={{
-                      width: `${(scenario.responseCount / scenario.totalContacts) * 100}%`
+                      width: `${(scenario.responseCount / scenario.totalContacts) * 100 || 0}%`
                     }}
                     initial={{ width: 0 }}
-                    animate={{ width: `${(scenario.responseCount / scenario.totalContacts) * 100}%` }}
+                    animate={{ width: `${(scenario.responseCount / scenario.totalContacts) * 100 || 0}%` }}
                     transition={{ duration: 0.5, delay: 0.2 }}
                   />
                 </div>

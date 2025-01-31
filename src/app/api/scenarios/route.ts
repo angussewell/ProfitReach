@@ -47,63 +47,11 @@ export async function GET() {
       orderBy: { createdAt: 'desc' }
     });
 
-    // Get webhook logs for analytics
-    const webhookLogs = await prisma.webhookLog.findMany({
-      where: {
-        organizationId: session.user.organizationId,
-        scenarioName: {
-          in: scenarios.map(s => s.name)
-        }
-      },
-      select: {
-        scenarioName: true,
-        status: true,
-        createdAt: true
-      }
-    });
-
-    // Get metrics for analytics
-    const metrics = await prisma.metric.findMany({
-      where: {
-        organizationId: session.user.organizationId,
-        scenarioName: {
-          in: scenarios.map(s => s.name)
-        }
-      },
-      select: {
-        scenarioName: true,
-        enrollments: true,
-        replies: true
-      }
-    });
-
-    // Calculate analytics for each scenario
-    const formattedScenarios = scenarios.map(scenario => {
-      const scenarioLogs = webhookLogs.filter(log => log.scenarioName === scenario.name);
-      const scenarioMetrics = metrics.find(m => m.scenarioName === scenario.name);
-      
-      // Calculate total contacts from webhook logs
-      const totalContacts = scenarioLogs.length;
-      
-      // Calculate active contacts (contacts in last 30 days)
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      const activeContacts = scenarioLogs.filter(log => 
-        new Date(log.createdAt) > thirtyDaysAgo
-      ).length;
-
-      // Calculate response count from metrics
-      const responseCount = scenarioMetrics?.replies || 0;
-
-      return {
-        ...scenario,
-        createdAt: scenario.createdAt.toISOString(),
-        updatedAt: scenario.updatedAt.toISOString(),
-        totalContacts,
-        activeContacts,
-        responseCount
-      };
-    });
+    const formattedScenarios = scenarios.map(scenario => ({
+      ...scenario,
+      createdAt: scenario.createdAt.toISOString(),
+      updatedAt: scenario.updatedAt.toISOString()
+    }));
 
     return NextResponse.json(formattedScenarios);
   } catch (error) {
