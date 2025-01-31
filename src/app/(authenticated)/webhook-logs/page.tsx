@@ -88,7 +88,7 @@ export default function WebhookLogsPage() {
     <div className="container mx-auto px-6 py-8 max-w-7xl">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-[#33475b] mb-2">Webhook Logs</h1>
+          <h1 className="text-3xl font-bold text-slate-800 mb-2">Webhook Logs</h1>
           <p className="text-base text-gray-600">
             Monitor and debug webhook activity
           </p>
@@ -98,7 +98,7 @@ export default function WebhookLogsPage() {
             setCurrentPage(1);
             fetchLogs();
           }}
-          className="bg-[#ff7a59] hover:bg-[#ff957a] text-white transition-colors"
+          className="bg-red-500 hover:bg-red-600 text-white transition-colors"
         >
           <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
           Refresh
@@ -116,7 +116,7 @@ export default function WebhookLogsPage() {
               setSearchQuery(e.target.value);
               setCurrentPage(1);
             }}
-            className="pl-10 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]"
+            className="pl-10 border-slate-200 focus:border-red-500 focus:ring-red-100"
           />
         </div>
 
@@ -201,7 +201,7 @@ export default function WebhookLogsPage() {
                     <td className="px-6 py-4">
                       <Link
                         href={`/webhook-logs/${log.id}`}
-                        className="text-[#ff7a59] hover:text-[#ff957a] text-sm font-medium"
+                        className="text-red-500 hover:text-red-600 text-sm font-medium"
                       >
                         View Details
                       </Link>
@@ -229,7 +229,7 @@ export default function WebhookLogsPage() {
                 key={page}
                 variant={currentPage === page ? "default" : "outline"}
                 onClick={() => setCurrentPage(page)}
-                className={currentPage === page ? "bg-[#ff7a59] hover:bg-[#ff957a]" : ""}
+                className={currentPage === page ? "bg-red-500 hover:bg-red-600" : ""}
               >
                 {page}
               </Button>

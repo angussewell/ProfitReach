@@ -45,16 +45,13 @@ async function registerField(field: string, retryCount = 0): Promise<any> {
   try {
     const normalizedField = normalizeFieldName(field);
     return await prisma.webhookField.upsert({
-      where: { field: normalizedField },
+      where: { name: normalizedField },
       create: { 
-        field: normalizedField,
-        lastSeen: new Date(),
-        occurrences: 1
+        name: normalizedField,
+        description: `Field ${field} from webhook`,
+        type: 'string'
       },
-      update: {
-        lastSeen: new Date(),
-        occurrences: { increment: 1 }
-      }
+      update: {}
     });
   } catch (error) {
     if (retryCount < 3) {
@@ -110,23 +107,23 @@ export async function registerWebhookFields(data: any) {
  */
 export async function getWebhookFields(): Promise<string[]> {
   const fields = await prisma.webhookField.findMany({
-    orderBy: { lastSeen: 'desc' }
+    orderBy: { updatedAt: 'desc' }
   });
   
   // Get unique field names
   const uniqueFields = new Set<string>();
   
   fields.forEach(field => {
-    uniqueFields.add(field.field);
+    uniqueFields.add(field.name);
     
     // Add variations of the field
-    const plainField = field.field.replace(/[{}]/g, '');
-    if (plainField !== field.field) {
+    const plainField = field.name.replace(/[{}]/g, '');
+    if (plainField !== field.name) {
       uniqueFields.add(plainField);
     }
     
     // Add with braces if it doesn't have them
-    if (!field.field.includes('{')) {
+    if (!field.name.includes('{')) {
       uniqueFields.add(`{${plainField}}`);
     }
   });

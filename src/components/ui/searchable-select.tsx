@@ -4,8 +4,13 @@ import * as Popover from "@radix-ui/react-popover";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
+interface Option {
+  value: string;
+  label: string;
+}
+
 interface SearchableSelectProps {
-  options: string[];
+  options: Option[];
   value?: string;
   onChange: (value: string) => void;
   placeholder?: string;
@@ -41,15 +46,11 @@ export function SearchableSelect({
     if (!search) return options;
     const searchLower = search.toLowerCase();
     return options.filter(option => 
-      option.toLowerCase().includes(searchLower)
+      option.label.toLowerCase().includes(searchLower)
     );
   }, [options, search]);
 
-  const handleSelect = React.useCallback((option: string) => {
-    onChange(option);
-    setOpen(false);
-    setSearch("");
-  }, [onChange]);
+  const selectedOption = options.find(opt => opt.value === value);
 
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
@@ -58,9 +59,9 @@ export function SearchableSelect({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between h-12 border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all rounded-lg"
+          className="w-full justify-between h-12 border-2 border-slate-200 focus:border-red-500 focus:ring-red-100 transition-all rounded-lg"
         >
-          <span className="truncate">{value || placeholder}</span>
+          <span className="truncate">{selectedOption?.label || placeholder}</span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </Popover.Trigger>
@@ -76,7 +77,7 @@ export function SearchableSelect({
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search..."
-              className="w-full px-3 py-2 border-b bg-transparent focus:outline-none focus:ring-2 focus:ring-[#ff7a59]/20 rounded-t-md"
+              className="w-full px-3 py-2 border-b bg-transparent focus:outline-none focus:ring-2 focus:ring-red-100 rounded-t-md"
               autoComplete="off"
             />
             <div className="max-h-60 overflow-auto p-1">
@@ -85,21 +86,25 @@ export function SearchableSelect({
               ) : (
                 filteredOptions.map(option => (
                   <div
-                    key={option}
-                    onClick={() => handleSelect(option)}
+                    key={option.value}
+                    onClick={() => {
+                      onChange(option.value);
+                      setOpen(false);
+                      setSearch("");
+                    }}
                     className={cn(
                       "flex items-center px-3 py-2 cursor-pointer rounded-sm text-sm",
                       "hover:bg-accent hover:text-accent-foreground",
-                      value === option && "bg-accent text-accent-foreground"
+                      value === option.value && "bg-accent text-accent-foreground"
                     )}
                   >
                     <Check
                       className={cn(
                         "mr-2 h-4 w-4 flex-shrink-0",
-                        value === option ? "opacity-100" : "opacity-0"
+                        value === option.value ? "opacity-100" : "opacity-0"
                       )}
                     />
-                    <span className="truncate">{option}</span>
+                    <span className="truncate">{option.label}</span>
                   </div>
                 ))
               )}

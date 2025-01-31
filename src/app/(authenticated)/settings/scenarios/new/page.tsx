@@ -45,7 +45,7 @@ export default function NewScenarioPage() {
     const formData = new FormData(e.currentTarget);
     const data = {
       name: formData.get('name'),
-      type: formData.get('type') || 'simple',
+      touchpointType: formData.get('touchpointType') || 'email',
       description: formData.get('description'),
       status: 'active',
       filters: JSON.stringify(filters),
@@ -108,15 +108,16 @@ export default function NewScenarioPage() {
             </div>
             
             <div>
-              <Label htmlFor="type">Type</Label>
-              <Select name="type" defaultValue="simple">
+              <Label htmlFor="touchpointType">Type</Label>
+              <Select name="touchpointType" defaultValue="email">
                 <SelectTrigger>
                   <SelectValue placeholder="Select type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="simple">Simple</SelectItem>
+                  <SelectItem value="email">Email</SelectItem>
                   <SelectItem value="research">Research</SelectItem>
-                  <SelectItem value="custom">Custom</SelectItem>
+                  <SelectItem value="googleDrive">Google Drive</SelectItem>
+                  <SelectItem value="linkedin">LinkedIn</SelectItem>
                 </SelectContent>
               </Select>
             </div>

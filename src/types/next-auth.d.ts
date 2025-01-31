@@ -2,6 +2,11 @@ import 'next-auth';
 import type { DefaultSession } from 'next-auth'
 import { User as PrismaUser } from '@prisma/client';
 
+interface Organization {
+  id: string;
+  name: string;
+}
+
 declare module 'next-auth' {
   interface User {
     id: string;
@@ -10,6 +15,7 @@ declare module 'next-auth' {
     role: string;
     organizationId?: string;
     organizationName?: string;
+    organizations?: Organization[];
     password?: string;
   }
 
@@ -19,6 +25,7 @@ declare module 'next-auth' {
       role: string;
       organizationId?: string;
       organizationName?: string;
+      organizations?: Organization[];
     } & DefaultSession['user']
     accessToken?: string | null
     refreshToken?: string | null
@@ -47,6 +54,7 @@ declare module 'next-auth/jwt' {
     role: string;
     organizationId?: string;
     organizationName?: string;
+    organizations?: Organization[];
     _timestamp?: number
   }
 } 

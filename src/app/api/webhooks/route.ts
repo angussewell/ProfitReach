@@ -10,7 +10,7 @@ export async function POST(req: Request) {
 
     const organization = await prisma.organization.findUnique({
       where: { id: organizationId },
-      include: { ghlIntegration: true }
+      include: { ghlIntegrations: true }
     });
 
     if (!organization) {
@@ -27,27 +27,48 @@ export async function POST(req: Request) {
         scenarioName,
         contactEmail,
         status,
-        payload: body,
+        requestBody: body,
+        responseBody: {},
+        ghlIntegrationId: organization.ghlIntegrations[0]?.id || '',
+        accountId: body.accountId || 'unknown',
+        contactName: body.contactName || 'Unknown',
+        company: body.company || 'Unknown'
       }
     });
 
     // Update metrics
-    if (status === 'enrollment') {
-      await prisma.metric.create({
+    const existingMetric = await prisma.metric.findUnique({
+      where: {
+        accountId_scenarioName: {
+          accountId: body.accountId || 'unknown',
+          scenarioName
+        }
+      }
+    });
+
+    if (existingMetric) {
+      await prisma.metric.update({
+        where: {
+          accountId_scenarioName: {
+            accountId: body.accountId || 'unknown',
+            scenarioName
+          }
+        },
         data: {
-          organizationId,
-          type: 'enrollment',
-          scenarioName,
-          contactEmail
+          enrollments: status === 'enrollment' ? existingMetric.enrollments + 1 : existingMetric.enrollments,
+          replies: status === 'reply' ? existingMetric.replies + 1 : existingMetric.replies,
+          updatedAt: new Date()
         }
       });
-    } else if (status === 'reply') {
+    } else {
       await prisma.metric.create({
         data: {
           organizationId,
-          type: 'reply',
+          accountId: body.accountId || 'unknown',
           scenarioName,
-          contactEmail
+          enrollments: status === 'enrollment' ? 1 : 0,
+          replies: status === 'reply' ? 1 : 0,
+          updatedAt: new Date()
         }
       });
     }

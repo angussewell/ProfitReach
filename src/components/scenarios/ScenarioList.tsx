@@ -7,16 +7,16 @@ interface Scenario {
   id: string;
   name: string;
   description?: string | null;
-  type: string;
+  touchpointType: string;
   status: string;
   createdAt: Date;
   signature?: {
     name: string;
   } | null;
-  attachments: Array<{
+  attachment?: {
     name: string;
-    type: string;
-  }>;
+    url: string;
+  } | null;
 }
 
 interface ScenarioListProps {
@@ -46,7 +46,7 @@ export function ScenarioList({ scenarios }: ScenarioListProps) {
               <p className="text-gray-500 mb-4 line-clamp-2">{scenario.description}</p>
             )}
             <div className="flex items-center gap-2 text-sm text-gray-500">
-              <span className="capitalize">{scenario.type}</span>
+              <span className="capitalize">{scenario.touchpointType}</span>
               <span>•</span>
               <span className="capitalize">{scenario.status}</span>
             </div>
@@ -55,9 +55,9 @@ export function ScenarioList({ scenarios }: ScenarioListProps) {
                 Signature: {scenario.signature.name}
               </div>
             )}
-            {scenario.attachments.length > 0 && (
+            {scenario.attachment && (
               <div className="mt-2 text-sm text-gray-500">
-                Attachments: {scenario.attachments.length}
+                Attachment: {scenario.attachment.name}
               </div>
             )}
           </Card>

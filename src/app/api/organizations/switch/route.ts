@@ -1,35 +1,21 @@
 import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { prisma } from '@/lib/prisma';
-
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
 
 export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
-    
-    if (!session?.user?.id) {
-      console.log('No authenticated user found');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    if (!session?.user) {
+      return new NextResponse('Unauthorized', { status: 401 });
     }
 
-    const { organizationId } = await request.json();
-    
+    const body = await request.json();
+    const { organizationId } = body;
+
     if (!organizationId) {
-      console.log('No organization ID provided');
-      return NextResponse.json({ error: 'Organization ID required' }, { status: 400 });
-    }
-
-    // Verify user exists
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id }
-    });
-
-    if (!user) {
-      console.log('User not found:', session.user.id);
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      return new NextResponse('Organization ID is required', { status: 400 });
     }
 
     // Verify organization exists
@@ -38,59 +24,48 @@ export async function POST(request: Request) {
     });
 
     if (!organization) {
-      console.log('Organization not found:', organizationId);
-      return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
+      return new NextResponse('Organization not found', { status: 404 });
+    }
+
+    // For regular users, verify they belong to the organization
+    if (session.user.role !== 'admin') {
+      const userOrg = await prisma.user.findFirst({
+        where: {
+          id: session.user.id,
+          organizationId: organizationId
+        }
+      });
+
+      if (!userOrg) {
+        return new NextResponse('Forbidden', { status: 403 });
+      }
     }
 
     // Update user's organization
-    const updatedUser = await prisma.user.update({
+    await prisma.user.update({
       where: { id: session.user.id },
-      data: { organizationId },
+      data: { organizationId }
+    });
+
+    // Get updated user data
+    const updatedUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
       include: {
         organization: {
-          select: {
-            name: true
-          }
+          select: { id: true, name: true }
         }
       }
     });
 
-    // Add a small delay to ensure database commit
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    console.log('User organization updated:', {
-      userId: updatedUser.id,
-      organizationId: updatedUser.organizationId,
-      timestamp: Date.now()
-    });
-
-    // Return updated user data with timestamp
     const timestamp = Date.now();
     console.log('Preparing response with timestamp:', timestamp);
-    
-    const response = NextResponse.json({
-      id: updatedUser.id,
-      email: updatedUser.email,
-      name: updatedUser.name,
-      role: updatedUser.role,
-      organizationId: updatedUser.organizationId,
-      organizationName: updatedUser.organization?.name,
-      _timestamp: timestamp
-    });
 
-    // Set strict no-cache headers
-    response.headers.set('Cache-Control', 'no-store, must-revalidate, private');
-    response.headers.set('Pragma', 'no-cache');
-    response.headers.set('Expires', '0');
-    
-    return response;
-  } catch (error) {
-    console.error('Organization switch failed:', error);
     return NextResponse.json({
-      error: 'Failed to switch organization',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    }, {
-      status: 500
+      organizationId: updatedUser?.organization?.id,
+      organizationName: updatedUser?.organization?.name
     });
+  } catch (error) {
+    console.error('Error switching organization:', error);
+    return new NextResponse('Internal Server Error', { status: 500 });
   }
 }

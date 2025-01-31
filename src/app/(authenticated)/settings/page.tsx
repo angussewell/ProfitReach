@@ -8,6 +8,7 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { GHLAuthButton } from '@/components/auth/GHLAuthButton';
 import { useSession } from 'next-auth/react';
 import { useOrganization } from '@/contexts/OrganizationContext';
+import { PageContainer } from '@/components/layout/PageContainer';
 
 // Pre-configured templates
 const WEBHOOK_TEMPLATES = {
@@ -46,6 +47,7 @@ export default function SettingsPage() {
   const [ghlIntegration, setGhlIntegration] = useState<any>(null);
   const [webhookFields, setWebhookFields] = useState<any[]>([]);
   const [mappings, setMappings] = useState<Record<string, string>>({});
+  const [organization, setOrganization] = useState<any>(null);
 
   useEffect(() => {
     async function fetchData() {
@@ -55,18 +57,26 @@ export default function SettingsPage() {
       }
 
       try {
-        const response = await fetch(`/api/ghl-integration?organizationId=${session.user.organizationId}`);
-        const data = await response.json();
+        const [ghlResponse, orgResponse] = await Promise.all([
+          fetch(`/api/ghl-integration?organizationId=${session.user.organizationId}`),
+          fetch(`/api/organizations/${session.user.organizationId}`)
+        ]);
         
-        if (data.error) {
-          throw new Error(data.error);
+        const [ghlData, orgData] = await Promise.all([
+          ghlResponse.json(),
+          orgResponse.json()
+        ]);
+        
+        if (ghlData.error) {
+          throw new Error(ghlData.error);
         }
         
-        setGhlIntegration(data.ghlIntegration);
+        setGhlIntegration(ghlData.ghlIntegration);
+        setOrganization(orgData);
         setLoading(false);
       } catch (error) {
-        console.error('Error fetching GHL integration:', error);
-        toast.error('Failed to fetch GHL integration status');
+        console.error('Error fetching data:', error);
+        toast.error('Failed to fetch organization data');
         setLoading(false);
       }
     }
@@ -102,57 +112,102 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="p-4">
-        <Card className="p-6">
-          <div>Loading...</div>
+      <PageContainer>
+        <Card className="border-0 shadow-lg bg-white rounded-xl overflow-hidden">
+          <div className="p-6">
+            <div>Loading...</div>
+          </div>
         </Card>
-      </div>
+      </PageContainer>
     );
   }
 
   if (!session?.user?.organizationId) {
     return (
-      <div className="p-4">
-        <Card className="p-6">
-          <div>Please select an organization to manage integrations.</div>
+      <PageContainer>
+        <Card className="border-0 shadow-lg bg-white rounded-xl overflow-hidden">
+          <div className="p-6">
+            <div>Please select an organization to manage integrations.</div>
+          </div>
         </Card>
-      </div>
+      </PageContainer>
     );
   }
 
   return (
-    <div className="p-4">
-      <Card className="p-6">
-        <h2 className="text-2xl font-bold mb-4">GoHighLevel Integration</h2>
-        
-        {!ghlIntegration ? (
-          <div>
-            <p className="mb-4">Connect your GoHighLevel account to get started.</p>
-            <GHLAuthButton />
-          </div>
-        ) : (
-          <div>
-            <p className="text-green-600 mb-4">✓ Connected to GoHighLevel</p>
-            <p className="text-sm text-gray-600 mb-2">Location: {ghlIntegration.locationName || 'Unknown'}</p>
-            <Button
-              onClick={handleDisconnect}
-              variant="destructive"
-              disabled={saving}
-            >
-              {saving ? 'Disconnecting...' : 'Disconnect'}
-            </Button>
-          </div>
-        )}
-      </Card>
-
-      {ghlIntegration && (
-        <Card className="mt-4 p-6">
-          <h2 className="text-2xl font-bold mb-4">Webhook Field Mappings</h2>
-          <div className="space-y-4">
-            {/* Add webhook field mapping UI here */}
+    <PageContainer>
+      <div className="flex flex-col gap-6">
+        <Card className="border-0 shadow-lg bg-white rounded-xl overflow-hidden">
+          <div className="p-6">
+            <h2 className="text-2xl font-bold text-[#2e475d] mb-4">GoHighLevel Integration</h2>
+            
+            {!ghlIntegration ? (
+              <div>
+                <p className="mb-4">Connect your GoHighLevel account to get started.</p>
+                <GHLAuthButton />
+              </div>
+            ) : (
+              <div>
+                <p className="text-green-600 mb-4">✓ Connected to GoHighLevel</p>
+                <p className="text-sm text-gray-600 mb-2">Location: {ghlIntegration.locationName || 'Unknown'}</p>
+                <Button
+                  onClick={handleDisconnect}
+                  variant="destructive"
+                  disabled={saving}
+                >
+                  {saving ? 'Disconnecting...' : 'Disconnect'}
+                </Button>
+              </div>
+            )}
           </div>
         </Card>
-      )}
-    </div>
+
+        {ghlIntegration && (
+          <Card className="border-0 shadow-lg bg-white rounded-xl overflow-hidden">
+            <div className="p-6">
+              <h2 className="text-2xl font-bold text-[#2e475d] mb-4">Webhook Field Mappings</h2>
+              <div className="space-y-4">
+                {/* Add webhook field mapping UI here */}
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {/* Webhook URL Card */}
+        <Card className="border-0 shadow-lg bg-white rounded-xl overflow-hidden">
+          <div className="p-6">
+            <h2 className="text-2xl font-bold text-[#2e475d] mb-4">Webhook URL</h2>
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                Use this URL to send contact data to your organization. This URL is unique to your organization and should be kept secure.
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={organization ? `https://profit-reach.vercel.app/api/webhooks/${organization.webhookUrl}` : 'Loading...'}
+                  className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-600"
+                />
+                <Button
+                  onClick={() => {
+                    if (organization?.webhookUrl) {
+                      navigator.clipboard.writeText(`https://profit-reach.vercel.app/api/webhooks/${organization.webhookUrl}`);
+                      toast.success('Webhook URL copied to clipboard');
+                    }
+                  }}
+                  className="bg-red-500 hover:bg-red-600 text-white"
+                  disabled={!organization?.webhookUrl}
+                >
+                  Copy
+                </Button>
+              </div>
+              <p className="text-xs text-gray-500">
+                Check the <a href="/documentation/webhooks" className="text-red-500 hover:text-red-600">documentation</a> for more information on how to use webhooks.
+              </p>
+            </div>
+          </div>
+        </Card>
+      </div>
+    </PageContainer>
   );
 } 

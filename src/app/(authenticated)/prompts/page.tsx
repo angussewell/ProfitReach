@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
 import { Plus, Pencil, Trash2, X, ChevronDown, ChevronUp, Search, Eye } from 'lucide-react';
 import { replaceVariables } from '@/lib/utils';
+import { PageContainer } from '@/components/layout/PageContainer';
 
 interface Prompt {
   id: string;
@@ -160,7 +161,7 @@ export default function PromptsPage() {
       <>
         {parts.map((part, index) => {
           if (part.match(/\{\{\w+\}\}/)) {
-            return <span key={index} className="bg-[#ff7a59]/10 text-[#ff7a59] px-1 rounded">{part}</span>;
+            return <span key={index} className="bg-red-100 text-red-500 px-1 rounded">{part}</span>;
           }
           return <span key={index}>{part}</span>;
         })}
@@ -177,7 +178,7 @@ export default function PromptsPage() {
         <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto border-0 shadow-2xl bg-white rounded-xl">
           <CardHeader className="pb-4 border-b border-gray-100 sticky top-0 bg-white z-10">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-xl font-semibold text-[#2e475d]">Preview Prompt: {prompt.name}</CardTitle>
+              <CardTitle className="text-xl font-semibold text-slate-800">Preview Prompt: {prompt.name}</CardTitle>
               <Button 
                 variant="ghost" 
                 size="sm" 
@@ -191,11 +192,11 @@ export default function PromptsPage() {
           <CardContent className="space-y-6 p-8">
             {variables.length > 0 ? (
               <div className="space-y-4">
-                <h3 className="text-sm font-medium text-[#2e475d]">Variables</h3>
+                <h3 className="text-sm font-medium text-slate-800">Variables</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {variables.map(variable => (
                     <div key={variable} className="space-y-2">
-                      <label className="text-sm font-medium text-[#2e475d]">{variable}</label>
+                      <label className="text-sm font-medium text-slate-800">{variable}</label>
                       <Input
                         value={previewVariables[variable] || ''}
                         onChange={(e) => setPreviewVariables(prev => ({
@@ -203,7 +204,7 @@ export default function PromptsPage() {
                           [variable]: e.target.value
                         }))}
                         placeholder={`Enter value for ${variable}`}
-                        className="h-10 border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all rounded-lg"
+                        className="h-10 border-2 border-slate-200 focus:border-red-500 focus:ring-red-100 transition-all rounded-lg"
                       />
                     </div>
                   ))}
@@ -214,9 +215,9 @@ export default function PromptsPage() {
             )}
             
             <div className="space-y-2">
-              <h3 className="text-sm font-medium text-[#2e475d]">Preview</h3>
+              <h3 className="text-sm font-medium text-slate-800">Preview</h3>
               <div className="bg-gray-50/80 rounded-lg p-4 border border-gray-100">
-                <pre className="whitespace-pre-wrap text-sm text-[#2e475d] font-mono">
+                <pre className="whitespace-pre-wrap text-sm text-slate-800 font-mono">
                   {replaceVariables(prompt.content, previewVariables)}
                 </pre>
               </div>
@@ -229,9 +230,11 @@ export default function PromptsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#f5f8fa]">
-        <div className="container mx-auto px-6 py-8 max-w-7xl">
-          <h1 className="text-3xl font-bold text-[#2e475d] mb-8">Prompts</h1>
+      <PageContainer>
+        <div className="flex flex-col gap-6">
+          <div className="flex items-center justify-between">
+            <h1 className="text-3xl font-bold text-slate-800">Prompts</h1>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[1, 2, 3].map((i) => (
               <Card key={i} className="animate-pulse border-0 shadow-lg bg-white rounded-xl overflow-hidden">
@@ -245,40 +248,39 @@ export default function PromptsPage() {
             ))}
           </div>
         </div>
-      </div>
+      </PageContainer>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#f5f8fa]">
-      <div className="container mx-auto px-6 py-8 max-w-7xl">
-        <div className="flex flex-col gap-6 mb-8">
-          <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-bold text-[#2e475d]">Prompts</h1>
-            <Button 
-              onClick={() => setIsCreating(true)}
-              className="bg-[#ff7a59] hover:bg-[#ff8f73] transition-all duration-200 shadow-sm hover:shadow-md text-white border-0 rounded-lg px-6"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              New Prompt
-            </Button>
-          </div>
-          <div className="relative max-w-2xl">
-            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-            <Input
-              className="pl-12 h-12 border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all duration-200 shadow-sm hover:shadow-md bg-white rounded-xl text-lg"
-              placeholder="Search prompts..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
+    <PageContainer>
+      <div className="flex flex-col gap-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold text-slate-800">Prompts</h1>
+          <Button 
+            onClick={() => setIsCreating(true)}
+            className="bg-red-500 hover:bg-red-600 transition-all duration-200 shadow-sm hover:shadow-md text-white border-0 rounded-lg px-6"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            New Prompt
+          </Button>
+        </div>
+
+        <div className="relative max-w-2xl">
+          <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+          <Input
+            className="pl-12 h-12 border-2 border-slate-200 focus:border-red-500 focus:ring-red-100 transition-all duration-200 shadow-sm hover:shadow-md bg-white rounded-xl text-lg"
+            placeholder="Search prompts..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
         </div>
 
         {isCreating && (
           <Card className="mb-8 border-0 shadow-xl bg-white rounded-xl overflow-hidden">
             <CardHeader className="pb-4 border-b border-gray-100">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-xl font-semibold text-[#2e475d]">Create New Prompt</CardTitle>
+                <CardTitle className="text-xl font-semibold text-slate-800">Create New Prompt</CardTitle>
                 <Button variant="ghost" size="sm" onClick={() => setIsCreating(false)} className="text-gray-500 hover:text-gray-700 hover:bg-gray-100/80 rounded-lg">
                   <X className="w-5 h-5" />
                 </Button>
@@ -286,34 +288,34 @@ export default function PromptsPage() {
             </CardHeader>
             <CardContent className="space-y-6 p-8">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-[#2e475d]">Name</label>
+                <label className="text-sm font-medium text-slate-800">Name</label>
                 <Input
                   value={newPrompt.name}
                   onChange={(e) => setNewPrompt({ ...newPrompt, name: e.target.value })}
                   placeholder="Enter prompt name"
-                  className="h-12 border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all rounded-lg"
+                  className="h-12 border-2 border-slate-200 focus:border-red-500 focus:ring-red-100 transition-all rounded-lg"
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium text-[#2e475d]">Content</label>
+                <label className="text-sm font-medium text-slate-800">Content</label>
                 <Textarea
                   value={newPrompt.content}
                   onChange={(e) => setNewPrompt({ ...newPrompt, content: e.target.value })}
                   placeholder="Enter prompt content"
-                  className="min-h-[200px] border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all rounded-lg"
+                  className="min-h-[200px] border-2 border-slate-200 focus:border-red-500 focus:ring-red-100 transition-all rounded-lg"
                 />
               </div>
               <div className="flex gap-3 pt-2">
                 <Button 
                   onClick={handleCreate}
-                  className="bg-[#ff7a59] hover:bg-[#ff8f73] transition-all duration-200 text-white shadow-sm hover:shadow-md border-0 rounded-lg px-6 h-12 text-base"
+                  className="bg-red-500 hover:bg-red-600 transition-all duration-200 text-white shadow-sm hover:shadow-md border-0 rounded-lg px-6 h-12 text-base"
                 >
                   Create Prompt
                 </Button>
                 <Button 
                   variant="outline" 
                   onClick={() => setIsCreating(false)}
-                  className="border-2 border-gray-200 hover:bg-gray-50 text-[#2e475d] hover:border-[#ff7a59] transition-all rounded-lg px-6 h-12 text-base"
+                  className="border-2 border-slate-200 hover:bg-slate-50 text-slate-800 hover:border-red-500 transition-all rounded-lg px-6 h-12 text-base"
                 >
                   Cancel
                 </Button>
@@ -327,7 +329,7 @@ export default function PromptsPage() {
             <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto border-0 shadow-2xl bg-white rounded-xl">
               <CardHeader className="pb-4 border-b border-gray-100 sticky top-0 bg-white z-10">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-xl font-semibold text-[#2e475d]">Edit Prompt</CardTitle>
+                  <CardTitle className="text-xl font-semibold text-slate-800">Edit Prompt</CardTitle>
                   <Button 
                     variant="ghost" 
                     size="sm" 
@@ -340,38 +342,38 @@ export default function PromptsPage() {
               </CardHeader>
               <CardContent className="space-y-6 p-8">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-[#2e475d]">Name</label>
+                  <label className="text-sm font-medium text-slate-800">Name</label>
                   <Input
                     value={editingPrompt.name}
                     onChange={(e) => setEditingPrompt({
                       ...editingPrompt,
                       name: e.target.value
                     })}
-                    className="h-12 border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all rounded-lg"
+                    className="h-12 border-2 border-slate-200 focus:border-red-500 focus:ring-red-100 transition-all rounded-lg"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-[#2e475d]">Content</label>
+                  <label className="text-sm font-medium text-slate-800">Content</label>
                   <Textarea
                     value={editingPrompt.content}
                     onChange={(e) => setEditingPrompt({
                       ...editingPrompt,
                       content: e.target.value
                     })}
-                    className="min-h-[400px] border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all rounded-lg font-mono"
+                    className="min-h-[400px] border-2 border-slate-200 focus:border-red-500 focus:ring-red-100 transition-all rounded-lg font-mono"
                   />
                 </div>
                 <div className="flex gap-3 pt-2">
                   <Button 
                     onClick={() => handleSave(editingPrompt)}
-                    className="bg-[#ff7a59] hover:bg-[#ff8f73] transition-all duration-200 text-white shadow-sm hover:shadow-md border-0 rounded-lg px-6 h-12 text-base"
+                    className="bg-red-500 hover:bg-red-600 transition-all duration-200 text-white shadow-sm hover:shadow-md border-0 rounded-lg px-6 h-12 text-base"
                   >
                     Save Changes
                   </Button>
                   <Button 
                     variant="outline" 
                     onClick={() => setEditingPrompt(null)}
-                    className="border-2 border-gray-200 hover:bg-gray-50 text-[#2e475d] hover:border-[#ff7a59] transition-all rounded-lg px-6 h-12 text-base"
+                    className="border-2 border-slate-200 hover:bg-slate-50 text-slate-800 hover:border-red-500 transition-all rounded-lg px-6 h-12 text-base"
                   >
                     Cancel
                   </Button>
@@ -392,7 +394,7 @@ export default function PromptsPage() {
                   variant="ghost"
                   size="sm"
                   onClick={() => togglePrompt(prompt.id)}
-                  className="bg-white/90 hover:bg-white shadow-sm hover:shadow-md rounded-lg text-gray-600 hover:text-[#ff7a59]"
+                  className="bg-white/90 hover:bg-white shadow-sm hover:shadow-md rounded-lg text-gray-600 hover:text-red-500"
                 >
                   {expandedPrompts.has(prompt.id) ? (
                     <ChevronUp className="w-5 h-5" />
@@ -407,7 +409,7 @@ export default function PromptsPage() {
                     setPreviewVariables({});
                     setPreviewPrompt(prompt);
                   }}
-                  className="bg-white/90 hover:bg-white shadow-sm hover:shadow-md rounded-lg text-gray-600 hover:text-[#ff7a59]"
+                  className="bg-white/90 hover:bg-white shadow-sm hover:shadow-md rounded-lg text-gray-600 hover:text-red-500"
                 >
                   <Eye className="w-5 h-5" />
                 </Button>
@@ -415,7 +417,7 @@ export default function PromptsPage() {
                   variant="ghost"
                   size="sm"
                   onClick={() => setEditingPrompt(prompt)}
-                  className="bg-white/90 hover:bg-white shadow-sm hover:shadow-md rounded-lg text-gray-600 hover:text-[#ff7a59]"
+                  className="bg-white/90 hover:bg-white shadow-sm hover:shadow-md rounded-lg text-gray-600 hover:text-red-500"
                 >
                   <Pencil className="w-5 h-5" />
                 </Button>
@@ -423,18 +425,18 @@ export default function PromptsPage() {
                   variant="ghost"
                   size="sm"
                   onClick={() => handleDelete(prompt.id)}
-                  className="bg-white/90 hover:bg-white shadow-sm hover:shadow-md rounded-lg text-gray-600 hover:text-[#ff7a59]"
+                  className="bg-white/90 hover:bg-white shadow-sm hover:shadow-md rounded-lg text-gray-600 hover:text-red-500"
                 >
                   <Trash2 className="w-5 h-5" />
                 </Button>
               </div>
               <CardHeader className="pb-4">
-                <CardTitle className="text-lg font-semibold text-[#2e475d] pr-24">{prompt.name}</CardTitle>
+                <CardTitle className="text-lg font-semibold text-slate-800 pr-24">{prompt.name}</CardTitle>
               </CardHeader>
               {expandedPrompts.has(prompt.id) && (
                 <CardContent className="pt-0">
                   <div className="bg-gray-50/80 rounded-lg p-4 border border-gray-100">
-                    <pre className="whitespace-pre-wrap text-sm text-[#2e475d] font-mono">
+                    <pre className="whitespace-pre-wrap text-sm text-slate-800 font-mono">
                       {highlightVariables(prompt.content)}
                     </pre>
                   </div>
@@ -446,6 +448,6 @@ export default function PromptsPage() {
       </div>
 
       {previewPrompt && <PreviewModal prompt={previewPrompt} />}
-    </div>
+    </PageContainer>
   );
 } 

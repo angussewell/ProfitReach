@@ -72,7 +72,7 @@ export default function CurrentScenariosPage() {
       <div className="container mx-auto px-6 py-8 max-w-7xl">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-[#33475b] mb-2">Current Scenarios</h1>
+            <h1 className="text-3xl font-bold text-slate-800 mb-2">Current Scenarios</h1>
             <p className="text-base text-gray-600">Loading scenario data...</p>
           </div>
           <Button disabled>
@@ -103,7 +103,7 @@ export default function CurrentScenariosPage() {
     <div className="container mx-auto px-6 py-8 max-w-7xl">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-[#33475b] mb-2">Current Scenarios</h1>
+          <h1 className="text-3xl font-bold text-slate-800 mb-2">Current Scenarios</h1>
           <p className="text-base text-gray-600">
             Monitor active email scenarios
           </p>
@@ -116,7 +116,7 @@ export default function CurrentScenariosPage() {
         </div>
         <Button
           onClick={() => fetchScenarios(true)}
-          className="bg-[#ff7a59] hover:bg-[#ff957a] text-white transition-colors"
+          className="bg-red-500 hover:bg-red-600 text-white transition-colors"
         >
           <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
           Refresh
@@ -131,7 +131,7 @@ export default function CurrentScenariosPage() {
             placeholder="Search scenarios..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]"
+            className="pl-10 border-slate-200 focus:border-red-500 focus:ring-red-100"
           />
         </div>
       </div>
@@ -143,7 +143,7 @@ export default function CurrentScenariosPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
         >
-          <Card className="bg-gradient-to-br from-[#ff7a59] to-[#ff957a] text-white">
+          <Card className="bg-gradient-to-br from-red-500 to-red-600 text-white">
             <CardHeader className="pb-2">
               <CardTitle className="text-lg font-medium opacity-90 flex items-center">
                 <Users className="w-5 h-5 mr-2 opacity-80" />
@@ -164,7 +164,7 @@ export default function CurrentScenariosPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
         >
-          <Card className="bg-gradient-to-br from-[#00a4bd] to-[#33b5c9] text-white">
+          <Card className="bg-gradient-to-br from-red-500 to-red-600 text-white">
             <CardHeader className="pb-2">
               <CardTitle className="text-lg font-medium opacity-90 flex items-center">
                 <MessageSquare className="w-5 h-5 mr-2 opacity-80" />
@@ -185,7 +185,7 @@ export default function CurrentScenariosPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
         >
-          <Card className="bg-gradient-to-br from-[#516f90] to-[#7389a3] text-white">
+          <Card className="bg-gradient-to-br from-red-500 to-red-600 text-white">
             <CardHeader className="pb-2">
               <CardTitle className="text-lg font-medium opacity-90 flex items-center">
                 <Clock className="w-5 h-5 mr-2 opacity-80" />
@@ -210,10 +210,10 @@ export default function CurrentScenariosPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
           >
-            <Card className="hover:border-[#ff7a59] transition-colors">
+            <Card className="hover:border-red-500 transition-colors">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <MessageSquare className="w-5 h-5 text-[#ff7a59]" />
+                  <MessageSquare className="w-5 h-5 text-red-500" />
                   {scenario.name}
                 </CardTitle>
                 {scenario.lastUpdated && (
@@ -224,20 +224,20 @@ export default function CurrentScenariosPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-bold text-[#ff7a59]">
+                  <span className="text-3xl font-bold text-red-500">
                     {scenario.count.toLocaleString()}
                   </span>
                   <span className="text-gray-600">Active Contacts</span>
                 </div>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-semibold text-[#00bda5]">
+                  <span className="text-2xl font-semibold text-red-500">
                     {scenario.responseCount.toLocaleString()}
                   </span>
                   <span className="text-gray-600">Responses</span>
                 </div>
                 <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                   <motion.div
-                    className="h-full bg-gradient-to-r from-[#00bda5] to-[#33cbb8]"
+                    className="h-full bg-gradient-to-r from-red-500 to-red-600"
                     style={{
                       width: `${(scenario.responseCount / scenario.count) * 100}%`
                     }}

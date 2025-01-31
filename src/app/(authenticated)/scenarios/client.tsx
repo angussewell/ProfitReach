@@ -9,11 +9,15 @@ import { RefreshCw, Search, MessageSquare, Users, TrendingUp } from 'lucide-reac
 import { motion } from 'framer-motion';
 
 interface Scenario {
+  id: string;
   name: string;
-  totalCount: number;
-  activeCount: number;
+  description: string | null;
+  touchpointType: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  totalContacts: number;
   responseCount: number;
-  lastUpdated: string;
 }
 
 interface ScenarioResponse {
@@ -23,7 +27,7 @@ interface ScenarioResponse {
 }
 
 const SCENARIO_COLORS = {
-  primary: ['#ff7a59', '#ff957a'],
+  primary: ['rgb(239, 68, 68)', 'rgb(220, 38, 38)'],
   secondary: ['#00a4bd', '#33b5c9'],
   tertiary: ['#516f90', '#7389a3']
 };
@@ -66,7 +70,7 @@ export function ScenariosClient() {
   }, [data?.scenarios, searchQuery]);
 
   // Calculate total metrics
-  const totalContacts = data?.scenarios.reduce((sum, scenario) => sum + scenario.totalCount, 0) || 0;
+  const totalContacts = data?.scenarios.reduce((sum, scenario) => sum + scenario.totalContacts, 0) || 0;
   const totalResponses = data?.scenarios.reduce((sum, scenario) => sum + scenario.responseCount, 0) || 0;
   const responseRate = totalContacts > 0 ? (totalResponses / totalContacts) * 100 : 0;
 
@@ -111,7 +115,7 @@ export function ScenariosClient() {
     <div className="container mx-auto px-6 py-8 max-w-7xl">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-[#33475b] mb-2">All Scenarios</h1>
+          <h1 className="text-3xl font-bold text-slate-800 mb-2">All Scenarios</h1>
           <p className="text-base text-gray-600">
             Track and manage your email scenarios
           </p>
@@ -124,7 +128,7 @@ export function ScenariosClient() {
         </div>
         <Button
           onClick={() => fetchScenarios(true)}
-          className="bg-[#ff7a59] hover:bg-[#ff957a] text-white transition-colors"
+          className="bg-red-500 hover:bg-red-600 text-white transition-colors"
         >
           <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
           Refresh
@@ -139,7 +143,7 @@ export function ScenariosClient() {
             placeholder="Search scenarios..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]"
+            className="pl-10 border-slate-200 focus:border-red-500 focus:ring-red-100"
           />
         </div>
       </div>
@@ -151,7 +155,7 @@ export function ScenariosClient() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
         >
-          <Card className="bg-gradient-to-br from-[#ff7a59] to-[#ff957a] text-white">
+          <Card className="bg-gradient-to-br from-red-500 to-red-600 text-white">
             <CardHeader className="pb-2">
               <CardTitle className="text-lg font-semibold text-white flex items-center">
                 <Users className="w-5 h-5 mr-2" />
@@ -219,7 +223,7 @@ export function ScenariosClient() {
                 <MessageSquare className="h-4 w-4 text-muted-foreground" />
               </div>
               <p className="text-sm text-muted-foreground">
-                Updated: {new Date(scenario.lastUpdated).toLocaleString()}
+                Updated: {new Date(scenario.updatedAt).toLocaleString()}
               </p>
             </CardHeader>
             <CardContent>
@@ -228,15 +232,7 @@ export function ScenariosClient() {
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-medium">Total Contacts</p>
                     <span className="text-2xl font-bold text-orange-500">
-                      {scenario.totalCount.toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-                <div>
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium">Currently Active</p>
-                    <span className="text-2xl font-bold text-blue-500">
-                      {scenario.activeCount.toLocaleString()}
+                      {scenario.totalContacts.toLocaleString()}
                     </span>
                   </div>
                 </div>
@@ -252,17 +248,17 @@ export function ScenariosClient() {
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-medium">Response Rate</p>
                     <span className="text-2xl font-bold text-purple-500">
-                      {((scenario.responseCount / scenario.totalCount) * 100).toFixed(1)}%
+                      {((scenario.responseCount / scenario.totalContacts) * 100).toFixed(1)}%
                     </span>
                   </div>
                   <div className="h-2 bg-gray-100 rounded-full overflow-hidden mt-2">
                     <motion.div
                       className="h-full bg-gradient-to-r from-purple-500 to-purple-400"
                       style={{
-                        width: `${(scenario.responseCount / scenario.totalCount) * 100}%`
+                        width: `${(scenario.responseCount / scenario.totalContacts) * 100}%`
                       }}
                       initial={{ width: 0 }}
-                      animate={{ width: `${(scenario.responseCount / scenario.totalCount) * 100}%` }}
+                      animate={{ width: `${(scenario.responseCount / scenario.totalContacts) * 100}%` }}
                       transition={{ duration: 0.5, delay: 0.2 }}
                     />
                   </div>

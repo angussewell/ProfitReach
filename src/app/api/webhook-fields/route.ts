@@ -21,7 +21,7 @@ export async function GET() {
     
     // Get fields from our registry
     const fields = await prisma.webhookField.findMany({
-      orderBy: { lastSeen: 'desc' }
+      orderBy: { updatedAt: 'desc' }
     });
 
     // Add common fields that might not be mapped
@@ -38,7 +38,7 @@ export async function GET() {
 
     // Combine and deduplicate fields
     const allFields = [...new Set([
-      ...fields.map(f => f.field),
+      ...fields.map(f => f.name),
       ...commonFields
     ])].sort();
 
