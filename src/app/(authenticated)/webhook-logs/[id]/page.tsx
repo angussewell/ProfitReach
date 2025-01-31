@@ -13,7 +13,7 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
     notFound();
   }
 
-  const payload = log.payload as any;
+  const requestData = log.requestBody as any;
   
   return (
     <div className="p-6 space-y-6">
@@ -63,7 +63,7 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
               <div className="space-y-1">
                 <Label className="text-sm text-muted-foreground">Contact Name</Label>
                 <div className="text-sm font-medium">
-                  {payload?.contactName || 'N/A'}
+                  {log.contactName || 'N/A'}
                 </div>
               </div>
 
@@ -71,7 +71,7 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
               <div className="space-y-1">
                 <Label className="text-sm text-muted-foreground">Company</Label>
                 <div className="text-sm font-medium">
-                  {payload?.company || 'N/A'}
+                  {log.company || 'N/A'}
                 </div>
               </div>
 
@@ -79,7 +79,7 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
               <div className="space-y-1">
                 <Label className="text-sm text-muted-foreground">Lead Status</Label>
                 <div className="text-sm font-medium">
-                  {payload?.leadStatus || 'N/A'}
+                  {requestData?.['Lead Status'] || 'N/A'}
                 </div>
               </div>
 
@@ -87,7 +87,7 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
               <div className="space-y-1">
                 <Label className="text-sm text-muted-foreground">Lifecycle Stage</Label>
                 <div className="text-sm font-medium">
-                  {payload?.lifecycleStage || 'N/A'}
+                  {requestData?.['Lifecycle Stage'] || 'N/A'}
                 </div>
               </div>
             </div>
@@ -101,7 +101,7 @@ export default async function WebhookLogPage({ params }: { params: { id: string 
           </CardHeader>
           <CardContent>
             <pre className="mt-2 p-4 bg-muted rounded-md text-sm whitespace-pre-wrap">
-              {JSON.stringify(payload, null, 2)}
+              {JSON.stringify(log.requestBody, null, 2)}
             </pre>
           </CardContent>
         </Card>

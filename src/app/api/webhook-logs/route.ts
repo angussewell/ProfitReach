@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
 interface WhereClause {
+  organizationId: string;
   status?: string;
   scenarioName?: string;
   OR?: Array<{
@@ -13,6 +16,12 @@ interface WhereClause {
 
 export async function GET(request: Request) {
   try {
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user?.organizationId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
@@ -24,7 +33,10 @@ export async function GET(request: Request) {
     const skip = (page - 1) * limit;
 
     // Build where clause
-    const where: WhereClause = {};
+    const where: WhereClause = {
+      organizationId: session.user.organizationId
+    };
+    
     if (status) where.status = status;
     if (scenario) where.scenarioName = scenario;
     if (search) {
@@ -50,6 +62,9 @@ export async function GET(request: Request) {
 
     // Get unique scenarios for filtering
     const scenarios = await prisma.webhookLog.findMany({
+      where: {
+        organizationId: session.user.organizationId
+      },
       select: {
         scenarioName: true
       },
