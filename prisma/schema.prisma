@@ -1,6 +1,5 @@
 generator client {
-  provider        = "prisma-client-js"
-  previewFeatures = ["extendedWhereUnique"]
+  provider = "prisma-client-js"
 }
 
 datasource db {
@@ -46,6 +45,7 @@ model Organization {
   users           User[]
   webhookLogs     WebhookLog[]
   researchResults ResearchResult[]
+  attachments     Attachment[]
 }
 
 model User {
@@ -142,12 +142,16 @@ model FieldMapping {
 }
 
 model Attachment {
-  id        String     @id @default(cuid())
-  name      String     @unique
-  content   String
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  scenarios Scenario[]
+  id             String       @id @default(cuid())
+  name           String       @unique
+  content        String
+  organizationId String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  scenarios      Scenario[]
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
 }
 
 model WebhookField {

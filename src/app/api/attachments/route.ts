@@ -5,7 +5,14 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET() {
   try {
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user?.organizationId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const attachments = await prisma.attachment.findMany({
+      where: { organizationId: session.user.organizationId },
       orderBy: { name: 'asc' }
     });
 
@@ -23,7 +30,7 @@ export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
     
-    if (!session) {
+    if (!session?.user?.organizationId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -39,7 +46,8 @@ export async function POST(req: Request) {
     const attachment = await prisma.attachment.create({
       data: {
         name: data.name,
-        content: data.content
+        content: data.content,
+        organizationId: session.user.organizationId
       }
     });
 
@@ -57,7 +65,7 @@ export async function PUT(req: Request) {
   try {
     const session = await getServerSession(authOptions);
     
-    if (!session) {
+    if (!session?.user?.organizationId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -67,6 +75,21 @@ export async function PUT(req: Request) {
       return NextResponse.json(
         { error: 'ID, name, and content are required' },
         { status: 400 }
+      );
+    }
+
+    // First verify the attachment belongs to the organization
+    const existingAttachment = await prisma.attachment.findFirst({
+      where: {
+        id: data.id,
+        organizationId: session.user.organizationId
+      }
+    });
+
+    if (!existingAttachment) {
+      return NextResponse.json(
+        { error: 'Attachment not found' },
+        { status: 404 }
       );
     }
 
@@ -92,7 +115,7 @@ export async function DELETE(req: Request) {
   try {
     const session = await getServerSession(authOptions);
     
-    if (!session) {
+    if (!session?.user?.organizationId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -103,6 +126,21 @@ export async function DELETE(req: Request) {
       return NextResponse.json(
         { error: 'Attachment ID is required' },
         { status: 400 }
+      );
+    }
+
+    // First verify the attachment belongs to the organization
+    const existingAttachment = await prisma.attachment.findFirst({
+      where: {
+        id,
+        organizationId: session.user.organizationId
+      }
+    });
+
+    if (!existingAttachment) {
+      return NextResponse.json(
+        { error: 'Attachment not found' },
+        { status: 404 }
       );
     }
 

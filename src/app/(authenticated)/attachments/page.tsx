@@ -29,10 +29,14 @@ export default function AttachmentsPage() {
   const fetchAttachments = async () => {
     try {
       const response = await fetch('/api/attachments');
+      if (!response.ok) {
+        throw new Error('Failed to fetch attachments');
+      }
       const data = await response.json();
       setAttachments(data);
     } catch (error) {
       console.error('Error fetching attachments:', error);
+      setAttachments([]);
       toast({
         title: 'Error',
         description: 'Failed to fetch attachments',
