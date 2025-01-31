@@ -41,7 +41,7 @@ export function ScenariosClient() {
   const fetchScenarios = async (forceRefresh = false) => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/scenarios/past${forceRefresh ? '?refresh=1' : ''}`);
+      const response = await fetch(`/api/scenarios${forceRefresh ? '?refresh=1' : ''}`);
       if (!response.ok) throw new Error('Failed to fetch scenarios');
       const data = await response.json();
       setData(data);

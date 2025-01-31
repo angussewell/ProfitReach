@@ -9,10 +9,13 @@ import { RefreshCw, CheckSquare, MessageSquare, Users, Search } from 'lucide-rea
 import { motion } from 'framer-motion';
 
 interface Scenario {
+  id: string;
   name: string;
-  totalCount: number;
-  positiveReplyCount: number;
-  lastUpdated: string;
+  totalContacts: number;
+  activeContacts: number;
+  responseCount: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface ScenarioResponse {
@@ -30,7 +33,7 @@ export default function PastScenariosPage() {
   const fetchScenarios = async (forceRefresh = false) => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/scenarios/past${forceRefresh ? '?refresh=1' : ''}`);
+      const response = await fetch(`/api/scenarios${forceRefresh ? '?refresh=1' : ''}`);
       if (!response.ok) throw new Error('Failed to fetch scenarios');
       const data = await response.json();
       setData(data);
@@ -59,8 +62,8 @@ export default function PastScenariosPage() {
   }, [data?.scenarios, searchQuery]);
 
   // Calculate total metrics
-  const totalContacts = data?.scenarios.reduce((sum, scenario) => sum + scenario.totalCount, 0) || 0;
-  const totalResponses = data?.scenarios.reduce((sum, scenario) => sum + scenario.positiveReplyCount, 0) || 0;
+  const totalContacts = data?.scenarios.reduce((sum, scenario) => sum + scenario.totalContacts, 0) || 0;
+  const totalResponses = data?.scenarios.reduce((sum, scenario) => sum + scenario.responseCount, 0) || 0;
   const responseRate = totalContacts > 0 ? (totalResponses / totalContacts) * 100 : 0;
 
   const formatLastUpdated = (dateStr: string) => {
@@ -216,22 +219,22 @@ export default function PastScenariosPage() {
                   <CheckSquare className="w-5 h-5 text-red-500" />
                   {scenario.name}
                 </CardTitle>
-                {scenario.lastUpdated && (
+                {scenario.updatedAt && (
                   <p className="text-sm text-gray-500">
-                    Updated: {formatLastUpdated(scenario.lastUpdated)}
+                    Updated: {formatLastUpdated(scenario.updatedAt)}
                   </p>
                 )}
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-baseline gap-2">
                   <span className="text-3xl font-bold text-red-500">
-                    {scenario.totalCount.toLocaleString()}
+                    {scenario.totalContacts.toLocaleString()}
                   </span>
                   <span className="text-gray-600">Total Contacts</span>
                 </div>
                 <div className="flex items-baseline gap-2">
                   <span className="text-2xl font-semibold text-red-500">
-                    {scenario.positiveReplyCount.toLocaleString()}
+                    {scenario.responseCount.toLocaleString()}
                   </span>
                   <span className="text-gray-600">Responses</span>
                 </div>
@@ -239,10 +242,10 @@ export default function PastScenariosPage() {
                   <motion.div
                     className="h-full bg-gradient-to-r from-red-500 to-red-600"
                     style={{
-                      width: `${(scenario.positiveReplyCount / scenario.totalCount) * 100}%`
+                      width: `${(scenario.responseCount / scenario.totalContacts) * 100}%`
                     }}
                     initial={{ width: 0 }}
-                    animate={{ width: `${(scenario.positiveReplyCount / scenario.totalCount) * 100}%` }}
+                    animate={{ width: `${(scenario.responseCount / scenario.totalContacts) * 100}%` }}
                     transition={{ duration: 0.5, delay: 0.2 }}
                   />
                 </div>
