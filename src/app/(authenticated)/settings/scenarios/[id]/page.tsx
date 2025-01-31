@@ -22,7 +22,6 @@ type ScenarioWithRelations = Omit<Scenario, 'filters'> & {
   attachment: {
     id: string;
     name: string;
-    url: string;
   } | null;
 };
 
@@ -49,8 +48,7 @@ export default async function ScenarioEditPage({ params }: { params: { id: strin
       attachment: {
         select: {
           id: true,
-          name: true,
-          url: true
+          name: true
         }
       }
     }

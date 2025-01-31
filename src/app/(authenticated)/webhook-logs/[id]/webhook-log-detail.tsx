@@ -50,7 +50,7 @@ export default function WebhookLogDetail({ log }: WebhookLogDetailProps) {
               <div className="space-y-1">
                 <Label className="text-sm text-muted-foreground">Scenario</Label>
                 <div className="text-sm font-medium">
-                  {requestData?.['Current Scenario '] || 'N/A'}
+                  {log.scenarioName || 'N/A'}
                 </div>
               </div>
 
