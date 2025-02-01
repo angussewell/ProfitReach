@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
+import { useSession, signOut } from 'next-auth/react';
 import { toast } from 'sonner';
 
 interface Organization {
@@ -17,6 +17,7 @@ interface OrganizationContextType {
   error: string | null;
   switchOrganization: (orgId: string) => Promise<void>;
   createOrganization: (name: string) => Promise<void>;
+  handleLogout: () => Promise<void>;
 }
 
 const OrganizationContext = createContext<OrganizationContextType | undefined>(undefined);
@@ -145,6 +146,23 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      // Show feedback before logout
+      toast.info('Logging out...');
+      
+      // Clear organization state
+      setCurrentOrganization(null);
+      setOrganizations([]);
+      
+      // Sign out using NextAuth
+      await signOut({ redirect: true, callbackUrl: '/login' });
+    } catch (err) {
+      console.error('Failed to logout:', err);
+      toast.error('Failed to logout. Please try again.');
+    }
+  };
+
   return (
     <OrganizationContext.Provider
       value={{
@@ -154,7 +172,8 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
         switching,
         error,
         switchOrganization,
-        createOrganization
+        createOrganization,
+        handleLogout
       }}
     >
       {children}

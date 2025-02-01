@@ -12,7 +12,10 @@ const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
   title: 'ProfitReach',
-  description: 'AI-powered outbound communication management'
+  description: 'AI-powered outbound communication management',
+  icons: {
+    icon: '/MessageLM Icon.png',
+  }
 };
 
 // Suppress hydration warnings caused by browser extensions modifying the DOM

@@ -3,7 +3,6 @@
 import { Fragment, useState } from 'react';
 import { Menu, Transition } from '@headlessui/react';
 import { ChevronDownIcon } from '@heroicons/react/20/solid';
-import { signOut } from 'next-auth/react';
 import { cn } from '@/lib/utils';
 import { Building, Plus, LogOut } from 'lucide-react';
 import { toast } from 'sonner';
@@ -14,6 +13,10 @@ import type { ReactElement, JSX } from 'react';
 
 interface OrganizationSwitcherProps {
   open?: boolean;
+}
+
+interface ItemRenderPropArg {
+  active: boolean;
 }
 
 export default function OrganizationSwitcher({ open = true }: OrganizationSwitcherProps): ReactElement {
@@ -81,8 +84,8 @@ export default function OrganizationSwitcher({ open = true }: OrganizationSwitch
             </div>
 
             <Transition
-              show={menuOpen}
               as={Fragment}
+              show={menuOpen}
               enter="transition ease-out duration-100"
               enterFrom="transform opacity-0 scale-95"
               enterTo="transform opacity-100 scale-100"
@@ -94,7 +97,7 @@ export default function OrganizationSwitcher({ open = true }: OrganizationSwitch
                 <div className="py-1">
                   {organizations?.map((org) => (
                     <Menu.Item key={org.id}>
-                      {({ active }): JSX.Element => (
+                      {({ active }: ItemRenderPropArg) => (
                         <button
                           onClick={() => handleOrgSwitch(org.id)}
                           className={cn(
@@ -109,7 +112,7 @@ export default function OrganizationSwitcher({ open = true }: OrganizationSwitch
                   ))}
 
                   <Menu.Item>
-                    {({ active }): JSX.Element => (
+                    {({ active }: ItemRenderPropArg) => (
                       <button
                         onClick={() => setShowCreateModal(true)}
                         className={cn(
@@ -124,7 +127,7 @@ export default function OrganizationSwitcher({ open = true }: OrganizationSwitch
                   </Menu.Item>
 
                   <Menu.Item>
-                    {({ active }): JSX.Element => (
+                    {({ active }: ItemRenderPropArg) => (
                       <button
                         onClick={handleLogout}
                         className={cn(

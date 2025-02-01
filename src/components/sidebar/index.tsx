@@ -11,6 +11,7 @@ import { useState } from 'react';
 import React from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { Logo } from '@/components/Logo';
 
 interface Route {
   href: string;
@@ -77,6 +78,11 @@ export default function Sidebar(): JSX.Element {
     <SidebarContainer open={open} setOpen={setOpen}>
       <SidebarBody className="justify-between">
         <div className="flex flex-col flex-1">
+          {/* Logo */}
+          <div className="p-3 border-b border-border">
+            <Logo />
+          </div>
+          
           {/* Organization Switcher */}
           <div className="p-3 border-b border-border">
             <OrganizationSwitcher open={open} />
