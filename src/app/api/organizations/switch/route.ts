@@ -9,7 +9,8 @@ export async function POST(request: Request) {
     const session = await getServerSession(authOptions);
     console.log('Organization switch attempt:', { 
       userId: session?.user?.id,
-      role: session?.user?.role
+      role: session?.user?.role,
+      currentOrgId: session?.user?.organizationId
     });
 
     if (!session?.user) {
@@ -25,6 +26,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Organization ID is required' }, { status: 400 });
     }
 
+    console.log('Attempting organization switch:', {
+      userId: session.user.id,
+      targetOrgId: organizationId,
+      userRole: session.user.role
+    });
+
     // For admin users, just verify the organization exists
     if (session.user.role === 'admin') {
       const organization = await prisma.organization.findUnique({
@@ -37,22 +44,30 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
       }
 
-      // Update user's organization
-      await prisma.user.update({
-        where: { id: session.user.id },
-        data: { organizationId }
-      });
+      try {
+        // Update user's organization
+        const updatedUser = await prisma.user.update({
+          where: { id: session.user.id },
+          data: { organizationId },
+          select: { id: true, organizationId: true }
+        });
 
-      console.log('Admin organization switch successful:', {
-        userId: session.user.id,
-        organizationId: organization.id,
-        organizationName: organization.name
-      });
+        console.log('Admin organization switch successful:', {
+          userId: session.user.id,
+          organizationId: organization.id,
+          organizationName: organization.name,
+          updatedUserId: updatedUser.id,
+          updatedOrgId: updatedUser.organizationId
+        });
 
-      return NextResponse.json({
-        organizationId: organization.id,
-        organizationName: organization.name
-      });
+        return NextResponse.json({
+          organizationId: organization.id,
+          organizationName: organization.name
+        });
+      } catch (updateError) {
+        console.error('Failed to update user organization:', updateError);
+        return NextResponse.json({ error: 'Failed to update user organization' }, { status: 500 });
+      }
     }
 
     // For regular users, verify they belong to the organization
@@ -72,34 +87,47 @@ export async function POST(request: Request) {
     if (!userOrg) {
       console.log('Organization not found or access denied:', { 
         userId: session.user.id,
-        organizationId 
+        organizationId,
+        userRole: session.user.role
       });
       return NextResponse.json({ error: 'Organization not found or access denied' }, { status: 404 });
     }
 
-    // Update user's organization
-    await prisma.user.update({
-      where: { id: session.user.id },
-      data: { organizationId }
-    });
+    try {
+      // Update user's organization
+      const updatedUser = await prisma.user.update({
+        where: { id: session.user.id },
+        data: { organizationId },
+        select: { id: true, organizationId: true }
+      });
 
-    console.log('Organization switch successful:', {
-      userId: session.user.id,
-      organizationId: userOrg.id,
-      organizationName: userOrg.name
-    });
+      console.log('Organization switch successful:', {
+        userId: session.user.id,
+        organizationId: userOrg.id,
+        organizationName: userOrg.name,
+        updatedUserId: updatedUser.id,
+        updatedOrgId: updatedUser.organizationId
+      });
 
-    return NextResponse.json({
-      organizationId: userOrg.id,
-      organizationName: userOrg.name
-    });
-    
+      return NextResponse.json({
+        organizationId: userOrg.id,
+        organizationName: userOrg.name
+      });
+    } catch (updateError) {
+      console.error('Failed to update user organization:', updateError);
+      return NextResponse.json({ error: 'Failed to update user organization' }, { status: 500 });
+    }
   } catch (error) {
     console.error('Error switching organization:', error);
     
     // Handle specific Prisma errors
     if (error instanceof PrismaClientKnownRequestError) {
       if (error.code === 'P2025') {
+        console.error('User not found error:', {
+          error: error.message,
+          code: error.code,
+          meta: error.meta
+        });
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
       }
     }

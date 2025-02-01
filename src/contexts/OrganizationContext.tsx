@@ -40,22 +40,29 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
         
         // Fetch all organizations
         const orgRes = await fetch('/api/organizations');
-        if (!orgRes.ok) throw new Error('Failed to fetch organizations');
+        if (!orgRes.ok) {
+          const errorData = await orgRes.json();
+          throw new Error(errorData.error || 'Failed to fetch organizations');
+        }
         const orgs = await orgRes.json();
         setOrganizations(orgs);
 
         // If we have an organizationId, fetch the current organization
         if (session.user.organizationId) {
           const currentOrgRes = await fetch(`/api/organizations/${session.user.organizationId}`);
-          if (currentOrgRes.ok) {
+          if (!currentOrgRes.ok) {
+            const errorData = await currentOrgRes.json();
+            console.error('Failed to fetch current organization:', errorData);
+            // Don't throw here, just log the error and continue
+          } else {
             const currentOrg = await currentOrgRes.json();
             setCurrentOrganization(currentOrg);
           }
         }
       } catch (err) {
         console.error('Failed to fetch organization data:', err);
-        setError('Failed to fetch organization data');
-        toast.error('Failed to fetch organization data');
+        setError(err instanceof Error ? err.message : 'Failed to fetch organization data');
+        toast.error(err instanceof Error ? err.message : 'Failed to fetch organization data');
       } finally {
         setLoading(false);
       }
@@ -99,6 +106,7 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
       console.error('Failed to switch organization:', err);
       setError(err instanceof Error ? err.message : 'Failed to switch organization');
       toast.error(err instanceof Error ? err.message : 'Failed to switch organization');
+    } finally {
       setSwitching(false);
     }
   };
