@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 
 export async function POST(request: Request) {
   try {
@@ -65,6 +66,13 @@ export async function POST(request: Request) {
     
   } catch (error) {
     console.error('Error switching organization:', error);
+    
+    // Handle specific Prisma errors
+    if (error instanceof PrismaClientKnownRequestError) {
+      if (error.code === 'P2025') {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      }
+    }
     
     return NextResponse.json({ 
       error: 'Internal Server Error',

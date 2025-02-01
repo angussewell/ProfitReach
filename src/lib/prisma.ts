@@ -8,27 +8,17 @@ const globalForPrisma = globalThis as unknown as {
 
 export const prisma = globalForPrisma.prisma ?? new PrismaClient({
   log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-  // Add connection timeout
   datasources: {
     db: {
       url: process.env.DATABASE_URL,
     },
   },
-  // Add connection pooling for serverless
-  connection: {
-    pool: {
-      min: 0,
-      max: 1,
-    },
-  },
-  // Add connection retry logic
-  errorFormat: 'minimal',
 })
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
 
 // Add middleware for connection error handling and logging
-prisma.$use(async (params, next) => {
+prisma.$use(async (params: any, next: any) => {
   const startTime = Date.now()
   let attempts = 0
   const maxAttempts = 3
