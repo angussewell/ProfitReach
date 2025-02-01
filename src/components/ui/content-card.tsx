@@ -1,43 +1,44 @@
 'use client';
 
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import * as React from 'react';
 import { cn } from '@/lib/utils';
 
-interface ContentCardProps {
-  children: React.ReactNode;
-  className?: string;
+interface ContentCardProps extends React.HTMLAttributes<HTMLDivElement> {
   title?: string;
   noPadding?: boolean;
   contentClassName?: string;
 }
 
-export function ContentCard({
-  children,
-  className,
-  title,
-  noPadding = false,
-  contentClassName
-}: ContentCardProps) {
-  return (
-    <Card
-      className={cn(
-        "border border-gray-100/50 shadow-sm hover:shadow-md transition-all duration-200 bg-white rounded-xl overflow-hidden",
-        className
-      )}
-    >
-      {title && (
-        <CardHeader className="pb-4 border-b border-gray-100/50">
-          <CardTitle className="text-xl font-semibold text-gray-800">
-            {title}
-          </CardTitle>
-        </CardHeader>
-      )}
-      <CardContent className={cn(
-        noPadding ? 'p-0' : 'p-6 space-y-4',
-        contentClassName
-      )}>
-        {children}
-      </CardContent>
-    </Card>
-  );
-} 
+const ContentCard = React.forwardRef<HTMLDivElement, ContentCardProps>(
+  ({ className, title, children, noPadding = false, contentClassName, ...props }, ref) => {
+    return (
+      <div
+        ref={ref}
+        className={cn(
+          "technical-card",
+          className
+        )}
+        {...props}
+      >
+        {title && (
+          <div className="pb-4 border-b border-border/50">
+            <h3 className="technical-header">{title}</h3>
+          </div>
+        )}
+        <div
+          className={cn(
+            "flex flex-col",
+            !noPadding && "p-4 space-y-4",
+            contentClassName
+          )}
+        >
+          {children}
+        </div>
+      </div>
+    );
+  }
+);
+
+ContentCard.displayName = "ContentCard";
+
+export { ContentCard }; 

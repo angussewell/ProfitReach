@@ -4,6 +4,7 @@ import { getWebhookFields } from '@/lib/webhook-fields';
 import { Filter } from '@/types/filters';
 import { ScenarioEditForm } from '@/components/scenarios/ScenarioEditForm';
 import { Scenario } from '@prisma/client';
+import { PageContainer } from '@/components/layout/PageContainer';
 
 type ScenarioWithRelations = Omit<Scenario, 'filters'> & {
   filters: string;
@@ -25,9 +26,22 @@ type ScenarioWithRelations = Omit<Scenario, 'filters'> & {
   } | null;
 };
 
-export default async function ScenarioEditPage({ params }: { params: { id: string } }) {
+interface Props {
+  params: Promise<{
+    id: string;
+  }>;
+}
+
+export default async function ScenarioEditPage({ params }: Props) {
+  // Await params before using
+  const resolvedParams = await params;
+  
+  if (!resolvedParams?.id) {
+    notFound();
+  }
+
   const scenario = await prisma.scenario.findUnique({
-    where: { id: params.id },
+    where: { id: resolvedParams.id },
     include: {
       signature: {
         select: {
@@ -82,16 +96,33 @@ export default async function ScenarioEditPage({ params }: { params: { id: strin
     }
   });
 
-  // Parse filters from JSON field
+  // Parse filters from JSON field with robust error handling
   let filters: Filter[] = [];
   try {
-    filters = scenario.filters ? JSON.parse(scenario.filters) as Filter[] : [];
+    if (scenario.filters) {
+      // Handle both string and object formats
+      const filtersData = typeof scenario.filters === 'string' 
+        ? JSON.parse(scenario.filters)
+        : scenario.filters;
+      
+      if (Array.isArray(filtersData)) {
+        filters = filtersData;
+      } else if (typeof filtersData === 'object') {
+        console.warn('Scenario filters is an object, initializing empty array');
+        filters = [];
+      } else {
+        console.warn('Scenario filters is not an array or object:', filtersData);
+        filters = [];
+      }
+    }
   } catch (e) {
     console.error('Failed to parse filters:', e);
+    // Initialize with empty array if parsing fails
+    filters = [];
   }
 
   return (
-    <div className="p-6">
+    <PageContainer>
       <ScenarioEditForm
         scenario={{
           ...scenario,
@@ -101,6 +132,6 @@ export default async function ScenarioEditPage({ params }: { params: { id: strin
         snippets={snippets}
         attachments={attachments}
       />
-    </div>
+    </PageContainer>
   );
 } 

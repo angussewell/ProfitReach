@@ -1,21 +1,34 @@
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { redirect } from 'next/navigation';
+'use client';
+
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import Sidebar from '@/components/sidebar/index';
 
 // Force dynamic rendering for authenticated routes
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
-export default async function AuthenticatedLayout({
+export default function AuthenticatedLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const session = await getServerSession(authOptions);
+  const { data: session, status } = useSession();
+  const router = useRouter();
   
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/login');
+    }
+  }, [status, router]);
+
+  if (status === 'loading') {
+    return <div>Loading...</div>;
+  }
+
   if (!session) {
-    redirect('/login');
+    return null;
   }
 
   return (

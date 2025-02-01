@@ -12,10 +12,20 @@ export const prisma = globalForPrisma.prisma ?? new PrismaClient({
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
 
-// Generate Prisma Client
+// Add middleware for connection error handling and logging
 prisma.$use(async (params, next) => {
-  const result = await next(params);
-  return result;
-});
+  try {
+    return await next(params)
+  } catch (error: any) {
+    // Log database errors
+    console.error('Database operation failed:', {
+      operation: params.action,
+      model: params.model,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    })
+    throw error
+  }
+})
 
-export default prisma; 
+export default prisma 

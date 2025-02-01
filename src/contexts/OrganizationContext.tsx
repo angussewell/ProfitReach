@@ -74,7 +74,17 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
       // First, find the organization in our current list
       const targetOrg = organizations.find(org => org.id === orgId);
       if (!targetOrg) {
-        throw new Error('Organization not found');
+        // Attempt to fetch fresh organization data
+        const orgRes = await fetch('/api/organizations');
+        if (!orgRes.ok) throw new Error('Failed to fetch organizations');
+        const orgs = await orgRes.json();
+        setOrganizations(orgs);
+        
+        // Try to find the organization again
+        const freshTargetOrg = orgs.find((org: Organization) => org.id === orgId);
+        if (!freshTargetOrg) {
+          throw new Error('Organization not found');
+        }
       }
 
       // Make the API call to switch organizations
@@ -95,9 +105,9 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
       });
 
       // Show feedback
-      toast.success(`Switching to ${targetOrg.name}...`);
+      toast.success(`Switching to ${targetOrg?.name || 'new organization'}...`);
 
-      // Redirect to scenarios page
+      // Force a full page refresh to get fresh server-side data
       window.location.href = '/scenarios';
       
     } catch (err) {

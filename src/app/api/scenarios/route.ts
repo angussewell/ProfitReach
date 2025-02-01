@@ -124,6 +124,7 @@ export async function POST(req: Request) {
         attachmentId: data.attachmentId,
         attachmentName: data.attachmentName,
         organizationId: session.user.organizationId,
+        filters: data.filters || '[]' // Add filters with default empty array
       },
     });
 
@@ -166,7 +167,7 @@ export async function PUT(req: Request) {
       snippet: data.snippetId ? { connect: { id: data.snippetId } } : { disconnect: true },
       attachment: data.attachmentId ? { connect: { id: data.attachmentId } } : { disconnect: true },
       attachmentName: data.attachmentName,
-      filters: data.filters ? JSON.parse(data.filters) : {}
+      filters: data.filters // Don't parse again, it's already stringified
     } as const satisfies Omit<Prisma.ScenarioUpdateInput, 'filters'> & { filters: any };
 
     const scenario = await prisma.scenario.update({

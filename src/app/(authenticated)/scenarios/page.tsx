@@ -112,13 +112,13 @@ export default function ScenariosPage() {
   return (
     <PageContainer>
       <div className="space-y-8">
-        <div className="bg-gradient-to-r from-slate-800 to-slate-900 -mx-8 px-8 py-8 shadow-lg">
+        <div className="bg-gradient-to-r from-slate-800 to-slate-900 mx-0 px-8 py-8 rounded-xl shadow-lg">
           <h1 className="text-3xl font-bold text-white mb-2">Scenario Analytics</h1>
           <p className="text-slate-300">Performance metrics across all scenarios</p>
         </div>
 
         {/* Key Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 -mt-12">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Card className="border-2 border-slate-100 bg-white shadow-lg hover:shadow-xl transition-all duration-200 rounded-xl overflow-hidden">
             <CardHeader className="pb-4">
               <div className="flex items-center gap-2">

@@ -4,55 +4,55 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 0 0% 98%;
+    --foreground: 0 0% 12%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 0 0% 12%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --popover-foreground: 0 0% 12%;
+    --primary: 0 84% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 92%;
+    --secondary-foreground: 0 0% 12%;
+    --muted: 0 0% 92%;
+    --muted-foreground: 0 0% 46%;
+    --accent: 0 84% 60%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 88%;
+    --input: 0 0% 88%;
+    --ring: 0 84% 60%;
     --radius: 0.5rem;
-    --brand-primary: #2563eb;
-    --brand-primary-dark: #1d4ed8;
-    --brand-secondary: #0ea5e9;
-    --brand-secondary-dark: #0284c7;
-    --brand-accent: #14b8a6;
-    --brand-accent-dark: #0d9488;
-    --brand-light: #f0f9ff;
+    --brand-primary: #EF4444;
+    --brand-primary-dark: #DC2626;
+    --brand-secondary: #EF4444;
+    --brand-secondary-dark: #DC2626;
+    --brand-accent: #EF4444;
+    --brand-accent-dark: #DC2626;
+    --brand-light: #FEF2F2;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --background: 0 0% 8%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 12%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 12%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 84% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 16%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 16%;
+    --muted-foreground: 0 0% 64%;
+    --accent: 0 84% 60%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 16%;
+    --input: 0 0% 16%;
+    --ring: 0 84% 60%;
   }
 
   * {
@@ -60,24 +60,123 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
 
 @layer components {
-  .progress-bar {
-    @apply h-2 w-full bg-gray-100 rounded-full overflow-hidden;
+  /* Base Card */
+  .technical-card {
+    @apply relative p-4 bg-card rounded-lg border border-border/50 shadow-sm hover:shadow-md transition-shadow duration-200;
   }
 
-  .progress-bar-fill {
-    @apply h-full bg-gradient-to-r from-brand-primary to-brand-primary-dark transition-all duration-300 ease-in-out;
+  /* Card Variants */
+  .technical-card-primary {
+    @apply technical-card bg-gradient-to-br from-primary/90 to-primary text-primary-foreground;
   }
 
-  .glass-effect {
-    @apply bg-white/75 backdrop-blur-sm border border-white/20;
+  .technical-card-accent {
+    @apply technical-card bg-gradient-to-br from-primary/90 to-primary text-primary-foreground;
   }
 
-  .metric-card {
-    @apply relative p-4 bg-white rounded-lg border border-gray-200 hover:shadow-lg transition-all duration-300;
+  /* Typography */
+  .technical-header {
+    @apply text-2xl font-semibold tracking-tight text-foreground;
   }
+
+  .technical-subheader {
+    @apply text-sm text-muted-foreground;
+  }
+
+  .technical-value {
+    @apply text-4xl font-bold text-primary;
+  }
+
+  .technical-label {
+    @apply text-sm font-medium text-muted-foreground;
+  }
+
+  /* Form Elements */
+  .technical-input {
+    @apply px-4 py-2 bg-card border border-border/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/30 transition-all duration-200;
+  }
+
+  .technical-button {
+    @apply px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors duration-200 shadow-sm hover:shadow;
+  }
+
+  .technical-badge {
+    @apply inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-primary/10 text-primary;
+  }
+
+  /* Progress Elements */
+  .technical-progress {
+    @apply h-2 w-full bg-muted rounded-full overflow-hidden;
+  }
+
+  .technical-progress-fill {
+    @apply h-full bg-gradient-to-r from-primary to-primary/80 transition-all duration-300 ease-in-out;
+  }
+
+  /* Layout Elements */
+  .technical-divider {
+    @apply h-px bg-border my-4;
+  }
+
+  .technical-grid {
+    @apply grid gap-4;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  }
+
+  /* Scrollbar */
+  .technical-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+
+  .technical-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .technical-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .technical-scrollbar::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--border));
+    border-radius: 3px;
+  }
+
+  .technical-scrollbar::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+
+/* Code Elements */
+.line-numbers {
+  @apply pl-8 relative font-mono text-sm;
+}
+
+.line-numbers::before {
+  @apply absolute left-0 w-6 text-right pr-2 text-muted-foreground font-mono text-xs;
+  content: attr(data-line);
+}
+
+.code-block {
+  @apply font-mono text-sm bg-muted/30 rounded-lg p-4;
+}
+
+/* Status Indicators */
+.status-dot {
+  @apply w-2 h-2 rounded-full;
+}
+
+.status-dot.active {
+  @apply bg-accent;
+}
+
+.status-dot.inactive {
+  @apply bg-muted-foreground/30;
 }

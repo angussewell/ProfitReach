@@ -13,8 +13,8 @@ const Alert = React.forwardRef<
     className={cn(
       "relative w-full rounded-lg border p-4",
       {
-        "bg-red-50 border-red-200 text-red-900": variant === "destructive",
-        "bg-gray-50 border-gray-200 text-gray-900": variant === "default",
+        "bg-destructive/10 border-destructive/20 text-destructive": variant === "destructive",
+        "bg-muted border-border/50 text-foreground": variant === "default",
       },
       className
     )}

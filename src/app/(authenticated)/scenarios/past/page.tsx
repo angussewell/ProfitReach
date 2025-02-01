@@ -75,24 +75,24 @@ export default function PastScenariosPage() {
       <div className="container mx-auto px-6 py-8 max-w-7xl">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-slate-800 mb-2">Past Scenarios</h1>
-            <p className="text-base text-gray-600">Loading scenario data...</p>
+            <h1 className="technical-header mb-2">Past Scenarios</h1>
+            <p className="technical-subheader">Loading scenario data...</p>
           </div>
-          <Button disabled>
+          <Button disabled variant="default">
             <RefreshCw className="w-4 h-4 animate-spin mr-2" />
             Loading...
           </Button>
         </div>
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="technical-grid">
           {[1, 2, 3].map((i) => (
-            <Card key={i} className="animate-pulse">
+            <Card key={i} className="technical-card animate-pulse">
               <CardHeader className="pb-3">
-                <div className="h-6 bg-gray-200 rounded w-3/4" />
+                <div className="h-6 bg-muted rounded w-3/4" />
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-4">
-                  <div className="h-10 bg-gray-200 rounded w-2/3" />
-                  <div className="h-8 bg-gray-200 rounded w-1/2" />
+                  <div className="h-10 bg-muted rounded w-2/3" />
+                  <div className="h-8 bg-muted rounded w-1/2" />
                 </div>
               </CardContent>
             </Card>
@@ -106,19 +106,19 @@ export default function PastScenariosPage() {
     <div className="container mx-auto px-6 py-8 max-w-7xl">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-slate-800 mb-2">Past Scenarios</h1>
-          <p className="text-base text-gray-600">
+          <h1 className="technical-header mb-2">Past Scenarios</h1>
+          <p className="technical-subheader">
             Track completed scenario performance
           </p>
           {scenarios.length > 0 && (
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-sm text-muted-foreground mt-1">
               Last updated: {formatLastUpdated(scenarios[0].updatedAt)}
             </p>
           )}
         </div>
         <Button
           onClick={() => fetchScenarios(true)}
-          className="bg-red-500 hover:bg-red-600 text-white transition-colors"
+          variant="default"
         >
           <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
           Refresh
@@ -127,36 +127,36 @@ export default function PastScenariosPage() {
 
       <div className="flex items-center mb-6">
         <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
           <Input
             type="text"
             placeholder="Search scenarios..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 border-slate-200 focus:border-red-500 focus:ring-red-100"
+            className="pl-10"
           />
         </div>
       </div>
 
       {/* Quick Stats */}
-      <div className="grid gap-6 md:grid-cols-3 mb-8">
+      <div className="technical-grid mb-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
         >
-          <Card className="bg-gradient-to-br from-red-500 to-red-600 text-white">
+          <Card className="technical-card-accent">
             <CardHeader className="pb-2">
-              <CardTitle className="text-lg font-medium opacity-90 flex items-center">
-                <Users className="w-5 h-5 mr-2 opacity-80" />
+              <CardTitle className="flex items-center gap-2">
+                <Users className="w-5 h-5 opacity-80" />
                 Total Contacts
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold">
+              <div className="technical-value">
                 {totalContacts.toLocaleString()}
               </div>
-              <p className="text-sm mt-2 opacity-80">Across all scenarios</p>
+              <p className="technical-label mt-2">Across all scenarios</p>
             </CardContent>
           </Card>
         </motion.div>
@@ -166,18 +166,18 @@ export default function PastScenariosPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
         >
-          <Card className="bg-gradient-to-br from-red-500 to-red-600 text-white">
+          <Card className="technical-card-accent">
             <CardHeader className="pb-2">
-              <CardTitle className="text-lg font-medium opacity-90 flex items-center">
-                <MessageSquare className="w-5 h-5 mr-2 opacity-80" />
+              <CardTitle className="flex items-center gap-2">
+                <MessageSquare className="w-5 h-5 opacity-80" />
                 Total Responses
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold">
+              <div className="technical-value">
                 {totalResponses.toLocaleString()}
               </div>
-              <p className="text-sm mt-2 opacity-80">Positive replies received</p>
+              <p className="technical-label mt-2">Positive replies received</p>
             </CardContent>
           </Card>
         </motion.div>
@@ -187,24 +187,24 @@ export default function PastScenariosPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
         >
-          <Card className="bg-gradient-to-br from-red-500 to-red-600 text-white">
+          <Card className="technical-card-accent">
             <CardHeader className="pb-2">
-              <CardTitle className="text-lg font-medium opacity-90 flex items-center">
-                <Clock className="w-5 h-5 mr-2 opacity-80" />
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="w-5 h-5 opacity-80" />
                 Response Rate
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold">
+              <div className="technical-value">
                 {responseRate.toFixed(1)}%
               </div>
-              <p className="text-sm mt-2 opacity-80">Average response rate</p>
+              <p className="technical-label mt-2">Average response rate</p>
             </CardContent>
           </Card>
         </motion.div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <div className="technical-grid">
         {filteredScenarios.map((scenario) => (
           <motion.div
             key={scenario.name}
@@ -212,34 +212,34 @@ export default function PastScenariosPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
           >
-            <Card className="hover:border-red-500 transition-colors">
+            <Card className="technical-card">
               <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <CheckSquare className="w-5 h-5 text-red-500" />
+                <CardTitle className="flex items-center gap-2">
+                  <CheckSquare className="w-5 h-5 text-primary" />
                   {scenario.name}
                 </CardTitle>
                 {scenario.updatedAt && (
-                  <p className="text-sm text-gray-500">
+                  <p className="technical-subheader">
                     Updated: {formatLastUpdated(scenario.updatedAt)}
                   </p>
                 )}
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-bold text-red-500">
+                  <span className="technical-value">
                     {scenario.totalContacts.toLocaleString()}
                   </span>
-                  <span className="text-gray-600">Total Contacts</span>
+                  <span className="technical-label">Total Contacts</span>
                 </div>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-semibold text-red-500">
+                  <span className="technical-value">
                     {scenario.responseCount.toLocaleString()}
                   </span>
-                  <span className="text-gray-600">Responses</span>
+                  <span className="technical-label">Responses</span>
                 </div>
-                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div className="technical-progress">
                   <motion.div
-                    className="h-full bg-gradient-to-r from-red-500 to-red-600"
+                    className="technical-progress-fill"
                     style={{
                       width: `${(scenario.responseCount / scenario.totalContacts) * 100 || 0}%`
                     }}

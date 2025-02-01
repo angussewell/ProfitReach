@@ -22,12 +22,14 @@ export async function GET() {
       ? await prisma.organization.findMany({
           orderBy: { name: 'asc' }
         })
-      : session.user.organizationId
-        ? await prisma.organization.findMany({
-            where: { id: session.user.organizationId },
-            orderBy: { name: 'asc' }
-          })
-        : [];
+      : await prisma.organization.findMany({
+          where: {
+            users: {
+              some: { id: session.user.id }
+            }
+          },
+          orderBy: { name: 'asc' }
+        });
 
     console.log('Returning all organizations for admin:', organizations.length);
     

@@ -9,6 +9,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { Plus, Pencil, Trash2, X, ChevronDown, ChevronUp, Search, Eye } from 'lucide-react';
 import { replaceVariables } from '@/lib/utils';
 import { PageContainer } from '@/components/layout/PageContainer';
+import { CodeEditor } from '@/components/ui/code-editor';
 
 interface Prompt {
   id: string;
@@ -255,32 +256,35 @@ export default function PromptsPage() {
   return (
     <PageContainer>
       <div className="flex flex-col gap-6">
+        <div className="bg-gradient-to-r from-slate-800 to-slate-900 mx-0 px-8 py-8 rounded-xl shadow-lg">
+          <h1 className="text-3xl font-bold text-white mb-2">Prompts</h1>
+          <p className="text-slate-300">Manage your global prompt library</p>
+        </div>
+
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-slate-800">Prompts</h1>
+          <div className="relative max-w-2xl flex-1">
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <Input
+              className="pl-12 h-12 border-2 border-slate-200 focus:border-red-500 focus:ring-red-100 transition-all duration-200 shadow-sm hover:shadow-md bg-white rounded-xl text-lg"
+              placeholder="Search prompts..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
           <Button 
             onClick={() => setIsCreating(true)}
-            className="bg-red-500 hover:bg-red-600 transition-all duration-200 shadow-sm hover:shadow-md text-white border-0 rounded-lg px-6"
+            className="bg-red-500 hover:bg-red-600 transition-all duration-200 shadow-sm hover:shadow-md text-white border-0 rounded-lg px-6 ml-4"
           >
             <Plus className="w-4 h-4 mr-2" />
             New Prompt
           </Button>
         </div>
 
-        <div className="relative max-w-2xl">
-          <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-          <Input
-            className="pl-12 h-12 border-2 border-slate-200 focus:border-red-500 focus:ring-red-100 transition-all duration-200 shadow-sm hover:shadow-md bg-white rounded-xl text-lg"
-            placeholder="Search prompts..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-
         {isCreating && (
           <Card className="mb-8 border-0 shadow-xl bg-white rounded-xl overflow-hidden">
             <CardHeader className="pb-4 border-b border-gray-100">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-xl font-semibold text-slate-800">Create New Prompt</CardTitle>
+                <CardTitle className="text-xl font-semibold text-slate-800">New Prompt</CardTitle>
                 <Button variant="ghost" size="sm" onClick={() => setIsCreating(false)} className="text-gray-500 hover:text-gray-700 hover:bg-gray-100/80 rounded-lg">
                   <X className="w-5 h-5" />
                 </Button>
@@ -310,7 +314,7 @@ export default function PromptsPage() {
                   onClick={handleCreate}
                   className="bg-red-500 hover:bg-red-600 transition-all duration-200 text-white shadow-sm hover:shadow-md border-0 rounded-lg px-6 h-12 text-base"
                 >
-                  Create Prompt
+                  Deploy Prompt
                 </Button>
                 <Button 
                   variant="outline" 
@@ -354,13 +358,16 @@ export default function PromptsPage() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-800">Content</label>
-                  <Textarea
+                  <CodeEditor
                     value={editingPrompt.content}
-                    onChange={(e) => setEditingPrompt({
+                    onChange={(value) => setEditingPrompt({
                       ...editingPrompt,
-                      content: e.target.value
+                      content: value
                     })}
-                    className="min-h-[400px] border-2 border-slate-200 focus:border-red-500 focus:ring-red-100 transition-all rounded-lg font-mono"
+                    language="markdown"
+                    className="min-h-[400px] border-2 border-slate-200 focus-within:border-red-500 focus-within:ring-red-100 transition-all rounded-lg"
+                    onSave={() => handleSave(editingPrompt)}
+                    maxLength={4000}
                   />
                 </div>
                 <div className="flex gap-3 pt-2">
@@ -368,7 +375,7 @@ export default function PromptsPage() {
                     onClick={() => handleSave(editingPrompt)}
                     className="bg-red-500 hover:bg-red-600 transition-all duration-200 text-white shadow-sm hover:shadow-md border-0 rounded-lg px-6 h-12 text-base"
                   >
-                    Save Changes
+                    {editingPrompt.id ? 'Deploy Changes' : 'Deploy Prompt'}
                   </Button>
                   <Button 
                     variant="outline" 

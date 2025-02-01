@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { registerWebhookFields } from '@/lib/webhook-fields';
 import { log } from '@/lib/logging';
+import { processWebhookVariables } from '@/utils/variableReplacer';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -141,9 +142,21 @@ export async function POST(
             organizationId: organization.id
           },
           include: {
-            signature: true,
-            snippet: true,
-            attachment: true
+            signature: {
+              select: {
+                content: true
+              }
+            },
+            snippet: {
+              select: {
+                content: true
+              }
+            },
+            attachment: {
+              select: {
+                content: true
+              }
+            }
           }
         });
 
@@ -165,20 +178,22 @@ export async function POST(
             id: scenario.id,
             name: scenario.name,
             touchpointType: scenario.touchpointType,
-            attachment: scenario.attachment ? {
-              name: scenario.attachment.name
-            } : null,
-            snippet: scenario.snippet ? {
-              name: scenario.snippet.name
-            } : null
+            customizationPrompt: scenario.customizationPrompt ? processWebhookVariables(scenario.customizationPrompt, contact) : null,
+            emailExamplesPrompt: scenario.emailExamplesPrompt ? processWebhookVariables(scenario.emailExamplesPrompt, contact) : null,
+            subjectLine: scenario.subjectLine ? processWebhookVariables(scenario.subjectLine, contact) : null,
+            followUp: scenario.isFollowUp,
+            attachment: scenario.attachment?.content ? processWebhookVariables(scenario.attachment.content, contact) : null,
+            snippet: scenario.snippet?.content ? processWebhookVariables(scenario.snippet.content, contact) : null
           },
-          prompts: {
-            customizationPrompt: scenario.customizationPrompt,
-            emailExamplesPrompt: scenario.emailExamplesPrompt,
-            subjectLine: scenario.subjectLine,
-            signature: scenario.signature?.content
-          }
+          prompts: {}
         };
+
+        // Fetch and process all global prompts
+        const allPrompts = await prisma.prompt.findMany();
+        outboundData.prompts = allPrompts.reduce((acc, prompt) => {
+          acc[prompt.name] = processWebhookVariables(prompt.content, contact);
+          return acc;
+        }, {} as Record<string, string>);
 
         const outboundResponse = await fetch(contact.customData.webhookURL, {
           method: 'POST',
@@ -210,6 +225,8 @@ export async function POST(
             } as Prisma.JsonObject
           }
         });
+        
+        return webhookLog;
         
       } catch (error) {
         await prisma.webhookLog.update({

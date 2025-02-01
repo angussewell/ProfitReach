@@ -1,20 +1,27 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 
 export async function GET(
   request: Request,
-  { params }: { params: { name: string } }
+  { params }: { params: { id: string } }
 ) {
   try {
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user?.organizationId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const scenario = await prisma.scenario.findFirst({
       where: {
-        name: params.name
+        id: params.id,
+        organizationId: session.user.organizationId
       }
     });
 
     if (!scenario) {
-      console.log(`Scenario not found: ${params.name}`);
       return NextResponse.json({ error: 'Scenario not found' }, { status: 404 });
     }
 
@@ -30,15 +37,22 @@ export async function GET(
 
 export async function PUT(
   request: Request,
-  { params }: { params: { name: string } }
+  { params }: { params: { id: string } }
 ) {
   try {
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user?.organizationId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const data = await request.json();
     const { customizationPrompt, emailExamplesPrompt, signatureId, subjectLine, filters } = data;
 
     const scenario = await prisma.scenario.findFirst({
       where: {
-        name: params.name
+        id: params.id,
+        organizationId: session.user.organizationId
       }
     });
 
@@ -53,10 +67,8 @@ export async function PUT(
     if (subjectLine !== undefined) updateData.subjectLine = subjectLine;
     if (filters !== undefined) updateData.filters = filters;
 
-    console.log('Updating scenario with filters:', filters); // Debug log
-
     const updatedScenario = await prisma.scenario.update({
-      where: { id: scenario.id },
+      where: { id: params.id },
       data: updateData
     });
 
@@ -70,38 +82,42 @@ export async function PUT(
   }
 }
 
-// Delete a specific scenario
 export async function DELETE(
   request: Request,
-  { params }: { params: { name: string } }
+  { params }: { params: { id: string } }
 ) {
   try {
-    // First find the scenario to delete
-    const existingScenario = await prisma.scenario.findFirst({
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user?.organizationId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Verify the scenario exists and belongs to the organization
+    const scenario = await prisma.scenario.findFirst({
       where: {
-        name: decodeURIComponent(params.name),
-      },
+        id: params.id,
+        organizationId: session.user.organizationId
+      }
     });
 
-    if (!existingScenario) {
+    if (!scenario) {
       return NextResponse.json(
         { error: 'Scenario not found' },
         { status: 404 }
       );
     }
 
-    // Then delete it using its ID
+    // Delete the scenario
     await prisma.scenario.delete({
-      where: {
-        id: existingScenario.id,
-      },
+      where: { id: params.id }
     });
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error deleting scenario:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to delete scenario' },
+      { error: 'Failed to delete scenario' },
       { status: 500 }
     );
   }

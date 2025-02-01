@@ -1,33 +1,51 @@
 import React from 'react';
 import { Plus, SlidersHorizontal, ChevronDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 
 export default function FilterSection() {
   return (
     <div className="flex items-center justify-between py-4 mb-6">
       <div className="flex items-center gap-6">
         <div className="flex items-center gap-2">
-          <button className="flex items-center gap-1 text-red-500 hover:text-red-600">
-            <Plus className="w-4 h-4" />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-primary hover:text-primary/90 hover:bg-primary/5"
+          >
+            <Plus className="w-4 h-4 mr-1" />
             Quick filters
-          </button>
-          <span className="text-gray-300">|</span>
-          <button className="flex items-center gap-1 text-slate-800 hover:text-slate-600">
-            <SlidersHorizontal className="w-4 h-4" />
+          </Button>
+          <span className="text-border">|</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-foreground hover:text-foreground/90 hover:bg-primary/5"
+          >
+            <SlidersHorizontal className="w-4 h-4 mr-1" />
             Advanced filters
-          </button>
+          </Button>
         </div>
       </div>
 
       <div className="flex items-center gap-4">
-        <a href="#" className="text-red-500 hover:text-red-600 text-sm">
+        <Button
+          variant="link"
+          size="sm"
+          className="text-primary hover:text-primary/90"
+        >
           Manage dashboards
-        </a>
-        <div className="flex items-center gap-2 text-sm">
-          <span className="text-gray-500">Assigned:</span>
-          <button className="flex items-center gap-1 text-red-500 hover:text-red-600">
+        </Button>
+        <div className="flex items-center gap-2">
+          <span className="technical-label">Assigned:</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-primary hover:text-primary/90 hover:bg-primary/5"
+          >
             Everyone can edit
-            <ChevronDown className="w-4 h-4" />
-          </button>
+            <ChevronDown className="w-4 h-4 ml-1" />
+          </Button>
         </div>
       </div>
     </div>

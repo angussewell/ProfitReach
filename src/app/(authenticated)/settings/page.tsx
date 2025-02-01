@@ -137,23 +137,29 @@ export default function SettingsPage() {
   return (
     <PageContainer>
       <div className="flex flex-col gap-6">
+        <div className="bg-gradient-to-r from-slate-800 to-slate-900 mx-0 px-8 py-8 rounded-xl shadow-lg">
+          <h1 className="text-3xl font-bold text-white mb-2">Settings</h1>
+          <p className="text-slate-300">Configure your application settings and integrations</p>
+        </div>
+
         <Card className="border-0 shadow-lg bg-white rounded-xl overflow-hidden">
           <div className="p-6">
-            <h2 className="text-2xl font-bold text-[#2e475d] mb-4">GoHighLevel Integration</h2>
+            <h2 className="text-2xl font-bold text-slate-800 mb-4">GoHighLevel Integration</h2>
             
             {!ghlIntegration ? (
               <div>
-                <p className="mb-4">Connect your GoHighLevel account to get started.</p>
+                <p className="mb-4 text-slate-600">Connect your GoHighLevel account to get started.</p>
                 <GHLAuthButton />
               </div>
             ) : (
               <div>
                 <p className="text-green-600 mb-4">✓ Connected to GoHighLevel</p>
-                <p className="text-sm text-gray-600 mb-2">Location: {ghlIntegration.locationName || 'Unknown'}</p>
+                <p className="text-sm text-slate-600 mb-2">Location: {ghlIntegration.locationName || 'Unknown'}</p>
                 <Button
                   onClick={handleDisconnect}
                   variant="destructive"
                   disabled={saving}
+                  className="bg-red-500 hover:bg-red-600 text-white transition-all duration-200 shadow-sm hover:shadow-md rounded-lg"
                 >
                   {saving ? 'Disconnecting...' : 'Disconnect'}
                 </Button>
