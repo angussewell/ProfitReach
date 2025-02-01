@@ -8,7 +8,7 @@ export async function GET() {
     const session = await getServerSession(authOptions);
 
     if (!session?.user) {
-      return new NextResponse('Unauthorized', { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     console.log('Fetching organizations for session:', { 
@@ -31,12 +31,15 @@ export async function GET() {
           orderBy: { name: 'asc' }
         });
 
-    console.log('Returning all organizations for admin:', organizations.length);
+    console.log('Returning organizations:', organizations.length);
     
     return NextResponse.json(organizations);
   } catch (error) {
     console.error('Error fetching organizations:', error);
-    return new NextResponse('Internal Server Error', { status: 500 });
+    return NextResponse.json({ 
+      error: 'Internal Server Error',
+      details: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
+    }, { status: 500 });
   }
 }
 
@@ -45,18 +48,18 @@ export async function POST(request: Request) {
     const session = await getServerSession(authOptions);
 
     if (!session?.user) {
-      return new NextResponse('Unauthorized', { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     if (session.user.role !== 'admin') {
-      return new NextResponse('Forbidden', { status: 403 });
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const body = await request.json();
     const { name } = body;
 
     if (!name) {
-      return new NextResponse('Name is required', { status: 400 });
+      return NextResponse.json({ error: 'Name is required' }, { status: 400 });
     }
 
     const organization = await prisma.organization.create({
@@ -66,10 +69,13 @@ export async function POST(request: Request) {
     return NextResponse.json(organization);
   } catch (error: any) {
     if (error.code === 'P2002') {
-      return new NextResponse('Organization name already exists', { status: 400 });
+      return NextResponse.json({ error: 'Organization name already exists' }, { status: 400 });
     }
     
     console.error('Error creating organization:', error);
-    return new NextResponse('Internal Server Error', { status: 500 });
+    return NextResponse.json({ 
+      error: 'Internal Server Error',
+      details: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
+    }, { status: 500 });
   }
 } 

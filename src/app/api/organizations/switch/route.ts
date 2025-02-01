@@ -8,7 +8,8 @@ export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
     console.log('Organization switch attempt:', { 
-      userId: session?.user?.id
+      userId: session?.user?.id,
+      role: session?.user?.role
     });
 
     if (!session?.user) {
@@ -24,14 +25,43 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Organization ID is required' }, { status: 400 });
     }
 
-    // Verify organization exists and user has access in a single query
+    // For admin users, just verify the organization exists
+    if (session.user.role === 'admin') {
+      const organization = await prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: { id: true, name: true }
+      });
+
+      if (!organization) {
+        console.log('Organization not found:', { organizationId });
+        return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
+      }
+
+      // Update user's organization
+      await prisma.user.update({
+        where: { id: session.user.id },
+        data: { organizationId }
+      });
+
+      console.log('Admin organization switch successful:', {
+        userId: session.user.id,
+        organizationId: organization.id,
+        organizationName: organization.name
+      });
+
+      return NextResponse.json({
+        organizationId: organization.id,
+        organizationName: organization.name
+      });
+    }
+
+    // For regular users, verify they belong to the organization
     const userOrg = await prisma.organization.findFirst({
       where: {
         id: organizationId,
-        OR: [
-          { users: { some: { id: session.user.id } } },
-          { users: { some: { role: 'admin' } } }
-        ]
+        users: {
+          some: { id: session.user.id }
+        }
       },
       select: {
         id: true,
