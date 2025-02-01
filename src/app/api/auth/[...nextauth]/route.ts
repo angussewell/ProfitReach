@@ -172,6 +172,28 @@ export const authOptions: AuthOptions = {
       return token;
     },
     async session({ session, token }) {
+      // First verify the user still exists
+      const user = await prisma.user.findUnique({
+        where: { id: token.id },
+        select: { id: true, role: true }
+      });
+
+      if (!user) {
+        console.error('User not found in session callback:', { tokenId: token.id });
+        // Return minimal session without organization data
+        return {
+          ...session,
+          user: {
+            ...session.user,
+            id: token.id,
+            role: token.role,
+            organizationId: undefined,
+            organizationName: undefined,
+            organizations: []
+          }
+        };
+      }
+
       // Get fresh organization data
       const org = token.organizationId ? await prisma.organization.findUnique({
         where: { id: token.organizationId },
@@ -179,26 +201,29 @@ export const authOptions: AuthOptions = {
       }) : null;
 
       // Get fresh organizations list
-      const organizations = token.role === 'admin'
+      const organizations = user.role === 'admin'
         ? await prisma.organization.findMany({
             orderBy: { name: 'asc' },
             select: { id: true, name: true }
           })
-        : token.id ? await prisma.organization.findMany({
+        : await prisma.organization.findMany({
             where: {
-              users: { some: { id: token.id } }
+              users: { some: { id: user.id } }
             },
             select: { id: true, name: true }
-          })
-        : [];
+          });
+
+      // If current organization doesn't exist and we have other organizations,
+      // use the first available one
+      const currentOrg = org || (organizations.length > 0 ? organizations[0] : null);
 
       session.user = {
         ...session.user,
-        id: token.id,
-        role: token.role,
-        organizationId: org?.id || token.organizationId,
-        organizationName: org?.name || token.organizationName,
-        organizations: organizations
+        id: user.id,
+        role: user.role,
+        organizationId: currentOrg?.id,
+        organizationName: currentOrg?.name,
+        organizations
       };
 
       console.log('Session updated with organizations:', {
