@@ -8,14 +8,14 @@ export async function POST(request: Request) {
     const session = await getServerSession(authOptions);
 
     if (!session?.user) {
-      return new NextResponse('Unauthorized', { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const body = await request.json();
     const { organizationId } = body;
 
     if (!organizationId) {
-      return new NextResponse('Organization ID is required', { status: 400 });
+      return NextResponse.json({ error: 'Organization ID is required' }, { status: 400 });
     }
 
     // Verify organization exists
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     });
 
     if (!organization) {
-      return new NextResponse('Organization not found', { status: 404 });
+      return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
     }
 
     // For regular users, verify they belong to the organization
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
       });
 
       if (!userOrg) {
-        return new NextResponse('Forbidden', { status: 403 });
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
     }
 
@@ -66,6 +66,6 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error('Error switching organization:', error);
-    return new NextResponse('Internal Server Error', { status: 500 });
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

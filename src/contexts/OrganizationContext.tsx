@@ -99,9 +99,11 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
         throw new Error(errorData.error || 'Failed to switch organization');
       }
 
+      const data = await res.json();
+
       // Update session with new organization ID
       await updateSession({
-        organizationId: orgId
+        organizationId: data.organizationId
       });
 
       // Show feedback
@@ -109,7 +111,6 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
 
       // Force a full page refresh to get fresh server-side data
       window.location.href = '/scenarios';
-      
     } catch (err) {
       console.error('Failed to switch organization:', err);
       setError(err instanceof Error ? err.message : 'Failed to switch organization');
