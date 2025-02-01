@@ -10,7 +10,7 @@ export async function GET(
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return new NextResponse('Unauthorized', { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const organization = await prisma.organization.findUnique({
@@ -23,7 +23,7 @@ export async function GET(
     });
 
     if (!organization) {
-      return new NextResponse('Organization not found', { status: 404 });
+      return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
     }
 
     // For non-admin users, verify they have access to this organization
@@ -36,13 +36,16 @@ export async function GET(
       });
 
       if (!userOrg) {
-        return new NextResponse('Unauthorized', { status: 401 });
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       }
     }
 
     return NextResponse.json(organization);
   } catch (error) {
     console.error('[ORGANIZATION_GET]', error);
-    return new NextResponse('Internal error', { status: 500 });
+    return NextResponse.json({ 
+      error: 'Internal Server Error',
+      details: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
+    }, { status: 500 });
   }
 } 

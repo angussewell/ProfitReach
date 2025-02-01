@@ -70,22 +70,6 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
     try {
       setSwitching(true);
       setError(null);
-      
-      // First, find the organization in our current list
-      const targetOrg = organizations.find(org => org.id === orgId);
-      if (!targetOrg) {
-        // Attempt to fetch fresh organization data
-        const orgRes = await fetch('/api/organizations');
-        if (!orgRes.ok) throw new Error('Failed to fetch organizations');
-        const orgs = await orgRes.json();
-        setOrganizations(orgs);
-        
-        // Try to find the organization again
-        const freshTargetOrg = orgs.find((org: Organization) => org.id === orgId);
-        if (!freshTargetOrg) {
-          throw new Error('Organization not found');
-        }
-      }
 
       // Make the API call to switch organizations
       const res = await fetch('/api/organizations/switch', {
@@ -101,7 +85,7 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
       }
 
       // Show feedback before session update
-      toast.success(`Switching to ${targetOrg?.name || 'new organization'}...`);
+      toast.success(`Switching to ${data.organizationName}...`);
 
       // Update session and wait for it to complete
       await updateSession({
