@@ -14,6 +14,13 @@ export const prisma = globalForPrisma.prisma ?? new PrismaClient({
       url: process.env.DATABASE_URL,
     },
   },
+  // Add connection pooling for serverless
+  connection: {
+    pool: {
+      min: 0,
+      max: 1,
+    },
+  },
   // Add connection retry logic
   errorFormat: 'minimal',
 })
@@ -23,40 +30,51 @@ if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
 // Add middleware for connection error handling and logging
 prisma.$use(async (params, next) => {
   const startTime = Date.now()
-  try {
-    const result = await next(params)
-    const duration = Date.now() - startTime
-    
-    // Log slow queries in production
-    if (process.env.NODE_ENV === 'production' && duration > 1000) {
-      console.warn('Slow database operation:', {
+  let attempts = 0
+  const maxAttempts = 3
+
+  while (attempts < maxAttempts) {
+    try {
+      const result = await next(params)
+      const duration = Date.now() - startTime
+      
+      // Log slow queries in production
+      if (process.env.NODE_ENV === 'production' && duration > 1000) {
+        console.warn('Slow database operation:', {
+          operation: params.action,
+          model: params.model,
+          duration: `${duration}ms`,
+          timestamp: new Date().toISOString()
+        })
+      }
+      
+      return result
+    } catch (error: any) {
+      attempts++
+      
+      // Enhanced error logging
+      console.error('Database operation failed:', {
         operation: params.action,
         model: params.model,
-        duration: `${duration}ms`,
-        timestamp: new Date().toISOString()
+        error: error.message,
+        code: error.code,
+        attempt: attempts,
+        timestamp: new Date().toISOString(),
+        duration: `${Date.now() - startTime}ms`
       })
+      
+      // Handle connection errors
+      if (error.code === 'P1001' || error.code === 'P1002' || error.code === 'P1017') {
+        console.error(`Database connection error (attempt ${attempts}/${maxAttempts}) - attempting to reconnect...`)
+        await prisma.$disconnect()
+        await new Promise(resolve => setTimeout(resolve, 1000)) // Wait before reconnecting
+        await prisma.$connect()
+        
+        if (attempts < maxAttempts) continue
+      }
+      
+      throw error
     }
-    
-    return result
-  } catch (error: any) {
-    // Enhanced error logging
-    console.error('Database operation failed:', {
-      operation: params.action,
-      model: params.model,
-      error: error.message,
-      code: error.code,
-      timestamp: new Date().toISOString(),
-      duration: `${Date.now() - startTime}ms`
-    })
-    
-    // Specific handling for connection errors
-    if (error.code === 'P1001' || error.code === 'P1002') {
-      console.error('Database connection error - attempting to reconnect...')
-      await prisma.$disconnect()
-      await prisma.$connect()
-    }
-    
-    throw error
   }
 })
 
