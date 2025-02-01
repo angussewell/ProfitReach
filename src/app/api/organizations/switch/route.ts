@@ -27,14 +27,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Organization ID is required' }, { status: 400 });
     }
 
+    // Verify user exists before attempting switch
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { id: true, role: true }
+    });
+
+    if (!user) {
+      console.log('User not found:', { userId: session.user.id });
+      return NextResponse.json({ error: 'User not found' }, { status: 401 });
+    }
+
     // Perform organization switch in a single transaction
     const result = await prisma.$transaction(async (tx: Omit<PrismaClient, '$transaction'>) => {
       // Check if organization exists and user has access
       const org = await tx.organization.findFirst({
         where: {
           id: organizationId,
-          ...(session.user.role !== 'admin' && {
-            users: { some: { id: session.user.id } }
+          ...(user.role !== 'admin' && {
+            users: { some: { id: user.id } }
           })
         },
         select: { id: true, name: true }
@@ -45,17 +56,17 @@ export async function POST(request: Request) {
       }
 
       // Update user's organization
-      const user = await tx.user.update({
-        where: { id: session.user.id },
+      const updatedUser = await tx.user.update({
+        where: { id: user.id },
         data: { organizationId: org.id },
         select: { id: true }
       });
 
-      return { org, user };
+      return { org, user: updatedUser };
     });
 
     console.log('Organization switch successful:', {
-      userId: session.user.id,
+      userId: user.id,
       organizationId: result.org.id,
       organizationName: result.org.name
     });
