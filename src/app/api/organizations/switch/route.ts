@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
+import { PrismaClient } from '@prisma/client';
 
 export async function POST(request: Request) {
   try {
@@ -26,115 +27,56 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Organization ID is required' }, { status: 400 });
     }
 
-    console.log('Attempting organization switch:', {
-      userId: session.user.id,
-      targetOrgId: organizationId,
-      userRole: session.user.role
-    });
-
-    // For admin users, just verify the organization exists
-    if (session.user.role === 'admin') {
-      const organization = await prisma.organization.findUnique({
-        where: { id: organizationId },
+    // Perform organization switch in a single transaction
+    const result = await prisma.$transaction(async (tx: Omit<PrismaClient, '$transaction'>) => {
+      // Check if organization exists and user has access
+      const org = await tx.organization.findFirst({
+        where: {
+          id: organizationId,
+          ...(session.user.role !== 'admin' && {
+            users: { some: { id: session.user.id } }
+          })
+        },
         select: { id: true, name: true }
       });
 
-      if (!organization) {
-        console.log('Organization not found:', { organizationId });
-        return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
+      if (!org) {
+        throw new Error('Organization not found or access denied');
       }
 
-      try {
-        // Update user's organization
-        const updatedUser = await prisma.user.update({
-          where: { id: session.user.id },
-          data: { organizationId },
-          select: { id: true, organizationId: true }
-        });
+      // Update user's organization
+      const user = await tx.user.update({
+        where: { id: session.user.id },
+        data: { organizationId: org.id },
+        select: { id: true }
+      });
 
-        console.log('Admin organization switch successful:', {
-          userId: session.user.id,
-          organizationId: organization.id,
-          organizationName: organization.name,
-          updatedUserId: updatedUser.id,
-          updatedOrgId: updatedUser.organizationId
-        });
-
-        return NextResponse.json({
-          organizationId: organization.id,
-          organizationName: organization.name
-        });
-      } catch (updateError) {
-        console.error('Failed to update user organization:', updateError);
-        return NextResponse.json({ error: 'Failed to update user organization' }, { status: 500 });
-      }
-    }
-
-    // For regular users, verify they belong to the organization
-    const userOrg = await prisma.organization.findFirst({
-      where: {
-        id: organizationId,
-        users: {
-          some: { id: session.user.id }
-        }
-      },
-      select: {
-        id: true,
-        name: true
-      }
+      return { org, user };
     });
 
-    if (!userOrg) {
-      console.log('Organization not found or access denied:', { 
-        userId: session.user.id,
-        organizationId,
-        userRole: session.user.role
-      });
-      return NextResponse.json({ error: 'Organization not found or access denied' }, { status: 404 });
-    }
+    console.log('Organization switch successful:', {
+      userId: session.user.id,
+      organizationId: result.org.id,
+      organizationName: result.org.name
+    });
 
-    try {
-      // Update user's organization
-      const updatedUser = await prisma.user.update({
-        where: { id: session.user.id },
-        data: { organizationId },
-        select: { id: true, organizationId: true }
-      });
+    return NextResponse.json({
+      organizationId: result.org.id,
+      organizationName: result.org.name
+    });
 
-      console.log('Organization switch successful:', {
-        userId: session.user.id,
-        organizationId: userOrg.id,
-        organizationName: userOrg.name,
-        updatedUserId: updatedUser.id,
-        updatedOrgId: updatedUser.organizationId
-      });
-
-      return NextResponse.json({
-        organizationId: userOrg.id,
-        organizationName: userOrg.name
-      });
-    } catch (updateError) {
-      console.error('Failed to update user organization:', updateError);
-      return NextResponse.json({ error: 'Failed to update user organization' }, { status: 500 });
-    }
   } catch (error) {
     console.error('Error switching organization:', error);
     
-    // Handle specific Prisma errors
     if (error instanceof PrismaClientKnownRequestError) {
-      if (error.code === 'P2025') {
-        console.error('User not found error:', {
-          error: error.message,
-          code: error.code,
-          meta: error.meta
-        });
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
-      }
+      console.error('Prisma error details:', {
+        code: error.code,
+        message: error.message,
+        meta: error.meta
+      });
     }
     
-    return NextResponse.json({ 
-      error: 'Internal Server Error',
-      details: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
-    }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Internal Server Error';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
