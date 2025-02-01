@@ -94,20 +94,20 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
         body: JSON.stringify({ organizationId: orgId })
       });
 
+      const data = await res.json();
+      
       if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Failed to switch organization');
+        throw new Error(data.error || 'Failed to switch organization');
       }
 
-      const data = await res.json();
-
-      // Update session with new organization ID
-      await updateSession({
-        organizationId: data.organizationId
-      });
-
-      // Show feedback
+      // Show feedback before session update
       toast.success(`Switching to ${targetOrg?.name || 'new organization'}...`);
+
+      // Update session and wait for it to complete
+      await updateSession({
+        organizationId: data.organizationId,
+        organizationName: data.organizationName
+      });
 
       // Force a full page refresh to get fresh server-side data
       window.location.href = '/scenarios';

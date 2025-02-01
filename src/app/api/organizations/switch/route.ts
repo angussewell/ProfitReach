@@ -6,8 +6,10 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
+    console.log('Organization switch attempt:', { userId: session?.user?.id });
 
     if (!session?.user) {
+      console.log('Unauthorized: No session user');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -15,6 +17,7 @@ export async function POST(request: Request) {
     const { organizationId } = body;
 
     if (!organizationId) {
+      console.log('Bad request: No organization ID provided');
       return NextResponse.json({ error: 'Organization ID is required' }, { status: 400 });
     }
 
@@ -24,6 +27,7 @@ export async function POST(request: Request) {
     });
 
     if (!organization) {
+      console.log('Organization not found:', { organizationId });
       return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
     }
 
@@ -37,6 +41,10 @@ export async function POST(request: Request) {
       });
 
       if (!userOrg) {
+        console.log('Forbidden: User does not belong to organization', {
+          userId: session.user.id,
+          organizationId
+        });
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
     }
@@ -57,8 +65,11 @@ export async function POST(request: Request) {
       }
     });
 
-    const timestamp = Date.now();
-    console.log('Preparing response with timestamp:', timestamp);
+    console.log('Organization switch successful:', {
+      userId: session.user.id,
+      organizationId: updatedUser?.organization?.id,
+      organizationName: updatedUser?.organization?.name
+    });
 
     return NextResponse.json({
       organizationId: updatedUser?.organization?.id,
