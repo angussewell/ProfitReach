@@ -248,12 +248,27 @@ async function getFieldMapping(systemField: string) {
 
 // Update FilterPipeline to handle field mapping
 const FilterPipeline = {
-  normalize: (filter: Filter): Filter => ({
-    ...filter,
-    field: filter.field.trim(),
-    value: filter.value?.trim(),
-    operator: filter.operator
-  }),
+  normalize: (filter: Filter): Filter => {
+    // Log incoming filter
+    log('info', 'Normalizing filter', { 
+      original: filter
+    });
+
+    const normalized = {
+      ...filter,
+      field: filter.field.toLowerCase().trim(),
+      value: filter.value?.trim(),
+      operator: filter.operator
+    };
+
+    // Log normalized result
+    log('info', 'Normalized filter', { 
+      original: filter,
+      normalized
+    });
+
+    return normalized;
+  },
   
   validate: (filter: Filter): Filter => {
     const errors = [];
@@ -273,8 +288,19 @@ const FilterPipeline = {
       
       // Get webhook field from mapping
       const webhookField = await getFieldMapping(normalized.field);
+      log('info', 'Field mapping lookup result', {
+        originalField: filter.field,
+        normalizedField: normalized.field,
+        mappedField: webhookField
+      });
+
       if (!webhookField) {
-        log('error', 'No field mapping found', { systemField: normalized.field });
+        log('error', 'No field mapping found', { 
+          systemField: normalized.field,
+          availableFields: await prisma.fieldMapping.findMany().then((mappings: { systemField: string }[]) => 
+            mappings.map((m: { systemField: string }) => m.systemField)
+          )
+        });
         return { passed: false, reason: `No mapping found for field ${normalized.field}` };
       }
       
@@ -283,7 +309,8 @@ const FilterPipeline = {
       log('info', 'Processing filter with mapping', { 
         original: filter,
         normalized,
-        mappedField: webhookField
+        mappedField: webhookField,
+        finalFilter: mappedFilter
       });
       
       return evaluateFilter(mappedFilter, data);
