@@ -49,28 +49,8 @@ export async function POST(req: NextRequest) {
       body = await req.json();
       log('info', 'Received webhook request', { body });
       
-      // Extract and save webhook fields with normalized names
-      if (body.contactData) {
-        const fields = Object.keys(body.contactData);
-        await Promise.all(fields.map(field => 
-          prisma.webhookField.upsert({
-            where: {
-              name: normalizeFieldName(field)
-            },
-            update: {
-              originalName: field
-            },
-            create: {
-              name: normalizeFieldName(field),
-              originalName: field,
-              description: `Field ${field} from webhook`,
-              required: false,
-              type: 'string'
-            }
-          })
-        ));
-        log('info', 'Saved webhook fields', { fields });
-      }
+      // Remove automatic field syncing for performance
+      
     } catch (e) {
       log('error', 'Failed to parse request body', { error: String(e) });
       return Response.json({ 
