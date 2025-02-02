@@ -111,22 +111,12 @@ export async function getWebhookFields(): Promise<string[]> {
     orderBy: { updatedAt: 'desc' }
   });
   
-  // Get unique field names
+  // Get unique field names, always using braces format
   const uniqueFields = new Set<string>();
   
   fields.forEach(field => {
-    uniqueFields.add(field.name);
-    
-    // Add variations of the field
     const plainField = field.name.replace(/[{}]/g, '');
-    if (plainField !== field.name) {
-      uniqueFields.add(plainField);
-    }
-    
-    // Add with braces if it doesn't have them
-    if (!field.name.includes('{')) {
-      uniqueFields.add(`{${plainField}}`);
-    }
+    uniqueFields.add(`{${plainField}}`);
   });
 
   return Array.from(uniqueFields).sort();
