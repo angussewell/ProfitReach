@@ -194,16 +194,31 @@ export async function POST(req: NextRequest) {
       let parsedFilters: Filter[] = [];
       try {
         if (scenario.filters) {
+          log('info', 'Raw filters from scenario', { 
+            filters: scenario.filters,
+            type: typeof scenario.filters 
+          });
+
           const filtersData = typeof scenario.filters === 'string' 
             ? JSON.parse(scenario.filters)
             : scenario.filters;
           
+          log('info', 'Parsed filters data', { filtersData });
+
           if (Array.isArray(filtersData)) {
             parsedFilters = filtersData;
+            log('info', 'Successfully parsed filters', { parsedFilters });
+          } else {
+            log('warn', 'Filters data is not an array', { filtersData });
           }
+        } else {
+          log('info', 'No filters found in scenario');
         }
       } catch (e) {
-        log('error', 'Failed to parse filters', { error: String(e) });
+        log('error', 'Failed to parse filters', { 
+          error: String(e),
+          filters: scenario.filters 
+        });
         await prisma.webhookLog.update({
           where: { id: webhookLog.id },
           data: { 
@@ -216,9 +231,23 @@ export async function POST(req: NextRequest) {
 
       // Normalize webhook data
       const normalizedData = normalizeWebhookData(contactData);
+      log('info', 'Normalized webhook data', { 
+        original: contactData,
+        normalized: normalizedData 
+      });
 
       // Evaluate filters
+      log('info', 'Starting filter evaluation', { 
+        filterCount: parsedFilters.length,
+        filters: parsedFilters 
+      });
+
       const result = await evaluateFilters([{ logic: 'AND', filters: parsedFilters }], normalizedData);
+
+      log('info', 'Filter evaluation result', { 
+        passed: result.passed,
+        reason: result.reason
+      });
 
       // If filters didn't pass, update log and return
       if (!result.passed) {
@@ -264,21 +293,34 @@ export async function POST(req: NextRequest) {
             })
           });
 
+          log('info', 'Outbound webhook response received', {
+            status: webhookResponse.status,
+            statusText: webhookResponse.statusText,
+            headers: Object.fromEntries(webhookResponse.headers.entries())
+          });
+
           if (!webhookResponse.ok) {
             throw new Error(`Outbound webhook failed with status ${webhookResponse.status}`);
           }
 
-          // Try to parse response as JSON, fall back to text
-          let responseData;
-          const contentType = webhookResponse.headers.get('content-type');
-          if (contentType && contentType.includes('application/json')) {
+          // Get response text first
+          const responseText = await webhookResponse.text();
+          log('info', 'Outbound webhook raw response', { responseText });
+
+          // Try to parse as JSON only if it looks like JSON
+          let responseData = responseText;
+          if (responseText.trim().startsWith('{') || responseText.trim().startsWith('[')) {
             try {
-              responseData = await webhookResponse.json();
+              responseData = JSON.parse(responseText);
+              log('info', 'Successfully parsed response as JSON', { responseData });
             } catch (e) {
-              responseData = await webhookResponse.text();
+              log('warn', 'Failed to parse response as JSON, using raw text', { 
+                error: String(e),
+                responseText 
+              });
             }
           } else {
-            responseData = await webhookResponse.text();
+            log('info', 'Response is not JSON, using raw text', { responseText });
           }
 
           // Update webhook log with success

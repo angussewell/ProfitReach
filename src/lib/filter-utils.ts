@@ -300,10 +300,11 @@ export async function evaluateFilters(
   data: Record<string, any>
 ): Promise<{ passed: boolean; reason: string }> {
   // Log the incoming filter groups for debugging
-  log('info', 'Evaluating filter groups', { 
+  log('info', 'Starting filter evaluation', { 
     filterGroups,
     hasGroups: !!filterGroups?.length,
-    groupCount: filterGroups?.length || 0
+    groupCount: filterGroups?.length || 0,
+    data
   });
 
   // Validate filter groups
@@ -317,6 +318,12 @@ export async function evaluateFilters(
     group && Array.isArray(group.filters) && group.filters.length > 0
   );
 
+  log('info', 'Valid filter groups', {
+    originalCount: filterGroups.length,
+    validCount: validGroups.length,
+    validGroups
+  });
+
   if (validGroups.length === 0) {
     log('info', 'No valid filter groups found after validation');
     return { passed: true, reason: 'No filters configured' };
@@ -327,12 +334,24 @@ export async function evaluateFilters(
     // Log group evaluation
     log('info', 'Evaluating filter group', {
       logic: group.logic,
-      filterCount: group.filters.length
+      filterCount: group.filters.length,
+      filters: group.filters
     });
 
     // Evaluate each filter in the group
     const filterResults = await Promise.all(
-      group.filters.map(filter => evaluateFilter(filter, data))
+      group.filters.map(async filter => {
+        const result = await evaluateFilter(filter, data);
+        log('info', 'Filter evaluation result', {
+          filter,
+          result,
+          data: {
+            fieldValue: data[filter.field],
+            contactDataValue: data.contactData?.[filter.field]
+          }
+        });
+        return result;
+      })
     );
 
     // Group passes if all filters pass (AND logic)
@@ -343,7 +362,8 @@ export async function evaluateFilters(
 
     log('info', 'Group evaluation result', {
       passed: groupPassed,
-      reason: groupReason
+      reason: groupReason,
+      filterResults
     });
 
     return { passed: groupPassed, reason: groupReason };
