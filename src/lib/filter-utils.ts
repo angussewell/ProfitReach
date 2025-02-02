@@ -245,9 +245,14 @@ function normalizeFieldName(field: string): string {
 
 async function getFieldMapping(systemField: string) {
   const mapping = await prisma.webhookField.findFirst({
-    where: { name: normalizeFieldName(systemField) }
+    where: { 
+      OR: [
+        { name: normalizeFieldName(systemField) },
+        { originalName: systemField }
+      ]
+    }
   });
-  return mapping?.originalName;
+  return mapping?.originalName || systemField;
 }
 
 // Update FilterPipeline to handle field mapping
@@ -260,7 +265,7 @@ const FilterPipeline = {
 
     const normalized = {
       ...filter,
-      field: filter.field.toLowerCase().trim(),
+      field: filter.field,  // Don't lowercase the field name anymore
       value: filter.value?.trim(),
       operator: filter.operator
     };

@@ -313,7 +313,7 @@ export async function POST(req: NextRequest) {
           log('info', 'Outbound webhook raw response', { responseText });
 
           // Try to parse as JSON only if it looks like JSON
-          let responseData = responseText;
+          let responseData: any = responseText;
           if (responseText.trim().startsWith('{') || responseText.trim().startsWith('[')) {
             try {
               responseData = JSON.parse(responseText);
@@ -328,17 +328,14 @@ export async function POST(req: NextRequest) {
             log('info', 'Response is not JSON, using raw text', { responseText });
           }
 
-          // Update webhook log with success
+          // Update webhook log with success - store response as a string if it's not JSON
           await prisma.webhookLog.update({
             where: { id: webhookLog.id },
             data: { 
               status: 'success',
-              responseBody: JSON.stringify({ 
-                response: responseData,
-                filters: parsedFilters,
-                passed: result.passed,
-                reason: result.reason
-              })
+              responseBody: typeof responseData === 'string' 
+                ? { response: responseData } 
+                : responseData
             }
           });
 
