@@ -3,7 +3,6 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
-import { encrypt } from '@/lib/encryption';
 
 // Schema for email account validation
 const emailAccountSchema = z.object({
@@ -79,7 +78,7 @@ export async function PUT(
 
     // Only update password if provided
     if (data.password) {
-      updateData.password = await encrypt(data.password);
+      updateData.password = data.password;
     }
 
     const emailAccount = await prisma.emailAccount.update({

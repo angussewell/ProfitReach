@@ -3,7 +3,6 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
-import { encrypt } from '@/lib/encryption';
 
 // Schema for email account validation
 const emailAccountSchema = z.object({
@@ -76,13 +75,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Encrypt the password before storing
-    const encryptedPassword = await encrypt(data.password);
-
     const emailAccount = await prisma.emailAccount.create({
       data: {
         ...data,
-        password: encryptedPassword,
         organizationId: session.user.organizationId,
       },
     });

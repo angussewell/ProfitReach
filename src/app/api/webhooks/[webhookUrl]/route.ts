@@ -248,11 +248,7 @@ export async function POST(
           });
 
           if (emailAccount) {
-            const decryptedPassword = await decrypt(emailAccount.password);
-            outboundData.emailData = {
-              ...emailAccount,
-              password: decryptedPassword
-            };
+            outboundData.emailData = emailAccount;
           }
         }
 
