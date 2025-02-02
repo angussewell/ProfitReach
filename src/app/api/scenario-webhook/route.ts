@@ -87,10 +87,30 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
+    if (!userWebhookUrl) {
+      log('error', 'Missing webhook URL', { body });
+      return Response.json({ 
+        error: "Missing userWebhookUrl in request"
+      }, { status: 400 });
+    }
+
+    // Find organization by webhook URL
+    const organization = await prisma.organization.findUnique({
+      where: { webhookUrl: userWebhookUrl }
+    });
+
+    if (!organization) {
+      log('error', 'Organization not found', { userWebhookUrl });
+      return Response.json({ 
+        error: "Invalid webhook URL"
+      }, { status: 404 });
+    }
+
     log('info', 'Extracted scenario name', { 
       scenarioName,
       contactData,
-      userWebhookUrl 
+      userWebhookUrl,
+      organizationId: organization.id
     });
 
     // Get scenario with filters and prompts
@@ -99,7 +119,7 @@ export async function POST(req: NextRequest) {
       scenario = await prisma.scenario.findFirst({
         where: { 
           name: scenarioName,
-          organizationId: userWebhookUrl
+          organizationId: organization.id
         }
       });
 
@@ -117,7 +137,7 @@ export async function POST(req: NextRequest) {
             accountId: userWebhookUrl,
             organization: {
               connect: {
-                id: userWebhookUrl
+                id: organization.id
               }
             },
             GHLIntegration: {
@@ -159,7 +179,7 @@ export async function POST(req: NextRequest) {
           accountId: userWebhookUrl,
           organization: {
             connect: {
-              id: userWebhookUrl
+              id: organization.id
             }
           },
           GHLIntegration: {
@@ -331,7 +351,7 @@ export async function POST(req: NextRequest) {
             accountId: userWebhookUrl,
             organization: {
               connect: {
-                id: userWebhookUrl
+                id: organization.id
               }
             },
             GHLIntegration: {
