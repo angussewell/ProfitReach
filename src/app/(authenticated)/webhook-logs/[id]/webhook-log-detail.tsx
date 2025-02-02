@@ -6,10 +6,19 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { WebhookLog } from '@prisma/client';
 
 interface WebhookLogDetailProps {
-  log: WebhookLog;
+  log: {
+    id: string;
+    status: string;
+    scenarioName: string;
+    contactEmail: string;
+    contactName: string;
+    company: string;
+    createdAt: Date;
+    requestBody: Record<string, any>;
+    responseBody: Record<string, any>;
+  };
 }
 
 export default function WebhookLogDetail({ log }: WebhookLogDetailProps) {
@@ -96,6 +105,25 @@ export default function WebhookLogDetail({ log }: WebhookLogDetailProps) {
             </div>
           </CardContent>
         </Card>
+
+        {/* Error Message Card (if status is error) */}
+        {log.status === 'error' && (
+          <Card className="border-red-100">
+            <CardHeader>
+              <CardTitle className="text-red-600">Error Details</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-sm text-red-600">
+                {(log.responseBody as any)?.error || 'Unknown error'}
+              </div>
+              {(log.responseBody as any)?.response && (
+                <pre className="mt-2 p-4 bg-red-50 rounded-md text-sm whitespace-pre-wrap text-red-600">
+                  {(log.responseBody as any).response}
+                </pre>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Raw Data Card */}
         <Card>
