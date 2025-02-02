@@ -17,7 +17,7 @@ interface WebhookLogDetailProps {
     company: string;
     createdAt: Date;
     requestBody: Record<string, any>;
-    responseBody: Record<string, any>;
+    responseBody: string;
   };
 }
 
@@ -25,6 +25,16 @@ export default function WebhookLogDetail({ log }: WebhookLogDetailProps) {
   const [isRawDataExpanded, setIsRawDataExpanded] = React.useState(false);
   const requestData = log.requestBody as any;
   
+  // Parse response body
+  const responseData = React.useMemo(() => {
+    try {
+      return typeof log.responseBody === 'string' ? JSON.parse(log.responseBody) : log.responseBody;
+    } catch (e) {
+      console.error('Failed to parse response body:', e);
+      return { error: 'Failed to parse response body' };
+    }
+  }, [log.responseBody]);
+
   return (
     <div className="p-6 space-y-6">
       <div className="space-y-4">
@@ -114,11 +124,11 @@ export default function WebhookLogDetail({ log }: WebhookLogDetailProps) {
             </CardHeader>
             <CardContent>
               <div className="text-sm text-red-600">
-                {(log.responseBody as any)?.error || 'Unknown error'}
+                {responseData?.error || 'Unknown error'}
               </div>
-              {(log.responseBody as any)?.response && (
+              {responseData?.response && (
                 <pre className="mt-2 p-4 bg-red-50 rounded-md text-sm whitespace-pre-wrap text-red-600">
-                  {(log.responseBody as any).response}
+                  {responseData.response}
                 </pre>
               )}
             </CardContent>
