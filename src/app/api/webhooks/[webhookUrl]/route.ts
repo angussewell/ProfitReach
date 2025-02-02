@@ -37,6 +37,7 @@ interface OutboundData {
     subjectLine: string | null;
     followUp: boolean;
     attachment: string | null;
+    attachmentName: string | null;
     snippet: string | null;
   };
   prompts: Record<string, string>;
@@ -141,7 +142,8 @@ export async function POST(
             },
             attachment: {
               select: {
-                content: true
+                content: true,
+                name: true
               }
             }
           }
@@ -219,6 +221,7 @@ export async function POST(
             subjectLine: scenario.subjectLine ? processWebhookVariables(scenario.subjectLine, data) : null,
             followUp: scenario.isFollowUp,
             attachment: scenario.attachment?.content ? processWebhookVariables(scenario.attachment.content, data) : null,
+            attachmentName: scenario.attachment?.name || null,
             snippet: scenario.snippet?.content ? processWebhookVariables(scenario.snippet.content, data) : null
           },
           prompts: {}
