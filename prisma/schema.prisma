@@ -157,6 +157,7 @@ model Attachment {
 model WebhookField {
   id          String   @id @default(cuid())
   name        String   @unique
+  originalName String
   description String?
   required    Boolean  @default(false)
   type        String   @default("string")

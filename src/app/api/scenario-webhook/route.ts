@@ -57,9 +57,12 @@ export async function POST(req: NextRequest) {
             where: {
               name: normalizeFieldName(field)
             },
-            update: {},
+            update: {
+              originalName: field
+            },
             create: {
               name: normalizeFieldName(field),
+              originalName: field,
               description: `Field ${field} from webhook`,
               required: false,
               type: 'string'

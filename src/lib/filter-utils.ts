@@ -238,12 +238,16 @@ async function evaluateFilter(
   }
 }
 
-// Add field mapping lookup
+// Normalize field names consistently
+function normalizeFieldName(field: string): string {
+  return field.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
 async function getFieldMapping(systemField: string) {
-  const mapping = await prisma.fieldMapping.findFirst({
-    where: { systemField }
+  const mapping = await prisma.webhookField.findFirst({
+    where: { name: normalizeFieldName(systemField) }
   });
-  return mapping?.webhookField;
+  return mapping?.originalName;
 }
 
 // Update FilterPipeline to handle field mapping
