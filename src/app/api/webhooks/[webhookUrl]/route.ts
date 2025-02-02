@@ -1,20 +1,16 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { z } from 'zod';
-import { Prisma } from '@prisma/client';
 import { registerWebhookFields } from '@/lib/webhook-fields';
+import { z } from 'zod';
 import { log } from '@/lib/logging';
+import { Prisma } from '@prisma/client';
 import { processWebhookVariables } from '@/utils/variableReplacer';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
 
-// Webhook data validation schema for a single contact
-const contactSchema = z.object({
-  'Current Scenario ': z.string({
-    required_error: "Current Scenario is required",
-    invalid_type_error: "Current Scenario must be a string"
-  }),
+// Webhook schema
+const webhookSchema = z.object({
+  'Current Scenario ': z.string().optional(),
   contact_id: z.string().optional(),
   first_name: z.string().optional(),
   last_name: z.string().optional(),
@@ -27,12 +23,6 @@ const contactSchema = z.object({
   }).optional(),
 }).passthrough();
 
-// Accept either a single contact object or an array of contacts
-const webhookSchema = z.union([
-  contactSchema,
-  z.array(contactSchema)
-]);
-
 export async function POST(
   request: Request,
   { params }: { params: { webhookUrl: string } }
@@ -40,7 +30,7 @@ export async function POST(
   try {
     // Validate webhook URL format
     if (!params.webhookUrl || params.webhookUrl.length < 32) {
-      console.error('Invalid webhook URL format:', params.webhookUrl);
+      log('error', 'Invalid webhook URL format', { webhookUrl: params.webhookUrl });
       return NextResponse.json(
         { error: 'Invalid webhook URL format' },
         { status: 400 }
@@ -59,7 +49,7 @@ export async function POST(
     });
 
     if (!organization) {
-      console.error('Organization not found for webhook URL:', params.webhookUrl);
+      log('error', 'Organization not found', { webhookUrl: params.webhookUrl });
       return NextResponse.json(
         { error: 'Invalid webhook URL' },
         { status: 404 }
@@ -71,74 +61,45 @@ export async function POST(
     const validationResult = webhookSchema.safeParse(rawData);
 
     if (!validationResult.success) {
-      console.error('Invalid webhook data:', validationResult.error);
+      log('error', 'Invalid webhook data', { errors: validationResult.error.errors });
       return NextResponse.json(
         { error: 'Invalid webhook data', details: validationResult.error.errors },
         { status: 400 }
       );
     }
 
-    // Convert single object to array if needed
-    const webhookData = Array.isArray(validationResult.data) 
-      ? validationResult.data 
-      : [validationResult.data];
-    
-    // Register all fields for future use
-    await registerWebhookFields(webhookData[0]);
+    // Register webhook fields
+    const data = validationResult.data;
+    await registerWebhookFields(data);
 
     // Get the most recent GHL integration
     const ghlIntegration = organization.ghlIntegrations[0];
     if (!ghlIntegration) {
-      console.warn('No GHL integration found for organization:', organization.id);
+      log('warn', 'No GHL integration found', { organizationId: organization.id });
     }
 
-    // Process each contact in the array
-    const results = await Promise.all(webhookData.map(async (contact) => {
-      // Ensure scenario name exists and trim it
-      if (!contact['Current Scenario ']) {
-        throw new Error('Current Scenario is required but was not provided');
+    // Create webhook log
+    const webhookLog = await prisma.webhookLog.create({
+      data: {
+        accountId: data.contact_id || 'unknown',
+        organizationId: organization.id,
+        status: 'received',
+        scenarioName: data['Current Scenario '] || 'unknown',
+        contactEmail: data.email || 'Unknown',
+        contactName: `${data.first_name || ''} ${data.last_name || ''}`.trim() || 'Unknown',
+        company: data.company_name || 'Unknown',
+        requestBody: data as unknown as Prisma.JsonObject,
+        responseBody: { status: 'received' } as Prisma.JsonObject,
+        ...(ghlIntegration && { ghlIntegrationId: ghlIntegration.id })
       }
-      const scenarioName = contact['Current Scenario '].trim();
-      if (!scenarioName) {
-        throw new Error('Current Scenario cannot be empty');
-      }
+    });
 
-      const isPositiveReply = contact.customData?.type === 'positive_reply' || 
-                             contact.customData?.replyType === 'positive';
-
-      // Create webhook log with initial status using the scenario name from webhook
-      const webhookLog = await prisma.webhookLog.create({
-        data: {
-          accountId: contact.contact_id || 'unknown',
-          organizationId: organization.id,
-          status: 'received',
-          scenarioName,
-          contactEmail: contact.email || 'Unknown',
-          contactName: `${contact.first_name || ''} ${contact.last_name || ''}`.trim() || 'Unknown',
-          company: contact.company_name || 'Unknown',
-          requestBody: contact as unknown as Prisma.JsonObject,
-          responseBody: { status: 'received' } as Prisma.JsonObject,
-          ...(ghlIntegration && { ghlIntegrationId: ghlIntegration.id })
-        }
-      });
-
-      // Check if webhook URL is provided
-      if (!contact.customData?.webhookURL) {
-        await prisma.webhookLog.update({
-          where: { id: webhookLog.id },
-          data: { 
-            status: 'blocked', 
-            responseBody: { error: 'No webhook URL provided' } as Prisma.JsonObject 
-          }
-        });
-        return webhookLog;
-      }
-
-      // Get scenario with filters and prompts
+    // Process webhook if URL is provided
+    if (data.customData?.webhookURL) {
       try {
         const scenario = await prisma.scenario.findFirst({
           where: { 
-            name: scenarioName,
+            name: data['Current Scenario '] || '',
             organizationId: organization.id
           },
           include: {
@@ -168,34 +129,29 @@ export async function POST(
               responseBody: { error: 'Scenario not found' } as Prisma.JsonObject
             }
           });
-          return webhookLog;
+          return NextResponse.json({ 
+            message: 'Fields registered but scenario not found',
+            fieldsRegistered: true
+          });
         }
 
         // Send outbound webhook
         const outboundData = {
-          contactData: contact,
+          contactData: data,
           scenarioData: {
             id: scenario.id,
             name: scenario.name,
             touchpointType: scenario.touchpointType,
-            customizationPrompt: scenario.customizationPrompt ? processWebhookVariables(scenario.customizationPrompt, contact) : null,
-            emailExamplesPrompt: scenario.emailExamplesPrompt ? processWebhookVariables(scenario.emailExamplesPrompt, contact) : null,
-            subjectLine: scenario.subjectLine ? processWebhookVariables(scenario.subjectLine, contact) : null,
+            customizationPrompt: scenario.customizationPrompt ? processWebhookVariables(scenario.customizationPrompt, data) : null,
+            emailExamplesPrompt: scenario.emailExamplesPrompt ? processWebhookVariables(scenario.emailExamplesPrompt, data) : null,
+            subjectLine: scenario.subjectLine ? processWebhookVariables(scenario.subjectLine, data) : null,
             followUp: scenario.isFollowUp,
-            attachment: scenario.attachment?.content ? processWebhookVariables(scenario.attachment.content, contact) : null,
-            snippet: scenario.snippet?.content ? processWebhookVariables(scenario.snippet.content, contact) : null
-          },
-          prompts: {}
+            attachment: scenario.attachment?.content ? processWebhookVariables(scenario.attachment.content, data) : null,
+            snippet: scenario.snippet?.content ? processWebhookVariables(scenario.snippet.content, data) : null
+          }
         };
 
-        // Fetch and process all global prompts
-        const allPrompts = await prisma.prompt.findMany();
-        outboundData.prompts = allPrompts.reduce((acc, prompt) => {
-          acc[prompt.name] = processWebhookVariables(prompt.content, contact);
-          return acc;
-        }, {} as Record<string, string>);
-
-        const outboundResponse = await fetch(contact.customData.webhookURL, {
+        const outboundResponse = await fetch(data.customData.webhookURL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(outboundData)
@@ -212,7 +168,10 @@ export async function POST(
               } as Prisma.JsonObject
             }
           });
-          return webhookLog;
+          return NextResponse.json({ 
+            message: 'Fields registered but outbound webhook failed',
+            fieldsRegistered: true
+          });
         }
 
         // Update to success status
@@ -225,9 +184,6 @@ export async function POST(
             } as Prisma.JsonObject
           }
         });
-        
-        return webhookLog;
-        
       } catch (error) {
         await prisma.webhookLog.update({
           where: { id: webhookLog.id },
@@ -238,24 +194,24 @@ export async function POST(
             } as Prisma.JsonObject
           }
         });
+        return NextResponse.json({ 
+          message: 'Fields registered but webhook processing failed',
+          fieldsRegistered: true,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
       }
-
-      return webhookLog;
-    }));
+    }
 
     // Return success response
-    return NextResponse.json({
-      success: true,
-      message: 'Webhook received and processed',
-      logs: results
+    return NextResponse.json({ 
+      message: 'Webhook processed successfully',
+      fieldsRegistered: true
     });
+
   } catch (error) {
-    console.error('Error processing webhook:', error);
+    log('error', 'Error processing webhook', { error: String(error) });
     return NextResponse.json(
-      {
-        error: 'Failed to process webhook',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
+      { error: 'Failed to process webhook' },
       { status: 500 }
     );
   }

@@ -20,7 +20,7 @@ const WEBHOOK_TEMPLATES = {
 
 export default function SettingsPage() {
   const [organization, setOrganization] = useState<any>(null);
-  const [syncing, setSyncing] = useState(false);
+  const [syncState, setSyncState] = useState<'idle' | 'waiting' | 'synced'>('idle');
 
   // Fetch organization data on mount
   useEffect(() => {
@@ -32,6 +32,30 @@ export default function SettingsPage() {
         toast.error('Failed to fetch organization data');
       });
   }, []);
+
+  // Listen for webhook field registration events
+  useEffect(() => {
+    if (syncState !== 'waiting') return;
+
+    const checkForFields = async () => {
+      try {
+        const response = await fetch('/api/webhook-fields');
+        if (!response.ok) throw new Error('Failed to fetch fields');
+        
+        const fields = await response.json();
+        if (fields.length > 0) {
+          setSyncState('synced');
+          toast.success('Fields have been registered!');
+        }
+      } catch (error) {
+        console.error('Error checking fields:', error);
+      }
+    };
+
+    // Check every 5 seconds while waiting
+    const interval = setInterval(checkForFields, 5000);
+    return () => clearInterval(interval);
+  }, [syncState]);
 
   return (
     <PageContainer>
@@ -46,43 +70,35 @@ export default function SettingsPage() {
           <h2 className="text-2xl font-bold text-[#2e475d] mb-4">Webhook Field Sync</h2>
           <div className="space-y-4">
             <p className="text-sm text-gray-600">
-              Click the button below to sync webhook fields using a test webhook. This will register all standard GoHighLevel fields in your database.
+              Click the button below to sync webhook fields. Post data to your webhook URL and we'll automatically register the fields.
             </p>
             <button
-              onClick={async () => {
-                if (!organization?.webhookUrl) {
-                  toast.error('No webhook URL found');
-                  return;
-                }
-                
-                setSyncing(true);
-                try {
-                  // Send test webhook with standard fields
-                  const response = await fetch(`/api/webhooks/${organization.webhookUrl}`, {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(WEBHOOK_TEMPLATES.make)
-                  });
-                  
-                  if (!response.ok) {
-                    throw new Error('Failed to sync fields');
-                  }
-                  
-                  toast.success('Successfully synced webhook fields');
-                } catch (error) {
-                  console.error('Error syncing fields:', error);
-                  toast.error('Failed to sync webhook fields');
-                } finally {
-                  setSyncing(false);
-                }
-              }}
-              disabled={syncing}
-              className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={() => setSyncState('waiting')}
+              disabled={syncState !== 'idle' || !organization?.webhookUrl}
+              className={`px-4 py-2 rounded-lg text-white transition-colors ${
+                syncState === 'waiting'
+                  ? 'bg-yellow-500'
+                  : syncState === 'synced'
+                  ? 'bg-green-500'
+                  : 'bg-red-500 hover:bg-red-600'
+              }`}
             >
-              {syncing ? 'Syncing Fields...' : 'Sync Standard Fields'}
+              {syncState === 'waiting' 
+                ? 'Waiting for data...' 
+                : syncState === 'synced'
+                ? 'Fields synced!'
+                : 'Sync Fields'}
             </button>
+            {syncState === 'waiting' && (
+              <p className="text-sm text-yellow-600">
+                Post data to your webhook URL below. We'll automatically register any fields we receive.
+              </p>
+            )}
+            {syncState === 'synced' && (
+              <p className="text-sm text-green-600">
+                Fields have been registered! You can now use them in your scenarios.
+              </p>
+            )}
           </div>
         </div>
 
