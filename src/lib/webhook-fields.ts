@@ -48,6 +48,7 @@ async function registerField(field: string, retryCount = 0): Promise<any> {
       where: { name: normalizedField },
       create: { 
         name: normalizedField,
+        originalName: field,
         description: `Field ${field} from webhook`,
         type: 'string'
       },
@@ -127,28 +128,6 @@ export async function getWebhookFields(): Promise<string[]> {
       uniqueFields.add(`{${plainField}}`);
     }
   });
-
-  // Add common fields that might not be mapped
-  const commonFields = [
-    'lifecycle_stage',
-    'lead_status',
-    'company',
-    'PMS',
-    'first_name',
-    'last_name',
-    'email',
-    'make_sequence',
-    'contactData.email',
-    'contactData.first_name',
-    'contactData.last_name',
-    'contactData.company',
-    'contactData.PMS',
-    'contactData.make_sequence',
-    'contactData.lifecycle_stage',
-    'contactData.lead_status'
-  ];
-
-  commonFields.forEach(field => uniqueFields.add(field));
 
   return Array.from(uniqueFields).sort();
 } 

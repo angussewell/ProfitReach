@@ -24,23 +24,8 @@ export async function GET() {
       orderBy: { updatedAt: 'desc' }
     });
 
-    // Add common fields that might not be mapped
-    const commonFields = [
-      'lifecycle_stage',
-      'lead_status',
-      'company',
-      'PMS',
-      'first_name',
-      'last_name',
-      'email',
-      'make_sequence',
-    ];
-
-    // Combine and deduplicate fields
-    const allFields = [...new Set([
-      ...fields.map(f => f.name),
-      ...commonFields
-    ])].sort();
+    // Return only fields from the database
+    const allFields = fields.map(f => f.name).sort();
 
     log('info', 'Webhook fields fetched', { count: allFields.length, fields: allFields });
 
