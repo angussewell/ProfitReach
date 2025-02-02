@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
+import { PageContainer } from '@/components/layout/PageContainer';
 
 // Pre-configured templates
 const WEBHOOK_TEMPLATES = {
@@ -33,7 +34,7 @@ export default function SettingsPage() {
   }, []);
 
   return (
-    <div className="p-6">
+    <PageContainer>
       <div className="flex flex-col gap-6">
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 mx-0 px-8 py-8 rounded-xl shadow-lg">
           <h1 className="text-3xl font-bold text-white mb-2">Settings</h1>
@@ -118,6 +119,6 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
-    </div>
+    </PageContainer>
   );
 } 
