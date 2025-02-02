@@ -68,6 +68,11 @@ export default function Sidebar(): JSX.Element {
       icon: createIcon(Icons.Search, 'research-icon')
     },
     { 
+      href: '/email-accounts', 
+      label: 'Email Accounts', 
+      icon: createIcon(Icons.Mail, 'email-accounts-icon')
+    },
+    { 
       href: '/settings', 
       label: 'Settings', 
       icon: createIcon(Icons.Settings, 'settings-icon')

@@ -25,6 +25,28 @@ const webhookSchema = z.object({
   }).optional(),
 }).passthrough();
 
+interface OutboundData {
+  contactData: any;
+  scenarioData: {
+    id: string;
+    name: string;
+    touchpointType: string;
+    customizationPrompt: string | null;
+    emailExamplesPrompt: string | null;
+    subjectLine: string | null;
+    followUp: boolean;
+    attachment: string | null;
+    snippet: string | null;
+  };
+  prompts: Record<string, string>;
+  emailData?: {
+    email: string;
+    name: string;
+    host: string;
+    port: number;
+  };
+}
+
 export async function POST(
   request: Request,
   { params }: { params: { webhookUrl: string } }
@@ -184,7 +206,7 @@ export async function POST(
         }
 
         // Send outbound webhook
-        const outboundData = {
+        const outboundData: OutboundData = {
           contactData: data,
           scenarioData: {
             id: scenario.id,
@@ -196,8 +218,36 @@ export async function POST(
             followUp: scenario.isFollowUp,
             attachment: scenario.attachment?.content ? processWebhookVariables(scenario.attachment.content, data) : null,
             snippet: scenario.snippet?.content ? processWebhookVariables(scenario.snippet.content, data) : null
-          }
+          },
+          prompts: {}
         };
+
+        // Fetch all prompts
+        const allPrompts = await prisma.prompt.findMany();
+        outboundData.prompts = allPrompts.reduce((acc: Record<string, string>, prompt) => {
+          acc[prompt.name] = processWebhookVariables(prompt.content, data);
+          return acc;
+        }, {});
+
+        // Find email account if specified
+        if (data['Email Sender']) {
+          const emailAccount = await prisma.emailAccount.findFirst({
+            where: {
+              email: data['Email Sender'],
+              organizationId: organization.id
+            },
+            select: {
+              email: true,
+              name: true,
+              host: true,
+              port: true
+            }
+          });
+
+          if (emailAccount) {
+            outboundData.emailData = emailAccount;
+          }
+        }
 
         const outboundResponse = await fetch(data.customData.webhookURL, {
           method: 'POST',
