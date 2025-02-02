@@ -7,6 +7,7 @@ import { Prisma } from '@prisma/client';
 import { processWebhookVariables } from '@/utils/variableReplacer';
 import { Filter } from '@/types/filters';
 import { evaluateFilters } from '@/lib/filter-utils';
+import { decrypt } from '@/lib/encryption';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,6 +43,7 @@ interface OutboundData {
   emailData?: {
     email: string;
     name: string;
+    password: string;
     host: string;
     port: number;
   };
@@ -239,13 +241,18 @@ export async function POST(
             select: {
               email: true,
               name: true,
+              password: true,
               host: true,
               port: true
             }
           });
 
           if (emailAccount) {
-            outboundData.emailData = emailAccount;
+            const decryptedPassword = await decrypt(emailAccount.password);
+            outboundData.emailData = {
+              ...emailAccount,
+              password: decryptedPassword
+            };
           }
         }
 
