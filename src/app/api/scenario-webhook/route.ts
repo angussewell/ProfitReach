@@ -17,7 +17,7 @@ interface ScenarioWithSignature {
   id: string;
   name: string;
   touchpointType: string;
-  filters: Prisma.JsonValue;
+  filters: Record<string, any>;
   customizationPrompt: string | null;
   emailExamplesPrompt: string | null;
   subjectLine: string | null;
@@ -109,11 +109,11 @@ export async function POST(req: NextRequest) {
           data: {
             status: 'error',
             scenarioName,
-            contactEmail: 'Unknown',
-            contactName: 'Unknown',
-            company: 'Unknown',
-            requestBody: contactData as Prisma.JsonObject,
-            responseBody: { error: 'Scenario not found' } as Prisma.JsonObject,
+            contactEmail: contactData.email || 'Unknown',
+            contactName: contactData.name || 'Unknown',
+            company: contactData.company || 'Unknown',
+            requestBody: contactData as Record<string, any>,
+            responseBody: { error: 'Scenario not found' } as Record<string, any>,
             accountId: userWebhookUrl,
             organization: {
               connect: {
@@ -146,43 +146,87 @@ export async function POST(req: NextRequest) {
         } : null
       };
 
-      // Create webhook log
-      try {
-        await prisma.webhookLog.create({
-          data: {
-            status: 'success',
-            scenarioName: scenario.name,
-            contactEmail: contactData.email || 'Unknown',
-            contactName: contactData.name || 'Unknown',
-            company: contactData.company || 'Unknown',
-            requestBody: contactData as Prisma.JsonObject,
-            responseBody: processedScenario as unknown as Prisma.JsonObject,
-            accountId: userWebhookUrl,
-            organization: {
-              connect: {
-                id: userWebhookUrl
-              }
-            },
-            GHLIntegration: {
-              connect: {
-                id: userWebhookUrl
-              }
+      // Create initial webhook log
+      const webhookLog = await prisma.webhookLog.create({
+        data: {
+          status: 'processing',
+          scenarioName: scenario.name,
+          contactEmail: contactData.email || 'Unknown',
+          contactName: contactData.name || 'Unknown',
+          company: contactData.company || 'Unknown',
+          requestBody: contactData as Record<string, any>,
+          responseBody: {} as Record<string, any>,
+          accountId: userWebhookUrl,
+          organization: {
+            connect: {
+              id: userWebhookUrl
+            }
+          },
+          GHLIntegration: {
+            connect: {
+              id: userWebhookUrl
             }
           }
-        });
+        }
+      });
+
+      // Parse and evaluate filters
+      let parsedFilters: Filter[] = [];
+      try {
+        if (scenario.filters) {
+          const filtersData = typeof scenario.filters === 'string' 
+            ? JSON.parse(scenario.filters)
+            : scenario.filters;
+          
+          if (Array.isArray(filtersData)) {
+            parsedFilters = filtersData;
+          }
+        }
       } catch (e) {
-        log('error', 'Failed to create webhook log', { error: String(e) });
-        // Don't return error - continue with response
+        log('error', 'Failed to parse filters', { error: String(e) });
+        await prisma.webhookLog.update({
+          where: { id: webhookLog.id },
+          data: { 
+            status: 'error',
+            responseBody: { error: 'Failed to parse filters' } as Record<string, any>
+          }
+        });
+        return Response.json({ error: 'Failed to parse filters' }, { status: 500 });
+      }
+
+      // Normalize webhook data
+      const normalizedData = normalizeWebhookData(contactData);
+
+      // Evaluate filters
+      const result = await evaluateFilters([{ logic: 'AND', filters: parsedFilters }], normalizedData);
+
+      // If filters didn't pass, update log and return
+      if (!result.passed) {
+        await prisma.webhookLog.update({
+          where: { id: webhookLog.id },
+          data: { 
+            status: 'blocked',
+            responseBody: { 
+              reason: result.reason,
+              filters: parsedFilters
+            } as Record<string, any>
+          }
+        });
+        return Response.json({
+          status: 'blocked',
+          reason: result.reason,
+          filters: parsedFilters
+        });
       }
 
       // If filters passed, send outbound webhook
-      if (result.passed && userWebhookUrl) {
+      if (userWebhookUrl) {
         try {
           // Fetch all prompts
           const allPrompts = await prisma.prompt.findMany();
           
           // Process variables in all text fields
-          const processedPrompts = allPrompts.reduce((acc, prompt) => {
+          const processedPrompts = allPrompts.reduce((acc: Record<string, string>, prompt: { name: string; content: string }) => {
             acc[prompt.name] = processWebhookVariables(prompt.content, contactData);
             return acc;
           }, {} as Record<string, string>);
@@ -196,7 +240,7 @@ export async function POST(req: NextRequest) {
             body: JSON.stringify({
               contactData,
               scenario: processedScenario,
-              prompts: processedPrompts // Now a collection instead of an array
+              prompts: processedPrompts
             })
           });
 
@@ -204,28 +248,66 @@ export async function POST(req: NextRequest) {
             throw new Error(`Outbound webhook failed with status ${webhookResponse.status}`);
           }
 
+          // Try to parse response as JSON, fall back to text
+          let responseData;
+          const contentType = webhookResponse.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            try {
+              responseData = await webhookResponse.json();
+            } catch (e) {
+              responseData = await webhookResponse.text();
+            }
+          } else {
+            responseData = await webhookResponse.text();
+          }
+
+          // Update webhook log with success
+          await prisma.webhookLog.update({
+            where: { id: webhookLog.id },
+            data: { 
+              status: 'success',
+              responseBody: { 
+                response: responseData,
+                filters: parsedFilters,
+                passed: result.passed,
+                reason: result.reason
+              } as Record<string, any>
+            }
+          });
+
           log('info', 'Outbound webhook sent successfully', {
             url: userWebhookUrl,
             scenario: processedScenario,
-            prompts: processedPrompts
+            prompts: processedPrompts,
+            response: responseData
           });
+
+          return Response.json({
+            status: 'success',
+            data: normalizedData,
+            passed: result.passed,
+            reason: result.reason,
+            filters: parsedFilters
+          });
+
         } catch (e) {
           log('error', 'Failed to send outbound webhook', { error: String(e) });
-          // Don't return error - continue with response
+          await prisma.webhookLog.update({
+            where: { id: webhookLog.id },
+            data: { 
+              status: 'error',
+              responseBody: { 
+                error: String(e),
+                filters: parsedFilters
+              } as Record<string, any>
+            }
+          });
+          return Response.json({ 
+            error: 'Failed to send outbound webhook',
+            details: String(e)
+          }, { status: 500 });
         }
       }
-
-      return Response.json({
-        data: normalizedData,
-        passed: result.passed,
-        reason: result.reason,
-        filters: parsedFilters,
-        debug: {
-          scenarioId: scenario.id,
-          filterCount: parsedFilters.length,
-          normalizedDataKeys: Object.keys(normalizedData)
-        }
-      });
       
     } catch (error) {
       // Enhanced error logging
@@ -240,12 +322,23 @@ export async function POST(req: NextRequest) {
         await prisma.webhookLog.create({
           data: {
             status: 'error',
-            scenarioName: 'Unknown',
-            contactEmail: 'Unknown',
-            contactName: 'Unknown',
-            company: 'Unknown',
-            requestBody: {},
-            responseBody: { error: String(error) }
+            scenarioName: scenarioName || 'Unknown',
+            contactEmail: contactData?.email || 'Unknown',
+            contactName: contactData?.name || 'Unknown',
+            company: contactData?.company || 'Unknown',
+            requestBody: contactData as Record<string, any> || {},
+            responseBody: { error: String(error) } as Record<string, any>,
+            accountId: userWebhookUrl,
+            organization: {
+              connect: {
+                id: userWebhookUrl
+              }
+            },
+            GHLIntegration: {
+              connect: {
+                id: userWebhookUrl
+              }
+            }
           }
         });
       } catch (e) {
@@ -254,39 +347,14 @@ export async function POST(req: NextRequest) {
 
       return Response.json({ 
         error: "Internal server error",
-        details: error instanceof Error ? error.message : String(error),
-        timestamp: new Date().toISOString()
+        details: error instanceof Error ? error.message : String(error)
       }, { status: 500 });
     }
   } catch (error) {
-    // Enhanced error logging
-    log('error', 'Webhook processing error', { 
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-      timestamp: new Date().toISOString()
-    });
-
-    // Try to create error log
-    try {
-      await prisma.webhookLog.create({
-        data: {
-          status: 'error',
-          scenarioName: 'Unknown',
-          contactEmail: 'Unknown',
-          contactName: 'Unknown',
-          company: 'Unknown',
-          requestBody: {},
-          responseBody: { error: String(error) }
-        }
-      });
-    } catch (e) {
-      log('error', 'Failed to create error log', { error: String(e) });
-    }
-
+    log('error', 'Unhandled webhook error', { error: String(error) });
     return Response.json({ 
-      error: "Internal server error",
-      details: error instanceof Error ? error.message : String(error),
-      timestamp: new Date().toISOString()
+      error: "Unhandled error",
+      details: String(error)
     }, { status: 500 });
   }
 } 
