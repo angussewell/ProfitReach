@@ -20,7 +20,7 @@ const WEBHOOK_TEMPLATES = {
 
 export default function SettingsPage() {
   const [organization, setOrganization] = useState<any>(null);
-  const [syncState, setSyncState] = useState<'idle' | 'waiting' | 'synced'>('idle');
+  const [isWaitingForData, setIsWaitingForData] = useState(false);
 
   // Fetch organization data on mount
   useEffect(() => {
@@ -32,30 +32,6 @@ export default function SettingsPage() {
         toast.error('Failed to fetch organization data');
       });
   }, []);
-
-  // Listen for webhook field registration events
-  useEffect(() => {
-    if (syncState !== 'waiting') return;
-
-    const checkForFields = async () => {
-      try {
-        const response = await fetch('/api/webhook-fields');
-        if (!response.ok) throw new Error('Failed to fetch fields');
-        
-        const fields = await response.json();
-        if (fields.length > 0) {
-          setSyncState('synced');
-          toast.success('Fields have been registered!');
-        }
-      } catch (error) {
-        console.error('Error checking fields:', error);
-      }
-    };
-
-    // Check every 5 seconds while waiting
-    const interval = setInterval(checkForFields, 5000);
-    return () => clearInterval(interval);
-  }, [syncState]);
 
   return (
     <PageContainer>
@@ -70,33 +46,22 @@ export default function SettingsPage() {
           <h2 className="text-2xl font-bold text-[#2e475d] mb-4">Webhook Field Sync</h2>
           <div className="space-y-4">
             <p className="text-sm text-gray-600">
-              Click the button below to sync webhook fields. Post data to your webhook URL and we'll automatically register the fields.
+              Post data to your webhook URL below and we'll automatically register any fields we receive.
             </p>
             <button
-              onClick={() => setSyncState('waiting')}
-              disabled={syncState !== 'idle' || !organization?.webhookUrl}
+              onClick={() => setIsWaitingForData(true)}
+              disabled={isWaitingForData || !organization?.webhookUrl}
               className={`px-4 py-2 rounded-lg text-white transition-colors ${
-                syncState === 'waiting'
+                isWaitingForData
                   ? 'bg-yellow-500'
-                  : syncState === 'synced'
-                  ? 'bg-green-500'
                   : 'bg-red-500 hover:bg-red-600'
               }`}
             >
-              {syncState === 'waiting' 
-                ? 'Waiting for data...' 
-                : syncState === 'synced'
-                ? 'Fields synced!'
-                : 'Sync Fields'}
+              {isWaitingForData ? 'Waiting for data...' : 'Start Field Sync'}
             </button>
-            {syncState === 'waiting' && (
+            {isWaitingForData && (
               <p className="text-sm text-yellow-600">
-                Post data to your webhook URL below. We'll automatically register any fields we receive.
-              </p>
-            )}
-            {syncState === 'synced' && (
-              <p className="text-sm text-green-600">
-                Fields have been registered! You can now use them in your scenarios.
+                Send a webhook to your URL below. Fields will be automatically registered when data is received.
               </p>
             )}
           </div>
