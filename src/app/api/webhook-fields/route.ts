@@ -21,16 +21,18 @@ export async function GET() {
     
     // Get fields from our registry
     const fields = await prisma.webhookField.findMany({
-      orderBy: { updatedAt: 'desc' }
+      orderBy: { updatedAt: 'desc' },
+      select: {
+        name: true,
+        originalName: true,
+        description: true
+      }
     });
 
-    // Return only fields from the database
-    const allFields = fields.map(f => f.name).sort();
-
-    log('info', 'Webhook fields fetched', { count: allFields.length, fields: allFields });
+    log('info', 'Webhook fields fetched', { count: fields.length });
 
     // Set cache control headers
-    const response = NextResponse.json(allFields);
+    const response = NextResponse.json(fields);
     response.headers.set('Cache-Control', 'no-store, must-revalidate');
     response.headers.set('Pragma', 'no-cache');
     return response;

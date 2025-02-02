@@ -10,6 +10,7 @@ import { Plus, Pencil, Trash2, X, ChevronDown, ChevronUp, Search, Eye } from 'lu
 import { replaceVariables } from '@/lib/utils';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { CodeEditor } from '@/components/ui/code-editor';
+import { VariableSelector } from '@/components/prompts/VariableSelector';
 
 interface Prompt {
   id: string;
@@ -151,17 +152,20 @@ export default function PromptsPage() {
 
   // Extract variables from prompt content
   const extractVariables = (content: string): string[] => {
-    const matches = content.match(/\{\{(\w+)\}\}/g) || [];
-    return [...new Set(matches.map(match => match.slice(2, -2)))];
+    // Match both {{variable}} and {variable} formats
+    const matches = content.match(/\{\{(\w+)\}\}|\{(\w+)\}/g) || [];
+    // Clean up the matches to remove brackets
+    return matches.map(match => match.replace(/[{}]/g, ''));
   };
 
   // Highlight variables in prompt content
   const highlightVariables = (content: string): JSX.Element => {
-    const parts = content.split(/(\{\{\w+\}\})/g);
+    // Split on both double and single bracketed variables
+    const parts = content.split(/(\{\{\w+\}\}|\{\w+\})/g);
     return (
       <>
         {parts.map((part, index) => {
-          if (part.match(/\{\{\w+\}\}/)) {
+          if (part.match(/\{\{\w+\}\}|\{\w+\}/)) {
             return <span key={index} className="bg-red-100 text-red-500 px-1 rounded">{part}</span>;
           }
           return <span key={index}>{part}</span>;
@@ -227,6 +231,36 @@ export default function PromptsPage() {
         </Card>
       </div>
     );
+  };
+
+  // Add variable insertion handlers
+  const handleNewPromptVariableSelect = (variable: string) => {
+    const textarea = document.querySelector('textarea[name="new-prompt-content"]') as HTMLTextAreaElement;
+    if (textarea) {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const content = newPrompt.content;
+      const newContent = content.substring(0, start) + variable + content.substring(end);
+      setNewPrompt({ ...newPrompt, content: newContent });
+      
+      // Set cursor position after the inserted variable
+      setTimeout(() => {
+        textarea.focus();
+        const newPosition = start + variable.length;
+        textarea.setSelectionRange(newPosition, newPosition);
+      }, 0);
+    } else {
+      setNewPrompt({ ...newPrompt, content: newPrompt.content + variable });
+    }
+  };
+
+  const handleEditPromptVariableSelect = (variable: string) => {
+    if (editingPrompt) {
+      setEditingPrompt({
+        ...editingPrompt,
+        content: editingPrompt.content + variable
+      });
+    }
   };
 
   if (loading) {
@@ -302,7 +336,12 @@ export default function PromptsPage() {
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-800">Content</label>
+                <VariableSelector 
+                  onSelect={handleNewPromptVariableSelect}
+                  className="mb-2"
+                />
                 <Textarea
+                  name="new-prompt-content"
                   value={newPrompt.content}
                   onChange={(e) => setNewPrompt({ ...newPrompt, content: e.target.value })}
                   placeholder="Enter prompt content"
@@ -358,6 +397,10 @@ export default function PromptsPage() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-800">Content</label>
+                  <VariableSelector 
+                    onSelect={handleEditPromptVariableSelect}
+                    className="mb-2"
+                  />
                   <CodeEditor
                     value={editingPrompt.content}
                     onChange={(value) => setEditingPrompt({

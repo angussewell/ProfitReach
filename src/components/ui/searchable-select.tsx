@@ -66,12 +66,15 @@ export function SearchableSelect({
         </Button>
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content 
-          className="w-[--radix-popover-trigger-width] p-0" 
+        <Popover.Content
+          className="z-50 min-w-[var(--radix-popover-trigger-width)] p-0"
           align="start"
-          sideOffset={4}
+          sideOffset={8}
+          side="bottom"
+          avoidCollisions
+          sticky="always"
         >
-          <div className="w-full border rounded-md bg-popover shadow-md">
+          <div className="w-full border rounded-md bg-white shadow-md">
             <input
               ref={inputRef}
               value={search}
@@ -80,7 +83,7 @@ export function SearchableSelect({
               className="w-full px-3 py-2 border-b bg-transparent focus:outline-none focus:ring-2 focus:ring-red-100 rounded-t-md"
               autoComplete="off"
             />
-            <div className="max-h-60 overflow-auto p-1">
+            <div className="max-h-[300px] overflow-auto p-1">
               {filteredOptions.length === 0 ? (
                 <div className="py-6 text-center text-sm text-muted-foreground">{emptyMessage}</div>
               ) : (
@@ -94,8 +97,8 @@ export function SearchableSelect({
                     }}
                     className={cn(
                       "flex items-center px-3 py-2 cursor-pointer rounded-sm text-sm",
-                      "hover:bg-accent hover:text-accent-foreground",
-                      value === option.value && "bg-accent text-accent-foreground"
+                      "hover:bg-slate-100 hover:text-slate-900",
+                      value === option.value && "bg-slate-100 text-slate-900"
                     )}
                   >
                     <Check
