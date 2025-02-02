@@ -57,12 +57,17 @@ export default function SettingsPage() {
                   : 'bg-red-500 hover:bg-red-600'
               }`}
             >
-              {isWaitingForData ? 'Waiting for data...' : 'Start Field Sync'}
+              {isWaitingForData ? 'Send data to webhook URL below →' : 'Start Field Sync'}
             </button>
             {isWaitingForData && (
-              <p className="text-sm text-yellow-600">
-                Send a webhook to your URL below. Fields will be automatically registered when data is received.
-              </p>
+              <div className="space-y-2">
+                <p className="text-sm text-yellow-600">
+                  1. Send a webhook to your URL below to register fields
+                </p>
+                <p className="text-sm text-yellow-600">
+                  2. After sending data, refresh the page to see registered fields
+                </p>
+              </div>
             )}
           </div>
         </div>

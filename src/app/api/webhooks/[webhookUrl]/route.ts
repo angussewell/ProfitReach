@@ -5,6 +5,8 @@ import { z } from 'zod';
 import { log } from '@/lib/logging';
 import { Prisma } from '@prisma/client';
 import { processWebhookVariables } from '@/utils/variableReplacer';
+import { Filter } from '@/types/filters';
+import { evaluateFilters } from '@/lib/filter-utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -135,6 +137,52 @@ export async function POST(
           });
         }
 
+        // Parse and evaluate filters
+        let parsedFilters: Filter[] = [];
+        try {
+          if (scenario.filters) {
+            const filtersData = typeof scenario.filters === 'string' 
+              ? JSON.parse(scenario.filters as string)
+              : scenario.filters;
+            
+            if (Array.isArray(filtersData)) {
+              parsedFilters = filtersData;
+            }
+          }
+        } catch (e) {
+          log('error', 'Failed to parse filters', { error: String(e) });
+          await prisma.webhookLog.update({
+            where: { id: webhookLog.id },
+            data: { 
+              status: 'error',
+              responseBody: { error: 'Failed to parse filters' } as Prisma.JsonObject
+            }
+          });
+          return NextResponse.json({ error: 'Failed to parse filters' }, { status: 500 });
+        }
+
+        // Evaluate filters
+        const filterResult = await evaluateFilters([{ logic: 'AND', filters: parsedFilters }], data);
+        
+        // If filters didn't pass, update log and return
+        if (!filterResult.passed) {
+          await prisma.webhookLog.update({
+            where: { id: webhookLog.id },
+            data: { 
+              status: 'blocked',
+              responseBody: { 
+                reason: filterResult.reason,
+                filters: JSON.stringify(parsedFilters)
+              } as Prisma.JsonObject
+            }
+          });
+          return NextResponse.json({
+            status: 'blocked',
+            reason: filterResult.reason,
+            filters: parsedFilters
+          });
+        }
+
         // Send outbound webhook
         const outboundData = {
           contactData: data,
@@ -174,15 +222,33 @@ export async function POST(
           });
         }
 
+        // Get response text first
+        const responseText = await outboundResponse.text();
+        
+        // Try to parse as JSON only if it looks like JSON
+        let responseData: any = responseText;
+        if (responseText.trim().startsWith('{') || responseText.trim().startsWith('[')) {
+          try {
+            responseData = JSON.parse(responseText);
+          } catch (e) {
+            log('warn', 'Failed to parse response as JSON, using raw text', { error: String(e) });
+          }
+        }
+
         // Update to success status
         await prisma.webhookLog.update({
           where: { id: webhookLog.id },
           data: { 
             status: 'success',
-            responseBody: { 
-              response: await outboundResponse.json() 
-            } as Prisma.JsonObject
+            responseBody: typeof responseData === 'string' 
+              ? { response: responseData } 
+              : responseData as Prisma.JsonObject
           }
+        });
+
+        return NextResponse.json({ 
+          message: 'Webhook processed successfully',
+          fieldsRegistered: true
         });
       } catch (error) {
         await prisma.webhookLog.update({

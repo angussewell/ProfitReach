@@ -97,31 +97,28 @@ model Signature {
 }
 
 model Scenario {
-  id                  String       @id @default(cuid())
-  name                String
+  id                  String     @id @default(cuid())
+  name                String     @unique
+  organizationId      String
   description         String?
-  touchpointType      String       @default("email")
-  status              String       @default("active")
-  signatureId         String?
+  touchpointType      String     @default("email")
+  status             String     @default("active")
+  isFollowUp         Boolean    @default(false)
   customizationPrompt String?
   emailExamplesPrompt String?
-  subjectLine         String?
-  isFollowUp          Boolean      @default(false)
-  snippetId           String?
-  attachmentId        String?
-  attachmentName      String?
-  messageId           String?
-  filters             Json         @default("{}")
-  organizationId      String
-  createdAt           DateTime     @default(now())
-  updatedAt           DateTime     @updatedAt
-  organization        Organization @relation(fields: [organizationId], references: [id])
-  signature           Signature?   @relation(fields: [signatureId], references: [id])
+  subjectLine        String?
+  signatureId        String?
+  snippetId          String?
+  attachmentId       String?
+  filters            Json?      @default("[]")
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  organization       Organization @relation(fields: [organizationId], references: [id])
+  signature          Signature?   @relation(fields: [signatureId], references: [id])
   snippet            Snippet?     @relation(fields: [snippetId], references: [id])
   attachment         Attachment?  @relation(fields: [attachmentId], references: [id])
 
-  @@unique([name, organizationId])
-  @@index([name])
+  @@index([organizationId])
 }
 
 model Prompt {
