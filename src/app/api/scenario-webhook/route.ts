@@ -239,10 +239,12 @@ export async function POST(req: NextRequest) {
       // Evaluate filters
       log('info', 'Starting filter evaluation', { 
         filterCount: parsedFilters.length,
-        filters: parsedFilters 
+        filters: parsedFilters,
+        evaluationData: normalizedData.contactData,
+        availableFields: Object.keys(normalizedData.contactData)
       });
 
-      const result = await evaluateFilters([{ logic: 'AND', filters: parsedFilters }], normalizedData);
+      const result = await evaluateFilters([{ logic: 'AND', filters: parsedFilters }], normalizedData.contactData);
 
       log('info', 'Filter evaluation result', { 
         passed: result.passed,
@@ -328,12 +330,12 @@ export async function POST(req: NextRequest) {
             where: { id: webhookLog.id },
             data: { 
               status: 'success',
-              responseBody: { 
+              responseBody: JSON.stringify({ 
                 response: responseData,
                 filters: parsedFilters,
                 passed: result.passed,
                 reason: result.reason
-              } as Record<string, any>
+              })
             }
           });
 
@@ -358,10 +360,10 @@ export async function POST(req: NextRequest) {
             where: { id: webhookLog.id },
             data: { 
               status: 'error',
-              responseBody: { 
+              responseBody: JSON.stringify({ 
                 error: String(e),
                 filters: parsedFilters
-              } as Record<string, any>
+              })
             }
           });
           return Response.json({ 
