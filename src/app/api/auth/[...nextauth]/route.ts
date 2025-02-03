@@ -44,13 +44,21 @@ export const authOptions: AuthOptions = {
         password: { label: "Password", type: "password" }
       },
       async authorize(credentials) {
+        console.log('Starting authorize function with email:', credentials?.email);
+        
         if (!credentials?.email || !credentials?.password) {
-          console.log('Missing credentials');
+          console.log('Missing credentials - Email or password not provided');
           return null;
         }
 
         const user = await prisma.user.findUnique({
           where: { email: credentials.email }
+        });
+
+        console.log('User lookup result:', { 
+          email: credentials.email, 
+          userFound: !!user,
+          hasPassword: !!(user?.password)
         });
 
         if (!user || !user.password) {
@@ -59,7 +67,10 @@ export const authOptions: AuthOptions = {
         }
 
         const isPasswordValid = await bcrypt.compare(credentials.password, user.password);
-        console.log('Password validation result:', { email: credentials.email, isValid: isPasswordValid });
+        console.log('Password validation result:', { 
+          email: credentials.email, 
+          isValid: isPasswordValid 
+        });
 
         if (!isPasswordValid) {
           return null;
@@ -143,6 +154,7 @@ export const authOptions: AuthOptions = {
       }
     }
   ],
+  secret: process.env.NEXTAUTH_SECRET,
   callbacks: {
     async jwt({ token, user, trigger, session }) {
       if (user) {
@@ -246,7 +258,6 @@ export const authOptions: AuthOptions = {
   session: {
     strategy: 'jwt',
     maxAge: 30 * 24 * 60 * 60, // 30 days
-    updateAge: 24 * 60 * 60 // 24 hours
   },
   cookies: {
     sessionToken: {
@@ -256,7 +267,7 @@ export const authOptions: AuthOptions = {
         sameSite: 'lax',
         path: '/',
         secure: true,
-        domain: '.messagelm.com'
+        domain: 'app.messagelm.com'
       }
     }
   }
