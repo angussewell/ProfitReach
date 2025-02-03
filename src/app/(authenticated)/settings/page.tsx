@@ -83,13 +83,13 @@ export default function SettingsPage() {
               <input
                 type="text"
                 readOnly
-                value={organization ? `https://profit-reach.vercel.app/api/webhooks/${organization.webhookUrl}` : 'Loading...'}
+                value={organization ? `https://app.messagelm.com/api/webhooks/${organization.webhookUrl}` : 'Loading...'}
                 className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-600"
               />
               <button
                 onClick={() => {
                   if (organization?.webhookUrl) {
-                    navigator.clipboard.writeText(`https://profit-reach.vercel.app/api/webhooks/${organization.webhookUrl}`);
+                    navigator.clipboard.writeText(`https://app.messagelm.com/api/webhooks/${organization.webhookUrl}`);
                     toast.success('Webhook URL copied to clipboard');
                   }
                 }}

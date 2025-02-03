@@ -17,17 +17,23 @@ export default function LoginPage() {
     setError('');
     
     const formData = new FormData(e.currentTarget);
-    const result = await signIn('credentials', {
-      email: formData.get('email'),
-      password: formData.get('password'),
-      callbackUrl: safeCallbackUrl,
-      redirect: true
-    });
-
-    if (result?.error) {
-      setError('Invalid email or password');
-    } else {
-      window.location.href = '/scenarios';
+    try {
+      const result = await signIn('credentials', {
+        email: formData.get('email'),
+        password: formData.get('password'),
+        callbackUrl: safeCallbackUrl,
+        redirect: true
+      });
+      
+      // The redirect should happen automatically, but just in case:
+      if (!result?.error) {
+        window.location.href = safeCallbackUrl;
+      } else {
+        setError('Invalid email or password');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      setError('An error occurred during login. Please try again.');
     }
   }
 

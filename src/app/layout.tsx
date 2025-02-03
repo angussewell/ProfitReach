@@ -11,7 +11,7 @@ import { Toaster } from '@/components/ui/toaster';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
-  title: 'ProfitReach',
+  title: 'MessageLM',
   description: 'AI-powered outbound communication management',
   icons: {
     icon: '/MessageLM Icon.png',
