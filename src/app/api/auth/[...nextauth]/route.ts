@@ -4,6 +4,23 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 
+// Add environment validation at the top of the file
+if (!process.env.NEXTAUTH_SECRET) {
+  console.error('NEXTAUTH_SECRET is not set');
+  throw new Error('NEXTAUTH_SECRET must be set');
+}
+
+if (!process.env.NEXTAUTH_URL) {
+  console.error('NEXTAUTH_URL is not set');
+  throw new Error('NEXTAUTH_URL must be set');
+}
+
+console.log('NextAuth Environment:', {
+  NEXTAUTH_URL: process.env.NEXTAUTH_URL,
+  hasSecret: !!process.env.NEXTAUTH_SECRET,
+  cookieDomain: 'app.messagelm.com'
+});
+
 declare module 'next-auth' {
   interface Session {
     user: {
@@ -257,6 +274,9 @@ export const authOptions: AuthOptions = {
   },
   session: {
     strategy: 'jwt',
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+  },
+  jwt: {
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
   cookies: {
