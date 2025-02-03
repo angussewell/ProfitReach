@@ -83,13 +83,25 @@ export const authOptions: AuthOptions = {
           return null;
         }
 
-        const isPasswordValid = await bcrypt.compare(credentials.password, user.password);
-        console.log('Password validation result:', { 
-          email: credentials.email, 
-          isValid: isPasswordValid 
+        console.log('Attempting password comparison for user:', {
+          email: credentials.email,
+          passwordLength: user.password.length,
+          providedPasswordLength: credentials.password.length
         });
 
-        if (!isPasswordValid) {
+        try {
+          const isPasswordValid = await bcrypt.compare(credentials.password, user.password);
+          console.log('Password validation result:', { 
+            email: credentials.email, 
+            isValid: isPasswordValid 
+          });
+
+          if (!isPasswordValid) {
+            console.log('Password validation failed');
+            return null;
+          }
+        } catch (error) {
+          console.error('Error comparing passwords:', error);
           return null;
         }
 
