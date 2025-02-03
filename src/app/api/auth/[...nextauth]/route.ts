@@ -45,6 +45,7 @@ export const authOptions: AuthOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
+          console.log('Missing credentials');
           return null;
         }
 
@@ -53,10 +54,12 @@ export const authOptions: AuthOptions = {
         });
 
         if (!user || !user.password) {
+          console.log('User not found or missing password:', credentials.email);
           return null;
         }
 
         const isPasswordValid = await bcrypt.compare(credentials.password, user.password);
+        console.log('Password validation result:', { email: credentials.email, isValid: isPasswordValid });
 
         if (!isPasswordValid) {
           return null;

@@ -14,7 +14,7 @@ export default function LoginPage() {
     const result = await signIn('credentials', {
       email: formData.get('email'),
       password: formData.get('password'),
-      redirect: false
+      callbackUrl: '/scenarios'
     });
 
     if (result?.error) {
