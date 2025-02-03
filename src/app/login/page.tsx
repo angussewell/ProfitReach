@@ -2,9 +2,15 @@
 
 import { signIn } from 'next-auth/react';
 import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 export default function LoginPage() {
   const [error, setError] = useState('');
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get('callbackUrl') || '/scenarios';
+
+  // Only allow redirects to our own domain
+  const safeCallbackUrl = callbackUrl.startsWith('/') ? callbackUrl : '/scenarios';
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -14,7 +20,8 @@ export default function LoginPage() {
     const result = await signIn('credentials', {
       email: formData.get('email'),
       password: formData.get('password'),
-      callbackUrl: '/scenarios'
+      callbackUrl: safeCallbackUrl,
+      redirect: true
     });
 
     if (result?.error) {

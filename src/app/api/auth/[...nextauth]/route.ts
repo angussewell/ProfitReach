@@ -247,7 +247,8 @@ export const authOptions: AuthOptions = {
     strategy: 'jwt',
     maxAge: 30 * 24 * 60 * 60, // 30 days
     updateAge: 24 * 60 * 60 // 24 hours
-  }
+  },
+  trustHost: true
 };
 
 const handler = NextAuth(authOptions);
