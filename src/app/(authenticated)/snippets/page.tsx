@@ -159,26 +159,26 @@ export default function SnippetsPage(): JSX.Element {
 
         {editingSnippet && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <Card className="technical-card w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-              <CardHeader className="pb-4 border-b border-border sticky top-0 bg-card z-10">
+            <Card className="w-full max-w-[90%] max-h-[90vh] lg:max-w-6xl overflow-hidden">
+              <CardHeader className="pb-4 border-b border-gray-100 sticky top-0 bg-white z-10">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="technical-header">
+                  <CardTitle className="text-xl font-semibold text-slate-800">
                     {editingSnippet.id ? 'Edit Snippet' : 'New Snippet'}
                   </CardTitle>
                   <Button 
                     variant="ghost" 
                     size="sm" 
                     onClick={() => setEditingSnippet(null)}
-                    className="text-muted-foreground hover:text-foreground"
+                    className="text-gray-500 hover:text-gray-700 hover:bg-gray-100/80 rounded-lg"
                   >
                     <X className="w-5 h-5" />
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-6 p-6">
+              <CardContent className="p-6 overflow-y-auto max-h-[calc(90vh-8rem)]">
                 <form onSubmit={handleSave} className="space-y-6">
                   <div className="space-y-2">
-                    <label className="technical-label">Name</label>
+                    <label className="text-sm font-medium text-slate-800">Name</label>
                     <Input
                       value={editingSnippet.name}
                       onChange={(e) => setEditingSnippet({
@@ -186,12 +186,12 @@ export default function SnippetsPage(): JSX.Element {
                         name: e.target.value
                       })}
                       placeholder="Enter snippet name"
-                      className="technical-input"
+                      className="h-12 border-2 border-slate-200 focus:border-red-500 focus:ring-red-100 transition-all rounded-lg"
                       required
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="technical-label">Content (HTML supported)</label>
+                    <label className="text-sm font-medium text-slate-800">Content (HTML supported)</label>
                     <CodeEditor
                       value={editingSnippet.content}
                       onChange={(value) => setEditingSnippet({
@@ -199,24 +199,23 @@ export default function SnippetsPage(): JSX.Element {
                         content: value
                       })}
                       language="html"
-                      className="min-h-[400px]"
+                      className="min-h-[60vh]"
                       onSave={handleSave}
                       maxLength={8000}
                     />
                   </div>
-                  <div className="flex gap-3 pt-2">
+                  <div className="flex gap-3 pt-4">
                     <Button 
-                      type="button"
-                      onClick={handleSave}
-                      className="technical-button"
+                      type="submit"
+                      className="px-6 h-12 bg-red-500 hover:bg-red-600 text-white transition-all rounded-lg"
                     >
-                      {editingSnippet.id ? 'Save Changes' : 'Save Snippet'}
+                      {editingSnippet.id ? 'Update' : 'Create'}
                     </Button>
-                    <Button 
+                    <Button
                       type="button"
-                      variant="outline" 
+                      variant="outline"
                       onClick={() => setEditingSnippet(null)}
-                      className="border-border hover:border-primary/30 hover:bg-primary/5"
+                      className="px-6 h-12 border-2 border-slate-200 hover:bg-slate-50 text-slate-800 hover:border-red-500 transition-all rounded-lg"
                     >
                       Cancel
                     </Button>

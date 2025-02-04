@@ -1,88 +1,35 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Button } from '@/components/ui/button';
-import { useToast } from '@/components/ui/use-toast';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { FilterBuilder } from '@/components/filters/FilterBuilder';
-import { Filter } from '@/types/filters';
+import { PromptInput } from '@/components/prompts/prompt-input';
 
 export default function NewScenarioPage() {
   const router = useRouter();
-  const { toast } = useToast();
-  const [loading, setLoading] = useState(false);
-  const [filters, setFilters] = useState<Filter[]>([]);
-  const [fields, setFields] = useState([]);
+  const [formData, setFormData] = useState({
+    name: '',
+    touchpointType: 'email',
+    description: '',
+    status: 'active',
+    filters: '[]',
+    customizationPrompt: '',
+    emailExamplesPrompt: '',
+    subjectLine: '',
+  });
 
-  useEffect(() => {
-    const fetchFields = async () => {
-      try {
-        const response = await fetch('/api/webhook-fields');
-        const data = await response.json();
-        setFields(data);
-      } catch (error) {
-        console.error('Error fetching webhook fields:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to load webhook fields',
-          variant: 'destructive',
-        });
-      }
-    };
-
-    fetchFields();
-  }, [toast]);
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-
-    const formData = new FormData(e.currentTarget);
-    const data = {
-      name: formData.get('name'),
-      touchpointType: formData.get('touchpointType') || 'email',
-      description: formData.get('description'),
-      status: 'active',
-      filters: JSON.stringify(filters),
-      customizationPrompt: formData.get('customizationPrompt'),
-      emailExamplesPrompt: formData.get('emailExamplesPrompt'),
-      subjectLine: formData.get('subjectLine'),
-    };
-
     try {
       const response = await fetch('/api/scenarios', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.details || 'Failed to create scenario');
-      }
-
-      const result = await response.json();
-      toast({
-        title: 'Success',
-        description: 'Scenario created successfully',
-      });
-      router.push(`/settings/scenarios/${result.id}`);
+      if (!response.ok) throw new Error('Failed to create scenario');
+      router.push('/scenarios');
     } catch (error) {
       console.error('Error creating scenario:', error);
-      toast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to create scenario',
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -91,105 +38,80 @@ export default function NewScenarioPage() {
       <h1 className="text-2xl font-bold">Create New Scenario</h1>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Basic Info Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Basic Information</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="name">Name</Label>
-              <Input
-                id="name"
-                name="name"
-                required
-                placeholder="Enter scenario name"
-              />
-            </div>
-            
-            <div>
-              <Label htmlFor="touchpointType">Type</Label>
-              <Select name="touchpointType" defaultValue="email">
-                <SelectTrigger>
-                  <SelectValue placeholder="Select type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="email">Email</SelectItem>
-                  <SelectItem value="research">Research</SelectItem>
-                  <SelectItem value="googleDrive">Google Drive</SelectItem>
-                  <SelectItem value="linkedin">LinkedIn</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                name="description"
-                placeholder="Enter scenario description"
-                rows={4}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Filters Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Webhook Filters</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <FilterBuilder
-              initialFilters={filters}
-              fields={fields}
-              onChange={setFilters}
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Name</label>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              required
+              placeholder="Enter scenario name"
+              className="w-full p-2 border rounded"
             />
-          </CardContent>
-        </Card>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium mb-1">Type</label>
+            <select
+              value={formData.touchpointType}
+              onChange={(e) => setFormData({ ...formData, touchpointType: e.target.value })}
+              className="w-full p-2 border rounded"
+            >
+              <option value="email">Email</option>
+              <option value="research">Research</option>
+              <option value="googleDrive">Google Drive</option>
+              <option value="linkedin">LinkedIn</option>
+            </select>
+          </div>
 
-        {/* Email Configuration Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Email Configuration</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="subjectLine">Subject Line</Label>
-              <Input
-                id="subjectLine"
-                name="subjectLine"
-                placeholder="Enter email subject line"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="customizationPrompt">Customization Prompt</Label>
-              <Textarea
-                id="customizationPrompt"
-                name="customizationPrompt"
-                placeholder="Enter customization prompt"
-                rows={4}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="emailExamplesPrompt">Email Examples Prompt</Label>
-              <Textarea
-                id="emailExamplesPrompt"
-                name="emailExamplesPrompt"
-                placeholder="Enter email examples prompt"
-                rows={4}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="flex justify-end">
-          <Button type="submit" disabled={loading}>
-            {loading ? 'Creating...' : 'Create Scenario'}
-          </Button>
+          <div>
+            <label className="block text-sm font-medium mb-1">Description</label>
+            <textarea
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              placeholder="Enter scenario description"
+              rows={4}
+              className="w-full p-2 border rounded"
+            />
+          </div>
         </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Subject Line</label>
+            <PromptInput
+              value={formData.subjectLine}
+              onChange={(value) => setFormData({ ...formData, subjectLine: value })}
+              placeholder="Enter email subject line"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Customization Prompt</label>
+            <PromptInput
+              value={formData.customizationPrompt}
+              onChange={(value) => setFormData({ ...formData, customizationPrompt: value })}
+              placeholder="Enter customization prompt"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Email Examples Prompt</label>
+            <PromptInput
+              value={formData.emailExamplesPrompt}
+              onChange={(value) => setFormData({ ...formData, emailExamplesPrompt: value })}
+              placeholder="Enter email examples prompt"
+            />
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          className="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600"
+        >
+          Create Scenario
+        </button>
       </form>
     </div>
   );

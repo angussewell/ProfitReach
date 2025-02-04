@@ -6,19 +6,19 @@ export async function middleware(request: NextRequest) {
   const token = await getToken({ req: request });
   const { pathname } = request.nextUrl;
 
-  // Allow access to auth-related paths, webhooks, and static files
+  // Allow access to auth-related paths
   if (
-    pathname.startsWith('/api/auth') || 
-    pathname.startsWith('/api/webhooks') ||
-    pathname === '/login' ||
+    pathname === '/auth/login' ||
+    pathname.startsWith('/api/auth/') ||
+    pathname.startsWith('/_next/') ||
     pathname.includes('.')
   ) {
     return NextResponse.next();
   }
 
-  // Redirect to login if not authenticated
+  // Redirect to login if no token is present
   if (!token) {
-    return NextResponse.redirect(new URL('/login', request.url));
+    return NextResponse.redirect(new URL('/auth/login', request.url));
   }
 
   return NextResponse.next();

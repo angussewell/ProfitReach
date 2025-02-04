@@ -156,7 +156,7 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
       setOrganizations([]);
       
       // Sign out using NextAuth
-      await signOut({ redirect: true, callbackUrl: '/login' });
+      await signOut({ redirect: true, callbackUrl: '/auth/login' });
     } catch (err) {
       console.error('Failed to logout:', err);
       toast.error('Failed to logout. Please try again.');

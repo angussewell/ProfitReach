@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,27 +9,25 @@ import { useToast } from '@/components/ui/use-toast';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Plus, X, Search, FileCode } from 'lucide-react';
 import { PageContainer } from '@/components/layout/PageContainer';
+import PageHeader from '@/components/layout/PageHeader';
 import { CodeEditor } from '@/components/ui/code-editor';
 import { useRouter } from 'next/navigation';
-import { PageHeader } from '@/components/ui/page-header';
 import { cn } from '@/lib/utils';
 import type { ReactNode } from 'react';
 
 interface Attachment {
-  id: string;
-  name: string;
-  content: string;
-  createdAt: string;
-  updatedAt: string;
+  id?: string;
+  name?: string;
+  content?: string;
 }
 
 export default function AttachmentsPage(): JSX.Element {
   const router = useRouter();
   const { toast } = useToast();
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [editingAttachment, setEditingAttachment] = useState<Partial<Attachment> | null>(null);
+  const [attachments, setAttachments] = React.useState<Attachment[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const [editingAttachment, setEditingAttachment] = React.useState<Attachment | null>(null);
 
   useEffect(() => {
     fetchAttachments();
@@ -117,7 +116,8 @@ export default function AttachmentsPage(): JSX.Element {
   };
 
   const filteredAttachments = attachments.filter(attachment =>
-    attachment.name.toLowerCase().includes(searchQuery.toLowerCase())
+    attachment.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    attachment.content?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   if (loading) {
@@ -147,18 +147,19 @@ export default function AttachmentsPage(): JSX.Element {
   return (
     <PageContainer>
       <div className="space-y-6">
-        <PageHeader
-          title="Attachments"
-          description="Manage your attachments for use in scenarios."
-        >
-          <Button
-            onClick={() => setEditingAttachment({})}
-            className="technical-button"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            New Attachment
-          </Button>
-        </PageHeader>
+        <div className="bg-gradient-to-r from-slate-800 to-slate-900 mx-0 px-8 py-8 rounded-xl shadow-lg">
+          <h1 className="text-3xl font-bold text-white mb-2">Attachments</h1>
+          <p className="text-slate-300">Manage your attachments for use in scenarios</p>
+          <div className="mt-4">
+            <Button
+              onClick={() => setEditingAttachment({})}
+              className="bg-red-500 hover:bg-red-600 transition-all duration-200 shadow-sm hover:shadow-md text-white border-0 rounded-lg px-6"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              New Attachment
+            </Button>
+          </div>
+        </div>
 
         <div className="flex items-center gap-4">
           <div className="relative flex-1">
@@ -166,33 +167,33 @@ export default function AttachmentsPage(): JSX.Element {
               placeholder="Search attachments..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="technical-input"
+              className="h-12 border-2 border-slate-200 focus:border-red-500 focus:ring-red-100 transition-all rounded-lg"
             />
           </div>
         </div>
 
         {editingAttachment && (
-          <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <Card className="technical-card w-full max-w-2xl">
-              <CardHeader className="pb-4 border-b border-border">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <Card className="w-full max-w-[90%] max-h-[90vh] lg:max-w-6xl overflow-hidden">
+              <CardHeader className="pb-4 border-b border-gray-100 sticky top-0 bg-white z-10">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="technical-header">
+                  <CardTitle className="text-xl font-semibold text-slate-800">
                     {editingAttachment.id ? 'Edit Attachment' : 'Create New Attachment'}
                   </CardTitle>
                   <Button 
                     variant="ghost" 
                     size="sm" 
                     onClick={() => setEditingAttachment(null)}
-                    className="text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                    className="text-gray-500 hover:text-gray-700 hover:bg-gray-100/80 rounded-lg"
                   >
                     <X className="w-5 h-5" />
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-6 p-8">
+              <CardContent className="p-6 overflow-y-auto max-h-[calc(90vh-8rem)]">
                 <form onSubmit={handleSave} className="space-y-6">
                   <div className="space-y-2">
-                    <label className="technical-label">Name</label>
+                    <label className="text-sm font-medium text-slate-800">Name</label>
                     <Input
                       value={editingAttachment.name || ''}
                       onChange={(e) => setEditingAttachment({
@@ -200,12 +201,12 @@ export default function AttachmentsPage(): JSX.Element {
                         name: e.target.value
                       })}
                       placeholder="Enter attachment name"
-                      className="technical-input"
+                      className="h-12 border-2 border-slate-200 focus:border-red-500 focus:ring-red-100 transition-all rounded-lg"
                       required
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="technical-label">Content</label>
+                    <label className="text-sm font-medium text-slate-800">Content</label>
                     <CodeEditor
                       value={editingAttachment.content || ''}
                       onChange={(value) => setEditingAttachment({
@@ -213,20 +214,24 @@ export default function AttachmentsPage(): JSX.Element {
                         content: value
                       })}
                       language="html"
-                      className="min-h-[400px] border-2 border-slate-200 focus-within:border-red-500 focus-within:ring-red-100 transition-all rounded-lg"
-                      onSave={handleSave}
+                      className="min-h-[60vh] border-2 border-slate-200 focus-within:border-red-500 focus-within:ring-red-100 transition-all rounded-lg"
+                      onSave={() => handleSave}
                       maxLength={8000}
                     />
                   </div>
-                  <div className="flex justify-end gap-3">
+                  <div className="flex justify-end gap-3 pt-4">
                     <Button
                       type="button"
                       variant="outline"
                       onClick={() => setEditingAttachment(null)}
+                      className="px-6 h-12 border-2 border-slate-200 hover:bg-slate-50 text-slate-800 hover:border-red-500 transition-all rounded-lg"
                     >
                       Cancel
                     </Button>
-                    <Button type="submit">
+                    <Button 
+                      type="submit"
+                      className="px-6 h-12 bg-red-500 hover:bg-red-600 text-white transition-all rounded-lg"
+                    >
                       {editingAttachment.id ? 'Update' : 'Create'}
                     </Button>
                   </div>
@@ -259,7 +264,7 @@ export default function AttachmentsPage(): JSX.Element {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleDelete(attachment.id)}
+                      onClick={() => handleDelete(attachment.id || '')}
                       className="text-destructive hover:text-destructive hover:bg-destructive/5"
                     >
                       Delete

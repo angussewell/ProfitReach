@@ -11,6 +11,7 @@ import { replaceVariables } from '@/lib/utils';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { CodeEditor } from '@/components/ui/code-editor';
 import { VariableSelector } from '@/components/prompts/VariableSelector';
+import { PromptInput } from '@/components/prompts/prompt-input';
 
 interface Prompt {
   id: string;
@@ -180,7 +181,7 @@ export default function PromptsPage() {
     
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto border-0 shadow-2xl bg-white rounded-xl">
+        <Card className="w-full max-w-[90%] max-h-[90vh] lg:max-w-6xl overflow-hidden">
           <CardHeader className="pb-4 border-b border-gray-100 sticky top-0 bg-white z-10">
             <div className="flex items-center justify-between">
               <CardTitle className="text-xl font-semibold text-slate-800">Preview Prompt: {prompt.name}</CardTitle>
@@ -194,73 +195,52 @@ export default function PromptsPage() {
               </Button>
             </div>
           </CardHeader>
-          <CardContent className="space-y-6 p-8">
+          <CardContent className="p-6 overflow-y-auto max-h-[calc(90vh-8rem)]">
             {variables.length > 0 ? (
-              <div className="space-y-4">
-                <h3 className="text-sm font-medium text-slate-800">Variables</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {variables.map(variable => (
-                    <div key={variable} className="space-y-2">
-                      <label className="text-sm font-medium text-slate-800">{variable}</label>
-                      <Input
-                        value={previewVariables[variable] || ''}
-                        onChange={(e) => setPreviewVariables(prev => ({
-                          ...prev,
-                          [variable]: e.target.value
-                        }))}
-                        placeholder={`Enter value for ${variable}`}
-                        className="h-10 border-2 border-slate-200 focus:border-red-500 focus:ring-red-100 transition-all rounded-lg"
-                      />
-                    </div>
-                  ))}
+              <div className="space-y-6">
+                <div className="space-y-4">
+                  <h3 className="text-sm font-medium text-slate-800">Variables</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {variables.map(variable => (
+                      <div key={variable} className="space-y-2">
+                        <label className="text-sm font-medium text-slate-800">{variable}</label>
+                        <Input
+                          value={previewVariables[variable] || ''}
+                          onChange={(e) => setPreviewVariables(prev => ({
+                            ...prev,
+                            [variable]: e.target.value
+                          }))}
+                          placeholder={`Enter value for ${variable}`}
+                          className="h-12 border-2 border-slate-200 focus:border-red-500 focus:ring-red-100 transition-all rounded-lg"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                <div className="space-y-4">
+                  <h3 className="text-sm font-medium text-slate-800">Preview</h3>
+                  <div className="bg-gray-50/80 rounded-lg p-6 border border-gray-100">
+                    <pre className="whitespace-pre-wrap text-sm text-slate-800 font-mono">
+                      {replaceVariables(prompt.content, previewVariables)}
+                    </pre>
+                  </div>
                 </div>
               </div>
             ) : (
-              <p className="text-gray-500 italic">No variables found in this prompt.</p>
-            )}
-            
-            <div className="space-y-2">
-              <h3 className="text-sm font-medium text-slate-800">Preview</h3>
-              <div className="bg-gray-50/80 rounded-lg p-4 border border-gray-100">
-                <pre className="whitespace-pre-wrap text-sm text-slate-800 font-mono">
-                  {replaceVariables(prompt.content, previewVariables)}
-                </pre>
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium text-slate-800">Preview</h3>
+                <div className="bg-gray-50/80 rounded-lg p-6 border border-gray-100">
+                  <pre className="whitespace-pre-wrap text-sm text-slate-800 font-mono">
+                    {prompt.content}
+                  </pre>
+                </div>
               </div>
-            </div>
+            )}
           </CardContent>
         </Card>
       </div>
     );
-  };
-
-  // Add variable insertion handlers
-  const handleNewPromptVariableSelect = (variable: string) => {
-    const textarea = document.querySelector('textarea[name="new-prompt-content"]') as HTMLTextAreaElement;
-    if (textarea) {
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const content = newPrompt.content;
-      const newContent = content.substring(0, start) + variable + content.substring(end);
-      setNewPrompt({ ...newPrompt, content: newContent });
-      
-      // Set cursor position after the inserted variable
-      setTimeout(() => {
-        textarea.focus();
-        const newPosition = start + variable.length;
-        textarea.setSelectionRange(newPosition, newPosition);
-      }, 0);
-    } else {
-      setNewPrompt({ ...newPrompt, content: newPrompt.content + variable });
-    }
-  };
-
-  const handleEditPromptVariableSelect = (variable: string) => {
-    if (editingPrompt) {
-      setEditingPrompt({
-        ...editingPrompt,
-        content: editingPrompt.content + variable
-      });
-    }
   };
 
   if (loading) {
@@ -315,61 +295,65 @@ export default function PromptsPage() {
         </div>
 
         {isCreating && (
-          <Card className="mb-8 border-0 shadow-xl bg-white rounded-xl overflow-hidden">
-            <CardHeader className="pb-4 border-b border-gray-100">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-xl font-semibold text-slate-800">New Prompt</CardTitle>
-                <Button variant="ghost" size="sm" onClick={() => setIsCreating(false)} className="text-gray-500 hover:text-gray-700 hover:bg-gray-100/80 rounded-lg">
-                  <X className="w-5 h-5" />
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-6 p-8">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-800">Name</label>
-                <Input
-                  value={newPrompt.name}
-                  onChange={(e) => setNewPrompt({ ...newPrompt, name: e.target.value })}
-                  placeholder="Enter prompt name"
-                  className="h-12 border-2 border-slate-200 focus:border-red-500 focus:ring-red-100 transition-all rounded-lg"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-800">Content</label>
-                <VariableSelector 
-                  onSelect={handleNewPromptVariableSelect}
-                  className="mb-2"
-                />
-                <Textarea
-                  name="new-prompt-content"
-                  value={newPrompt.content}
-                  onChange={(e) => setNewPrompt({ ...newPrompt, content: e.target.value })}
-                  placeholder="Enter prompt content"
-                  className="min-h-[200px] border-2 border-slate-200 focus:border-red-500 focus:ring-red-100 transition-all rounded-lg"
-                />
-              </div>
-              <div className="flex gap-3 pt-2">
-                <Button 
-                  onClick={handleCreate}
-                  className="bg-red-500 hover:bg-red-600 transition-all duration-200 text-white shadow-sm hover:shadow-md border-0 rounded-lg px-6 h-12 text-base"
-                >
-                  Deploy Prompt
-                </Button>
-                <Button 
-                  variant="outline" 
-                  onClick={() => setIsCreating(false)}
-                  className="border-2 border-slate-200 hover:bg-slate-50 text-slate-800 hover:border-red-500 transition-all rounded-lg px-6 h-12 text-base"
-                >
-                  Cancel
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <Card className="w-full max-w-[90%] max-h-[90vh] lg:max-w-6xl overflow-hidden">
+              <CardHeader className="pb-4 border-b border-gray-100 sticky top-0 bg-white z-10">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-xl font-semibold text-slate-800">New Prompt</CardTitle>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setIsCreating(false)}
+                    className="text-gray-500 hover:text-gray-700 hover:bg-gray-100/80 rounded-lg"
+                  >
+                    <X className="w-5 h-5" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="p-6 overflow-y-auto max-h-[calc(90vh-8rem)]">
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-800">Name</label>
+                    <Input
+                      value={newPrompt.name}
+                      onChange={(e) => setNewPrompt({ ...newPrompt, name: e.target.value })}
+                      placeholder="Enter prompt name"
+                      className="h-12 border-2 border-slate-200 focus:border-red-500 focus:ring-red-100 transition-all rounded-lg"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-800">Content</label>
+                    <PromptInput
+                      value={newPrompt.content}
+                      onChange={(value) => setNewPrompt({ ...newPrompt, content: value })}
+                      placeholder="Enter prompt content"
+                      className="min-h-[60vh]"
+                    />
+                  </div>
+                  <div className="flex gap-3 pt-4">
+                    <Button 
+                      onClick={handleCreate}
+                      className="px-6 h-12 bg-red-500 hover:bg-red-600 text-white transition-all rounded-lg"
+                    >
+                      Deploy Prompt
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setIsCreating(false)}
+                      className="px-6 h-12 border-2 border-slate-200 hover:bg-slate-50 text-slate-800 hover:border-red-500 transition-all rounded-lg"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         )}
 
         {editingPrompt && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto border-0 shadow-2xl bg-white rounded-xl">
+            <Card className="w-full max-w-[90%] max-h-[90vh] lg:max-w-6xl overflow-hidden">
               <CardHeader className="pb-4 border-b border-gray-100 sticky top-0 bg-white z-10">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-xl font-semibold text-slate-800">Edit Prompt</CardTitle>
@@ -383,50 +367,46 @@ export default function PromptsPage() {
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-6 p-8">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-800">Name</label>
-                  <Input
-                    value={editingPrompt.name}
-                    onChange={(e) => setEditingPrompt({
-                      ...editingPrompt,
-                      name: e.target.value
-                    })}
-                    className="h-12 border-2 border-slate-200 focus:border-red-500 focus:ring-red-100 transition-all rounded-lg"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-800">Content</label>
-                  <VariableSelector 
-                    onSelect={handleEditPromptVariableSelect}
-                    className="mb-2"
-                  />
-                  <CodeEditor
-                    value={editingPrompt.content}
-                    onChange={(value) => setEditingPrompt({
-                      ...editingPrompt,
-                      content: value
-                    })}
-                    language="markdown"
-                    className="min-h-[400px] border-2 border-slate-200 focus-within:border-red-500 focus-within:ring-red-100 transition-all rounded-lg"
-                    onSave={() => handleSave(editingPrompt)}
-                    maxLength={4000}
-                  />
-                </div>
-                <div className="flex gap-3 pt-2">
-                  <Button 
-                    onClick={() => handleSave(editingPrompt)}
-                    className="bg-red-500 hover:bg-red-600 transition-all duration-200 text-white shadow-sm hover:shadow-md border-0 rounded-lg px-6 h-12 text-base"
-                  >
-                    {editingPrompt.id ? 'Deploy Changes' : 'Deploy Prompt'}
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    onClick={() => setEditingPrompt(null)}
-                    className="border-2 border-slate-200 hover:bg-slate-50 text-slate-800 hover:border-red-500 transition-all rounded-lg px-6 h-12 text-base"
-                  >
-                    Cancel
-                  </Button>
+              <CardContent className="p-6 overflow-y-auto max-h-[calc(90vh-8rem)]">
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-800">Name</label>
+                    <Input
+                      value={editingPrompt.name}
+                      onChange={(e) => setEditingPrompt({
+                        ...editingPrompt,
+                        name: e.target.value
+                      })}
+                      className="h-12 border-2 border-slate-200 focus:border-red-500 focus:ring-red-100 transition-all rounded-lg"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-800">Content</label>
+                    <PromptInput
+                      value={editingPrompt.content}
+                      onChange={(value) => setEditingPrompt({
+                        ...editingPrompt,
+                        content: value
+                      })}
+                      placeholder="Enter prompt content"
+                      className="min-h-[60vh]"
+                    />
+                  </div>
+                  <div className="flex gap-3 pt-4">
+                    <Button 
+                      onClick={() => handleSave(editingPrompt)}
+                      className="px-6 h-12 bg-red-500 hover:bg-red-600 text-white transition-all rounded-lg"
+                    >
+                      Deploy Changes
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setEditingPrompt(null)}
+                      className="px-6 h-12 border-2 border-slate-200 hover:bg-slate-50 text-slate-800 hover:border-red-500 transition-all rounded-lg"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>

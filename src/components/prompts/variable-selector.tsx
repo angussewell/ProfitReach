@@ -23,7 +23,7 @@ export function VariableSelector({ onSelect, className }: VariableSelectorProps)
         const response = await fetch("/api/webhook-fields");
         if (!response.ok) throw new Error("Failed to fetch webhook fields");
         const data = await response.json();
-        setFields(data.fields);
+        setFields(data); // API returns array directly
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load webhook fields");
       } finally {
@@ -46,7 +46,7 @@ export function VariableSelector({ onSelect, className }: VariableSelectorProps)
     <div className={className}>
       <SearchableSelect
         options={options}
-        onChange={value => onSelect(`{{${value}}}`)}
+        onChange={value => onSelect(`{${value}}`)}
         placeholder="Search variables..."
         emptyMessage="No matching variables found"
       />

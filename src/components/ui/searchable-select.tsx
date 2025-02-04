@@ -67,7 +67,7 @@ export function SearchableSelect({
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
-          className="z-50 min-w-[var(--radix-popover-trigger-width)] p-0"
+          className="z-50 w-[var(--radix-popover-trigger-width)] max-w-[min(calc(100vw-32px),600px)] p-0"
           align="start"
           sideOffset={8}
           side="bottom"
@@ -83,7 +83,7 @@ export function SearchableSelect({
               className="w-full px-3 py-2 border-b bg-transparent focus:outline-none focus:ring-2 focus:ring-red-100 rounded-t-md"
               autoComplete="off"
             />
-            <div className="max-h-[300px] overflow-auto p-1">
+            <div className="max-h-[200px] overflow-auto p-1">
               {filteredOptions.length === 0 ? (
                 <div className="py-6 text-center text-sm text-muted-foreground">{emptyMessage}</div>
               ) : (
@@ -107,7 +107,7 @@ export function SearchableSelect({
                         value === option.value ? "opacity-100" : "opacity-0"
                       )}
                     />
-                    <span className="truncate">{option.label}</span>
+                    <span className="truncate max-w-full">{option.label}</span>
                   </div>
                 ))
               )}

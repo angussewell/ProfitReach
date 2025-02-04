@@ -1,3 +1,5 @@
+'use client';
+
 import { ScenarioWizard } from '@/components/scenarios/ScenarioWizard'
 import { PageContainer } from '@/components/layout/PageContainer'
 

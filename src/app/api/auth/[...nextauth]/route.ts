@@ -15,10 +15,14 @@ if (!process.env.NEXTAUTH_URL) {
   throw new Error('NEXTAUTH_URL must be set');
 }
 
+// Determine if we're in development
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 console.log('NextAuth Environment:', {
   NEXTAUTH_URL: process.env.NEXTAUTH_URL,
   hasSecret: !!process.env.NEXTAUTH_SECRET,
-  cookieDomain: 'app.messagelm.com'
+  cookieDomain: isDevelopment ? 'none' : 'app.messagelm.com',
+  isDevelopment
 });
 
 declare module 'next-auth' {
@@ -281,8 +285,8 @@ export const authOptions: AuthOptions = {
     }
   },
   pages: {
-    signIn: '/login',
-    error: '/login'
+    signIn: '/auth/login',
+    error: '/auth/login'
   },
   session: {
     strategy: 'jwt',
@@ -293,13 +297,13 @@ export const authOptions: AuthOptions = {
   },
   cookies: {
     sessionToken: {
-      name: `__Secure-next-auth.session-token`,
+      name: isDevelopment ? 'next-auth.session-token' : `__Secure-next-auth.session-token`,
       options: {
         httpOnly: true,
         sameSite: 'lax',
         path: '/',
-        secure: true,
-        domain: 'app.messagelm.com'
+        secure: !isDevelopment,
+        ...(isDevelopment ? {} : { domain: 'app.messagelm.com' })
       }
     }
   }
