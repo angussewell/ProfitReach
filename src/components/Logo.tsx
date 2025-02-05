@@ -1,5 +1,6 @@
 'use client';
 
+import type { StaticImageData } from 'next/image';
 import Image from 'next/image';
 import { useSidebar } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
@@ -24,18 +25,19 @@ export function Logo({ className }: LogoProps) {
   }, []);
   
   return (
-    <div className={cn("relative h-8 flex items-center justify-center", className)}>
+    <div className={cn(
+      "relative h-10 flex items-center",
+      open ? "justify-start pl-2" : "justify-center",
+      className
+    )}>
       <Image
         src={open ? '/MessageLM Hero.png' : '/MessageLM Icon.png'}
         alt="MessageLM"
-        height={32}
-        width={open ? 160 : 32}
+        height={open ? 36 : 36}
+        width={open ? 180 : 36}
         className="object-contain"
         priority
-        onError={(e) => {
-          console.error('Failed to load logo:', e);
-          // You could set a fallback here if needed
-        }}
+        unoptimized
       />
     </div>
   );
