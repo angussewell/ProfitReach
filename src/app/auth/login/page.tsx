@@ -35,9 +35,9 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
-      <div className="w-full max-w-md space-y-8 bg-white p-8 rounded-2xl shadow-xl">
-        <div className="flex flex-col items-center space-y-6">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
+      <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-xl">
+        <div className="flex flex-col items-center space-y-8">
           <div className="relative w-48 h-12">
             <Image
               src="/MessageLM Hero.png"
@@ -48,61 +48,50 @@ export default function LoginPage() {
               unoptimized
             />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900">
-            Welcome back
-          </h2>
-          <p className="text-gray-600 text-center max-w-sm">
-            Sign in to your account to continue managing your automated outreach campaigns
-          </p>
+          <form className="w-full space-y-6" onSubmit={handleSubmit}>
+            <div className="space-y-4">
+              <div>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  placeholder="Email address"
+                  className="h-11 px-4"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+              <div>
+                <Input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  placeholder="Password"
+                  className="h-11 px-4"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {error && (
+              <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm text-center">
+                {error}
+              </div>
+            )}
+
+            <Button
+              type="submit"
+              className="w-full h-11 text-base bg-primary hover:bg-primary/90"
+            >
+              Sign in
+            </Button>
+          </form>
         </div>
-        
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                Email address
-              </label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                className="h-11 px-4"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                Password
-              </label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                className="h-11 px-4"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {error && (
-            <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm text-center">
-              {error}
-            </div>
-          )}
-
-          <Button
-            type="submit"
-            className="w-full h-11 text-base bg-primary hover:bg-primary/90"
-          >
-            Sign in
-          </Button>
-        </form>
       </div>
     </div>
   );
