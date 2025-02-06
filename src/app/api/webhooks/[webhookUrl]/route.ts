@@ -138,6 +138,26 @@ export async function POST(
       });
     }
 
+    // Validate and fix webhook URL
+    let validatedWebhookUrl = outboundWebhookUrl;
+    try {
+      // Try to parse the URL to see if it's valid
+      const urlObj = new URL(outboundWebhookUrl);
+      log('info', 'Parsed webhook URL', { 
+        original: outboundWebhookUrl,
+        protocol: urlObj.protocol,
+        hostname: urlObj.hostname,
+        pathname: urlObj.pathname
+      });
+    } catch (e) {
+      // If URL parsing fails, assume it's a relative URL and prepend base URL
+      validatedWebhookUrl = `https://app.messagelm.com${outboundWebhookUrl.startsWith('/') ? '' : '/'}${outboundWebhookUrl}`;
+      log('info', 'Fixed relative webhook URL', { 
+        original: outboundWebhookUrl,
+        fixed: validatedWebhookUrl
+      });
+    }
+
     // Process webhook
     try {
       // Find the scenario to check test mode
@@ -158,7 +178,17 @@ export async function POST(
         })
       };
 
-      const outboundResponse = await fetch(outboundWebhookUrl, {
+      log('info', 'Sending outbound webhook request', {
+        url: validatedWebhookUrl,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'User-Agent': 'ProfitReach-API'
+        }
+      });
+
+      const outboundResponse = await fetch(validatedWebhookUrl, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -168,30 +198,46 @@ export async function POST(
         body: JSON.stringify(outboundData)
       });
 
+      // Log response headers for debugging
+      const responseHeaders: Record<string, string> = {};
+      outboundResponse.headers.forEach((value, key) => {
+        responseHeaders[key] = value;
+      });
+      
       // Get response text first for better error logging
       const responseText = await outboundResponse.text();
       log('info', 'Outbound webhook response', { 
         status: outboundResponse.status,
+        headers: responseHeaders,
         response: responseText,
-        url: outboundWebhookUrl
+        url: validatedWebhookUrl
       });
 
+      // Check if response looks like a sign-in page
+      const isSignInPage = responseText.toLowerCase().includes('sign in') || 
+                          responseText.toLowerCase().includes('login') ||
+                          responseText.toLowerCase().includes('authentication required');
+
       if (!outboundResponse.ok) {
+        const errorMessage = isSignInPage 
+          ? 'Outbound webhook failed - received a sign-in page. Please check if the webhook URL is correct and accessible without authentication.'
+          : `Outbound webhook failed with status ${outboundResponse.status}`;
+
         await prisma.webhookLog.update({
           where: { id: webhookLog.id },
           data: { 
             status: 'error',
             responseBody: { 
-              error: `Outbound webhook failed with status ${outboundResponse.status}`,
+              error: errorMessage,
               response: responseText,
-              url: outboundWebhookUrl
+              url: validatedWebhookUrl
             } as Prisma.JsonObject
           }
         });
         return NextResponse.json({ 
           message: 'Fields registered but outbound webhook failed',
           fieldsRegistered: true,
-          error: responseText
+          error: errorMessage
         });
       }
       
