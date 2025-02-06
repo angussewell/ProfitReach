@@ -165,16 +165,66 @@ export async function POST(
         where: { 
           name: data['Current Scenario '] || '',
           organizationId: organization.id
+        },
+        include: {
+          snippet: true,
+          attachment: true
         }
       });
 
-      // Prepare outbound data - keeping it simple, just pass through the data
+      if (!scenario) {
+        throw new Error('Scenario not found');
+      }
+
+      // Get email account if it's an email scenario
+      let emailAccount = null;
+      if (scenario.touchpointType === 'email') {
+        emailAccount = await prisma.emailAccount.findFirst({
+          where: { organizationId: organization.id }
+        });
+      }
+
+      // Process variables in scenario fields
+      const processedScenario = {
+        id: scenario.id,
+        name: scenario.name,
+        touchpointType: scenario.touchpointType,
+        customizationPrompt: scenario.customizationPrompt ? processWebhookVariables(scenario.customizationPrompt, data) : null,
+        emailExamplesPrompt: scenario.emailExamplesPrompt ? processWebhookVariables(scenario.emailExamplesPrompt, data) : null,
+        subjectLine: scenario.subjectLine ? processWebhookVariables(scenario.subjectLine, data) : null,
+        followUp: scenario.isFollowUp || false,
+        attachment: scenario.attachment?.content || null,
+        attachmentName: scenario.attachment?.name || null,
+        snippet: scenario.snippet?.content || null
+      };
+
+      // Fetch and process prompts
+      const prompts = await prisma.prompt.findMany();
+      const processedPrompts = prompts.reduce((acc, prompt) => {
+        acc[prompt.name] = processWebhookVariables(prompt.content, data);
+        return acc;
+      }, {} as Record<string, string>);
+
+      // Prepare outbound data
       const outboundData = {
-        ...data,
-        // If test mode is enabled, override email
-        ...(scenario?.testMode && scenario?.testEmail && {
-          email: scenario.testEmail,
-          contact_id: ''
+        contactData: {
+          ...data,
+          // If test mode is enabled, override email
+          ...(scenario.testMode && scenario.testEmail && {
+            email: scenario.testEmail,
+            contact_id: ''
+          })
+        },
+        scenarioData: processedScenario,
+        prompts: processedPrompts,
+        ...(emailAccount && {
+          emailData: {
+            email: emailAccount.email,
+            name: emailAccount.name,
+            password: emailAccount.password,
+            host: emailAccount.host,
+            port: emailAccount.port
+          }
         })
       };
 
