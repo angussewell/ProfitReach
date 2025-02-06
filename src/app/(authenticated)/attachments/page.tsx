@@ -14,6 +14,7 @@ import { CodeEditor } from '@/components/ui/code-editor';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import type { ReactNode } from 'react';
+import { PromptInput } from '@/components/prompts/prompt-input';
 
 interface Attachment {
   id?: string;
@@ -207,16 +208,15 @@ export default function AttachmentsPage(): JSX.Element {
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-slate-800">Content</label>
-                    <CodeEditor
+                    <PromptInput
                       value={editingAttachment.content || ''}
                       onChange={(value) => setEditingAttachment({
                         ...editingAttachment,
                         content: value
                       })}
-                      language="html"
-                      className="min-h-[60vh] border-2 border-slate-200 focus-within:border-red-500 focus-within:ring-red-100 transition-all rounded-lg"
-                      onSave={() => handleSave}
-                      maxLength={8000}
+                      placeholder="Enter attachment content"
+                      className="min-h-[60vh]"
+                      rows={4}
                     />
                   </div>
                   <div className="flex justify-end gap-3 pt-4">

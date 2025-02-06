@@ -105,6 +105,8 @@ model Scenario {
   touchpointType      String     @default("email")
   status             String     @default("active")
   isFollowUp         Boolean    @default(false)
+  testMode           Boolean    @default(false)
+  testEmail          String?
   customizationPrompt String?
   emailExamplesPrompt String?
   subjectLine        String?

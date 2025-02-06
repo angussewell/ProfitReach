@@ -5,23 +5,16 @@ import { Filter } from '@/types/filters';
 
 interface FilterSectionProps {
   initialFilters: Filter[];
-  fields: any[];
-  hiddenInputId?: string;
+  fields: string[];
+  onChange: (filters: Filter[]) => void;
 }
 
-export function FilterSection({ initialFilters, fields, hiddenInputId = 'filters-json' }: FilterSectionProps) {
-  const handleFilterChange = (newFilters: Filter[]) => {
-    const input = document.getElementById(hiddenInputId) as HTMLInputElement;
-    if (input) {
-      input.value = JSON.stringify(newFilters);
-    }
-  };
-
+export function FilterSection({ initialFilters, fields, onChange }: FilterSectionProps) {
   return (
     <FilterBuilder
       initialFilters={initialFilters}
       fields={fields}
-      onChange={handleFilterChange}
+      onChange={onChange}
     />
   );
 } 

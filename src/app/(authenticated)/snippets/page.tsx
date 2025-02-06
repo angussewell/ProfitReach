@@ -10,6 +10,7 @@ import { PageContainer } from '@/components/layout/PageContainer';
 import { CodeEditor } from '@/components/ui/code-editor';
 import { PageHeader } from '@/components/ui/page-header';
 import { motion } from 'framer-motion';
+import { PromptInput } from '@/components/prompts/prompt-input';
 
 interface Snippet {
   id: string;
@@ -192,16 +193,15 @@ export default function SnippetsPage(): JSX.Element {
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-slate-800">Content (HTML supported)</label>
-                    <CodeEditor
+                    <PromptInput
                       value={editingSnippet.content}
                       onChange={(value) => setEditingSnippet({
                         ...editingSnippet,
                         content: value
                       })}
-                      language="html"
+                      placeholder="Enter snippet content"
                       className="min-h-[60vh]"
-                      onSave={handleSave}
-                      maxLength={8000}
+                      rows={4}
                     />
                   </div>
                   <div className="flex gap-3 pt-4">

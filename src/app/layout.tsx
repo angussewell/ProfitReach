@@ -7,12 +7,19 @@ import { Providers } from '@/components/providers/Providers';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { Toaster } from '@/components/ui/toaster';
-import { Metadata } from 'next';
+import { Metadata, Viewport } from 'next';
 
 const inter = Inter({ subsets: ['latin'] });
 
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  themeColor: '#ffffff'
+};
+
 export const metadata: Metadata = {
-  title: 'ProfitReach',
+  title: 'MessageLM',
   description: 'Automated outbound communication management with AI-enhanced capabilities',
   icons: {
     icon: [
@@ -36,16 +43,10 @@ export const metadata: Metadata = {
     ]
   },
   manifest: '/site.webmanifest?v=2',
-  themeColor: '#ffffff',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'ProfitReach',
-  },
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 1
+    title: 'MessageLM',
   },
   robots: {
     index: true,

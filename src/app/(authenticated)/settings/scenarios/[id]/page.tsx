@@ -8,6 +8,8 @@ import { PageContainer } from '@/components/layout/PageContainer';
 
 type ScenarioWithRelations = Omit<Scenario, 'filters'> & {
   filters: string;
+  testMode: boolean;
+  testEmail: string | null;
   signature: {
     id: string;
     name: string;

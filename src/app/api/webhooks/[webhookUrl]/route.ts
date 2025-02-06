@@ -163,6 +163,21 @@ export async function POST(
           });
         }
 
+        // Validate test mode configuration
+        if (scenario.testMode && !scenario.testEmail) {
+          await prisma.webhookLog.update({
+            where: { id: webhookLog.id },
+            data: { 
+              status: 'error',
+              responseBody: { error: 'Test mode enabled but no test email configured' } as Prisma.JsonObject
+            }
+          });
+          return NextResponse.json({ 
+            message: 'Invalid test mode configuration',
+            error: 'Test mode enabled but no test email configured'
+          }, { status: 400 });
+        }
+
         // Parse and evaluate filters
         let parsedFilters: Filter[] = [];
         try {
@@ -209,20 +224,35 @@ export async function POST(
           });
         }
 
+        // Update webhook log status based on test mode
+        await prisma.webhookLog.update({
+          where: { id: webhookLog.id },
+          data: { 
+            status: scenario.testMode ? 'testing' : 'success'
+          }
+        });
+
         // Send outbound webhook
         const outboundData: OutboundData = {
-          contactData: data,
+          contactData: {
+            ...data,
+            // If test mode is enabled, override email and contact_id
+            ...(scenario?.testMode && {
+              email: scenario.testEmail || data.email,
+              contact_id: ''
+            })
+          },
           scenarioData: {
-            id: scenario.id,
-            name: scenario.name,
-            touchpointType: scenario.touchpointType,
-            customizationPrompt: scenario.customizationPrompt ? processWebhookVariables(scenario.customizationPrompt, data) : null,
-            emailExamplesPrompt: scenario.emailExamplesPrompt ? processWebhookVariables(scenario.emailExamplesPrompt, data) : null,
-            subjectLine: scenario.subjectLine ? processWebhookVariables(scenario.subjectLine, data) : null,
-            followUp: scenario.isFollowUp,
-            attachment: scenario.attachment?.content ? processWebhookVariables(scenario.attachment.content, data) : null,
-            attachmentName: scenario.attachment?.name || null,
-            snippet: scenario.snippet?.content ? processWebhookVariables(scenario.snippet.content, data) : null
+            id: scenario?.id || '',
+            name: scenario?.name || '',
+            touchpointType: scenario?.touchpointType || 'email',
+            customizationPrompt: scenario?.customizationPrompt ? processWebhookVariables(scenario.customizationPrompt, data) : null,
+            emailExamplesPrompt: scenario?.emailExamplesPrompt ? processWebhookVariables(scenario.emailExamplesPrompt, data) : null,
+            subjectLine: scenario?.subjectLine ? processWebhookVariables(scenario.subjectLine, data) : null,
+            followUp: scenario?.isFollowUp || false,
+            attachment: scenario?.attachment?.content ? processWebhookVariables(scenario.attachment.content, data) : null,
+            attachmentName: scenario?.attachment?.name || null,
+            snippet: scenario?.snippet?.content ? processWebhookVariables(scenario.snippet.content, data) : null
           },
           prompts: {}
         };
@@ -295,7 +325,7 @@ export async function POST(
         await prisma.webhookLog.update({
           where: { id: webhookLog.id },
           data: { 
-            status: 'success',
+            status: scenario?.testMode ? 'testing' : 'success',
             responseBody: typeof responseData === 'string' 
               ? { response: responseData } 
               : responseData as Prisma.JsonObject

@@ -59,6 +59,7 @@ export default function WebhookLogDetail({ log }: WebhookLogDetailProps) {
                   log.status === 'blocked' ? 'text-yellow-600' :
                   log.status === 'error' ? 'text-red-600' :
                   log.status === 'received' ? 'text-blue-600' :
+                  log.status === 'testing' ? 'text-blue-600' :
                   'text-gray-600'
                 )}>
                   {log.status.charAt(0).toUpperCase() + log.status.slice(1)}

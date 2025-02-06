@@ -1,9 +1,10 @@
 'use client';
 
 import * as React from 'react';
-import Editor from '@monaco-editor/react';
+import Editor, { type EditorProps } from '@monaco-editor/react';
 import { cn } from '@/lib/utils';
 import { Maximize2, Minimize2 } from 'lucide-react';
+import type { editor } from 'monaco-editor';
 
 interface CodeEditorProps {
   value: string;
@@ -13,6 +14,7 @@ interface CodeEditorProps {
   height?: string;
   onSave?: () => void;
   maxLength?: number;
+  editorOptions?: editor.IStandaloneEditorConstructionOptions | undefined;
 }
 
 export function CodeEditor({
@@ -22,12 +24,13 @@ export function CodeEditor({
   className,
   height = '400px',
   onSave,
-  maxLength
+  maxLength,
+  editorOptions: customOptions
 }: CodeEditorProps) {
   const [isFullscreen, setIsFullscreen] = React.useState(false);
   const editorRef = React.useRef<HTMLDivElement>(null);
 
-  const editorOptions = {
+  const defaultOptions: editor.IStandaloneEditorConstructionOptions = {
     minimap: { enabled: false },
     fontSize: 13,
     lineNumbers: 'on',
@@ -54,13 +57,17 @@ export function CodeEditor({
     },
     overviewRulerLanes: 0,
     hideCursorInOverviewRuler: true,
-    renderIndentGuides: true,
     colorDecorators: true,
     contextmenu: true,
     mouseWheelZoom: true,
     suggest: {
       showWords: false
     }
+  };
+
+  const editorOptions = {
+    ...defaultOptions,
+    ...customOptions
   };
 
   // Handle keyboard shortcuts
@@ -99,7 +106,7 @@ export function CodeEditor({
     <div 
       ref={editorRef}
       className={cn(
-        'relative rounded-sm border border-border overflow-hidden',
+        'relative rounded-lg border border-border overflow-hidden',
         'focus-within:ring-1 focus-within:ring-ring focus-within:border-ring',
         isFullscreen && 'fixed inset-4 z-50 border-none rounded-lg shadow-2xl',
         className

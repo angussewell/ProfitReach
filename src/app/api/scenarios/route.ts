@@ -94,115 +94,98 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user?.organizationId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const data = await req.json();
-    
-    // Validate required fields
-    if (!data.name || !data.touchpointType) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      );
+    const { name, touchpointType, isFollowUp, testMode, testEmail, customizationPrompt, emailExamplesPrompt, subjectLine, filters } = data;
+
+    // Get organization ID from session
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.organizationId) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    // Create scenario
     const scenario = await prisma.scenario.create({
       data: {
-        name: data.name,
-        description: data.description,
-        touchpointType: data.touchpointType,
-        customizationPrompt: data.customizationPrompt,
-        emailExamplesPrompt: data.emailExamplesPrompt,
-        subjectLine: data.subjectLine,
-        isFollowUp: data.isFollowUp || false,
-        snippetId: data.snippetId,
-        attachmentId: data.attachmentId,
-        attachmentName: data.attachmentName,
-        organizationId: session.user.organizationId,
-        filters: data.filters || '[]' // Add filters with default empty array
-      },
-    });
-
-    return NextResponse.json(scenario);
-  } catch (error) {
-    console.error('Error creating scenario:', error);
-    return NextResponse.json(
-      { error: 'Failed to create scenario' },
-      { status: 500 }
-    );
-  }
-}
-
-export async function PUT(req: Request) {
-  try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user?.organizationId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const data = await req.json();
-    
-    // Validate required fields
-    if (!data.id || !data.name) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      );
-    }
-
-    // Update scenario
-    const updateData = {
-      name: data.name,
-      description: data.description,
-      customizationPrompt: data.customizationPrompt,
-      emailExamplesPrompt: data.emailExamplesPrompt,
-      subjectLine: data.subjectLine,
-      isFollowUp: data.isFollowUp === 'on' ? true : false,
-      snippet: data.snippetId ? { connect: { id: data.snippetId } } : { disconnect: true },
-      attachment: data.attachmentId ? { connect: { id: data.attachmentId } } : { disconnect: true },
-      attachmentName: data.attachmentName,
-      filters: data.filters // Don't parse again, it's already stringified
-    } as const satisfies Omit<Prisma.ScenarioUpdateInput, 'filters'> & { filters: any };
-
-    const scenario = await prisma.scenario.update({
-      where: { id: data.id },
-      data: updateData,
-      include: {
-        signature: {
-          select: {
-            id: true,
-            name: true,
-            content: true
-          }
-        },
-        snippet: {
-          select: {
-            id: true,
-            name: true,
-            content: true
-          }
-        },
-        attachment: {
-          select: {
-            id: true,
-            name: true
-          }
-        }
+        name,
+        touchpointType,
+        isFollowUp: Boolean(isFollowUp),
+        testMode: Boolean(testMode),
+        testEmail: testEmail || null,
+        customizationPrompt,
+        emailExamplesPrompt,
+        subjectLine,
+        filters,
+        organizationId: session.user.organizationId
       }
     });
 
     return NextResponse.json(scenario);
   } catch (error) {
-    console.error('Error updating scenario:', error);
-    return NextResponse.json(
-      { error: 'Failed to update scenario' },
-      { status: 500 }
-    );
+    console.error('Error creating scenario:', error);
+    return NextResponse.json({ 
+      error: 'Failed to create scenario',
+      details: error instanceof Error ? error.message : String(error)
+    }, { status: 500 });
+  }
+}
+
+export async function PUT(req: Request) {
+  try {
+    log('info', 'Updating scenario - start');
+    
+    // Get organization ID from session
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.organizationId) {
+      log('error', 'No organization ID in session', { session });
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
+    const data = await req.json();
+    log('info', 'Received update data', { data });
+    
+    const { id, name, touchpointType, isFollowUp, testMode, testEmail, customizationPrompt, emailExamplesPrompt, subjectLine, filters, snippetId, attachmentId } = data;
+
+    // First verify the scenario belongs to this organization
+    const existingScenario = await prisma.scenario.findFirst({
+      where: {
+        id,
+        organizationId: session.user.organizationId
+      }
+    });
+
+    if (!existingScenario) {
+      log('error', 'Scenario not found or unauthorized', { id, organizationId: session.user.organizationId });
+      return NextResponse.json({ error: 'Scenario not found' }, { status: 404 });
+    }
+
+    log('info', 'Updating scenario in database', { id });
+    
+    const scenario = await prisma.scenario.update({
+      where: { id },
+      data: {
+        name,
+        touchpointType,
+        isFollowUp: Boolean(isFollowUp),
+        testMode: Boolean(testMode),
+        testEmail: testEmail || null,
+        customizationPrompt,
+        emailExamplesPrompt,
+        subjectLine,
+        filters,
+        snippetId: snippetId || null,
+        attachmentId: attachmentId || null
+      }
+    });
+
+    log('info', 'Successfully updated scenario', { id });
+    return NextResponse.json(scenario);
+  } catch (error) {
+    log('error', 'Error updating scenario', { 
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined
+    });
+    return NextResponse.json({ 
+      error: 'Failed to update scenario',
+      details: error instanceof Error ? error.message : String(error)
+    }, { status: 500 });
   }
 } 

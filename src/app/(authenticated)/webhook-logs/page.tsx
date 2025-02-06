@@ -75,6 +75,7 @@ export default function WebhookLogsPage() {
     switch (status.toLowerCase()) {
       case 'success': return 'text-green-600';
       case 'blocked': return 'text-yellow-600';
+      case 'testing': return 'text-blue-600';
       default: return 'text-red-600';
     }
   };
@@ -133,6 +134,7 @@ export default function WebhookLogsPage() {
               <SelectItem value="success">Success</SelectItem>
               <SelectItem value="blocked">Blocked</SelectItem>
               <SelectItem value="error">Error</SelectItem>
+              <SelectItem value="testing">Testing</SelectItem>
             </SelectContent>
           </Select>
 

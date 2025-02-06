@@ -11,11 +11,13 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setIsLoading(true);
 
     try {
       const result = await signIn('credentials', {
@@ -25,12 +27,19 @@ export default function LoginPage() {
       });
 
       if (result?.error) {
-        setError(result.error);
+        if (result.error.includes('database')) {
+          setError('Unable to connect to the service. Please try again in a few moments.');
+        } else {
+          setError(result.error);
+        }
       } else {
         router.push('/scenarios');
       }
-    } catch (error) {
-      setError('An error occurred. Please try again.');
+    } catch (error: any) {
+      console.error('Login error:', error);
+      setError('An error occurred. Please try again in a few moments.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -48,6 +57,11 @@ export default function LoginPage() {
               unoptimized
             />
           </div>
+          {error && (
+            <div className="w-full p-3 text-sm text-red-600 bg-red-50 rounded-md">
+              {error}
+            </div>
+          )}
           <form className="w-full space-y-6" onSubmit={handleSubmit}>
             <div className="space-y-4">
               <div>
@@ -78,17 +92,12 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {error && (
-              <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm text-center">
-                {error}
-              </div>
-            )}
-
             <Button
               type="submit"
               className="w-full h-11 text-base bg-primary hover:bg-primary/90"
+              disabled={isLoading}
             >
-              Sign in
+              {isLoading ? 'Signing in...' : 'Sign in'}
             </Button>
           </form>
         </div>

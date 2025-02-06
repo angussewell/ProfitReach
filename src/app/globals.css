@@ -180,3 +180,13 @@
 .status-dot.inactive {
   @apply bg-muted-foreground/30;
 }
+
+/* Subject Line Editor */
+.subject-line-editor .monaco-editor .monaco-editor-background,
+.subject-line-editor .monaco-editor .margin {
+  background-color: transparent !important;
+}
+
+.subject-line-editor .monaco-editor .lines-content {
+  padding-left: 32px !important;
+}

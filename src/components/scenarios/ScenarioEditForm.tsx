@@ -1,9 +1,9 @@
 'use client';
 
+import * as React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { FilterSection } from '@/components/scenarios/FilterSection';
 import { Filter } from '@/types/filters';
@@ -12,6 +12,8 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { PromptInput } from '@/components/prompts/prompt-input';
+import { useRouter } from 'next/navigation';
 
 interface ScenarioEditFormProps {
   scenario: {
@@ -19,6 +21,8 @@ interface ScenarioEditFormProps {
     name: string;
     touchpointType: string;
     isFollowUp: boolean;
+    testMode: boolean;
+    testEmail: string | null;
     customizationPrompt?: string | null;
     emailExamplesPrompt?: string | null;
     subjectLine?: string | null;
@@ -32,29 +36,62 @@ interface ScenarioEditFormProps {
 }
 
 export function ScenarioEditForm({ scenario, fields, snippets, attachments }: ScenarioEditFormProps) {
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const data = Object.fromEntries(formData.entries());
+  const router = useRouter();
+  const [formData, setFormData] = React.useState({
+    id: scenario.id,
+    name: scenario.name,
+    touchpointType: scenario.touchpointType,
+    isFollowUp: scenario.isFollowUp,
+    testMode: scenario.testMode ?? false,
+    testEmail: scenario.testEmail || '',
+    customizationPrompt: scenario.customizationPrompt || '',
+    emailExamplesPrompt: scenario.emailExamplesPrompt || '',
+    subjectLine: scenario.subjectLine || '',
+    snippetId: scenario.snippet?.id || '',
+    attachmentId: scenario.attachment?.id || '',
+    filters: typeof scenario.filters === 'string' ? JSON.parse(scenario.filters) : scenario.filters
+  });
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
     try {
+      const requestData = {
+        ...formData,
+        filters: typeof formData.filters === 'string' ? formData.filters : JSON.stringify(formData.filters)
+      };
+
+      console.log('Sending PUT request to /api/scenarios with data:', requestData);
+      
       const response = await fetch('/api/scenarios', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify(requestData),
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to update scenario');
+      // Get response data first
+      const responseData = await response.json();
+      
+      // Then check status and handle accordingly
+      if (response.ok) {
+        console.log('Scenario updated successfully:', responseData);
+        toast.success('Scenario updated successfully');
+        
+        // Wait for toast to be visible before navigating
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Use Next.js router for navigation
+        router.push('/settings/scenarios');
+        router.refresh();
+      } else {
+        console.error('Error response:', responseData);
+        throw new Error(responseData.details || responseData.message || responseData.error || 'Failed to update scenario');
       }
-
-      toast.success('Scenario updated successfully');
-      window.location.href = '/settings/scenarios';
     } catch (error) {
       console.error('Error updating scenario:', error);
-      toast.error('Failed to update scenario');
+      toast.error(error instanceof Error ? error.message : 'Failed to update scenario');
     }
   };
 
@@ -109,8 +146,6 @@ export function ScenarioEditForm({ scenario, fields, snippets, attachments }: Sc
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <input type="hidden" name="id" value={scenario.id} />
-        
         {/* Basic Info Card */}
         <Card>
           <CardHeader>
@@ -121,8 +156,8 @@ export function ScenarioEditForm({ scenario, fields, snippets, attachments }: Sc
               <Label htmlFor="name">Name</Label>
               <Input
                 id="name"
-                name="name"
-                defaultValue={scenario.name}
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 required
               />
             </div>
@@ -131,23 +166,46 @@ export function ScenarioEditForm({ scenario, fields, snippets, attachments }: Sc
               <Label htmlFor="touchpointType">Type</Label>
               <Input
                 id="touchpointType"
-                name="touchpointType"
-                defaultValue={scenario.touchpointType}
+                value={formData.touchpointType}
                 disabled
                 className="bg-gray-50"
               />
             </div>
 
-            {scenario.touchpointType === 'email' && (
+            {formData.touchpointType === 'email' && (
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="isFollowUp"
-                  name="isFollowUp"
-                  defaultChecked={scenario.isFollowUp}
+                  checked={formData.isFollowUp}
+                  onCheckedChange={(checked) => setFormData({ ...formData, isFollowUp: checked as boolean })}
                 />
                 <Label htmlFor="isFollowUp">Follow up on previous thread</Label>
               </div>
             )}
+
+            <div className="space-y-4 pt-4 border-t">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="testMode"
+                  checked={formData.testMode}
+                  onCheckedChange={(checked) => setFormData({ ...formData, testMode: checked ? true : false })}
+                />
+                <Label htmlFor="testMode">Enable Test Mode</Label>
+              </div>
+
+              <div>
+                <Label htmlFor="testEmail">Test Email Address</Label>
+                <Input
+                  id="testEmail"
+                  type="email"
+                  value={formData.testEmail}
+                  onChange={(e) => setFormData({ ...formData, testEmail: e.target.value })}
+                  placeholder="Enter test email address"
+                  className={formData.testMode ? '' : 'opacity-50'}
+                  disabled={!formData.testMode}
+                />
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -157,15 +215,10 @@ export function ScenarioEditForm({ scenario, fields, snippets, attachments }: Sc
             <CardTitle>Webhook Filters</CardTitle>
           </CardHeader>
           <CardContent>
-            <input 
-              type="hidden" 
-              name="filters" 
-              id="filters-json"
-              value={JSON.stringify(scenario.filters)} 
-            />
             <FilterSection
-              initialFilters={scenario.filters}
+              initialFilters={formData.filters}
               fields={fields}
+              onChange={(filters) => setFormData({ ...formData, filters })}
             />
           </CardContent>
         </Card>
@@ -178,69 +231,55 @@ export function ScenarioEditForm({ scenario, fields, snippets, attachments }: Sc
           <CardContent className="space-y-4">
             <div>
               <Label htmlFor="subjectLine">Subject Line</Label>
-              <Input
-                type="text"
-                id="subjectLine"
-                name="subjectLine"
-                defaultValue={scenario.subjectLine ?? ''}
+              <PromptInput
+                value={formData.subjectLine}
+                onChange={(value) => setFormData({ ...formData, subjectLine: value })}
+                placeholder="Enter subject line"
+                className="mt-1"
+                rows={1}
+                isSubjectLine={true}
               />
             </div>
 
             <div>
               <Label htmlFor="customizationPrompt">Customization Prompt</Label>
-              <Textarea
-                id="customizationPrompt"
-                name="customizationPrompt"
-                defaultValue={scenario.customizationPrompt || ''}
+              <PromptInput
+                value={formData.customizationPrompt}
+                onChange={(value) => setFormData({ ...formData, customizationPrompt: value })}
+                placeholder="Enter customization prompt"
+                className="mt-1"
                 rows={4}
               />
             </div>
 
             <div>
               <Label htmlFor="emailExamplesPrompt">Email Examples Prompt</Label>
-              <Textarea
-                id="emailExamplesPrompt"
-                name="emailExamplesPrompt"
-                defaultValue={scenario.emailExamplesPrompt || ''}
+              <PromptInput
+                value={formData.emailExamplesPrompt}
+                onChange={(value) => setFormData({ ...formData, emailExamplesPrompt: value })}
+                placeholder="Enter email examples"
+                className="mt-1"
                 rows={4}
               />
             </div>
 
             <div>
               <Label htmlFor="snippetId">Snippet</Label>
-              <input 
-                type="hidden" 
-                name="snippetId" 
-                id="snippet-id-input"
-                value={scenario.snippet?.id || ''} 
-              />
               <SearchableSelect
                 options={snippets.map(s => ({ value: s.id, label: s.name }))}
-                value={scenario.snippet?.id}
-                onChange={(value) => {
-                  const input = document.getElementById('snippet-id-input') as HTMLInputElement;
-                  if (input) input.value = value;
-                }}
+                value={formData.snippetId}
+                onChange={(value) => setFormData({ ...formData, snippetId: value })}
                 placeholder="Select a snippet (optional)"
               />
             </div>
 
-            {(scenario.touchpointType === 'email' || scenario.touchpointType === 'googleDrive') && (
+            {(formData.touchpointType === 'email' || formData.touchpointType === 'googleDrive') && (
               <div>
                 <Label htmlFor="attachmentId">Attachment</Label>
-                <input 
-                  type="hidden" 
-                  name="attachmentId" 
-                  id="attachment-id-input"
-                  value={scenario.attachment?.id || ''} 
-                />
                 <SearchableSelect
                   options={attachments.map(a => ({ value: a.id, label: a.name }))}
-                  value={scenario.attachment?.id}
-                  onChange={(value) => {
-                    const input = document.getElementById('attachment-id-input') as HTMLInputElement;
-                    if (input) input.value = value;
-                  }}
+                  value={formData.attachmentId}
+                  onChange={(value) => setFormData({ ...formData, attachmentId: value })}
                   placeholder="Select an attachment (optional)"
                 />
               </div>
@@ -249,7 +288,11 @@ export function ScenarioEditForm({ scenario, fields, snippets, attachments }: Sc
         </Card>
 
         <div className="flex justify-end">
-          <Button type="submit">Save Changes</Button>
+          <Button 
+            type="submit"
+          >
+            Save Changes
+          </Button>
         </div>
       </form>
     </div>
