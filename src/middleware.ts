@@ -6,10 +6,11 @@ export async function middleware(request: NextRequest) {
   const token = await getToken({ req: request });
   const { pathname } = request.nextUrl;
 
-  // Allow access to auth-related paths
+  // Allow access to auth-related paths and webhook endpoints
   if (
     pathname === '/auth/login' ||
     pathname.startsWith('/api/auth/') ||
+    pathname.startsWith('/api/webhooks/') ||
     pathname.startsWith('/_next/') ||
     pathname.includes('.')
   ) {
