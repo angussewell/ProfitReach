@@ -121,8 +121,10 @@ export async function POST(
       }
     });
 
-    // Check if webhook URL is provided
-    if (!data.customData?.webhookURL) {
+    // Use the webhook URL from customData since we're keeping it simple
+    const outboundWebhookUrl = data.customData?.webhookURL;
+    
+    if (!outboundWebhookUrl) {
       await prisma.webhookLog.update({
         where: { id: webhookLog.id },
         data: { 
@@ -136,252 +138,104 @@ export async function POST(
       });
     }
 
-    // Process webhook if URL is provided
-    if (data.customData?.webhookURL) {
-      try {
-        const scenario = await prisma.scenario.findFirst({
-          where: { 
-            name: data['Current Scenario '] || '',
-            organizationId: organization.id
-          },
-          include: {
-            signature: {
-              select: {
-                content: true
-              }
-            },
-            snippet: {
-              select: {
-                content: true
-              }
-            },
-            attachment: {
-              select: {
-                content: true,
-                name: true
-              }
-            }
-          }
-        });
-
-        if (!scenario) {
-          await prisma.webhookLog.update({
-            where: { id: webhookLog.id },
-            data: { 
-              status: 'error',
-              responseBody: { error: 'Scenario not found' } as Prisma.JsonObject
-            }
-          });
-          return NextResponse.json({ 
-            message: 'Fields registered but scenario not found',
-            fieldsRegistered: true
-          });
+    // Process webhook
+    try {
+      // Find the scenario to check test mode
+      const scenario = await prisma.scenario.findFirst({
+        where: { 
+          name: data['Current Scenario '] || '',
+          organizationId: organization.id
         }
+      });
 
-        // Validate test mode configuration
-        if (scenario.testMode && !scenario.testEmail) {
-          await prisma.webhookLog.update({
-            where: { id: webhookLog.id },
-            data: { 
-              status: 'error',
-              responseBody: { error: 'Test mode enabled but no test email configured' } as Prisma.JsonObject
-            }
-          });
-          return NextResponse.json({ 
-            message: 'Invalid test mode configuration',
-            error: 'Test mode enabled but no test email configured'
-          }, { status: 400 });
-        }
+      // Prepare outbound data - keeping it simple, just pass through the data
+      const outboundData = {
+        ...data,
+        // If test mode is enabled, override email
+        ...(scenario?.testMode && scenario?.testEmail && {
+          email: scenario.testEmail,
+          contact_id: ''
+        })
+      };
 
-        // Parse and evaluate filters
-        let parsedFilters: Filter[] = [];
-        try {
-          if (scenario.filters) {
-            const filtersData = typeof scenario.filters === 'string' 
-              ? JSON.parse(scenario.filters as string)
-              : scenario.filters;
-            
-            if (Array.isArray(filtersData)) {
-              parsedFilters = filtersData;
-            }
-          }
-        } catch (e) {
-          log('error', 'Failed to parse filters', { error: String(e) });
-          await prisma.webhookLog.update({
-            where: { id: webhookLog.id },
-            data: { 
-              status: 'error',
-              responseBody: { error: 'Failed to parse filters' } as Prisma.JsonObject
-            }
-          });
-          return NextResponse.json({ error: 'Failed to parse filters' }, { status: 500 });
-        }
+      const outboundResponse = await fetch(outboundWebhookUrl, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'User-Agent': 'ProfitReach-API'
+        },
+        body: JSON.stringify(outboundData)
+      });
 
-        // Evaluate filters
-        const filterResult = await evaluateFilters([{ logic: 'AND', filters: parsedFilters }], data);
-        
-        // If filters didn't pass, update log and return
-        if (!filterResult.passed) {
-          await prisma.webhookLog.update({
-            where: { id: webhookLog.id },
-            data: { 
-              status: 'blocked',
-              responseBody: { 
-                reason: filterResult.reason,
-                filters: JSON.stringify(parsedFilters)
-              } as Prisma.JsonObject
-            }
-          });
-          return NextResponse.json({
-            status: 'blocked',
-            reason: filterResult.reason,
-            filters: parsedFilters
-          });
-        }
+      // Get response text first for better error logging
+      const responseText = await outboundResponse.text();
+      log('info', 'Outbound webhook response', { 
+        status: outboundResponse.status,
+        response: responseText,
+        url: outboundWebhookUrl
+      });
 
-        // Update webhook log status based on test mode
-        await prisma.webhookLog.update({
-          where: { id: webhookLog.id },
-          data: { 
-            status: scenario.testMode ? 'testing' : 'success'
-          }
-        });
-
-        // Send outbound webhook
-        const outboundData: OutboundData = {
-          contactData: {
-            ...data,
-            // If test mode is enabled, override email and contact_id
-            ...(scenario?.testMode && {
-              email: scenario.testEmail || data.email,
-              contact_id: ''
-            })
-          },
-          scenarioData: {
-            id: scenario?.id || '',
-            name: scenario?.name || '',
-            touchpointType: scenario?.touchpointType || 'email',
-            customizationPrompt: scenario?.customizationPrompt ? processWebhookVariables(scenario.customizationPrompt, data) : null,
-            emailExamplesPrompt: scenario?.emailExamplesPrompt ? processWebhookVariables(scenario.emailExamplesPrompt, data) : null,
-            subjectLine: scenario?.subjectLine ? processWebhookVariables(scenario.subjectLine, data) : null,
-            followUp: scenario?.isFollowUp || false,
-            attachment: scenario?.attachment?.content ? processWebhookVariables(scenario.attachment.content, data) : null,
-            attachmentName: scenario?.attachment?.name || null,
-            snippet: scenario?.snippet?.content ? processWebhookVariables(scenario.snippet.content, data) : null
-          },
-          prompts: {}
-        };
-
-        // Fetch all prompts
-        const allPrompts = await prisma.prompt.findMany();
-        outboundData.prompts = allPrompts.reduce((acc: Record<string, string>, prompt) => {
-          acc[prompt.name] = processWebhookVariables(prompt.content, data);
-          return acc;
-        }, {});
-
-        // Find email account if specified
-        if (data['Email Sender']) {
-          const emailAccount = await prisma.emailAccount.findFirst({
-            where: {
-              email: data['Email Sender'],
-              organizationId: organization.id
-            },
-            select: {
-              email: true,
-              name: true,
-              password: true,
-              host: true,
-              port: true
-            }
-          });
-
-          if (emailAccount) {
-            outboundData.emailData = emailAccount;
-          }
-        }
-
-        const outboundResponse = await fetch(data.customData.webhookURL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(outboundData)
-        });
-
-        // Get response text first for better error logging
-        const responseText = await outboundResponse.text();
-        log('info', 'Outbound webhook response', { 
-          status: outboundResponse.status,
-          response: responseText,
-          url: data.customData.webhookURL
-        });
-
-        if (!outboundResponse.ok) {
-          await prisma.webhookLog.update({
-            where: { id: webhookLog.id },
-            data: { 
-              status: 'error',
-              responseBody: { 
-                error: `Outbound webhook failed with status ${outboundResponse.status}`,
-                response: responseText,
-                url: data.customData.webhookURL
-              } as Prisma.JsonObject
-            }
-          });
-          return NextResponse.json({ 
-            message: 'Fields registered but outbound webhook failed',
-            fieldsRegistered: true,
-            error: responseText
-          });
-        }
-        
-        // Try to parse as JSON only if it looks like JSON
-        let responseData: any = responseText;
-        if (responseText.trim().startsWith('{') || responseText.trim().startsWith('[')) {
-          try {
-            responseData = JSON.parse(responseText);
-          } catch (e) {
-            log('warn', 'Failed to parse response as JSON, using raw text', { error: String(e) });
-          }
-        }
-
-        // Update to success status
-        await prisma.webhookLog.update({
-          where: { id: webhookLog.id },
-          data: { 
-            status: scenario?.testMode ? 'testing' : 'success',
-            responseBody: typeof responseData === 'string' 
-              ? { response: responseData } 
-              : responseData as Prisma.JsonObject
-          }
-        });
-
-        return NextResponse.json({ 
-          message: 'Webhook processed successfully',
-          fieldsRegistered: true
-        });
-      } catch (error) {
+      if (!outboundResponse.ok) {
         await prisma.webhookLog.update({
           where: { id: webhookLog.id },
           data: { 
             status: 'error',
             responseBody: { 
-              error: error instanceof Error ? error.message : 'Unknown error' 
+              error: `Outbound webhook failed with status ${outboundResponse.status}`,
+              response: responseText,
+              url: outboundWebhookUrl
             } as Prisma.JsonObject
           }
         });
         return NextResponse.json({ 
-          message: 'Fields registered but webhook processing failed',
+          message: 'Fields registered but outbound webhook failed',
           fieldsRegistered: true,
-          error: error instanceof Error ? error.message : 'Unknown error'
+          error: responseText
         });
       }
+      
+      // Try to parse as JSON only if it looks like JSON
+      let responseData: any = responseText;
+      if (responseText.trim().startsWith('{') || responseText.trim().startsWith('[')) {
+        try {
+          responseData = JSON.parse(responseText);
+        } catch (e) {
+          log('warn', 'Failed to parse response as JSON, using raw text', { error: String(e) });
+        }
+      }
+
+      // Update to success status
+      await prisma.webhookLog.update({
+        where: { id: webhookLog.id },
+        data: { 
+          status: scenario?.testMode ? 'testing' : 'success',
+          responseBody: typeof responseData === 'string' 
+            ? { response: responseData } 
+            : responseData as Prisma.JsonObject
+        }
+      });
+
+      return NextResponse.json({ 
+        message: 'Webhook processed successfully',
+        fieldsRegistered: true
+      });
+    } catch (error) {
+      await prisma.webhookLog.update({
+        where: { id: webhookLog.id },
+        data: { 
+          status: 'error',
+          responseBody: { 
+            error: error instanceof Error ? error.message : 'Unknown error' 
+          } as Prisma.JsonObject
+        }
+      });
+      return NextResponse.json({ 
+        message: 'Fields registered but webhook processing failed',
+        fieldsRegistered: true,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
-
-    // Return success response
-    return NextResponse.json({ 
-      message: 'Webhook processed successfully',
-      fieldsRegistered: true
-    });
-
   } catch (error) {
     log('error', 'Error processing webhook', { error: String(error) });
     return NextResponse.json(
