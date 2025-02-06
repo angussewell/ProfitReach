@@ -121,6 +121,21 @@ export async function POST(
       }
     });
 
+    // Check if webhook URL is provided
+    if (!data.customData?.webhookURL) {
+      await prisma.webhookLog.update({
+        where: { id: webhookLog.id },
+        data: { 
+          status: 'error',
+          responseBody: { error: 'No webhook URL provided in customData' } as Prisma.JsonObject
+        }
+      });
+      return NextResponse.json({ 
+        message: 'Fields registered but no webhook URL provided',
+        fieldsRegistered: true
+      });
+    }
+
     // Process webhook if URL is provided
     if (data.customData?.webhookURL) {
       try {
@@ -291,6 +306,14 @@ export async function POST(
           body: JSON.stringify(outboundData)
         });
 
+        // Get response text first for better error logging
+        const responseText = await outboundResponse.text();
+        log('info', 'Outbound webhook response', { 
+          status: outboundResponse.status,
+          response: responseText,
+          url: data.customData.webhookURL
+        });
+
         if (!outboundResponse.ok) {
           await prisma.webhookLog.update({
             where: { id: webhookLog.id },
@@ -298,18 +321,17 @@ export async function POST(
               status: 'error',
               responseBody: { 
                 error: `Outbound webhook failed with status ${outboundResponse.status}`,
-                response: await outboundResponse.text()
+                response: responseText,
+                url: data.customData.webhookURL
               } as Prisma.JsonObject
             }
           });
           return NextResponse.json({ 
             message: 'Fields registered but outbound webhook failed',
-            fieldsRegistered: true
+            fieldsRegistered: true,
+            error: responseText
           });
         }
-
-        // Get response text first
-        const responseText = await outboundResponse.text();
         
         // Try to parse as JSON only if it looks like JSON
         let responseData: any = responseText;
