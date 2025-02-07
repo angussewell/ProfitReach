@@ -6,7 +6,7 @@
     "seed": "ts-node prisma/seed.ts"
   },
   "scripts": {
-    "dev": "next dev --port 3000",
+    "dev": "next dev --port ${PORT:-3000}",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

@@ -3,8 +3,9 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import type { EmailAccount } from '@prisma/client';
 
-// Schema for email account validation
+// Schema for full email account updates
 const emailAccountSchema = z.object({
   email: z.string().email(),
   name: z.string().min(1),
@@ -13,6 +14,14 @@ const emailAccountSchema = z.object({
   port: z.number().int().min(1).max(65535),
   isActive: z.boolean().optional(),
 });
+
+// Schema for status-only updates
+const statusUpdateSchema = z.object({
+  isActive: z.boolean()
+});
+
+type EmailAccountUpdate = z.infer<typeof emailAccountSchema>;
+type StatusUpdate = z.infer<typeof statusUpdateSchema>;
 
 export async function PUT(
   request: Request,
@@ -25,8 +34,47 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const validationResult = emailAccountSchema.safeParse(body);
+    
+    // Check if this is a status-only update
+    const isStatusUpdate = Object.keys(body).length === 1 && 'isActive' in body;
+    
+    if (isStatusUpdate) {
+      const validationResult = statusUpdateSchema.safeParse(body);
+      if (!validationResult.success) {
+        return NextResponse.json(
+          { error: 'Invalid data', details: validationResult.error.errors },
+          { status: 400 }
+        );
+      }
+      
+      // Check if email account exists and belongs to the organization
+      const existingAccount = await prisma.emailAccount.findFirst({
+        where: {
+          id: params.id,
+          organizationId: session.user.organizationId,
+        },
+      });
 
+      if (!existingAccount) {
+        return NextResponse.json(
+          { error: 'Email account not found' },
+          { status: 404 }
+        );
+      }
+
+      const emailAccount = await prisma.emailAccount.update({
+        where: { id: params.id },
+        data: {
+          isActive: validationResult.data.isActive
+        } as Partial<EmailAccount>
+      });
+
+      const { password, ...sanitizedAccount } = emailAccount;
+      return NextResponse.json(sanitizedAccount);
+    }
+
+    // Handle full updates
+    const validationResult = emailAccountSchema.safeParse(body);
     if (!validationResult.success) {
       return NextResponse.json(
         { error: 'Invalid data', details: validationResult.error.errors },
@@ -70,22 +118,14 @@ export async function PUT(
     }
 
     // Prepare update data
-    const updateData: any = {
+    const updateData = {
       email: data.email,
       name: data.name,
       host: data.host,
       port: data.port,
-    };
-
-    // Only update password if provided
-    if (data.password) {
-      updateData.password = data.password;
-    }
-
-    // Update isActive if provided
-    if (typeof data.isActive === 'boolean') {
-      updateData.isActive = data.isActive;
-    }
+      ...(data.password && { password: data.password }),
+      ...(typeof data.isActive === 'boolean' && { isActive: data.isActive })
+    } as Partial<EmailAccount>;
 
     const emailAccount = await prisma.emailAccount.update({
       where: { id: params.id },

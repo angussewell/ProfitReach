@@ -8,10 +8,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
+import { Switch } from '@/components/ui/switch';
 import type { ButtonProps } from '@/components/ui/button';
 import type { InputProps } from '@/components/ui/input';
 import type { HTMLAttributes } from 'react';
-import { Switch } from '@/components/ui/switch';
+import * as React from 'react';
 
 interface EmailAccount {
   id: string;
@@ -35,6 +36,11 @@ const ClientPlus = Plus as unknown as React.ComponentType<React.SVGProps<SVGSVGE
 const ClientSearch = Search as unknown as React.ComponentType<React.SVGProps<SVGSVGElement>>;
 const ClientX = X as unknown as React.ComponentType<React.SVGProps<SVGSVGElement>>;
 
+const ClientSwitch = React.forwardRef<HTMLButtonElement, React.ComponentPropsWithoutRef<typeof Switch>>((props, ref) => (
+  <Switch {...props} ref={ref} />
+));
+ClientSwitch.displayName = "ClientSwitch";
+
 export default function EmailAccountsPage() {
   const [emailAccounts, setEmailAccounts] = useState<EmailAccount[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -50,23 +56,35 @@ export default function EmailAccountsPage() {
   const fetchEmailAccounts = async () => {
     try {
       const response = await fetch('/api/email-accounts');
-      if (response.status === 401 && retryCount < 3) {
-        // If unauthorized and haven't retried too many times, wait and retry
-        await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Handle unauthorized case
+      if (response.status === 401) {
+        if (retryCount >= 3) {
+          toast.error('Session expired. Please log in again.');
+          // Redirect to login
+          window.location.href = '/auth/login';
+          return;
+        }
+        // Wait longer between each retry
+        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
         setRetryCount(prev => prev + 1);
         fetchEmailAccounts();
         return;
       }
       
+      // Reset retry count for other status codes
+      setRetryCount(0);
+      
       if (!response.ok) {
-        throw new Error('Failed to fetch email accounts');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to fetch email accounts');
       }
       
       const data = await response.json();
       setEmailAccounts(data);
-      setRetryCount(0); // Reset retry count on success
     } catch (error) {
-      toast.error('Failed to load email accounts');
+      const message = error instanceof Error ? error.message : 'Failed to load email accounts';
+      toast.error(message);
       console.error('Error fetching email accounts:', error);
     } finally {
       setLoading(false);
@@ -270,17 +288,20 @@ export default function EmailAccountsPage() {
                   <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2">
                       <label className="text-sm text-muted-foreground">Active</label>
-                      <Switch
+                      <ClientSwitch
                         checked={account.isActive}
                         onCheckedChange={async (checked) => {
                           try {
                             const response = await fetch(`/api/email-accounts/${account.id}`, {
                               method: 'PUT',
                               headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ ...account, isActive: checked }),
+                              body: JSON.stringify({ isActive: checked }),
                             });
 
-                            if (!response.ok) throw new Error('Failed to update account');
+                            if (!response.ok) {
+                              const errorData = await response.json();
+                              throw new Error(errorData.error || 'Failed to update account');
+                            }
                             
                             toast.success('Email account updated successfully');
                             fetchEmailAccounts();
@@ -291,23 +312,14 @@ export default function EmailAccountsPage() {
                         }}
                       />
                     </div>
-                    <div className="flex gap-2">
-                      <ClientButton
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setEditingAccount(account)}
-                      >
-                        Edit
-                      </ClientButton>
-                      <ClientButton
-                        variant="ghost"
-                        size="sm"
-                        className="text-destructive hover:text-destructive"
-                        onClick={() => handleDelete(account.id)}
-                      >
-                        Delete
-                      </ClientButton>
-                    </div>
+                    <ClientButton
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDelete(account.id)}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      Delete
+                    </ClientButton>
                   </div>
                 </div>
               </ClientCard>
@@ -317,4 +329,4 @@ export default function EmailAccountsPage() {
       </div>
     </PageContainer>
   );
-} 
+}

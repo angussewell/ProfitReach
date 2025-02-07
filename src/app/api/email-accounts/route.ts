@@ -18,6 +18,7 @@ export async function GET() {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.organizationId) {
+      console.error('Unauthorized: No valid session or organization ID');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -34,7 +35,28 @@ export async function GET() {
 
     return NextResponse.json(sanitizedAccounts);
   } catch (error) {
-    console.error('Error fetching email accounts:', error);
+    console.error('Error fetching email accounts:', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      type: error instanceof Error ? error.constructor.name : typeof error
+    });
+
+    // Check for specific error types
+    if (error instanceof Error) {
+      if (error.message.includes('database') || error.message.includes('connection')) {
+        return NextResponse.json(
+          { error: 'Database connection error. Please try again.' },
+          { status: 503 }
+        );
+      }
+      if (error.message.includes('auth') || error.message.includes('unauthorized')) {
+        return NextResponse.json(
+          { error: 'Authentication error. Please log in again.' },
+          { status: 401 }
+        );
+      }
+    }
+
     return NextResponse.json(
       { error: 'Failed to fetch email accounts' },
       { status: 500 }

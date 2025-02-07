@@ -9,7 +9,9 @@ const nextConfig = {
   experimental: {
     serverActions: {
       bodySizeLimit: '2mb'
-    }
+    },
+    esmExternals: true,
+    serverComponentsExternalPackages: []
   },
   reactStrictMode: true,
   logging: {

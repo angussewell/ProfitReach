@@ -34,20 +34,20 @@ model Session {
 }
 
 model Organization {
-  id              String           @id @default(cuid())
-  name            String           @unique
-  webhookUrl      String           @unique @default(uuid())
+  id                 String           @id @default(cuid())
+  name               String           @unique
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  webhookUrl         String           @unique @default(uuid())
   outboundWebhookUrl String?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  ghlIntegrations GHLIntegration[]
-  metrics         Metric[]
-  scenarios       Scenario[]
-  users           User[]
-  webhookLogs     WebhookLog[]
-  researchResults ResearchResult[]
-  attachments     Attachment[]
-  emailAccounts   EmailAccount[]
+  attachments        Attachment[]
+  emailAccounts      EmailAccount[]
+  ghlIntegrations    GHLIntegration[]
+  metrics            Metric[]
+  researchResults    ResearchResult[]
+  scenarios          Scenario[]
+  users              User[]
+  webhookLogs        WebhookLog[]
 }
 
 model User {
@@ -99,28 +99,28 @@ model Signature {
 }
 
 model Scenario {
-  id                  String     @id @default(cuid())
-  name                String     @unique
-  organizationId      String
+  id                  String       @id @default(cuid())
+  name                String       @unique
   description         String?
-  touchpointType      String     @default("email")
-  status             String     @default("active")
-  isFollowUp         Boolean    @default(false)
-  testMode           Boolean    @default(false)
-  testEmail          String?
+  status              String       @default("active")
+  signatureId         String?
   customizationPrompt String?
   emailExamplesPrompt String?
-  subjectLine        String?
-  signatureId        String?
-  snippetId          String?
-  attachmentId       String?
-  filters            Json?      @default("[]")
-  createdAt          DateTime   @default(now())
-  updatedAt          DateTime   @updatedAt
-  organization       Organization @relation(fields: [organizationId], references: [id])
-  signature          Signature?   @relation(fields: [signatureId], references: [id])
-  snippet            Snippet?     @relation(fields: [snippetId], references: [id])
-  attachment         Attachment?  @relation(fields: [attachmentId], references: [id])
+  organizationId      String
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+  attachmentId        String?
+  isFollowUp          Boolean      @default(false)
+  snippetId           String?
+  subjectLine         String?
+  touchpointType      String       @default("email")
+  filters             Json?        @default("[]")
+  testEmail           String?
+  testMode            Boolean      @default(false)
+  attachment          Attachment?  @relation(fields: [attachmentId], references: [id])
+  organization        Organization @relation(fields: [organizationId], references: [id])
+  signature           Signature?   @relation(fields: [signatureId], references: [id])
+  snippet             Snippet?     @relation(fields: [snippetId], references: [id])
 
   @@index([organizationId])
 }
@@ -145,42 +145,42 @@ model FieldMapping {
 model Attachment {
   id             String       @id @default(cuid())
   name           String       @unique
-  content        String
-  organizationId String
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
-  scenarios      Scenario[]
+  content        String
+  organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
+  scenarios      Scenario[]
 
   @@index([organizationId])
 }
 
 model WebhookField {
-  id          String   @id @default(cuid())
-  name        String   @unique
+  id           String   @id @default(cuid())
+  name         String   @unique
+  description  String?
+  required     Boolean  @default(false)
+  type         String   @default("string")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
   originalName String
-  description String?
-  required    Boolean  @default(false)
-  type        String   @default("string")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
 }
 
 model WebhookLog {
-  id               String         @id @default(cuid())
+  id               String          @id @default(cuid())
   accountId        String
   organizationId   String
-  createdAt        DateTime       @default(now())
-  status           String         @default("error")
-  scenarioName     String         @default("Unknown")
-  contactEmail     String         @default("Unknown")
-  contactName      String         @default("Unknown")
-  company          String         @default("Unknown")
+  createdAt        DateTime        @default(now())
+  status           String          @default("error")
+  scenarioName     String          @default("Unknown")
+  contactEmail     String          @default("Unknown")
+  contactName      String          @default("Unknown")
+  company          String          @default("Unknown")
   requestBody      Json
-  responseBody     Json           @default("{}")
+  responseBody     Json            @default("{}")
   ghlIntegrationId String?
   GHLIntegration   GHLIntegration? @relation(fields: [ghlIntegrationId], references: [id])
-  organization     Organization   @relation(fields: [organizationId], references: [id])
+  organization     Organization    @relation(fields: [organizationId], references: [id])
 
   @@index([accountId])
   @@index([createdAt])
@@ -212,13 +212,13 @@ model GHLIntegration {
 }
 
 model ResearchResult {
-  id            String      @id
-  query         String
-  result        String      @db.Text
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  organization  Organization @relation(fields: [organizationId], references: [id])
+  id             String       @id
+  query          String
+  result         String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
   organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
 
   @@index([organizationId])
 }
@@ -239,10 +239,10 @@ model EmailAccount {
   password       String
   host           String
   port           Int
-  isActive       Boolean      @default(true)
   organizationId String
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+  isActive       Boolean      @default(true)
   organization   Organization @relation(fields: [organizationId], references: [id])
 
   @@index([organizationId])
