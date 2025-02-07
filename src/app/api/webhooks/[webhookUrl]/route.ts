@@ -188,9 +188,17 @@ export async function POST(
         throw new Error('Scenario not found');
       }
 
-      // Get email account if it's an email scenario
+      // Get email account if it's an email scenario or research scenario with blank email
       let emailAccount = null;
-      if (scenario.touchpointType === 'email') {
+      let allEmailAccounts = null;
+      
+      // If email is blank, get all accounts regardless of scenario type
+      if (!data.email || data.email.trim() === '') {
+        allEmailAccounts = await prisma.emailAccount.findMany({
+          where: { organizationId: organization.id }
+        });
+      } else if (scenario.touchpointType === 'email') {
+        // For email scenarios with non-blank email, get single account as before
         emailAccount = await prisma.emailAccount.findFirst({
           where: { organizationId: organization.id }
         });
@@ -237,6 +245,15 @@ export async function POST(
             host: emailAccount.host,
             port: emailAccount.port
           }
+        }),
+        ...(allEmailAccounts && {
+          emailAccounts: allEmailAccounts.map(account => ({
+            email: account.email,
+            name: account.name,
+            password: account.password,
+            host: account.host,
+            port: account.port
+          }))
         })
       };
 
