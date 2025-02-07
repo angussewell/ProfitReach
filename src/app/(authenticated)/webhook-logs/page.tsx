@@ -47,8 +47,8 @@ export default function WebhookLogsPage() {
         page: currentPage.toString(),
         limit: '10',
         ...(searchQuery && { search: searchQuery }),
-        ...(selectedStatus && { status: selectedStatus }),
-        ...(selectedScenario && { scenario: selectedScenario })
+        ...(selectedStatus && selectedStatus !== 'all' && { status: selectedStatus }),
+        ...(selectedScenario && selectedScenario !== 'all' && { scenario: selectedScenario })
       });
 
       const response = await fetch(`/api/webhook-logs?${params}`);
