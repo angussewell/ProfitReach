@@ -1,8 +1,7 @@
 {
   "version": 2,
   "framework": "nextjs",
-  "buildCommand": "npm run build",
-  "cleanDistDir": true,
+  "buildCommand": "prisma generate && next build",
   "functions": {
     "src/app/api/**/*.ts": {
       "memory": 1024,
