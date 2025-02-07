@@ -127,7 +127,7 @@ export function ScenariosPage() {
           <div className="relative flex items-center justify-between">
             <div className="space-y-1">
               <h1 className="text-3xl font-bold text-white [text-shadow:_0_1px_2px_rgb(0_0_0_/_10%)]">
-                Scenarios Dashboard v2
+                Scenarios Dashboard
               </h1>
               <p className="text-white/90">Track your automation performance</p>
             </div>
