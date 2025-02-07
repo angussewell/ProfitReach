@@ -3,7 +3,6 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
-import { parse } from 'csv-parse';
 
 // Schema for email account validation (same as single account)
 const emailAccountSchema = z.object({
@@ -15,18 +14,26 @@ const emailAccountSchema = z.object({
   isActive: z.boolean().optional().default(true),
 });
 
-// Synchronous CSV parsing helper
-function parseCSV(csvText: string): Promise<any[]> {
-  return new Promise((resolve, reject) => {
-    const records: any[] = [];
-    parse(csvText, {
-      columns: true,
-      skip_empty_lines: true,
-    })
-      .on('data', (record) => records.push(record))
-      .on('error', reject)
-      .on('end', () => resolve(records));
-  });
+// Simple CSV parser that handles headers and basic CSV format
+function parseCSV(csvText: string): Record<string, string>[] {
+  const lines = csvText.split('\n').map(line => line.trim()).filter(Boolean);
+  if (lines.length < 2) return []; // Need at least headers and one data row
+
+  const headers = lines[0].split(',').map(header => header.trim());
+  const records: Record<string, string>[] = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const values = lines[i].split(',').map(value => value.trim());
+    if (values.length !== headers.length) continue; // Skip malformed lines
+
+    const record: Record<string, string> = {};
+    headers.forEach((header, index) => {
+      record[header] = values[index];
+    });
+    records.push(record);
+  }
+
+  return records;
 }
 
 export async function POST(request: Request) {
@@ -46,7 +53,7 @@ export async function POST(request: Request) {
 
     // Read and parse CSV
     const csvText = await file.text();
-    const records = await parseCSV(csvText);
+    const records = parseCSV(csvText);
 
     const results = {
       success: 0,
