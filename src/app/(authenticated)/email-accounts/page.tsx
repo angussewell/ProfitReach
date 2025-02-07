@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import type { ButtonProps } from '@/components/ui/button';
 import type { InputProps } from '@/components/ui/input';
 import type { HTMLAttributes } from 'react';
+import { Switch } from '@/components/ui/switch';
 
 interface EmailAccount {
   id: string;
@@ -19,6 +20,7 @@ interface EmailAccount {
   password: string;
   host: string;
   port: number;
+  isActive: boolean;
 }
 
 // Create client-side components
@@ -158,7 +160,7 @@ export default function EmailAccountsPage() {
           title="Email Accounts"
           description="Manage your email sender accounts">
           <ClientButton 
-            onClick={() => setEditingAccount({ id: '', email: '', name: '', password: '', host: '', port: 587 })}
+            onClick={() => setEditingAccount({ id: '', email: '', name: '', password: '', host: '', port: 587, isActive: true })}
             className="technical-button"
           >
             <ClientPlus className="w-4 h-4 mr-2" />
@@ -265,22 +267,47 @@ export default function EmailAccountsPage() {
                       SMTP: {account.host}:{account.port}
                     </p>
                   </div>
-                  <div className="flex gap-2">
-                    <ClientButton
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setEditingAccount(account)}
-                    >
-                      Edit
-                    </ClientButton>
-                    <ClientButton
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive hover:text-destructive"
-                      onClick={() => handleDelete(account.id)}
-                    >
-                      Delete
-                    </ClientButton>
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <label className="text-sm text-muted-foreground">Active</label>
+                      <Switch
+                        checked={account.isActive}
+                        onCheckedChange={async (checked) => {
+                          try {
+                            const response = await fetch(`/api/email-accounts/${account.id}`, {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ ...account, isActive: checked }),
+                            });
+
+                            if (!response.ok) throw new Error('Failed to update account');
+                            
+                            toast.success('Email account updated successfully');
+                            fetchEmailAccounts();
+                          } catch (error) {
+                            toast.error('Failed to update email account');
+                            console.error('Error updating email account:', error);
+                          }
+                        }}
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <ClientButton
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setEditingAccount(account)}
+                      >
+                        Edit
+                      </ClientButton>
+                      <ClientButton
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => handleDelete(account.id)}
+                      >
+                        Delete
+                      </ClientButton>
+                    </div>
                   </div>
                 </div>
               </ClientCard>

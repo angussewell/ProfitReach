@@ -194,25 +194,29 @@ export async function POST(
       const emailSender = data['Email Sender'];
       
       if (!emailSender || emailSender.trim() === '') {
-        // Case 1: No email sender - get all accounts
+        // Case 1: No email sender - get all active accounts
         emailAccounts = await prisma.emailAccount.findMany({
-          where: { organizationId: organization.id }
+          where: { 
+            organizationId: organization.id,
+            isActive: true
+          }
         });
         
         if (emailAccounts.length === 0) {
-          throw new Error('No email accounts configured for this organization');
+          throw new Error('No active email accounts configured for this organization');
         }
       } else {
-        // Case 2 & 3: Email sender exists - try to find matching account
+        // Case 2 & 3: Email sender exists - try to find matching active account
         const matchingAccount = await prisma.emailAccount.findFirst({
           where: { 
             organizationId: organization.id,
-            email: emailSender.trim()
+            email: emailSender.trim(),
+            isActive: true
           }
         });
 
         if (!matchingAccount) {
-          throw new Error(`No matching email account found for sender: ${emailSender}`);
+          throw new Error(`No matching active email account found for sender: ${emailSender}`);
         }
 
         emailAccounts = [matchingAccount];

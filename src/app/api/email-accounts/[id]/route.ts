@@ -11,6 +11,7 @@ const emailAccountSchema = z.object({
   password: z.string().min(1).optional(), // Password is optional for updates
   host: z.string().min(1),
   port: z.number().int().min(1).max(65535),
+  isActive: z.boolean().optional(),
 });
 
 export async function PUT(
@@ -79,6 +80,11 @@ export async function PUT(
     // Only update password if provided
     if (data.password) {
       updateData.password = data.password;
+    }
+
+    // Update isActive if provided
+    if (typeof data.isActive === 'boolean') {
+      updateData.isActive = data.isActive;
     }
 
     const emailAccount = await prisma.emailAccount.update({
