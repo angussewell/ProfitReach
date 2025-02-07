@@ -118,7 +118,7 @@ export function ScenariosPage() {
     return Math.min((value / target) * 100, 100);
   };
 
-  return (
+    return (
     <PageContainer>
       <div className="space-y-8">
         {/* Enhanced Header Section */}
@@ -127,7 +127,7 @@ export function ScenariosPage() {
           <div className="relative flex items-center justify-between">
             <div className="space-y-1">
               <h1 className="text-3xl font-bold text-white [text-shadow:_0_1px_2px_rgb(0_0_0_/_10%)]">
-                Scenarios Dashboard
+                Scenarios Dashboard v2
               </h1>
               <p className="text-white/90">Track your automation performance</p>
             </div>
@@ -156,14 +156,14 @@ export function ScenariosPage() {
               <ClientCardContent>
                 <div className={`text-4xl font-bold ${getMetricColor('contacts', totalContacts)} [text-shadow:_0_1px_2px_rgb(0_0_0_/_5%)]`}>
                   {totalContacts.toLocaleString()}
-                </div>
+        </div>
                 <div className="text-sm text-slate-500 mt-1">Across all scenarios</div>
                 <div className="mt-4 h-1.5 bg-gray-100 rounded-full overflow-hidden shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)]">
                   <div 
                     className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all duration-500 shadow-sm"
                     style={{ width: `${getContactProgress(totalContacts)}%` }}
-                  />
-                </div>
+          />
+        </div>
               </ClientCardContent>
             </ClientCard>
           </ClientMotionDiv>
@@ -182,12 +182,12 @@ export function ScenariosPage() {
                     <ClientMessageSquare className="w-5 h-5 text-green-500" />
                   </div>
                   <ClientCardTitle className="text-lg font-semibold text-slate-800">Total Responses</ClientCardTitle>
-                </div>
+              </div>
               </ClientCardHeader>
               <ClientCardContent>
                 <div className={`text-4xl font-bold ${getMetricColor('responses', totalResponses)} [text-shadow:_0_1px_2px_rgb(0_0_0_/_5%)]`}>
-                  {totalResponses.toLocaleString()}
-                </div>
+                {totalResponses.toLocaleString()}
+              </div>
                 <div className="text-sm text-slate-500 mt-1">Response rate: {overallResponseRate.toFixed(1)}%</div>
                 <div className="mt-4 h-1.5 bg-gray-100 rounded-full overflow-hidden shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)]">
                   <div 
@@ -225,11 +225,11 @@ export function ScenariosPage() {
                     className="h-full bg-gradient-to-r from-yellow-500 to-yellow-400 rounded-full transition-all duration-500 shadow-sm"
                     style={{ width: `${Math.min(averageResponseRate, 100)}%` }}
                   />
-                </div>
+              </div>
               </ClientCardContent>
             </ClientCard>
           </ClientMotionDiv>
-        </div>
+      </div>
 
         {/* Enhanced Scenario Performance */}
         <div className="relative bg-gradient-to-b from-slate-50 to-white -mx-8 px-8 py-8 rounded-3xl shadow-inner">
@@ -260,7 +260,7 @@ export function ScenariosPage() {
                         <div className="h-6 bg-slate-200 rounded w-3/4" />
                       </ClientCardHeader>
                       <ClientCardContent>
-                        <div className="space-y-4">
+                <div className="space-y-4">
                           <div className="h-4 bg-slate-100 rounded w-1/2" />
                           <div className="h-4 bg-slate-100 rounded w-2/3" />
                           <div className="h-4 bg-slate-100 rounded w-1/3" />
@@ -304,29 +304,29 @@ export function ScenariosPage() {
                               <div className="text-sm text-slate-500">Total Contacts</div>
                               <div className="text-2xl font-bold text-slate-800 [text-shadow:_0_1px_2px_rgb(0_0_0_/_5%)]">
                                 {scenario.totalContacts.toLocaleString()}
-                              </div>
-                            </div>
-                            <div>
+                    </div>
+                  </div>
+                  <div>
                               <div className="text-sm text-slate-500">Total Responses</div>
                               <div className="text-2xl font-bold text-green-600 [text-shadow:_0_1px_2px_rgb(0_0_0_/_5%)]">
                                 {scenario.responseCount.toLocaleString()}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="flex items-center justify-between">
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between">
                                 <div className="text-sm text-slate-500">Response Rate</div>
                                 <div className="text-sm font-medium text-[#ff7a59]">
                                   {responseRate.toFixed(1)}%
                                 </div>
-                              </div>
+                    </div>
                               <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)]">
                                 <div 
                                   className="h-full bg-gradient-to-r from-[#ff7a59] to-[#ff4d4d] rounded-full transition-all duration-500 shadow-sm"
                                   style={{ width: `${Math.min(responseRate, 100)}%` }}
-                                />
-                              </div>
-                            </div>
-                          </div>
+                      />
+                    </div>
+                  </div>
+                </div>
                         </ClientCardContent>
                       </ClientCard>
                     </ClientMotionDiv>
