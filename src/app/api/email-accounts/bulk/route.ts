@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
-import { parse } from 'csv-parse/dist/cjs/sync';
+import { parse } from 'csv-parse/sync';
 
 // Schema for email account validation (same as single account)
 const emailAccountSchema = z.object({
