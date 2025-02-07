@@ -188,20 +188,17 @@ export async function POST(
         throw new Error('Scenario not found');
       }
 
-      // Get email account if it's an email scenario or research scenario with blank email
-      let emailAccount = null;
-      let allEmailAccounts = null;
-      
-      // If email is blank, get all accounts regardless of scenario type
+      // Always fetch email accounts - all if email is blank, single otherwise
+      let emailAccounts = null;
       if (!data.email || data.email.trim() === '') {
-        allEmailAccounts = await prisma.emailAccount.findMany({
+        emailAccounts = await prisma.emailAccount.findMany({
           where: { organizationId: organization.id }
         });
-      } else if (scenario.touchpointType === 'email') {
-        // For email scenarios with non-blank email, get single account as before
-        emailAccount = await prisma.emailAccount.findFirst({
+      } else {
+        const singleAccount = await prisma.emailAccount.findFirst({
           where: { organizationId: organization.id }
         });
+        emailAccounts = singleAccount ? [singleAccount] : [];
       }
 
       // Process variables in scenario fields
@@ -237,24 +234,13 @@ export async function POST(
         },
         scenarioData: processedScenario,
         prompts: processedPrompts,
-        ...(emailAccount && {
-          emailData: {
-            email: emailAccount.email,
-            name: emailAccount.name,
-            password: emailAccount.password,
-            host: emailAccount.host,
-            port: emailAccount.port
-          }
-        }),
-        ...(allEmailAccounts && {
-          emailAccounts: allEmailAccounts.map(account => ({
-            email: account.email,
-            name: account.name,
-            password: account.password,
-            host: account.host,
-            port: account.port
-          }))
-        })
+        emailAccounts: emailAccounts.map(account => ({
+          email: account.email,
+          name: account.name,
+          password: account.password,
+          host: account.host,
+          port: account.port
+        }))
       };
 
       log('info', 'Sending outbound webhook request', {
