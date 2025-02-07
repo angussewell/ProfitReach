@@ -17,11 +17,12 @@ interface Route {
   href: string;
   label: string;
   icon: React.ReactElement;
+  adminOnly?: boolean;
 }
 
 const createIcon = (Icon: LucideIcon, key: string) => 
   React.createElement(Icon, { 
-    className: "h-5 w-5 flex-shrink-0 text-muted-foreground",
+    className: "h-[22px] w-[22px] flex-shrink-0 text-slate-400 transition-all duration-200 group-hover:text-red-600 group-[.active]:text-red-600 group-hover:scale-110 group-[.active]:scale-110",
     key
   });
 
@@ -40,7 +41,7 @@ export default function Sidebar(): JSX.Element {
     { 
       href: '/settings/scenarios', 
       label: 'Manage Scenarios', 
-      icon: createIcon(Icons.Settings, 'manage-scenarios-icon')
+      icon: createIcon(Icons.LayoutList, 'manage-scenarios-icon')
     },
     { 
       href: '/snippets', 
@@ -55,7 +56,8 @@ export default function Sidebar(): JSX.Element {
     { 
       href: '/prompts', 
       label: 'Prompts', 
-      icon: createIcon(Icons.MessageSquare, 'prompts-icon')
+      icon: createIcon(Icons.MessageSquare, 'prompts-icon'),
+      adminOnly: true
     },
     { 
       href: '/webhook-logs', 
@@ -70,56 +72,62 @@ export default function Sidebar(): JSX.Element {
     { 
       href: '/settings', 
       label: 'Settings', 
-      icon: createIcon(Icons.Settings, 'settings-icon')
+      icon: createIcon(Icons.Settings, 'settings-icon'),
+      adminOnly: true
     }
   ];
 
   return (
     <SidebarContainer open={open} setOpen={setOpen}>
-      <SidebarBody className="justify-between">
+      <SidebarBody className="justify-between bg-gradient-to-b from-white to-slate-50/80">
         <div className="flex flex-col flex-1">
           {/* Logo */}
-          <div className="p-3 border-b border-border">
+          <div className={cn(
+            "border-b border-slate-200/50 transition-all duration-200 bg-white/50 backdrop-blur-sm",
+            open ? "py-2" : "p-2"
+          )}>
             <Logo />
           </div>
           
           {/* Organization Switcher */}
-          <div className="p-3 border-b border-border">
+          <div className="px-3 py-2.5 border-b border-slate-200/50 bg-white/30">
             <OrganizationSwitcher open={open} />
           </div>
 
-          <nav className="flex-1 py-2 space-y-0.5">
-            {routes.map((route) => (
-              <SidebarLink
-                key={route.href}
-                link={route}
-                className={cn(
-                  "px-3 py-2 mx-2 rounded-lg transition-colors",
-                  pathname === route.href 
-                    ? "bg-primary/10 text-primary" 
-                    : "text-muted-foreground hover:bg-primary/5 hover:text-primary",
-                  !currentOrganization && "opacity-50 pointer-events-none"
-                )}
-              />
-            ))}
+          <nav className="flex-1 py-2 px-2">
+            {routes
+              .filter(route => !route.adminOnly || session?.user?.role === 'admin')
+              .map((route) => (
+                <SidebarLink
+                  key={route.href}
+                  link={route}
+                  className={cn(
+                    "px-2.5 py-2.5 mb-0.5 rounded-xl transition-all duration-200 text-base font-medium tracking-[-0.1px] group hover:scale-[1.02] active:scale-[0.98]",
+                    pathname === route.href 
+                      ? "bg-gradient-to-r from-red-50 to-red-100/50 text-red-600 active shadow-sm ring-1 ring-red-200/50" 
+                      : "text-slate-600 hover:bg-slate-100/80 hover:text-slate-900 hover:shadow-sm hover:ring-1 hover:ring-slate-200/50",
+                    !currentOrganization && "opacity-50 pointer-events-none"
+                  )}
+                />
+              ))}
           </nav>
         </div>
 
         {/* Status Bar */}
-        <div className="p-3 border-t border-border">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="px-3 py-2.5 border-t border-slate-200/50 bg-gradient-to-b from-transparent to-white/80">
+          <div className="flex items-center gap-2 text-[13.5px] text-slate-500">
             <div className={cn(
-              "h-2 w-2 rounded-full",
+              "h-2 w-2 rounded-full shadow-sm ring-1",
               currentOrganization 
-                ? "bg-primary animate-pulse" 
-                : "bg-muted-foreground/30"
+                ? "bg-red-500 ring-red-200 animate-pulse" 
+                : "bg-slate-300 ring-slate-200"
             )} />
             <motion.span
               animate={{
                 display: open ? "inline-block" : "none",
                 opacity: open ? 1 : 0,
               }}
-              className="font-mono whitespace-pre"
+              className="font-medium whitespace-pre tracking-[-0.1px]"
             >
               {currentOrganization ? 'Connected' : 'No Organization'}
             </motion.span>

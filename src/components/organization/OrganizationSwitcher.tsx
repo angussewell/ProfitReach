@@ -10,6 +10,7 @@ import { useOrganization } from '@/contexts/OrganizationContext';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { motion } from 'framer-motion';
 import type { ReactElement, JSX } from 'react';
+import { useSession } from 'next-auth/react';
 
 interface OrganizationSwitcherProps {
   open?: boolean;
@@ -29,6 +30,9 @@ export default function OrganizationSwitcher({ open = true }: OrganizationSwitch
     createOrganization,
     handleLogout
   } = useOrganization();
+
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === 'admin';
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newOrgName, setNewOrgName] = useState('');
@@ -111,20 +115,22 @@ export default function OrganizationSwitcher({ open = true }: OrganizationSwitch
                     </Menu.Item>
                   ))}
 
-                  <Menu.Item>
-                    {({ active }: ItemRenderPropArg) => (
-                      <button
-                        onClick={() => setShowCreateModal(true)}
-                        className={cn(
-                          active ? 'bg-gray-100 text-gray-900' : 'text-gray-700',
-                          'flex w-full items-center px-4 py-2 text-left text-sm'
-                        )}
-                      >
-                        <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
-                        Create Organization
-                      </button>
-                    )}
-                  </Menu.Item>
+                  {isAdmin && (
+                    <Menu.Item>
+                      {({ active }: ItemRenderPropArg) => (
+                        <button
+                          onClick={() => setShowCreateModal(true)}
+                          className={cn(
+                            active ? 'bg-gray-100 text-gray-900' : 'text-gray-700',
+                            'flex w-full items-center px-4 py-2 text-left text-sm'
+                          )}
+                        >
+                          <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+                          Create Organization
+                        </button>
+                      )}
+                    </Menu.Item>
+                  )}
 
                   <Menu.Item>
                     {({ active }: ItemRenderPropArg) => (

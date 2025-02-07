@@ -5,6 +5,8 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { PrismaClient } from '@prisma/client';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions);

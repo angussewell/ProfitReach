@@ -4,6 +4,8 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 
+export const dynamic = 'force-dynamic';
+
 // Validation schema for PATCH request
 const updateSchema = z.object({
   outboundWebhookUrl: z.string().url().nullable()

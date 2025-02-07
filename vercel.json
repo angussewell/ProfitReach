@@ -1,31 +1,4 @@
 {
-  "version": 2,
-  "framework": "nextjs",
-  "buildCommand": "rm -rf .next && npm ci && prisma generate && next build",
-  "functions": {
-    "src/app/api/**/*.ts": {
-      "memory": 1024,
-      "maxDuration": 60
-    }
-  },
-  "crons": [{
-    "path": "/api/hubspot/companies/pipeline?refresh=1",
-    "schedule": "0 0 * * *"
-  }],
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/next",
-      "config": {
-        "skipBuildCache": true,
-        "zeroConfig": true
-      }
-    }
-  ],
-  "build": {
-    "env": {
-      "NEXT_TELEMETRY_DISABLED": "1",
-      "BUILD_TIMESTAMP": "2024-02-02T22:30:00Z"
-    }
-  }
+  "buildCommand": "prisma generate && next build",
+  "installCommand": "npm install"
 } 

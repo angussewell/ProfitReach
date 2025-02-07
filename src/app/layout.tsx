@@ -24,6 +24,11 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       {
+        url: '/favicon.ico',
+        sizes: 'any',
+        type: 'image/x-icon'
+      },
+      {
         url: '/MessageLM Icon.png?v=2',
         sizes: '32x32',
         type: 'image/png'
@@ -32,6 +37,12 @@ export const metadata: Metadata = {
         url: '/MessageLM Icon.png?v=2',
         sizes: '16x16',
         type: 'image/png'
+      }
+    ],
+    shortcut: [
+      {
+        url: '/favicon.ico',
+        type: 'image/x-icon'
       }
     ],
     apple: [
@@ -52,6 +63,10 @@ export const metadata: Metadata = {
     index: true,
     follow: true,
   },
+  other: {
+    'msapplication-TileColor': '#ffffff',
+    'msapplication-config': '/browserconfig.xml?v=2'
+  }
 };
 
 // Suppress hydration warnings caused by browser extensions modifying the DOM
