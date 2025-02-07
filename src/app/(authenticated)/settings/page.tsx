@@ -18,20 +18,75 @@ const WEBHOOK_TEMPLATES = {
   }
 };
 
+const isValidUrl = (url: string): boolean => {
+  try {
+    new URL(url);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 export default function SettingsPage() {
   const [organization, setOrganization] = useState<any>(null);
   const [isWaitingForData, setIsWaitingForData] = useState(false);
+  const [isSavingWebhookUrl, setIsSavingWebhookUrl] = useState(false);
+  const [outboundWebhookUrl, setOutboundWebhookUrl] = useState('');
+  const [urlError, setUrlError] = useState('');
 
   // Fetch organization data on mount
   useEffect(() => {
     fetch('/api/organizations/current')
       .then(res => res.json())
-      .then(data => setOrganization(data))
+      .then(data => {
+        setOrganization(data);
+        setOutboundWebhookUrl(data.outboundWebhookUrl || '');
+      })
       .catch(err => {
         console.error('Error fetching organization:', err);
         toast.error('Failed to fetch organization data');
       });
   }, []);
+
+  const handleOutboundWebhookUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newUrl = e.target.value;
+    setOutboundWebhookUrl(newUrl);
+    
+    if (newUrl && !isValidUrl(newUrl)) {
+      setUrlError('Please enter a valid URL');
+      return;
+    }
+    
+    setUrlError('');
+  };
+
+  const handleSaveWebhookUrl = async () => {
+    if (outboundWebhookUrl && !isValidUrl(outboundWebhookUrl)) {
+      setUrlError('Please enter a valid URL');
+      return;
+    }
+
+    setIsSavingWebhookUrl(true);
+    try {
+      const response = await fetch('/api/organizations/current', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ outboundWebhookUrl: outboundWebhookUrl || null })
+      });
+      
+      if (!response.ok) throw new Error('Failed to save outbound webhook URL');
+      
+      const updatedOrg = await response.json();
+      setOrganization(updatedOrg);
+      toast.success('Outbound webhook URL saved successfully');
+      setUrlError('');
+    } catch (err) {
+      console.error('Error saving outbound webhook URL:', err);
+      toast.error('Failed to save outbound webhook URL');
+    } finally {
+      setIsSavingWebhookUrl(false);
+    }
+  };
 
   return (
     <PageContainer>
@@ -102,6 +157,54 @@ export default function SettingsPage() {
             <p className="text-xs text-gray-500">
               Check the <a href="/documentation/webhooks" className="text-red-500 hover:text-red-600">documentation</a> for more information on how to use webhooks.
             </p>
+          </div>
+        </div>
+
+        {/* Outbound Webhook URL Section */}
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          <h2 className="text-2xl font-bold text-[#2e475d] mb-4">Outbound Webhook URL</h2>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              Enter the URL where you want to receive processed webhook data. This URL will receive the contact data after it has been processed by our system.
+            </p>
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <input
+                  type="text"
+                  value={outboundWebhookUrl}
+                  onChange={handleOutboundWebhookUrlChange}
+                  placeholder="Enter your outbound webhook URL"
+                  className={`w-full px-3 py-2 border rounded-md text-sm text-gray-600 ${
+                    urlError ? 'border-red-300' : 'border-gray-200'
+                  }`}
+                />
+              </div>
+              <button
+                onClick={handleSaveWebhookUrl}
+                disabled={isSavingWebhookUrl || (outboundWebhookUrl && !isValidUrl(outboundWebhookUrl))}
+                className={`px-4 py-2 rounded-lg text-white transition-colors ${
+                  isSavingWebhookUrl || (outboundWebhookUrl && !isValidUrl(outboundWebhookUrl))
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-red-500 hover:bg-red-600'
+                }`}
+              >
+                {isSavingWebhookUrl ? (
+                  <div className="flex items-center gap-2">
+                    <div className="animate-spin">⟳</div>
+                    <span>Saving...</span>
+                  </div>
+                ) : (
+                  'Save URL'
+                )}
+              </button>
+            </div>
+            {urlError ? (
+              <p className="text-xs text-red-500">{urlError}</p>
+            ) : (
+              <p className="text-xs text-gray-500">
+                The outbound webhook will send processed contact data, scenario information, and prompt data to this URL.
+              </p>
+            )}
           </div>
         </div>
       </div>
