@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Search, X } from 'lucide-react';
+import { Plus, Search, X, Upload } from 'lucide-react';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
@@ -35,6 +35,7 @@ const ClientCardTitle = CardTitle as React.ComponentType<HTMLAttributes<HTMLHead
 const ClientPlus = Plus as unknown as React.ComponentType<React.SVGProps<SVGSVGElement>>;
 const ClientSearch = Search as unknown as React.ComponentType<React.SVGProps<SVGSVGElement>>;
 const ClientX = X as unknown as React.ComponentType<React.SVGProps<SVGSVGElement>>;
+const ClientUpload = Upload as unknown as React.ComponentType<React.SVGProps<SVGSVGElement>>;
 
 const ClientSwitch = React.forwardRef<HTMLButtonElement, React.ComponentPropsWithoutRef<typeof Switch>>((props, ref) => (
   <Switch {...props} ref={ref} />
@@ -47,6 +48,7 @@ export default function EmailAccountsPage() {
   const [editingAccount, setEditingAccount] = useState<EmailAccount | null>(null);
   const [loading, setLoading] = useState(true);
   const [retryCount, setRetryCount] = useState(0);
+  const [uploading, setUploading] = useState(false);
 
   // Fetch email accounts
   useEffect(() => {
@@ -131,6 +133,45 @@ export default function EmailAccountsPage() {
     }
   };
 
+  const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('/api/email-accounts/bulk', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to upload file');
+      }
+
+      const results = await response.json();
+      
+      if (results.failed > 0) {
+        toast.error(`Upload completed with ${results.failed} errors. Check console for details.`);
+        console.error('Bulk upload errors:', results.errors);
+      } else {
+        toast.success(`Successfully uploaded ${results.success} email accounts`);
+      }
+
+      fetchEmailAccounts();
+    } catch (error) {
+      toast.error('Failed to upload file');
+      console.error('Error uploading file:', error);
+    } finally {
+      setUploading(false);
+      // Reset the file input
+      e.target.value = '';
+    }
+  };
+
   const filteredAccounts = emailAccounts.filter(account => 
     account.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
     account.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -143,10 +184,27 @@ export default function EmailAccountsPage() {
           <PageHeader 
             title="Email Accounts"
             description="Manage your email sender accounts">
-            <ClientButton disabled>
-              <ClientPlus className="w-4 h-4 mr-2" />
-              New Email Account
-            </ClientButton>
+            <div className="flex gap-2">
+              <input
+                type="file"
+                accept=".csv"
+                onChange={handleBulkUpload}
+                className="hidden"
+                id="bulk-upload"
+                disabled={uploading}
+              />
+              <label
+                htmlFor="bulk-upload"
+                className={`technical-button inline-flex items-center ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <ClientUpload className="w-4 h-4 mr-2" />
+                {uploading ? 'Uploading...' : 'Bulk Upload'}
+              </label>
+              <ClientButton disabled>
+                <ClientPlus className="w-4 h-4 mr-2" />
+                New Email Account
+              </ClientButton>
+            </div>
           </PageHeader>
 
           <div className="grid gap-4">
@@ -177,13 +235,31 @@ export default function EmailAccountsPage() {
         <PageHeader 
           title="Email Accounts"
           description="Manage your email sender accounts">
-          <ClientButton 
-            onClick={() => setEditingAccount({ id: '', email: '', name: '', password: '', host: '', port: 587, isActive: true })}
-            className="technical-button"
-          >
-            <ClientPlus className="w-4 h-4 mr-2" />
-            New Email Account
-          </ClientButton>
+          <div className="flex gap-2">
+            <input
+              type="file"
+              accept=".csv"
+              onChange={handleBulkUpload}
+              className="hidden"
+              id="bulk-upload"
+              disabled={uploading}
+            />
+            <label
+              htmlFor="bulk-upload"
+              className={`technical-button inline-flex items-center ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <ClientUpload className="w-4 h-4 mr-2" />
+              {uploading ? 'Uploading...' : 'Bulk Upload'}
+            </label>
+            <ClientButton 
+              onClick={() => setEditingAccount({ id: '', email: '', name: '', password: '', host: '', port: 587, isActive: true })}
+              className="technical-button"
+              disabled={uploading}
+            >
+              <ClientPlus className="w-4 h-4 mr-2" />
+              New Email Account
+            </ClientButton>
+          </div>
         </PageHeader>
 
         <div className="relative max-w-2xl">
