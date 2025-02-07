@@ -67,10 +67,19 @@ export async function POST(
     // Find organization by webhook URL
     const organization = await prisma.organization.findUnique({
       where: { webhookUrl: params.webhookUrl },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        webhookUrl: true,
+        outboundWebhookUrl: true,
         ghlIntegrations: {
           take: 1,
-          orderBy: { createdAt: 'desc' }
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            locationId: true,
+            locationName: true
+          }
         }
       }
     });
@@ -121,20 +130,23 @@ export async function POST(
       }
     });
 
-    // Use the webhook URL from customData since we're keeping it simple
-    const outboundWebhookUrl = data.customData?.webhookURL;
+    // Use organization's outbound webhook URL
+    const outboundWebhookUrl = organization.outboundWebhookUrl;
     
     if (!outboundWebhookUrl) {
       await prisma.webhookLog.update({
         where: { id: webhookLog.id },
         data: { 
           status: 'error',
-          responseBody: { error: 'No webhook URL provided in customData' } as Prisma.JsonObject
+          responseBody: { 
+            error: 'No outbound webhook URL configured. Please configure it in the settings page.' 
+          } as Prisma.JsonObject
         }
       });
       return NextResponse.json({ 
-        message: 'Fields registered but no webhook URL provided',
-        fieldsRegistered: true
+        message: 'Fields registered but no outbound webhook URL configured',
+        fieldsRegistered: true,
+        error: 'Please configure the outbound webhook URL in the settings page'
       });
     }
 
