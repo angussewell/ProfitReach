@@ -188,17 +188,31 @@ export async function POST(
         throw new Error('Scenario not found');
       }
 
-      // Always fetch email accounts - all if email is blank, single otherwise
+      // Handle email account logic based on email sender
       let emailAccounts = null;
       if (!data.email || data.email.trim() === '') {
+        // Case 1: No email sender - get all accounts
         emailAccounts = await prisma.emailAccount.findMany({
           where: { organizationId: organization.id }
         });
+        
+        if (emailAccounts.length === 0) {
+          throw new Error('No email accounts configured for this organization');
+        }
       } else {
-        const singleAccount = await prisma.emailAccount.findFirst({
-          where: { organizationId: organization.id }
+        // Case 2 & 3: Email sender exists - try to find matching account
+        const matchingAccount = await prisma.emailAccount.findFirst({
+          where: { 
+            organizationId: organization.id,
+            email: data.email.trim()
+          }
         });
-        emailAccounts = singleAccount ? [singleAccount] : [];
+
+        if (!matchingAccount) {
+          throw new Error(`No matching email account found for sender: ${data.email}`);
+        }
+
+        emailAccounts = [matchingAccount];
       }
 
       // Process variables in scenario fields
@@ -242,6 +256,12 @@ export async function POST(
           port: account.port
         }))
       };
+
+      log('info', 'Prepared outbound data with email accounts', { 
+        accountCount: emailAccounts.length,
+        hasEmail: !!data.email,
+        emailSender: data.email || 'none'
+      });
 
       log('info', 'Sending outbound webhook request', {
         url: validatedWebhookUrl,
