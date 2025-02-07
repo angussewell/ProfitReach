@@ -18,6 +18,7 @@ const webhookSchema = z.object({
   first_name: z.string().optional(),
   last_name: z.string().optional(),
   email: z.string().optional(),
+  'Email Sender': z.string().optional(),
   company_name: z.string().optional(),
   customData: z.object({
     webhookURL: z.string().optional(),
@@ -190,7 +191,9 @@ export async function POST(
 
       // Handle email account logic based on email sender
       let emailAccounts = null;
-      if (!data.email || data.email.trim() === '') {
+      const emailSender = data['Email Sender'];
+      
+      if (!emailSender || emailSender.trim() === '') {
         // Case 1: No email sender - get all accounts
         emailAccounts = await prisma.emailAccount.findMany({
           where: { organizationId: organization.id }
@@ -204,12 +207,12 @@ export async function POST(
         const matchingAccount = await prisma.emailAccount.findFirst({
           where: { 
             organizationId: organization.id,
-            email: data.email.trim()
+            email: emailSender.trim()
           }
         });
 
         if (!matchingAccount) {
-          throw new Error(`No matching email account found for sender: ${data.email}`);
+          throw new Error(`No matching email account found for sender: ${emailSender}`);
         }
 
         emailAccounts = [matchingAccount];
@@ -259,8 +262,8 @@ export async function POST(
 
       log('info', 'Prepared outbound data with email accounts', { 
         accountCount: emailAccounts.length,
-        hasEmail: !!data.email,
-        emailSender: data.email || 'none'
+        hasEmailSender: !!emailSender,
+        emailSender: emailSender || 'none'
       });
 
       log('info', 'Sending outbound webhook request', {
