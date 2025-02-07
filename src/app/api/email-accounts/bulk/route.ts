@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
-import { parse } from 'csv-parse/sync';
+import { parse } from 'csv-parse';
 
 // Schema for email account validation (same as single account)
 const emailAccountSchema = z.object({
@@ -14,6 +14,20 @@ const emailAccountSchema = z.object({
   port: z.number().int().min(1).max(65535),
   isActive: z.boolean().optional().default(true),
 });
+
+// Synchronous CSV parsing helper
+function parseCSV(csvText: string): Promise<any[]> {
+  return new Promise((resolve, reject) => {
+    const records: any[] = [];
+    parse(csvText, {
+      columns: true,
+      skip_empty_lines: true,
+    })
+      .on('data', (record) => records.push(record))
+      .on('error', reject)
+      .on('end', () => resolve(records));
+  });
+}
 
 export async function POST(request: Request) {
   try {
@@ -32,10 +46,7 @@ export async function POST(request: Request) {
 
     // Read and parse CSV
     const csvText = await file.text();
-    const records = parse(csvText, {
-      columns: true,
-      skip_empty_lines: true,
-    });
+    const records = await parseCSV(csvText);
 
     const results = {
       success: 0,
