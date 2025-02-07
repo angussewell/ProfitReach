@@ -1,7 +1,7 @@
 {
   "version": 2,
   "framework": "nextjs",
-  "buildCommand": "prisma generate && next build",
+  "buildCommand": "npm install && prisma generate && next build",
   "functions": {
     "src/app/api/**/*.ts": {
       "memory": 1024,
@@ -17,7 +17,8 @@
       "src": "package.json",
       "use": "@vercel/next",
       "config": {
-        "skipBuildCache": true
+        "skipBuildCache": true,
+        "zeroConfig": true
       }
     }
   ]
