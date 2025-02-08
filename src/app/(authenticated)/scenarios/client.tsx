@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import { Users, MessageSquare, TrendingUp, BarChart } from 'lucide-react';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -8,6 +9,10 @@ import { useToast } from '@/components/ui/use-toast';
 import { DateRangeFilter } from '@/components/filters/date-range-filter';
 import { HTMLAttributes, SVGProps } from 'react';
 import { motion } from 'framer-motion';
+import { cn } from '@/lib/utils';
+
+// Dynamic imports
+const ClientImage = dynamic(() => import('next/image'), { ssr: false });
 
 // Create client-side components
 const ClientCard = Card as React.ComponentType<HTMLAttributes<HTMLDivElement>>;
@@ -37,6 +42,7 @@ interface Scenario {
 interface ScenarioAnalytics {
   id: string;
   name: string;
+  touchpointType: string;
   totalContacts: number;
   activeContacts: number;
   responseCount: number;
@@ -49,6 +55,63 @@ interface DateRange {
   to: Date;
 }
 
+const getTypeConfig = (type: string | undefined) => {
+  const normalizedType = (type || '').toLowerCase();
+  
+  switch (normalizedType) {
+    case 'linkedin':
+      return {
+        icon: '/LinkedIn_icon.svg.png',
+        bgColor: 'bg-[#0A66C2]/5',
+        accentColor: 'border-[#0A66C2]/20',
+        iconBg: 'bg-[#0A66C2]',
+        hoverBg: 'hover:bg-[#0A66C2]/10',
+        progressColor: 'from-[#0A66C2] to-[#0A66C2]/80',
+        label: 'LinkedIn'
+      };
+    case 'research':
+      return {
+        icon: '/Perplexity-logo.png',
+        bgColor: 'bg-[#0A66C2]/5',
+        accentColor: 'border-[#0A66C2]/20',
+        iconBg: 'bg-[#0A66C2]',
+        hoverBg: 'hover:bg-[#0A66C2]/10',
+        progressColor: 'from-[#0A66C2] to-[#0A66C2]/80',
+        label: 'Research'
+      };
+    case 'email':
+      return {
+        icon: '/Gmail_icon_(2020).svg.webp',
+        bgColor: 'bg-[#EA4335]/5',
+        accentColor: 'border-[#EA4335]/20',
+        iconBg: 'bg-[#EA4335]',
+        hoverBg: 'hover:bg-[#EA4335]/10',
+        progressColor: 'from-[#EA4335] to-[#EA4335]/80',
+        label: 'Email'
+      };
+    case 'googledrive':
+      return {
+        icon: '/google drive logo.webp',
+        bgColor: 'bg-[#1FA463]/5',
+        accentColor: 'border-[#1FA463]/20',
+        iconBg: 'bg-[#1FA463]',
+        hoverBg: 'hover:bg-[#1FA463]/10',
+        progressColor: 'from-[#1FA463] to-[#1FA463]/80',
+        label: 'Google Drive'
+      };
+    default:
+      return {
+        icon: '/Gmail_icon_(2020).svg.webp',
+        bgColor: 'bg-gray-50',
+        accentColor: 'border-gray-200',
+        iconBg: 'bg-gray-100',
+        hoverBg: 'hover:bg-gray-100',
+        progressColor: 'from-gray-500 to-gray-400',
+        label: type || 'Unknown'
+      };
+  }
+};
+
 export function ScenariosPage() {
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [analytics, setAnalytics] = useState<ScenarioAnalytics[]>([]);
@@ -58,8 +121,6 @@ export function ScenariosPage() {
 
   const fetchData = async () => {
     try {
-      setLoading(true);
-
       // Build URL with date range parameters
       const url = new URL('/api/scenarios/analytics', window.location.origin);
       if (dateRange) {
@@ -75,7 +136,6 @@ export function ScenariosPage() {
 
       const data = await response.json();
       setAnalytics(data);
-      setLoading(false);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast({
@@ -83,26 +143,64 @@ export function ScenariosPage() {
         description: 'Failed to fetch scenario data',
         variant: 'destructive',
       });
+    } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
+    setLoading(true);
     fetchData();
   }, [dateRange]);
 
-  // Calculate overall metrics
-  const totalContacts = analytics.reduce((sum, scenario) => sum + scenario.totalContacts, 0);
-  const totalResponses = analytics.reduce((sum, scenario) => sum + scenario.responseCount, 0);
-  const overallResponseRate = totalContacts > 0 ? (totalResponses / totalContacts) * 100 : 0;
-  const averageResponseRate = analytics.length > 0
-    ? analytics.reduce((sum, scenario) => {
-        const rate = scenario.totalContacts > 0
-          ? (scenario.responseCount / scenario.totalContacts) * 100
-          : 0;
-        return sum + rate;
-      }, 0) / analytics.length
-    : 0;
+  // Calculate metrics using useMemo to prevent unnecessary recalculations
+  const {
+    outboundScenarios,
+    totalContacts,
+    totalResponses,
+    overallResponseRate,
+    averageResponseRate
+  } = useMemo(() => {
+    if (loading || !analytics.length) {
+      return {
+        outboundScenarios: [],
+        totalContacts: 0,
+        totalResponses: 0,
+        overallResponseRate: 0,
+        averageResponseRate: 0
+      };
+    }
+
+    // No need to filter since API already filters out research scenarios
+    const outboundScenarios = analytics;
+
+    const totalContacts = outboundScenarios.reduce((sum, scenario) => 
+      sum + (scenario.totalContacts || 0), 0);
+
+    const totalResponses = outboundScenarios.reduce((sum, scenario) => 
+      sum + (scenario.responseCount || 0), 0);
+
+    const overallResponseRate = totalContacts > 0 
+      ? (totalResponses / totalContacts) * 100 
+      : 0;
+
+    const averageResponseRate = outboundScenarios.length > 0
+      ? outboundScenarios.reduce((sum, scenario) => {
+          const rate = scenario.totalContacts > 0
+            ? ((scenario.responseCount || 0) / scenario.totalContacts) * 100
+            : 0;
+          return sum + rate;
+        }, 0) / outboundScenarios.length
+      : 0;
+
+    return {
+      outboundScenarios,
+      totalContacts,
+      totalResponses,
+      overallResponseRate,
+      averageResponseRate
+    };
+  }, [analytics, loading]);
 
   const getMetricColor = (type: string, value: number) => {
     if (type === 'contacts' && value > 1000) return 'text-blue-500';
@@ -118,7 +216,94 @@ export function ScenariosPage() {
     return Math.min((value / target) * 100, 100);
   };
 
+  const renderScenarioCard = (scenario: ScenarioAnalytics, index: number) => {
+    if (!scenario) return null;
+    
+    const isResearch = scenario.touchpointType && scenario.touchpointType.toLowerCase() === 'research';
+    const responseRate = !isResearch && scenario.totalContacts > 0
+      ? ((scenario.responseCount || 0) / scenario.totalContacts) * 100
+      : 0;
+    const config = getTypeConfig(scenario.touchpointType);
+
     return (
+      <ClientMotionDiv
+        key={scenario.id}
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.2, delay: index * 0.1 }}
+      >
+        <ClientCard 
+          className={cn(
+            "group border border-slate-200/50 bg-white shadow-lg hover:shadow-xl transition-all duration-300 rounded-xl overflow-hidden",
+            config.bgColor,
+            config.accentColor,
+            config.hoverBg
+          )}
+        >
+          <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-[#ff7a59]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          <ClientCardHeader className="pb-4">
+            <div className="flex items-center gap-3">
+              <div className={cn('rounded-xl p-2', config.iconBg, 'bg-opacity-10')}>
+                <img
+                  src={config.icon}
+                  alt={`${config.label} icon`}
+                  className="w-8 h-8 aspect-square object-contain"
+                  loading="eager"
+                />
+              </div>
+              <div>
+                <ClientCardTitle className="text-lg font-semibold text-slate-800">
+                  {scenario.name || 'Unnamed Scenario'}
+                </ClientCardTitle>
+                <p className="text-sm text-slate-500">{config.label}</p>
+              </div>
+            </div>
+          </ClientCardHeader>
+          <ClientCardContent>
+            <div className="space-y-6">
+              <div>
+                <div className="text-sm text-slate-500">
+                  {isResearch ? 'Contacts Researched' : 'Total Contacts'}
+                </div>
+                <div className="text-2xl font-bold text-slate-800 [text-shadow:_0_1px_2px_rgb(0_0_0_/_5%)]">
+                  {(scenario.totalContacts || 0).toLocaleString()}
+                </div>
+              </div>
+              {!isResearch && (
+                <>
+                  <div>
+                    <div className="text-sm text-slate-500">Total Responses</div>
+                    <div className="text-2xl font-bold text-green-600 [text-shadow:_0_1px_2px_rgb(0_0_0_/_5%)]">
+                      {(scenario.responseCount || 0).toLocaleString()}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-slate-500">Response Rate</div>
+                      <div className="text-sm font-medium text-[#ff7a59]">
+                        {responseRate.toFixed(1)}%
+                      </div>
+                    </div>
+                    <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)]">
+                      <div 
+                        className={cn(
+                          "h-full bg-gradient-to-r rounded-full transition-all duration-500 shadow-sm",
+                          config.progressColor
+                        )}
+                        style={{ width: `${Math.min(responseRate, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </ClientCardContent>
+        </ClientCard>
+      </ClientMotionDiv>
+    );
+  };
+
+  return (
     <PageContainer>
       <div className="space-y-8">
         {/* Enhanced Header Section */}
@@ -150,20 +335,20 @@ export function ScenariosPage() {
                   <div className="p-2 bg-blue-100 rounded-xl shadow-sm">
                     <ClientUsers className="w-5 h-5 text-blue-500" />
                   </div>
-                  <ClientCardTitle className="text-lg font-semibold text-slate-800">Total Contacts</ClientCardTitle>
+                  <ClientCardTitle className="text-lg font-semibold text-slate-800">Total Outbound Runs</ClientCardTitle>
                 </div>
               </ClientCardHeader>
               <ClientCardContent>
                 <div className={`text-4xl font-bold ${getMetricColor('contacts', totalContacts)} [text-shadow:_0_1px_2px_rgb(0_0_0_/_5%)]`}>
                   {totalContacts.toLocaleString()}
-        </div>
-                <div className="text-sm text-slate-500 mt-1">Across all scenarios</div>
+                </div>
+                <div className="text-sm text-slate-500 mt-1">Total scenario executions</div>
                 <div className="mt-4 h-1.5 bg-gray-100 rounded-full overflow-hidden shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)]">
                   <div 
                     className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all duration-500 shadow-sm"
                     style={{ width: `${getContactProgress(totalContacts)}%` }}
-          />
-        </div>
+                  />
+                </div>
               </ClientCardContent>
             </ClientCard>
           </ClientMotionDiv>
@@ -182,13 +367,13 @@ export function ScenariosPage() {
                     <ClientMessageSquare className="w-5 h-5 text-green-500" />
                   </div>
                   <ClientCardTitle className="text-lg font-semibold text-slate-800">Total Responses</ClientCardTitle>
-              </div>
+                </div>
               </ClientCardHeader>
               <ClientCardContent>
                 <div className={`text-4xl font-bold ${getMetricColor('responses', totalResponses)} [text-shadow:_0_1px_2px_rgb(0_0_0_/_5%)]`}>
-                {totalResponses.toLocaleString()}
-              </div>
-                <div className="text-sm text-slate-500 mt-1">Response rate: {overallResponseRate.toFixed(1)}%</div>
+                  {totalResponses.toLocaleString()}
+                </div>
+                <div className="text-sm text-slate-500 mt-1">Positive responses received</div>
                 <div className="mt-4 h-1.5 bg-gray-100 rounded-full overflow-hidden shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)]">
                   <div 
                     className="h-full bg-gradient-to-r from-green-500 to-green-400 rounded-full transition-all duration-500 shadow-sm"
@@ -219,17 +404,17 @@ export function ScenariosPage() {
                 <div className={`text-4xl font-bold ${getMetricColor('rate', averageResponseRate)} [text-shadow:_0_1px_2px_rgb(0_0_0_/_5%)]`}>
                   {averageResponseRate.toFixed(1)}%
                 </div>
-                <div className="text-sm text-slate-500 mt-1">Mean across scenarios</div>
+                <div className="text-sm text-slate-500 mt-1">Across outbound scenarios</div>
                 <div className="mt-4 h-1.5 bg-gray-100 rounded-full overflow-hidden shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)]">
                   <div 
                     className="h-full bg-gradient-to-r from-yellow-500 to-yellow-400 rounded-full transition-all duration-500 shadow-sm"
                     style={{ width: `${Math.min(averageResponseRate, 100)}%` }}
                   />
-              </div>
+                </div>
               </ClientCardContent>
             </ClientCard>
           </ClientMotionDiv>
-      </div>
+        </div>
 
         {/* Enhanced Scenario Performance */}
         <div className="relative bg-gradient-to-b from-slate-50 to-white -mx-8 px-8 py-8 rounded-3xl shadow-inner">
@@ -279,59 +464,7 @@ export function ScenariosPage() {
                   </div>
                 </ClientCard>
               ) : (
-                analytics.map((scenario, index) => {
-                  const responseRate = scenario.totalContacts > 0
-                    ? (scenario.responseCount / scenario.totalContacts) * 100
-                    : 0;
-
-                  return (
-                    <ClientMotionDiv
-                      key={scenario.id}
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ duration: 0.2, delay: index * 0.1 }}
-                    >
-                      <ClientCard className="group border border-slate-200/50 bg-white shadow-lg hover:shadow-xl transition-all duration-300 rounded-xl overflow-hidden">
-                        <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-[#ff7a59]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                        <ClientCardHeader className="pb-4">
-                          <ClientCardTitle className="text-lg font-semibold text-slate-800">
-                            {scenario.name}
-                          </ClientCardTitle>
-                        </ClientCardHeader>
-                        <ClientCardContent>
-                          <div className="space-y-6">
-                            <div>
-                              <div className="text-sm text-slate-500">Total Contacts</div>
-                              <div className="text-2xl font-bold text-slate-800 [text-shadow:_0_1px_2px_rgb(0_0_0_/_5%)]">
-                                {scenario.totalContacts.toLocaleString()}
-                    </div>
-                  </div>
-                  <div>
-                              <div className="text-sm text-slate-500">Total Responses</div>
-                              <div className="text-2xl font-bold text-green-600 [text-shadow:_0_1px_2px_rgb(0_0_0_/_5%)]">
-                                {scenario.responseCount.toLocaleString()}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="flex items-center justify-between">
-                                <div className="text-sm text-slate-500">Response Rate</div>
-                                <div className="text-sm font-medium text-[#ff7a59]">
-                                  {responseRate.toFixed(1)}%
-                                </div>
-                    </div>
-                              <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)]">
-                                <div 
-                                  className="h-full bg-gradient-to-r from-[#ff7a59] to-[#ff4d4d] rounded-full transition-all duration-500 shadow-sm"
-                                  style={{ width: `${Math.min(responseRate, 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-                        </ClientCardContent>
-                      </ClientCard>
-                    </ClientMotionDiv>
-                  );
-                })
+                analytics.map((scenario, index) => renderScenarioCard(scenario, index))
               )}
             </div>
           </div>

@@ -20,6 +20,11 @@ interface ItemRenderPropArg {
   active: boolean;
 }
 
+const ClientBuilding = Building as unknown as (props: any) => JSX.Element;
+const ClientPlus = Plus as unknown as (props: any) => JSX.Element;
+const ClientLogOut = LogOut as unknown as (props: any) => JSX.Element;
+const ClientChevronDown = ChevronDownIcon as unknown as (props: any) => JSX.Element;
+
 export default function OrganizationSwitcher({ open = true }: OrganizationSwitcherProps): ReactElement {
   const { 
     organizations,
@@ -64,7 +69,7 @@ export default function OrganizationSwitcher({ open = true }: OrganizationSwitch
             <div>
               <Menu.Button 
                 className={cn(
-                  "inline-flex w-full items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50",
+                  "inline-flex w-full items-center gap-x-2 rounded-xl bg-white px-3.5 py-2.5 text-[15px] font-medium text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 transition-all duration-200",
                   !open && "justify-center"
                 )}
                 disabled={isLoading || switching}
@@ -74,13 +79,13 @@ export default function OrganizationSwitcher({ open = true }: OrganizationSwitch
                   "flex items-center min-w-0",
                   !open && "justify-center"
                 )}>
-                  <Building className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+                  <ClientBuilding className="w-[18px] h-[18px] flex-shrink-0 text-slate-500" aria-hidden="true" />
                   {open && (
                     <>
                       <span className="ml-2 truncate">
                         {currentOrganization?.name || 'Select Organization'}
                       </span>
-                      <ChevronDownIcon className="ml-2 h-5 w-5 text-gray-400 flex-shrink-0" aria-hidden="true" />
+                      <ClientChevronDown className="ml-2 h-5 w-5 text-gray-400 flex-shrink-0" aria-hidden="true" />
                     </>
                   )}
                 </div>
@@ -97,7 +102,7 @@ export default function OrganizationSwitcher({ open = true }: OrganizationSwitch
               leaveFrom="transform opacity-100 scale-100"
               leaveTo="transform opacity-0 scale-95"
             >
-              <Menu.Items className="absolute left-0 z-10 mt-2 w-56 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+              <Menu.Items className="absolute left-0 z-10 mt-2 w-56 origin-top-right rounded-xl bg-white shadow-lg ring-1 ring-black/5 focus:outline-none">
                 <div className="py-1">
                   {organizations?.map((org) => (
                     <Menu.Item key={org.id}>
@@ -105,8 +110,8 @@ export default function OrganizationSwitcher({ open = true }: OrganizationSwitch
                         <button
                           onClick={() => handleOrgSwitch(org.id)}
                           className={cn(
-                            active ? 'bg-gray-100 text-gray-900' : 'text-gray-700',
-                            'block w-full px-4 py-2 text-left text-sm'
+                            active ? 'bg-gray-50 text-gray-900' : 'text-gray-700',
+                            'block w-full px-4 py-2.5 text-left text-[14px] font-medium tracking-[-0.1px]'
                           )}
                         >
                           {org.name}
@@ -121,11 +126,11 @@ export default function OrganizationSwitcher({ open = true }: OrganizationSwitch
                         <button
                           onClick={() => setShowCreateModal(true)}
                           className={cn(
-                            active ? 'bg-gray-100 text-gray-900' : 'text-gray-700',
-                            'flex w-full items-center px-4 py-2 text-left text-sm'
+                            active ? 'bg-gray-50 text-gray-900' : 'text-gray-700',
+                            'flex w-full items-center px-4 py-2.5 text-left text-[14px] font-medium tracking-[-0.1px]'
                           )}
                         >
-                          <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+                          <ClientPlus className="mr-2 h-4 w-4" aria-hidden="true" />
                           Create Organization
                         </button>
                       )}
@@ -137,11 +142,11 @@ export default function OrganizationSwitcher({ open = true }: OrganizationSwitch
                       <button
                         onClick={handleLogout}
                         className={cn(
-                          active ? 'bg-gray-100 text-gray-900' : 'text-gray-700',
-                          'flex w-full items-center px-4 py-2 text-left text-sm'
+                          active ? 'bg-gray-50 text-gray-900' : 'text-gray-700',
+                          'flex w-full items-center px-4 py-2.5 text-left text-[14px] font-medium tracking-[-0.1px]'
                         )}
                       >
-                        <LogOut className="mr-2 h-4 w-4" aria-hidden="true" />
+                        <ClientLogOut className="mr-2 h-4 w-4" aria-hidden="true" />
                         Logout
                       </button>
                     )}

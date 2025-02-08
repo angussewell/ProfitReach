@@ -89,8 +89,8 @@ export default function WebhookLogsPage() {
     <div className="container mx-auto px-6 py-8 max-w-7xl">
       <div className="space-y-8">
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 mx-0 px-8 py-8 rounded-xl shadow-lg">
-          <h1 className="text-3xl font-bold text-white mb-2">Webhook Logs</h1>
-          <p className="text-slate-300">Monitor and debug webhook activity</p>
+          <h1 className="text-3xl font-bold text-white mb-2">Logs</h1>
+          <p className="text-slate-300">Monitor and debug activity</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-4">

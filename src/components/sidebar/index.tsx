@@ -12,6 +12,7 @@ import React from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Logo } from '@/components/Logo';
+import { useRouter } from 'next/navigation';
 
 interface Route {
   href: string;
@@ -29,6 +30,7 @@ const createIcon = (Icon: LucideIcon, key: string) =>
 export default function Sidebar(): JSX.Element {
   const { data: session } = useSession();
   const pathname = usePathname();
+  const router = useRouter();
   const { currentOrganization, loading } = useOrganization();
   const [open, setOpen] = useState(true);
 
@@ -61,7 +63,7 @@ export default function Sidebar(): JSX.Element {
     },
     { 
       href: '/webhook-logs', 
-      label: 'Webhook Logs', 
+      label: 'Logs', 
       icon: createIcon(Icons.Webhook, 'webhook-logs-icon')
     },
     { 
@@ -112,6 +114,29 @@ export default function Sidebar(): JSX.Element {
               ))}
           </nav>
         </div>
+
+        {/* User Profile Button */}
+        <button
+          onClick={() => router.push('/user-settings')}
+          className={cn(
+            "mx-2 mb-2 px-2.5 py-2.5 rounded-xl transition-all duration-200 text-base font-medium tracking-[-0.1px] group hover:scale-[1.02] active:scale-[0.98]",
+            "text-slate-600 hover:bg-slate-100/80 hover:text-slate-900 hover:shadow-sm hover:ring-1 hover:ring-slate-200/50",
+            "flex items-center gap-2"
+          )}
+        >
+          <div className="h-[22px] w-[22px] flex-shrink-0 text-slate-400 transition-all duration-200 group-hover:text-red-600 group-hover:scale-110">
+            {createIcon(Icons.User, 'user-icon')}
+          </div>
+          <motion.span
+            animate={{
+              display: open ? "inline-block" : "none",
+              opacity: open ? 1 : 0,
+            }}
+            className="text-sm font-medium transition-all duration-200 whitespace-pre tracking-[-0.1px]"
+          >
+            {session?.user?.name || 'User Settings'}
+          </motion.span>
+        </button>
 
         {/* Status Bar */}
         <div className="px-3 py-2.5 border-t border-slate-200/50 bg-gradient-to-b from-transparent to-white/80">

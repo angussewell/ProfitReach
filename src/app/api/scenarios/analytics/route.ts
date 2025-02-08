@@ -35,10 +35,13 @@ export async function GET(request: Request) {
     const from = searchParams.get('from');
     const to = searchParams.get('to');
 
-    // Fetch scenarios
+    // Fetch scenarios (excluding research type)
     const scenarios = await prisma.scenario.findMany({
       where: {
         organizationId: session.user.organizationId,
+        NOT: {
+          touchpointType: 'research'
+        }
       },
     });
 
@@ -47,6 +50,12 @@ export async function GET(request: Request) {
       where: {
         organizationId: session.user.organizationId,
         status: 'success', // Only get successful webhooks
+        NOT: {
+          scenarioName: {
+            contains: 'research',
+            mode: 'insensitive'
+          }
+        },
         ...(from && to ? {
           createdAt: {
             gte: new Date(from),
