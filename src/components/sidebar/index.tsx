@@ -36,6 +36,11 @@ export default function Sidebar(): JSX.Element {
 
   const routes: Route[] = [
     { 
+      href: '/universal-inbox', 
+      label: 'Universal Inbox', 
+      icon: createIcon(Icons.Inbox, 'universal-inbox-icon')
+    },
+    { 
       href: '/scenarios', 
       label: 'Scenarios', 
       icon: createIcon(Icons.LayoutGrid, 'scenarios-icon')
