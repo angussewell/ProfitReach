@@ -27,6 +27,50 @@ const Mail360AccountResponse = z.object({
   }),
 });
 
+const Mail360MessageResponse = z.object({
+  status: z.object({
+    code: z.number(),
+    description: z.string(),
+  }),
+  data: z.object({
+    summary: z.string().optional(),
+    transaction_id: z.string().optional(),
+    delivered_to: z.string().optional(),
+    subject: z.string().optional(),
+    bcc_address: z.string().optional(),
+    parent_message_id: z.string().optional(),
+    account_key: z.string().optional(),
+    read_status: z.number().optional(),
+    has_attachment: z.boolean().optional(),
+    message_id: z.string(),
+    received_time: z.string().optional(),
+    to_address: z.string().optional(),
+    cc_address: z.string().optional(),
+    thread_id: z.string().optional(),
+    return_path: z.string().optional(),
+    size: z.number().optional(),
+    sender: z.string().optional(),
+    archived_message: z.number().optional(),
+    event: z.string().optional(),
+    folder_id: z.string().optional(),
+    header_message_id: z.string().optional(),
+    from_address: z.string().optional(),
+    send_time_in_gmt: z.string().optional(),
+    email: z.string().optional(),
+  }),
+});
+
+const Mail360MessageContentResponse = z.object({
+  status: z.object({
+    code: z.number(),
+    description: z.string(),
+  }),
+  data: z.object({
+    messageId: z.number(),
+    content: z.string(),
+  }),
+});
+
 export class Mail360Client {
   private accessToken: string | null = null;
   private accessTokenExpiry: number = 0;
@@ -233,5 +277,75 @@ export class Mail360Client {
       if (response.ok) return;
       throw new Error('Invalid response from Mail360 API');
     }
+  }
+
+  async getMessage(accountKey: string, messageId: string) {
+    const accessToken = await this.getAccessToken();
+
+    const response = await fetch(`https://mail360.zoho.com/api/accounts/${accountKey}/messages/${messageId}`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': `Zoho-oauthtoken ${accessToken}`,
+      },
+    });
+
+    const responseText = await response.text();
+    console.log('Get message response:', {
+      status: response.status,
+      statusText: response.statusText,
+      headers: Object.fromEntries(response.headers.entries()),
+      body: responseText,
+    });
+
+    if (!response.ok) {
+      console.error('Failed to get Mail360 message:', {
+        status: response.status,
+        statusText: response.statusText,
+        responseBody: responseText,
+      });
+      throw new Error(`Failed to get Mail360 message: ${responseText}`);
+    }
+
+    const data = JSON.parse(responseText);
+    const validatedData = Mail360MessageResponse.parse(data);
+
+    return validatedData.data;
+  }
+
+  async getMessageContent(accountKey: string, messageId: string) {
+    const accessToken = await this.getAccessToken();
+
+    const response = await fetch(`https://mail360.zoho.com/api/accounts/${accountKey}/messages/${messageId}/content`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': `Zoho-oauthtoken ${accessToken}`,
+      },
+    });
+
+    const responseText = await response.text();
+    console.log('Get message content response:', {
+      status: response.status,
+      statusText: response.statusText,
+      headers: Object.fromEntries(response.headers.entries()),
+      body: responseText,
+    });
+
+    if (!response.ok) {
+      console.error('Failed to get Mail360 message content:', {
+        status: response.status,
+        statusText: response.statusText,
+        responseBody: responseText,
+      });
+      throw new Error(`Failed to get Mail360 message content: ${responseText}`);
+    }
+
+    const data = JSON.parse(responseText);
+    const validatedData = Mail360MessageContentResponse.parse(data);
+
+    return validatedData.data;
   }
 } 
