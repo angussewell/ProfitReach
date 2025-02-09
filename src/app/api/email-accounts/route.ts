@@ -6,6 +6,8 @@ import { z } from 'zod';
 import { Mail360Client } from '@/lib/mail360';
 import { headers } from 'next/headers';
 
+export const dynamic = 'force-dynamic';
+
 // Schema for email account validation
 const emailAccountSchema = z.object({
   email: z.string().email(),
