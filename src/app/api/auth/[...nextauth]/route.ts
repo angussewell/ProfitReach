@@ -302,8 +302,8 @@ export const authOptions: AuthOptions = {
         httpOnly: true,
         sameSite: 'lax',
         path: '/',
-        secure: !isDevelopment,
-        ...(isDevelopment ? {} : { domain: 'app.messagelm.com' })
+        secure: process.env.NODE_ENV === 'production',
+        domain: isDevelopment ? undefined : 'app.messagelm.com'
       }
     }
   }

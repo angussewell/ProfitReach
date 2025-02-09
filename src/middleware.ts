@@ -27,12 +27,27 @@ const PROTECTED_ROUTES = [
 
 export async function middleware(request: NextRequest) {
   const token = await getToken({ req: request });
-
-  // Get the pathname of the request (e.g. /, /protected)
   const path = request.nextUrl.pathname;
+
+  console.log('Middleware processing request:', {
+    path,
+    hasToken: !!token,
+    method: request.method
+  });
 
   // If it's an API route, let the API handle authorization
   if (path.startsWith('/api')) {
+    console.log('API route detected, passing through:', {
+      path,
+      hasToken: !!token,
+      tokenData: token ? {
+        role: token.role,
+        hasOrgId: !!token.organizationId,
+        email: token.email,
+        exp: token.exp
+      } : null,
+      headers: Object.fromEntries(request.headers.entries())
+    });
     return NextResponse.next();
   }
 

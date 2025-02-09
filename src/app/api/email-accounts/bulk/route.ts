@@ -3,15 +3,20 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { Mail360Client } from '@/lib/mail360';
 
-// Schema for email account validation (same as single account)
+// Schema for email account validation
 const emailAccountSchema = z.object({
   email: z.string().email(),
   name: z.string().min(1),
-  password: z.string().min(1),
-  host: z.string().min(1),
-  port: z.number().int().min(1).max(65535),
-  isActive: z.boolean().optional().default(true),
+  incomingUser: z.string().min(1),
+  incomingPassword: z.string().min(1),
+  incomingServer: z.string().min(1),
+  incomingServerPort: z.number().int().min(1).max(65535),
+  outgoingUser: z.string().min(1),
+  outgoingPassword: z.string().min(1),
+  outgoingServer: z.string().min(1),
+  outgoingServerPort: z.number().int().min(1).max(65535),
 });
 
 // Simple CSV parser that handles headers and basic CSV format
@@ -61,17 +66,25 @@ export async function POST(request: Request) {
       errors: [] as string[],
     };
 
+    const mail360 = new Mail360Client();
+
     // Process each record
     for (const record of records) {
       try {
         // Map CSV fields to our schema
+        const name = [record['First Name'] || '', record['Last Name'] || ''].filter(Boolean).join(' ');
+        
         const accountData = {
-          email: record.email || record.Email,
-          name: `${record['First Name'] || record.FirstName || ''} ${record['Last Name'] || record.LastName || ''}`.trim(),
-          password: record['SMTP Password'] || record.SMTPPassword,
-          host: record['SMTP Host'] || record.SMTPHost,
-          port: parseInt(record['SMTP Port'] || record.SMTPPort),
-          isActive: true,
+          email: record.email || record['Email'],
+          name: name || 'Unknown',
+          incomingUser: record['IMAP Username'] || record.email || record['Email'],
+          incomingPassword: record['IMAP Password'],
+          incomingServer: record['IMAP Host'],
+          incomingServerPort: parseInt(record['IMAP Port']),
+          outgoingUser: record['SMTP Username'] || record['IMAP Username'] || record.email || record['Email'],
+          outgoingPassword: record['SMTP Password'] || record['IMAP Password'],
+          outgoingServer: record['SMTP Host'],
+          outgoingServerPort: parseInt(record['SMTP Port']),
         };
 
         // Validate the data
@@ -92,11 +105,45 @@ export async function POST(request: Request) {
           throw new Error(`Email account ${accountData.email} already exists`);
         }
 
-        // Create the account
+        // Create Mail360 account
+        const mail360AccountKey = await mail360.addSyncAccount({
+          emailid: accountData.email,
+          accountType: 2,  // Integer for sync account
+          incomingUser: accountData.incomingUser,
+          incomingPasswd: accountData.incomingPassword,
+          incomingServer: accountData.incomingServer,
+          incomingServerPort: accountData.incomingServerPort,
+          isCustomSmtp: true,  // Boolean for custom SMTP
+          outgoingServer: accountData.outgoingServer,
+          outgoingServerPort: accountData.outgoingServerPort,
+          smtpConnection: accountData.outgoingServerPort === 587 ? 2 : 1,  // Use STARTTLS for 587, SSL for others
+          outgoingAuth: true,  // Boolean for auth
+          outgoingUser: accountData.outgoingUser,
+          outgoingPasswd: accountData.outgoingPassword,
+          gmailTypeSync: false  // Boolean for non-Gmail
+        });
+
+        // Create the account in our database with smart defaults
         await prisma.emailAccount.create({
           data: {
-            ...accountData,
+            email: accountData.email,
+            name: accountData.name,
+            password: accountData.outgoingPassword,
+            host: accountData.outgoingServer,
+            port: accountData.outgoingServerPort,
             organizationId: session.user.organizationId,
+            mail360AccountKey,
+            smtpConnection: 1, // Default to SSL
+            isGmail: false,
+            incomingServer: accountData.incomingServer,
+            incomingServerPort: accountData.incomingServerPort,
+            incomingUser: accountData.incomingUser,
+            incomingPassword: accountData.incomingPassword,
+            sslEnabled: true, // Default to true
+            startTls: false, // Default to false
+            saveSentCopy: true, // Default to true
+            syncFromDate: new Date(), // Default to current date
+            isActive: true, // Default to active
           },
         });
 

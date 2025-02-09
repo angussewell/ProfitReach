@@ -20,12 +20,16 @@ const nextConfig = {
     },
   },
   async headers() {
+    const allowedOrigins = process.env.NODE_ENV === 'development' 
+      ? ['http://localhost:3000', 'https://app.messagelm.com']
+      : ['https://app.messagelm.com'];
+
     return [
       {
         source: '/api/:path*',
         headers: [
           { key: 'Access-Control-Allow-Credentials', value: 'true' },
-          { key: 'Access-Control-Allow-Origin', value: 'https://app.messagelm.com' },
+          { key: 'Access-Control-Allow-Origin', value: allowedOrigins.join(',') },
           { key: 'Access-Control-Allow-Methods', value: 'GET,DELETE,PATCH,POST,PUT' },
           { key: 'Access-Control-Allow-Headers', value: 'Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Auth' },
         ],

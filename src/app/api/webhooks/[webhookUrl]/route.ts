@@ -260,7 +260,10 @@ export async function POST(
           name: account.name,
           password: account.password,
           host: account.host,
-          port: account.port
+          port: account.port,
+          mail360AccountKey: account.mail360AccountKey,
+          smtpConnection: account.smtpConnection,
+          isGmail: account.isGmail
         }))
       };
 

@@ -54,6 +54,7 @@ let prisma: PrismaClient;
 if (globalForPrisma.prisma) {
   prisma = globalForPrisma.prisma;
 } else {
+  // Initialize synchronously for module exports
   prisma = new PrismaClient({
     log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
     datasources: {
@@ -62,19 +63,16 @@ if (globalForPrisma.prisma) {
       },
     },
   });
-  
-  // Validate connection immediately
-  validateConnection(prisma)
-    .then(isConnected => {
-      if (!isConnected) {
-        console.error('Initial database connection failed - server may not function correctly');
-      }
-    })
-    .catch(console.error);
 
-  if (process.env.NODE_ENV !== 'production') {
-    globalForPrisma.prisma = prisma;
-  }
+  // Validate connection in the background
+  initializePrismaClient().then(validatedClient => {
+    prisma = validatedClient;
+    if (process.env.NODE_ENV !== 'production') {
+      globalForPrisma.prisma = prisma;
+    }
+  }).catch(error => {
+    console.error('Failed to initialize Prisma client:', error);
+  });
 }
 
 // Add middleware for operation retries

@@ -4,14 +4,15 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import type { EmailAccount } from '@prisma/client';
+import { Mail360Client } from '@/lib/mail360';
 
 // Schema for full email account updates
 const emailAccountSchema = z.object({
   email: z.string().email(),
   name: z.string().min(1),
   password: z.string().min(1).optional(), // Password is optional for updates
-  host: z.string().min(1),
-  port: z.number().int().min(1).max(65535),
+  outgoingServer: z.string().min(1),
+  outgoingServerPort: z.number().int().min(1).max(65535),
   isActive: z.boolean().optional(),
 });
 
@@ -121,8 +122,8 @@ export async function PUT(
     const updateData = {
       email: data.email,
       name: data.name,
-      host: data.host,
-      port: data.port,
+      outgoingServer: data.outgoingServer,
+      outgoingServerPort: data.outgoingServerPort,
       ...(data.password && { password: data.password }),
       ...(typeof data.isActive === 'boolean' && { isActive: data.isActive })
     } as Partial<EmailAccount>;
@@ -155,30 +156,73 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if email account exists and belongs to the organization
-    const existingAccount = await prisma.emailAccount.findFirst({
+    // Get the email account
+    const emailAccount = await prisma.emailAccount.findFirst({
       where: {
         id: params.id,
         organizationId: session.user.organizationId,
       },
     });
 
-    if (!existingAccount) {
-      return NextResponse.json(
-        { error: 'Email account not found' },
-        { status: 404 }
-      );
+    if (!emailAccount) {
+      return NextResponse.json({ error: 'Email account not found' }, { status: 404 });
     }
 
-    await prisma.emailAccount.delete({
-      where: { id: params.id },
+    console.log('Attempting to delete account:', {
+      accountId: params.id,
+      mail360AccountKey: emailAccount.mail360AccountKey,
+      hasKey: !!emailAccount.mail360AccountKey
     });
+
+    // Delete from Mail360 first if we have an account key
+    if (emailAccount.mail360AccountKey) {
+      try {
+        const mail360 = new Mail360Client();
+        await mail360.deleteAccount(emailAccount.mail360AccountKey);
+        console.log('Successfully deleted from Mail360:', {
+          accountId: params.id,
+          mail360AccountKey: emailAccount.mail360AccountKey
+        });
+      } catch (mail360Error) {
+        console.error('Failed to delete from Mail360:', {
+          error: mail360Error instanceof Error ? mail360Error.message : String(mail360Error),
+          stack: mail360Error instanceof Error ? mail360Error.stack : undefined,
+          accountId: params.id,
+          mail360AccountKey: emailAccount.mail360AccountKey
+        });
+        throw mail360Error; // Re-throw to handle in outer catch
+      }
+    }
+
+    // Then delete from our database
+    try {
+      await prisma.emailAccount.delete({
+        where: {
+          id: params.id,
+        },
+      });
+      console.log('Successfully deleted from database:', {
+        accountId: params.id
+      });
+    } catch (dbError) {
+      console.error('Failed to delete from database:', {
+        error: dbError instanceof Error ? dbError.message : String(dbError),
+        stack: dbError instanceof Error ? dbError.stack : undefined,
+        accountId: params.id
+      });
+      throw dbError; // Re-throw to handle in outer catch
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error deleting email account:', error);
+    console.error('Error in delete account handler:', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      accountId: params.id
+    });
+    
     return NextResponse.json(
-      { error: 'Failed to delete email account' },
+      { error: error instanceof Error ? error.message : 'Failed to delete email account' },
       { status: 500 }
     );
   }
