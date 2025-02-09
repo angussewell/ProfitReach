@@ -39,12 +39,11 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create scenario message with a generated messageId
+    // Create scenario message
     const message = await db.$queryRaw`
-      INSERT INTO "ScenarioMessage" ("id", "messageId", "scenarioId", "threadId", "sender", "hasReplied", "createdAt", "updatedAt")
+      INSERT INTO "ScenarioMessage" ("id", "scenarioId", "threadId", "sender", "hasReplied", "createdAt", "updatedAt")
       VALUES (
         gen_random_uuid(),
-        ${`msg_${Date.now()}`},
         ${scenarioId},
         ${threadId},
         ${recipientEmail},
