@@ -1,25 +1,36 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { z } from 'zod';
 import { Mail360Client } from '@/lib/mail360';
+import { MessageType } from '@prisma/client';
+import { z } from 'zod';
 
 // Force dynamic API route
 export const dynamic = 'force-dynamic';
 
-type MessageType = 'REAL_REPLY' | 'BOUNCE' | 'AUTO_REPLY' | 'OUT_OF_OFFICE' | 'OTHER';
-
-// Webhook payload schema from Mail360
+// Define webhook data schema
 const mail360WebhookSchema = z.object({
   account_key: z.string(),
-  message_id: z.string()
+  message_id: z.string(),
+  thread_id: z.string().optional(),
+  subject: z.string().optional(),
+  from_address: z.string().optional(),
+  sender: z.string().optional(),
+  delivered_to: z.string().optional(),
+  to_address: z.string().optional(),
+  summary: z.string().optional(),
+  received_time: z.string().optional()
 });
+
+type Mail360WebhookData = z.infer<typeof mail360WebhookSchema>;
 
 type ClassificationScore = Record<string, number>;
 
-function classifyMessage(message: any): {
+interface ClassificationResult {
   type: MessageType;
   scores: ClassificationScore;
-} {
+}
+
+function classifyMessage(message: any): ClassificationResult {
   const scores: ClassificationScore = {
     bounce: 0,
     autoReply: 0,
@@ -47,15 +58,15 @@ function classifyMessage(message: any): {
   
   // Determine message type
   const maxScore = Math.max(...Object.values(scores));
-  let type: MessageType = 'REAL_REPLY';
+  let type: MessageType = MessageType.OTHER;
   
   if (maxScore > 0.6) {
     if (scores.bounce > scores.autoReply && scores.bounce > scores.outOfOffice) {
-      type = 'BOUNCE';
+      type = MessageType.BOUNCE;
     } else if (scores.autoReply > scores.outOfOffice) {
-      type = 'AUTO_REPLY';
+      type = MessageType.AUTO_REPLY;
     } else if (scores.outOfOffice > 0) {
-      type = 'OUT_OF_OFFICE';
+      type = MessageType.OUT_OF_OFFICE;
     }
   }
   
@@ -127,53 +138,71 @@ export async function POST(request: Request) {
       mail360AccountKey: emailAccount.mail360AccountKey
     });
 
-    // Fetch full message details from Mail360
-    const mail360Client = new Mail360Client();
-    const message = await mail360Client.getMessage(webhookData.account_key, webhookData.message_id);
-    const messageContent = await mail360Client.getMessageContent(webhookData.account_key, webhookData.message_id);
-    
-    // Combine message details with content
-    const fullMessage = {
-      ...message,
-      content: messageContent.content
-    };
-    
-    // Classify message
-    const { type: messageType, scores } = classifyMessage(fullMessage);
-    
-    console.log('Message classified:', {
-      type: messageType,
-      scores,
-      messageId: webhookData.message_id
-    });
-    
-    // Store message in database
-    const result = await prisma.emailMessage.create({
+    // Store initial message in database with webhook data
+    const initialMessage = await prisma.emailMessage.create({
       data: {
         messageId: webhookData.message_id,
-        threadId: (fullMessage.thread_id as string) || webhookData.message_id,
+        threadId: webhookData.thread_id || webhookData.message_id,
         organizationId: emailAccount.organizationId,
         emailAccountId: emailAccount.id,
-        subject: (fullMessage.subject as string) || 'No Subject',
-        sender: (fullMessage.from_address as string) || (fullMessage.sender as string) || 'Unknown Sender',
-        recipientEmail: (fullMessage.delivered_to as string) || (fullMessage.to_address as string) || emailAccount.email,
-        content: (fullMessage.content as string) || (fullMessage.summary as string) || '',
-        receivedAt: new Date(parseInt((fullMessage.received_time as string)) || Date.now()),
-        messageType,
-        classificationScores: scores
+        subject: webhookData.subject || 'No Subject',
+        sender: webhookData.from_address || webhookData.sender || 'Unknown Sender',
+        recipientEmail: webhookData.delivered_to || webhookData.to_address || emailAccount.email,
+        content: webhookData.summary || '',
+        receivedAt: new Date(parseInt(webhookData.received_time || Date.now().toString())),
+        messageType: MessageType.OTHER // Default type until we can classify it
       }
     });
     
-    console.log('Message stored:', {
-      id: result.id,
-      messageId: result.messageId,
-      type: messageType
+    console.log('Initial message stored:', {
+      id: initialMessage.id,
+      messageId: initialMessage.messageId
     });
+    
+    // Try to fetch message details in the background
+    try {
+      const mail360Client = new Mail360Client();
+      const message = await mail360Client.getMessage(webhookData.account_key, webhookData.message_id);
+      const messageContent = await mail360Client.getMessageContent(webhookData.account_key, webhookData.message_id);
+      
+      // Combine message details with content
+      const fullMessage = {
+        ...message,
+        content: messageContent.content
+      };
+      
+      // Classify message
+      const { type: messageType, scores } = classifyMessage(fullMessage);
+      
+      console.log('Message classified:', {
+        type: messageType,
+        scores,
+        messageId: webhookData.message_id
+      });
+      
+      // Update message in database with full details
+      const updatedMessage = await prisma.emailMessage.update({
+        where: { id: initialMessage.id },
+        data: {
+          content: fullMessage.content || initialMessage.content,
+          messageType,
+          classificationScores: scores
+        }
+      });
+      
+      console.log('Message updated with full details:', {
+        id: updatedMessage.id,
+        messageId: updatedMessage.messageId,
+        type: messageType
+      });
+    } catch (error) {
+      console.error('Failed to fetch message details (will retry later):', error);
+      // Don't throw error - we'll retry fetching details later
+    }
     
     return NextResponse.json({
       success: true,
-      messageId: result.id,
-      messageType
+      messageId: initialMessage.id
     });
   } catch (error) {
     console.error('Error processing Mail360 webhook:', error);
