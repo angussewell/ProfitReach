@@ -303,7 +303,7 @@ export const authOptions: AuthOptions = {
         sameSite: 'lax',
         path: '/',
         secure: !isDevelopment,
-        domain: isDevelopment ? undefined : '.messagelm.com'
+        domain: isDevelopment ? undefined : 'app.messagelm.com'
       }
     }
   }
