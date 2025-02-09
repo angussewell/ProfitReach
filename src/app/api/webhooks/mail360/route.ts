@@ -62,43 +62,50 @@ function classifyMessage(message: any): {
   return { type, scores };
 }
 
-// Add GET handler for webhook verification and processing
-export async function GET(request: Request) {
+// Add GET handler for webhook verification
+export async function GET() {
+  return NextResponse.json({ status: 'ok' });
+}
+
+export async function POST(request: Request) {
   try {
-    const url = new URL(request.url);
-    console.log('Received Mail360 webhook GET request:', {
-      url: request.url,
-      fullUrl: url.toString(),
-      allParams: Object.fromEntries(url.searchParams.entries()),
-      headers: Object.fromEntries(request.headers),
-      method: request.method
+    console.log('Received Mail360 webhook request');
+    
+    // Parse and validate webhook data
+    const data = await request.json();
+    console.log('Webhook payload:', {
+      ...data,
+      headers: Object.fromEntries(request.headers)
     });
-
-    const account_key = url.searchParams.get('account_key');
-    const message_id = url.searchParams.get('message_id');
-
-    // If no parameters, it's just a verification request
-    if (!account_key || !message_id) {
-      console.log('No parameters provided, treating as verification request');
-      return NextResponse.json({ status: 'ok' });
+    
+    const validationResult = mail360WebhookSchema.safeParse(data);
+    
+    if (!validationResult.success) {
+      console.error('Invalid webhook data:', validationResult.error.errors);
+      return NextResponse.json(
+        { error: 'Invalid webhook data', details: validationResult.error.errors },
+        { status: 400 }
+      );
     }
-
+    
+    const webhookData = validationResult.data;
+    
     // Find email account by Mail360 account key (case-insensitive)
     const emailAccount = await prisma.emailAccount.findFirst({
       where: {
         OR: [
-          { mail360AccountKey: account_key },
-          { mail360AccountKey: account_key.toUpperCase() },
-          { mail360AccountKey: account_key.toLowerCase() }
+          { mail360AccountKey: webhookData.account_key },
+          { mail360AccountKey: webhookData.account_key.toUpperCase() },
+          { mail360AccountKey: webhookData.account_key.toLowerCase() }
         ]
       }
     });
-
+    
     if (!emailAccount) {
       console.error('Email account not found:', {
-        attempted_key: account_key,
-        attempted_key_upper: account_key.toUpperCase(),
-        attempted_key_lower: account_key.toLowerCase(),
+        attempted_key: webhookData.account_key,
+        attempted_key_upper: webhookData.account_key.toUpperCase(),
+        attempted_key_lower: webhookData.account_key.toLowerCase(),
         available_accounts: await prisma.emailAccount.findMany({
           select: { 
             email: true, 
@@ -116,103 +123,8 @@ export async function GET(request: Request) {
     console.log('Found email account:', {
       id: emailAccount.id,
       email: emailAccount.email,
-      organizationId: emailAccount.organizationId
-    });
-
-    // Fetch full message details from Mail360
-    const mail360Client = new Mail360Client();
-    const message = await mail360Client.getMessage(account_key, message_id);
-    const messageContent = await mail360Client.getMessageContent(account_key, message_id);
-    
-    // Combine message details with content
-    const fullMessage = {
-      ...message,
-      content: messageContent.content
-    };
-    
-    // Classify message
-    const { type: messageType, scores } = classifyMessage(fullMessage);
-    
-    console.log('Message classified:', {
-      type: messageType,
-      scores,
-      messageId: message_id
-    });
-    
-    // Store message in database
-    const result = await prisma.emailMessage.create({
-      data: {
-        messageId: message_id,
-        threadId: (fullMessage.thread_id as string) || message_id,
-        organizationId: emailAccount.organizationId,
-        emailAccountId: emailAccount.id,
-        subject: (fullMessage.subject as string) || 'No Subject',
-        sender: (fullMessage.from_address as string) || (fullMessage.sender as string) || 'Unknown Sender',
-        recipientEmail: (fullMessage.delivered_to as string) || (fullMessage.to_address as string) || emailAccount.email,
-        content: (fullMessage.content as string) || (fullMessage.summary as string) || '',
-        receivedAt: new Date(parseInt((fullMessage.received_time as string)) || Date.now()),
-        messageType,
-        classificationScores: scores
-      }
-    });
-    
-    console.log('Message stored:', {
-      id: result.id,
-      messageId: result.messageId,
-      type: messageType
-    });
-    
-    return NextResponse.json({
-      success: true,
-      messageId: result.id,
-      messageType
-    });
-  } catch (error) {
-    console.error('Error processing Mail360 webhook:', error);
-    return NextResponse.json(
-      { error: 'Failed to process webhook' },
-      { status: 500 }
-    );
-  }
-}
-
-export async function POST(request: Request) {
-  try {
-    console.log('Received Mail360 webhook request');
-    
-    // Parse and validate webhook data
-    const data = await request.json();
-    console.log('Webhook payload:', data);
-    
-    const validationResult = mail360WebhookSchema.safeParse(data);
-    
-    if (!validationResult.success) {
-      console.error('Invalid webhook data:', validationResult.error.errors);
-      return NextResponse.json(
-        { error: 'Invalid webhook data', details: validationResult.error.errors },
-        { status: 400 }
-      );
-    }
-    
-    const webhookData = validationResult.data;
-    
-    // Find email account by Mail360 account key
-    const emailAccount = await prisma.emailAccount.findFirst({
-      where: { mail360AccountKey: webhookData.account_key }
-    });
-    
-    if (!emailAccount) {
-      console.error('Email account not found:', webhookData.account_key);
-      return NextResponse.json(
-        { error: 'Email account not found' },
-        { status: 404 }
-      );
-    }
-
-    console.log('Found email account:', {
-      id: emailAccount.id,
-      email: emailAccount.email,
-      organizationId: emailAccount.organizationId
+      organizationId: emailAccount.organizationId,
+      mail360AccountKey: emailAccount.mail360AccountKey
     });
 
     // Fetch full message details from Mail360
