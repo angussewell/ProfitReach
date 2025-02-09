@@ -4,10 +4,11 @@ import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { PageHeader } from '@/components/ui/page-header';
-import { ClientCard, ClientButton } from '@/components/ui/client-components';
-import { Inbox, Loader2, MessageSquare, Filter, X } from 'lucide-react';
+import { ClientCard, ClientButton, ClientInput } from '@/components/ui/client-components';
+import { Inbox, Loader2, MessageSquare, Filter, X, Reply, Send } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { LucideProps } from 'lucide-react';
+import { toast } from 'sonner';
 
 type MessageType = 'REAL_REPLY' | 'BOUNCE' | 'AUTO_REPLY' | 'OUT_OF_OFFICE' | 'OTHER';
 
@@ -29,6 +30,8 @@ const InboxIcon: React.FC<LucideProps> = Inbox;
 const MessageIcon: React.FC<LucideProps> = MessageSquare;
 const FilterIcon: React.FC<LucideProps> = Filter;
 const CloseIcon: React.FC<LucideProps> = X;
+const ReplyIcon: React.FC<LucideProps> = Reply;
+const SendIcon: React.FC<LucideProps> = Send;
 
 export function UniversalInboxClient() {
   const [selectedThread, setSelectedThread] = useState<string | null>(null);
@@ -36,37 +39,53 @@ export function UniversalInboxClient() {
   const [filteredMessages, setFilteredMessages] = useState<EmailMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [showFilteredMessages, setShowFilteredMessages] = useState(false);
+  const [showReplyModal, setShowReplyModal] = useState(false);
+  const [replyContent, setReplyContent] = useState('');
+  const [replying, setReplying] = useState(false);
+  const [emailAccounts, setEmailAccounts] = useState<Array<{ id: string; email: string; mail360AccountKey: string | null }>>([]);
+  const [selectedFromEmail, setSelectedFromEmail] = useState<string>('');
 
-  // Fetch messages for current organization
+  // Fetch messages and email accounts
   useEffect(() => {
-    const fetchMessages = async () => {
+    const fetchData = async () => {
       setLoading(true);
       try {
-        // Fetch both real replies and filtered messages
-        const [repliesResponse, filteredResponse] = await Promise.all([
+        const [repliesResponse, filteredResponse, accountsResponse] = await Promise.all([
           fetch('/api/messages'),
-          fetch('/api/messages?includeFiltered=true')
+          fetch('/api/messages?includeFiltered=true'),
+          fetch('/api/email-accounts')
         ]);
         
-        if (!repliesResponse.ok || !filteredResponse.ok) 
-          throw new Error('Failed to fetch messages');
+        if (!repliesResponse.ok || !filteredResponse.ok || !accountsResponse.ok) 
+          throw new Error('Failed to fetch data');
         
-        const [replies, filtered] = await Promise.all([
+        const [replies, filtered, accounts] = await Promise.all([
           repliesResponse.json(),
-          filteredResponse.json()
+          filteredResponse.json(),
+          accountsResponse.json()
         ]);
         
         setMessages(replies);
         setFilteredMessages(filtered);
+        setEmailAccounts(accounts);
       } catch (error) {
-        console.error('Error fetching messages:', error);
+        console.error('Error fetching data:', error);
       } finally {
         setLoading(false);
       }
     };
     
-    fetchMessages();
+    fetchData();
   }, []);
+
+  // Reset selected email when opening reply modal
+  useEffect(() => {
+    if (showReplyModal && selectedThread) {
+      const latestMessage = threadGroups[selectedThread]
+        .sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime())[0];
+      setSelectedFromEmail(latestMessage.recipientEmail);
+    }
+  }, [showReplyModal, selectedThread]);
 
   // Group messages by thread
   const threadGroups = messages.reduce((groups, message) => {
@@ -88,6 +107,66 @@ export function UniversalInboxClient() {
     acc[message.messageType].push(message);
     return acc;
   }, {} as Record<MessageType, EmailMessage[]>);
+
+  const handleReply = async () => {
+    if (!selectedThread || !replyContent.trim() || !selectedFromEmail) return;
+    
+    setReplying(true);
+    try {
+      const latestMessage = threadGroups[selectedThread]
+        .sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime())[0];
+
+      // Find the selected email account
+      const selectedAccount = emailAccounts.find(account => account.email === selectedFromEmail);
+      if (!selectedAccount?.mail360AccountKey) {
+        throw new Error('Selected email account is not properly configured');
+      }
+
+      const response = await fetch('/api/messages/reply', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messageId: latestMessage.messageId,
+          content: replyContent,
+          action: 'reply',
+          fromEmail: selectedFromEmail
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to send reply');
+      }
+
+      toast.success('Reply sent successfully');
+      setShowReplyModal(false);
+      setReplyContent('');
+      
+      // Refresh messages
+      const [repliesResponse, filteredResponse] = await Promise.all([
+        fetch('/api/messages'),
+        fetch('/api/messages?includeFiltered=true')
+      ]);
+      
+      if (!repliesResponse.ok || !filteredResponse.ok) 
+        throw new Error('Failed to fetch messages');
+      
+      const [replies, filtered] = await Promise.all([
+        repliesResponse.json(),
+        filteredResponse.json()
+      ]);
+      
+      setMessages(replies);
+      setFilteredMessages(filtered);
+    } catch (error) {
+      console.error('Error sending reply:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to send reply');
+    } finally {
+      setReplying(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -205,10 +284,17 @@ export function UniversalInboxClient() {
             <ClientCard className="h-[calc(100vh-14rem)] overflow-hidden flex flex-col border-slate-200/60 shadow-lg shadow-slate-200/50">
               {selectedThread ? (
                 <>
-                  <div className="px-6 py-4 border-b border-slate-200/60 bg-white/95">
+                  <div className="px-6 py-4 border-b border-slate-200/60 bg-white/95 flex justify-between items-center">
                     <h2 className="text-lg font-semibold text-slate-900">
                       {threadGroups[selectedThread][0].subject}
                     </h2>
+                    <ClientButton
+                      onClick={() => setShowReplyModal(true)}
+                      className="flex items-center gap-2"
+                    >
+                      <ReplyIcon className="h-4 w-4" />
+                      Reply
+                    </ClientButton>
                   </div>
                   <div className="p-6 space-y-6 overflow-y-auto flex-1">
                     {threadGroups[selectedThread]
@@ -298,6 +384,80 @@ export function UniversalInboxClient() {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reply Modal */}
+      {showReplyModal && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl w-[800px] max-h-[80vh] flex flex-col shadow-xl border border-slate-200/60">
+            <div className="px-6 py-4 border-b border-slate-200/60 flex justify-between items-center bg-white/95">
+              <h2 className="text-lg font-semibold flex items-center gap-2 text-slate-900">
+                <ReplyIcon className="h-5 w-5 text-slate-500" />
+                <span>Reply</span>
+              </h2>
+              <button
+                onClick={() => {
+                  setShowReplyModal(false);
+                  setReplyContent('');
+                }}
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <CloseIcon className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="p-6 flex-1">
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  From
+                </label>
+                <select
+                  value={selectedFromEmail}
+                  onChange={(e) => setSelectedFromEmail(e.target.value)}
+                  className="w-full p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {emailAccounts.map(account => (
+                    <option 
+                      key={account.id} 
+                      value={account.email}
+                      disabled={!account.mail360AccountKey}
+                    >
+                      {account.email} {!account.mail360AccountKey && '(Not configured)'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <textarea
+                value={replyContent}
+                onChange={(e) => setReplyContent(e.target.value)}
+                placeholder="Type your reply here..."
+                className="w-full h-[300px] p-4 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              />
+            </div>
+            <div className="px-6 py-4 border-t border-slate-200/60 flex justify-end gap-3">
+              <ClientButton
+                variant="outline"
+                onClick={() => {
+                  setShowReplyModal(false);
+                  setReplyContent('');
+                }}
+              >
+                Cancel
+              </ClientButton>
+              <ClientButton
+                onClick={handleReply}
+                disabled={!replyContent.trim() || replying || !selectedFromEmail}
+                className="flex items-center gap-2"
+              >
+                {replying ? (
+                  <LoaderIcon className="h-4 w-4 animate-spin" />
+                ) : (
+                  <SendIcon className="h-4 w-4" />
+                )}
+                {replying ? 'Sending...' : 'Send Reply'}
+              </ClientButton>
             </div>
           </div>
         </div>

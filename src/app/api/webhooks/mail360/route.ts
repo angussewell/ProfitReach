@@ -10,6 +10,22 @@ function classifyMessageType(data: any): MessageType {
   const subject = (data.subject || '').toLowerCase();
   const content = (data.content || '').toLowerCase();
   const sender = (data.from_address || '').toLowerCase();
+  const rawSubject = data.subject || '';
+  const rawContent = data.content || '';
+
+  // Check for warm-up email patterns (random strings)
+  const warmupPattern = /[A-Z0-9]{8,}/;
+  const subjectMatches = rawSubject.match(warmupPattern) || [];
+  const contentMatches = rawContent.match(warmupPattern) || [];
+  
+  if (subjectMatches.length > 0 || contentMatches.length > 0) {
+    console.log('Detected warm-up email pattern:', {
+      subject: rawSubject,
+      subjectMatches,
+      contentMatches
+    });
+    return MessageType.OTHER;
+  }
 
   // Check for auto-replies first
   if (
@@ -293,6 +309,43 @@ export async function POST(request: Request) {
           messageType: messageType
         }
       });
+      
+      // If this is a real reply, try to update scenario message
+      if (messageType === MessageType.REAL_REPLY) {
+        try {
+          // Find the original message in ScenarioMessage table
+          const scenarioMessage = await prisma.scenarioMessage.findFirst({
+            where: {
+              threadId: data.thread_id,
+              sender: data.from_address
+            }
+          });
+
+          if (scenarioMessage) {
+            // Update hasReplied status
+            await prisma.scenarioMessage.update({
+              where: { id: scenarioMessage.id },
+              data: { 
+                hasReplied: true,
+                updatedAt: new Date()
+              }
+            });
+
+            console.log('Updated scenario message reply status:', {
+              threadId: data.thread_id,
+              sender: data.from_address,
+              scenarioId: scenarioMessage.scenarioId
+            });
+          }
+        } catch (error) {
+          // Log error but don't fail the webhook
+          console.error('Failed to update scenario message:', {
+            error: error instanceof Error ? error.message : String(error),
+            threadId: data.thread_id,
+            sender: data.from_address
+          });
+        }
+      }
       
       console.log('Message stored:', {
         id: message.id,

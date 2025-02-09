@@ -14,14 +14,14 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { scenarioId, threadId, recipientEmail } = body;
+    const { scenarioId, messageId, recipientEmail } = body;
 
     // Validate required fields
-    if (!scenarioId || !threadId || !recipientEmail) {
+    if (!scenarioId || !messageId || !recipientEmail) {
       return NextResponse.json(
         { 
           error: 'Missing required fields',
-          details: 'scenarioId, threadId, and recipientEmail are required'
+          details: 'scenarioId, messageId, and recipientEmail are required'
         },
         { status: 400 }
       );
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
       VALUES (
         gen_random_uuid(),
         ${scenarioId},
-        ${threadId},
+        ${messageId},
         ${recipientEmail},
         false
       )

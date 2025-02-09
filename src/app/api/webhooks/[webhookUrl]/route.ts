@@ -258,12 +258,7 @@ export async function POST(
         emailAccounts: emailAccounts.map(account => ({
           email: account.email,
           name: account.name,
-          password: account.password,
-          host: account.host,
-          port: account.port,
-          mail360AccountKey: account.mail360AccountKey,
-          smtpConnection: account.smtpConnection,
-          isGmail: account.isGmail
+          mail360AccountKey: account.mail360AccountKey
         }))
       };
 

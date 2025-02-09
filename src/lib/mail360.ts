@@ -71,6 +71,20 @@ const Mail360MessageContentResponse = z.object({
   }),
 });
 
+// Add new response type for reply
+const Mail360ReplyResponse = z.object({
+  status: z.object({
+    code: z.number(),
+    description: z.string(),
+  }),
+  data: z.object({
+    messageId: z.string(),
+    fromAddress: z.string(),
+    toAddress: z.string(),
+    subject: z.string(),
+  }),
+});
+
 export class Mail360Client {
   private accessToken: string | null = null;
   private accessTokenExpiry: number = 0;
@@ -87,6 +101,7 @@ export class Mail360Client {
     try {
       // Return existing token if it's still valid (with 5 min buffer)
       if (this.accessToken && Date.now() < this.accessTokenExpiry - 300000) {
+        console.log('Using existing Mail360 access token');
         return this.accessToken;
       }
 
@@ -95,10 +110,11 @@ export class Mail360Client {
         clientSecretExists: !!Mail360Config.clientSecret,
         refreshTokenExists: !!Mail360Config.refreshToken,
         attempt: retryCount + 1,
-        clientId: Mail360Config.clientId,
-        refreshToken: Mail360Config.refreshToken,
+        clientIdLength: Mail360Config.clientId?.length,
+        refreshTokenLength: Mail360Config.refreshToken?.length
       });
 
+      // Prepare request exactly as per Mail360 documentation
       const response = await fetch('https://mail360.zoho.com/api/access-token', {
         method: 'POST',
         headers: {
@@ -113,39 +129,45 @@ export class Mail360Client {
       });
 
       const responseText = await response.text();
+      console.log('Raw token response:', responseText);
+      
+      let responseData;
+      try {
+        responseData = JSON.parse(responseText);
+      } catch (e) {
+        console.error('Failed to parse token response:', {
+          responseText,
+          error: e instanceof Error ? e.message : String(e)
+        });
+        throw new Error('Invalid JSON response from Mail360');
+      }
+
       console.log('Token refresh response:', {
         status: response.status,
         statusText: response.statusText,
         headers: Object.fromEntries(response.headers.entries()),
-        body: responseText,
-        requestBody: {
-          refresh_token: Mail360Config.refreshToken,
-          client_id: Mail360Config.clientId,
-          client_secret: '***'
-        }
+        responseData
       });
 
       if (!response.ok) {
         console.error('Failed to refresh Mail360 access token:', {
           status: response.status,
           statusText: response.statusText,
-          responseBody: responseText,
+          responseData,
           attempt: retryCount + 1,
         });
         
         if (retryCount < maxRetries) {
-          // Increase delay between retries
-          const delay = (retryCount + 1) * 2000; // 2s, 4s, 6s
+          const delay = (retryCount + 1) * 2000;
           console.log(`Waiting ${delay}ms before retry ${retryCount + 1}`);
           await new Promise(resolve => setTimeout(resolve, delay));
           return this.getAccessToken(retryCount + 1);
         }
         
-        throw new Error(`Failed to refresh Mail360 access token after ${maxRetries} attempts. Last response: ${responseText}`);
+        throw new Error(`Failed to refresh Mail360 access token: ${responseData?.status?.description || response.statusText}`);
       }
 
-      const data = JSON.parse(responseText);
-      const validatedData = Mail360TokenResponse.parse(data);
+      const validatedData = Mail360TokenResponse.parse(responseData);
 
       this.accessToken = validatedData.data.access_token;
       this.accessTokenExpiry = Date.now() + ((validatedData.data.expires_in_sec || 3600) * 1000);
@@ -153,8 +175,11 @@ export class Mail360Client {
       return this.accessToken;
     } catch (error) {
       console.error('Error in getAccessToken:', {
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
+        error: error instanceof Error ? {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        } : error,
         attempt: retryCount + 1,
       });
       
@@ -362,6 +387,109 @@ export class Mail360Client {
     const data = JSON.parse(responseText);
     const validatedData = Mail360MessageContentResponse.parse(data);
 
+    return validatedData.data;
+  }
+
+  async sendReply(params: {
+    accountKey: string,
+    messageId: string,
+    fromAddress: string,
+    content: string,
+    subject?: string,
+    action?: 'reply' | 'replyall' | 'forward',
+    toAddress?: string,
+    ccAddress?: string,
+    bccAddress?: string,
+    mailFormat?: 'html' | 'plaintext',
+  }) {
+    console.log('Starting Mail360 reply process with params:', {
+      accountKey: params.accountKey,
+      messageId: params.messageId,
+      fromAddress: params.fromAddress,
+      toAddress: params.toAddress,
+      subject: params.subject,
+      action: params.action,
+      contentLength: params.content.length
+    });
+
+    const accessToken = await this.getAccessToken();
+
+    // Prepare request body exactly as per Mail360 documentation
+    const requestBody = {
+      fromAddress: params.fromAddress,
+      content: params.content,
+      subject: params.subject,
+      action: params.action || 'reply',
+      toAddress: params.toAddress,
+      ccAddress: params.ccAddress,
+      bccAddress: params.bccAddress,
+      mailFormat: params.mailFormat || 'html'
+    };
+
+    const url = `https://mail360.zoho.com/api/accounts/${params.accountKey}/messages/${params.messageId}`;
+    console.log('Sending Mail360 reply to URL:', url);
+
+    console.log('Mail360 request headers:', {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      'Authorization': 'Zoho-oauthtoken [REDACTED]'
+    });
+
+    console.log('Mail360 request body:', {
+      ...requestBody,
+      content: requestBody.content.slice(0, 100) + '...' // Log first 100 chars of content
+    });
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': `Zoho-oauthtoken ${accessToken}`,
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    const responseText = await response.text();
+    console.log('Raw Mail360 response:', responseText);
+    
+    let responseData;
+    try {
+      responseData = JSON.parse(responseText);
+    } catch (e) {
+      console.error('Failed to parse Mail360 reply response:', {
+        responseText,
+        error: e instanceof Error ? {
+          message: e.message,
+          stack: e.stack,
+          name: e.name
+        } : e
+      });
+      throw new Error('Invalid JSON response from Mail360');
+    }
+
+    console.log('Mail360 reply response:', {
+      status: response.status,
+      statusText: response.statusText,
+      headers: Object.fromEntries(response.headers.entries()),
+      responseData
+    });
+
+    if (!response.ok) {
+      console.error('Failed to send Mail360 reply:', {
+        url,
+        status: response.status,
+        statusText: response.statusText,
+        responseData,
+        requestBody: {
+          ...requestBody,
+          content: requestBody.content.slice(0, 100) + '...'
+        }
+      });
+      throw new Error(`Failed to send Mail360 reply: ${responseData?.status?.description || response.statusText}`);
+    }
+
+    const validatedData = Mail360ReplyResponse.parse(responseData);
     return validatedData.data;
   }
 } 

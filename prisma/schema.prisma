@@ -122,6 +122,7 @@ model Scenario {
   organization        Organization @relation(fields: [organizationId], references: [id])
   signature           Signature?   @relation(fields: [signatureId], references: [id])
   snippet             Snippet?     @relation(fields: [snippetId], references: [id])
+  messages            ScenarioMessage[]
 
   @@index([organizationId])
 }
@@ -289,4 +290,21 @@ model EmailMessage {
   @@index([organizationId])
   @@index([emailAccountId])
   @@index([threadId])
+}
+
+model ScenarioMessage {
+  id          String    @id @default(cuid())
+  scenarioId  String
+  messageId   String
+  threadId    String
+  sender      String?
+  hasReplied  Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  scenario    Scenario  @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+  @@index([threadId])
+  @@index([sender])
+  @@unique([threadId, sender])
 }
