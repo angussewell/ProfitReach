@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { db } from '@/lib/db';
 
 export async function POST(request: Request) {
   try {
@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     }
 
     // Verify scenario exists
-    const scenario = await prisma.scenario.findUnique({
+    const scenario = await db.scenario.findUnique({
       where: { id: scenarioId }
     });
 
@@ -29,10 +29,10 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create scenario message
-    const message = await prisma.scenarioMessage.create({
+    // Create scenario message with a generated messageId
+    const message = await db.scenarioMessage.create({
       data: {
-        id: crypto.randomUUID(),
+        messageId: `msg_${Date.now()}`,
         scenarioId,
         threadId,
         sender: recipientEmail,
