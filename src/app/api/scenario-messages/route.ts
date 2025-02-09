@@ -14,14 +14,17 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { scenarioId, messageId, recipientEmail } = body;
+    const { scenarioId, messageId, threadId, recipientEmail } = body;
+
+    // Use messageId if provided, otherwise use threadId
+    const messageIdentifier = messageId || threadId;
 
     // Validate required fields
-    if (!scenarioId || !messageId || !recipientEmail) {
+    if (!scenarioId || !messageIdentifier || !recipientEmail) {
       return NextResponse.json(
         { 
           error: 'Missing required fields',
-          details: 'scenarioId, messageId, and recipientEmail are required'
+          details: 'scenarioId, (messageId or threadId), and recipientEmail are required'
         },
         { status: 400 }
       );
@@ -41,11 +44,12 @@ export async function POST(request: Request) {
 
     // Create scenario message with minimal fields
     const message = await db.$queryRaw`
-      INSERT INTO "ScenarioMessage" ("id", "scenarioId", "threadId", "sender", "hasReplied")
+      INSERT INTO "ScenarioMessage" ("id", "scenarioId", "threadId", "messageId", "sender", "hasReplied")
       VALUES (
         gen_random_uuid(),
         ${scenarioId},
-        ${messageId},
+        ${messageIdentifier},
+        ${messageIdentifier},
         ${recipientEmail},
         false
       )
