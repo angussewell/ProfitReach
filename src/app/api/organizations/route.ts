@@ -5,13 +5,17 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await getServerSession(authOptions);
 
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const { searchParams } = new URL(request.url);
+    const include = searchParams.get('include')?.split(',') || [];
+    const includeEmailAccounts = include.includes('emailAccounts');
 
     console.log('Fetching organizations for session:', { 
       userId: session.user.id,
@@ -22,6 +26,9 @@ export async function GET() {
     // Regular users can only see their organization
     const organizations = session.user.role === 'admin'
       ? await prisma.organization.findMany({
+          include: {
+            emailAccounts: includeEmailAccounts
+          },
           orderBy: { name: 'asc' }
         })
       : await prisma.organization.findMany({
@@ -29,6 +36,9 @@ export async function GET() {
             users: {
               some: { id: session.user.id }
             }
+          },
+          include: {
+            emailAccounts: includeEmailAccounts
           },
           orderBy: { name: 'asc' }
         });

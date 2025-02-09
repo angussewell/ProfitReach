@@ -5,10 +5,6 @@ import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Sidebar from '@/components/sidebar/index';
 
-// Force dynamic rendering for authenticated routes
-export const dynamic = 'force-dynamic';
-export const fetchCache = 'force-no-store';
-
 export default function AuthenticatedLayout({
   children,
 }: {

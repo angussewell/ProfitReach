@@ -6,15 +6,21 @@ import { Card } from './card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './select';
 import { Checkbox } from './checkbox';
 import { Switch } from './switch';
-import { Upload, Plus, Search, X } from 'lucide-react';
-import type { FC } from 'react';
-import type { LucideProps } from 'lucide-react';
+import { Upload, Plus, Search, X, Inbox, Loader2, MessageSquare } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import type { ComponentProps, HTMLAttributes } from 'react';
+import * as SelectPrimitive from "@radix-ui/react-select";
+import * as CheckboxPrimitive from "@radix-ui/react-checkbox";
+import * as SwitchPrimitive from "@radix-ui/react-switch";
 
-// Re-export icons with proper typing
-export const ClientUploadIcon: FC<LucideProps> = Upload;
-export const ClientPlusIcon: FC<LucideProps> = Plus;
-export const ClientSearchIcon: FC<LucideProps> = Search;
-export const ClientXIcon: FC<LucideProps> = X;
+// Re-export icons
+export const ClientUploadIcon = Upload;
+export const ClientPlusIcon = Plus;
+export const ClientSearchIcon = Search;
+export const ClientXIcon = X;
+export const ClientInboxIcon = Inbox;
+export const ClientLoaderIcon = Loader2;
+export const ClientMessageSquareIcon = MessageSquare;
 
 // Re-export components
 export const ClientButton = Button;
