@@ -1,6 +1,16 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
+export async function GET() {
+  return NextResponse.json(
+    { 
+      error: 'Method not allowed',
+      message: 'This endpoint only accepts POST requests'
+    },
+    { status: 405 }
+  );
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -30,19 +40,24 @@ export async function POST(request: Request) {
     }
 
     // Create scenario message with a generated messageId
-    const message = await db.scenarioMessage.create({
-      data: {
-        messageId: `msg_${Date.now()}`,
-        scenarioId,
-        threadId,
-        sender: recipientEmail,
-        hasReplied: false
-      }
-    });
+    const message = await db.$queryRaw`
+      INSERT INTO "ScenarioMessage" ("id", "messageId", "scenarioId", "threadId", "sender", "hasReplied", "createdAt", "updatedAt")
+      VALUES (
+        gen_random_uuid(),
+        ${`msg_${Date.now()}`},
+        ${scenarioId},
+        ${threadId},
+        ${recipientEmail},
+        false,
+        NOW(),
+        NOW()
+      )
+      RETURNING *;
+    `;
 
     return NextResponse.json({
       success: true,
-      message
+      message: Array.isArray(message) ? message[0] : message
     });
 
   } catch (error) {
