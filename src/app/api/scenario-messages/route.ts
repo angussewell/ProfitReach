@@ -39,17 +39,15 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create scenario message
+    // Create scenario message with minimal fields
     const message = await db.$queryRaw`
-      INSERT INTO "ScenarioMessage" ("id", "scenarioId", "threadId", "sender", "hasReplied", "createdAt", "updatedAt")
+      INSERT INTO "ScenarioMessage" ("id", "scenarioId", "threadId", "sender", "hasReplied")
       VALUES (
         gen_random_uuid(),
         ${scenarioId},
         ${threadId},
         ${recipientEmail},
-        false,
-        NOW(),
-        NOW()
+        false
       )
       RETURNING *;
     `;
