@@ -3,6 +3,9 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { Mail360Client } from '@/lib/mail360';
 
+// Force dynamic API route
+export const dynamic = 'force-dynamic';
+
 type MessageType = 'REAL_REPLY' | 'BOUNCE' | 'AUTO_REPLY' | 'OUT_OF_OFFICE' | 'OTHER';
 
 // Webhook payload schema from Mail360
@@ -66,11 +69,16 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    console.log('Received Mail360 webhook request');
+    
     // Parse and validate webhook data
     const data = await request.json();
+    console.log('Webhook payload:', data);
+    
     const validationResult = mail360WebhookSchema.safeParse(data);
     
     if (!validationResult.success) {
+      console.error('Invalid webhook data:', validationResult.error.errors);
       return NextResponse.json(
         { error: 'Invalid webhook data', details: validationResult.error.errors },
         { status: 400 }
@@ -86,11 +94,18 @@ export async function POST(request: Request) {
     });
     
     if (!emailAccount) {
+      console.error('Email account not found:', webhookData.account_key);
       return NextResponse.json(
         { error: 'Email account not found' },
         { status: 404 }
       );
     }
+
+    console.log('Found email account:', {
+      id: emailAccount.id,
+      email: emailAccount.email,
+      organizationId: emailAccount.organizationId
+    });
 
     // Fetch full message details from Mail360
     const mail360Client = new Mail360Client();
@@ -105,6 +120,12 @@ export async function POST(request: Request) {
     
     // Classify message
     const { type: messageType, scores } = classifyMessage(fullMessage);
+    
+    console.log('Message classified:', {
+      type: messageType,
+      scores,
+      messageId: webhookData.message_id
+    });
     
     // Store message in database
     const result = await prisma.emailMessage.create({
@@ -121,6 +142,12 @@ export async function POST(request: Request) {
         messageType,
         classificationScores: scores
       }
+    });
+    
+    console.log('Message stored:', {
+      id: result.id,
+      messageId: result.messageId,
+      type: messageType
     });
     
     return NextResponse.json({
