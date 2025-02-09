@@ -85,7 +85,25 @@ export async function POST(request: Request) {
     console.log('Received Mail360 webhook request');
     
     // Parse and validate webhook data
-    const data = await request.json();
+    let data;
+    const rawBody = await request.text();
+    try {
+      // Handle both regular and pre-stringified JSON
+      data = typeof rawBody === 'string' ? JSON.parse(rawBody) : rawBody;
+      if (typeof data === 'string') {
+        data = JSON.parse(data);
+      }
+    } catch (parseError) {
+      console.error('Failed to parse webhook data:', {
+        error: parseError,
+        rawBody: rawBody.slice(0, 1000) // Log first 1000 chars only
+      });
+      return NextResponse.json(
+        { error: 'Invalid JSON data' },
+        { status: 400 }
+      );
+    }
+
     console.log('Webhook payload:', {
       ...data,
       headers: Object.fromEntries(request.headers)
