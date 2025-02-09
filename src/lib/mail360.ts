@@ -192,7 +192,8 @@ export class Mail360Client {
 
     // Send parameters directly without string conversion
     const apiParams = {
-      ...params
+      ...params,
+      webhookUrl: 'https://app.messagelm.com/api/webhooks/mail360'
     };
 
     const response = await fetch('https://mail360.zoho.com/api/accounts', {
@@ -248,11 +249,6 @@ export class Mail360Client {
       headers: Object.fromEntries(response.headers.entries()),
       body: responseText,
       accountKey,
-      requestHeaders: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'Authorization': 'Zoho-oauthtoken [REDACTED]'
-      }
     });
 
     if (!response.ok) {
@@ -260,22 +256,42 @@ export class Mail360Client {
         status: response.status,
         statusText: response.statusText,
         responseBody: responseText,
-        accountKey,
-        requestUrl: `https://mail360.zoho.com/api/accounts/${accountKey}`
       });
-      throw new Error(`Failed to delete Mail360 account (${response.status}): ${responseText}`);
+      throw new Error(`Failed to delete Mail360 account: ${responseText}`);
     }
+  }
 
-    try {
-      const data = JSON.parse(responseText);
-      if (data.status?.code !== 200) {
-        throw new Error(`Mail360 API Error: ${data.status?.description || 'Unknown error'}`);
-      }
-    } catch (parseError) {
-      console.error('Error parsing Mail360 response:', parseError);
-      // If we can't parse the response but the status was OK, we'll consider it a success
-      if (response.ok) return;
-      throw new Error('Invalid response from Mail360 API');
+  async updateAccountSettings(accountKey: string): Promise<void> {
+    const accessToken = await this.getAccessToken();
+
+    const response = await fetch(`https://mail360.zoho.com/api/accounts/${accountKey}/settings`, {
+      method: 'PUT',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': `Zoho-oauthtoken ${accessToken}`,
+      },
+      body: JSON.stringify({
+        webhookUrl: 'https://app.messagelm.com/api/webhooks/mail360'
+      }),
+    });
+
+    const responseText = await response.text();
+    console.log('Account settings update response:', {
+      status: response.status,
+      statusText: response.statusText,
+      headers: Object.fromEntries(response.headers.entries()),
+      body: responseText,
+      accountKey,
+    });
+
+    if (!response.ok) {
+      console.error('Failed to update Mail360 account settings:', {
+        status: response.status,
+        statusText: response.statusText,
+        responseBody: responseText,
+      });
+      throw new Error(`Failed to update Mail360 account settings: ${responseText}`);
     }
   }
 
