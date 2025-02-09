@@ -80,6 +80,11 @@ function classifyMessage(message: z.infer<typeof mail360WebhookSchema>): {
   return { type, scores };
 }
 
+// Add GET handler for webhook verification
+export async function GET() {
+  return NextResponse.json({ status: 'ok' });
+}
+
 export async function POST(request: Request) {
   try {
     // Parse and validate webhook data
