@@ -15,6 +15,7 @@ const ADMIN_ROUTES = [
 
 // Routes that require authentication
 const PROTECTED_ROUTES = [
+  '/universal-inbox',
   '/scenarios',
   '/settings/scenarios',
   '/snippets',
