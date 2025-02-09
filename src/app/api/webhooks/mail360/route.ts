@@ -161,13 +161,21 @@ export async function POST(request: Request) {
       const cleanData = {
         message_id: data.message_id || data.messageId || `generated_${Date.now()}`,
         thread_id: data.thread_id || data.threadId || data.message_id || `thread_${Date.now()}`,
-        account_key: data.account_key || data.accountKey || '',
+        account_key: (data.account_key || data.accountKey || '').trim(),
         subject: data.subject || 'No Subject',
         from_address: data.from_address || data.sender || data.fromAddress || 'Unknown Sender',
         delivered_to: data.delivered_to || data.to_address || data.toAddress || '',
         content: data.content || data.summary || '',
         received_time: data.received_time || data.receivedTime || Date.now().toString()
       };
+
+      console.log('Account key analysis:', {
+        original: data.account_key || data.accountKey,
+        cleaned: cleanData.account_key,
+        containsWhitespace: /\s/.test(cleanData.account_key),
+        specialChars: cleanData.account_key.match(/[^a-zA-Z0-9]/g),
+        charCodes: [...cleanData.account_key].map(c => c.charCodeAt(0))
+      });
 
       // Validate required fields
       const missingFields = [];
@@ -200,6 +208,14 @@ export async function POST(request: Request) {
     }
 
     // Find email account by Mail360 account key (case-insensitive)
+    console.log('Attempting to find account with key:', {
+      raw_key: data.account_key,
+      uppercase_key: data.account_key?.toUpperCase(),
+      lowercase_key: data.account_key?.toLowerCase(),
+      key_type: typeof data.account_key,
+      key_length: data.account_key?.length
+    });
+
     const emailAccount = await prisma.emailAccount.findFirst({
       where: {
         OR: [
@@ -208,6 +224,23 @@ export async function POST(request: Request) {
           { mail360AccountKey: data.account_key?.toLowerCase() }
         ]
       }
+    });
+    
+    // Log all accounts for comparison
+    const allAccounts = await prisma.emailAccount.findMany({
+      select: {
+        email: true,
+        mail360AccountKey: true
+      }
+    });
+    
+    console.log('Database query results:', {
+      searchKey: data.account_key,
+      foundAccount: emailAccount ? {
+        email: emailAccount.email,
+        key: emailAccount.mail360AccountKey
+      } : null,
+      allAccounts: allAccounts
     });
     
     if (!emailAccount) {
