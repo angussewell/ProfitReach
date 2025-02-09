@@ -89,8 +89,7 @@ export async function POST(request: Request) {
     
     // Find email account by Mail360 account key
     const emailAccount = await prisma.emailAccount.findFirst({
-      where: { mail360AccountKey: webhookData.account_key },
-      include: { organization: true }
+      where: { mail360AccountKey: webhookData.account_key }
     });
     
     if (!emailAccount) {

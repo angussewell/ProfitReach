@@ -26,6 +26,12 @@ const PROTECTED_ROUTES = [
   '/prompts'
 ];
 
+// Public API routes that don't require authentication
+const PUBLIC_API_ROUTES = [
+  '/api/webhooks/mail360',
+  '/api/email-accounts/update-webhooks'
+];
+
 export async function middleware(request: NextRequest) {
   const token = await getToken({ req: request });
   const path = request.nextUrl.pathname;
@@ -35,6 +41,12 @@ export async function middleware(request: NextRequest) {
     hasToken: !!token,
     method: request.method
   });
+
+  // Check if this is a public API route
+  if (PUBLIC_API_ROUTES.some(route => path.startsWith(route))) {
+    console.log('Public API route detected, bypassing auth:', path);
+    return NextResponse.next();
+  }
 
   // If it's an API route, let the API handle authorization
   if (path.startsWith('/api')) {

@@ -1,6 +1,4 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { Mail360Client } from '@/lib/mail360';
 
@@ -8,15 +6,9 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.organizationId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     // Get all email accounts with Mail360 keys
     const emailAccounts = await prisma.emailAccount.findMany({
       where: {
-        organizationId: session.user.organizationId,
         mail360AccountKey: { not: null }
       }
     });
