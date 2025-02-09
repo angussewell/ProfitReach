@@ -25,12 +25,23 @@ const emailAccountSchema = z.object({
 export async function GET() {
   try {
     console.log('Starting GET request for email accounts');
+    const headersList = headers();
+    console.log('Request headers:', {
+      cookie: headersList.get('cookie'),
+      authorization: headersList.get('authorization'),
+      host: headersList.get('host'),
+      origin: headersList.get('origin'),
+      referer: headersList.get('referer'),
+      userAgent: headersList.get('user-agent')
+    });
+
     const session = await getServerSession(authOptions);
     console.log('Session data:', {
       hasSession: !!session,
       hasUser: !!session?.user,
+      userId: session?.user?.id,
+      userEmail: session?.user?.email,
       organizationId: session?.user?.organizationId,
-      headers: headers(),
       timestamp: new Date().toISOString()
     });
 

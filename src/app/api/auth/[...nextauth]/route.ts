@@ -297,13 +297,13 @@ export const authOptions: AuthOptions = {
   },
   cookies: {
     sessionToken: {
-      name: isDevelopment ? 'next-auth.session-token' : `__Secure-next-auth.session-token`,
+      name: `${isDevelopment ? '' : '__Secure-'}next-auth.session-token`,
       options: {
         httpOnly: true,
         sameSite: 'lax',
         path: '/',
-        secure: process.env.NODE_ENV === 'production',
-        domain: isDevelopment ? undefined : 'app.messagelm.com'
+        secure: !isDevelopment,
+        domain: isDevelopment ? undefined : '.messagelm.com'
       }
     }
   }
