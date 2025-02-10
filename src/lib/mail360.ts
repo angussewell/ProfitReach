@@ -196,31 +196,24 @@ export class Mail360Client {
 
   async addSyncAccount(params: {
     emailid: string;
-    accountType: number;
+    accountType: string;
     incomingUser: string;
     incomingPasswd: string;
     incomingServer: string;
-    incomingServerPort: number;
-    isCustomSmtp: boolean;
+    incomingServerPort: string;
     outgoingServer: string;
-    outgoingServerPort: number;
-    smtpConnection: number;
-    outgoingAuth: boolean;
+    outgoingServerPort: string;
+    smtpConnection: string;
     outgoingUser: string;
     outgoingPasswd: string;
-    gmailTypeSync: boolean;
+    gmailTypeSync: string;
   }): Promise<string> {
     const accessToken = await this.getAccessToken();
 
     // Add delay between requests in bulk operations
     await new Promise(resolve => setTimeout(resolve, 1000));
 
-    // Send parameters directly without string conversion
-    const apiParams = {
-      ...params,
-      webhookUrl: 'https://app.messagelm.com/api/webhooks/mail360'
-    };
-
+    // Send parameters exactly as specified by Mail360 API
     const response = await fetch('https://mail360.zoho.com/api/accounts', {
       method: 'POST',
       headers: {
@@ -228,7 +221,7 @@ export class Mail360Client {
         'Content-Type': 'application/json',
         'Authorization': `Zoho-oauthtoken ${accessToken}`,
       },
-      body: JSON.stringify(apiParams),
+      body: JSON.stringify(params),
     });
 
     const responseText = await response.text();
