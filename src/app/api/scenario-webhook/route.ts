@@ -103,6 +103,11 @@ export async function POST(req: NextRequest) {
         where: { 
           name: scenarioName,
           organizationId: organization.id
+        },
+        include: {
+          snippet: true,
+          attachment: true,
+          signature: true
         }
       });
 
@@ -134,6 +139,18 @@ export async function POST(req: NextRequest) {
           error: "Scenario not found",
           scenarioName 
         }, { status: 404 });
+      }
+
+      // Get email accounts
+      const emailAccounts = await prisma.emailAccount.findMany({
+        where: {
+          organizationId: organization.id,
+          isActive: true
+        }
+      });
+
+      if (emailAccounts.length === 0) {
+        throw new Error('No active email accounts found');
       }
 
       // Process variables in all text fields
@@ -273,8 +290,26 @@ export async function POST(req: NextRequest) {
             },
             body: JSON.stringify({
               contactData,
-              scenario: processedScenario,
-              prompts: processedPrompts
+              scenarioData: {
+                id: scenario.id,
+                name: scenario.name,
+                touchpointType: scenario.touchpointType,
+                customizationPrompt: scenario.customizationPrompt ? processWebhookVariables(scenario.customizationPrompt, contactData) : null,
+                emailExamplesPrompt: scenario.emailExamplesPrompt ? processWebhookVariables(scenario.emailExamplesPrompt, contactData) : null,
+                subjectLine: scenario.subjectLine ? processWebhookVariables(scenario.subjectLine, contactData) : null,
+                followUp: scenario.isFollowUp || false,
+                attachment: scenario.attachment?.content || null,
+                attachmentName: scenario.attachment?.name || null,
+                snippet: scenario.snippet?.content || null
+              },
+              prompts: processedPrompts,
+              emailData: emailAccounts[0] ? {
+                email: emailAccounts[0].email,
+                name: emailAccounts[0].name,
+                password: emailAccounts[0].password || '',
+                host: emailAccounts[0].outgoingServer || '',
+                port: emailAccounts[0].outgoingServerPort || 0
+              } : undefined
             })
           });
 
