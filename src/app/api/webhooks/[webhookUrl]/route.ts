@@ -45,9 +45,7 @@ interface OutboundData {
   emailData?: {
     email: string;
     name: string;
-    password: string;
-    host: string;
-    port: number;
+    mail360AccountKey: string;
   };
 }
 
@@ -258,9 +256,7 @@ export async function POST(
         emailData: emailAccounts[0] ? {
           email: emailAccounts[0].email,
           name: emailAccounts[0].name,
-          password: emailAccounts[0].password || '',
-          host: emailAccounts[0].outgoingServer || '',
-          port: emailAccounts[0].outgoingServerPort || 0
+          mail360AccountKey: emailAccounts[0].mail360AccountKey || ''
         } : undefined
       };
 
