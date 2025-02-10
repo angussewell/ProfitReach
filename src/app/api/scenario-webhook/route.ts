@@ -306,9 +306,7 @@ export async function POST(req: NextRequest) {
               emailData: emailAccounts[0] ? {
                 email: emailAccounts[0].email,
                 name: emailAccounts[0].name,
-                password: emailAccounts[0].password || '',
-                host: emailAccounts[0].outgoingServer || '',
-                port: emailAccounts[0].outgoingServerPort || 0
+                mail360AccountKey: emailAccounts[0].mail360AccountKey || ''
               } : undefined
             })
           });
