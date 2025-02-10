@@ -222,7 +222,7 @@ export async function POST(
         emailAccounts = [matchingAccount];
       }
 
-      // Process variables in scenario fields
+      // Process webhook variables in scenario fields
       const processedScenario = {
         id: scenario.id,
         name: scenario.name,
@@ -244,7 +244,7 @@ export async function POST(
       }, {} as Record<string, string>);
 
       // Prepare outbound data
-      const outboundData = {
+      const outboundData: OutboundData = {
         contactData: {
           ...data,
           // If test mode is enabled, override email
@@ -255,11 +255,13 @@ export async function POST(
         },
         scenarioData: processedScenario,
         prompts: processedPrompts,
-        emailAccounts: emailAccounts.map(account => ({
-          email: account.email,
-          name: account.name,
-          mail360AccountKey: account.mail360AccountKey
-        }))
+        emailData: emailAccounts[0] ? {
+          email: emailAccounts[0].email,
+          name: emailAccounts[0].name,
+          password: emailAccounts[0].password || '',
+          host: emailAccounts[0].outgoingServer || '',
+          port: emailAccounts[0].outgoingServerPort || 0
+        } : undefined
       };
 
       log('info', 'Prepared outbound data with email accounts', { 
