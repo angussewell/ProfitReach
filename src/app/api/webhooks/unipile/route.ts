@@ -15,14 +15,30 @@ const UnipileAccountWebhook = z.object({
   name: z.string()
 });
 
-// Define Unipile account details schema
+// Define Unipile account details schema based on their API response
 const UnipileAccountDetails = z.object({
   object: z.literal('Account'),
   id: z.string(),
   name: z.string(),
-  identifier: z.string().email(),
   type: z.string(),
-  created_at: z.string().datetime()
+  created_at: z.string(),
+  identifier: z.string().email().optional(), // Some account types might not have email
+  connection_params: z.object({}).passthrough(), // Allow any connection params
+  last_fetched_at: z.string().optional(),
+  current_signature: z.string().optional(),
+  signatures: z.array(
+    z.object({
+      title: z.string(),
+      content: z.string()
+    })
+  ).optional(),
+  groups: z.array(z.string()).optional(),
+  sources: z.array(
+    z.object({
+      id: z.string(),
+      status: z.string()
+    })
+  ).optional()
 });
 
 type UnipileAccountData = z.infer<typeof UnipileAccountWebhook>;
@@ -57,7 +73,14 @@ async function getUnipileAccountDetails(accountId: string): Promise<UnipileAccou
   console.log('Raw Unipile account details:', rawData);
 
   try {
-    return UnipileAccountDetails.parse(rawData);
+    const accountDetails = UnipileAccountDetails.parse(rawData);
+    
+    // For email accounts, ensure we have an identifier
+    if (!accountDetails.identifier && accountDetails.type === 'GOOGLE') {
+      throw new Error('Missing email identifier for Google account');
+    }
+    
+    return accountDetails;
   } catch (error) {
     console.error('Invalid account details format:', {
       error,
@@ -68,28 +91,40 @@ async function getUnipileAccountDetails(accountId: string): Promise<UnipileAccou
 }
 
 export async function POST(request: Request) {
+  console.log('Received Unipile webhook request:', {
+    url: request.url,
+    method: request.method,
+    headers: Object.fromEntries(request.headers.entries())
+  });
+
   try {
-    console.log('Received Unipile account webhook request', {
-      method: request.method,
-      url: request.url,
-      headers: Object.fromEntries(request.headers.entries())
-    });
-    
-    // Step 1: Parse and validate webhook data
+    // Log raw request body for debugging
     const rawBody = await request.text();
     console.log('Raw webhook body:', rawBody);
-    
+
+    // Parse the body as JSON
+    let body;
+    try {
+      body = JSON.parse(rawBody);
+      console.log('Parsed webhook body:', body);
+    } catch (parseError) {
+      console.error('Failed to parse webhook body:', parseError);
+      return NextResponse.json(
+        { 
+          error: 'Invalid JSON',
+          details: parseError instanceof Error ? parseError.message : String(parseError)
+        },
+        { status: 400 }
+      );
+    }
+
+    // Step 1: Validate webhook data
     let webhookData: UnipileAccountData;
     try {
-      const parsedData = JSON.parse(rawBody);
-      webhookData = UnipileAccountWebhook.parse(parsedData);
-      console.log('Parsed webhook data:', webhookData);
+      webhookData = UnipileAccountWebhook.parse(body);
+      console.log('Validated webhook data:', webhookData);
     } catch (parseError) {
-      console.error('Failed to parse webhook data:', {
-        error: parseError,
-        errorMessage: parseError instanceof Error ? parseError.message : String(parseError),
-        rawBody: rawBody.slice(0, 1000)
-      });
+      console.error('Invalid webhook data:', parseError);
       return NextResponse.json(
         { 
           error: 'Invalid webhook data', 
@@ -117,6 +152,18 @@ export async function POST(request: Request) {
 
     // Step 3: Save to database only after we have valid data
     try {
+      // Ensure we have an email identifier
+      if (!accountDetails.identifier) {
+        throw new Error('Missing email identifier in account details');
+      }
+
+      console.log('Attempting to save account:', {
+        unipileAccountId: accountDetails.id,
+        name: accountDetails.name,
+        email: accountDetails.identifier,
+        organizationId: webhookData.name
+      });
+
       const emailAccount = await prisma.emailAccount.upsert({
         where: {
           unipileAccountId: accountDetails.id
@@ -135,11 +182,12 @@ export async function POST(request: Request) {
         }
       });
       
-      console.log('Email account stored:', {
+      console.log('Email account stored successfully:', {
         id: emailAccount.id,
         unipileAccountId: emailAccount.unipileAccountId,
         name: emailAccount.name,
-        email: emailAccount.email
+        email: emailAccount.email,
+        organizationId: emailAccount.organizationId
       });
       
       return NextResponse.json({
@@ -153,7 +201,11 @@ export async function POST(request: Request) {
           stack: error.stack,
           name: error.name
         } : error,
-        accountDetails
+        accountDetails: {
+          id: accountDetails.id,
+          name: accountDetails.name,
+          email: accountDetails.identifier
+        }
       });
       
       return NextResponse.json(

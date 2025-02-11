@@ -40,13 +40,14 @@ export async function POST(request: Request) {
     const unipileUrl = `https://${UNIPILE_DSN}/api/v1/hosted/accounts/link`;
     const payload = {
       type: 'create',
-      providers: ['GOOGLE', 'OUTLOOK', 'MAIL'], // Updated to use correct provider names
-      api_url: `https://${UNIPILE_DSN}`,
+      providers: ['GOOGLE', 'OUTLOOK', 'MAIL'],
+      api_url: UNIPILE_DSN,
       expiresOn,
       notify_url: `${baseUrl}/api/webhooks/unipile`,
       name: session.user.organizationId,
       success_redirect_url: `${baseUrl}/email-accounts?success=true`,
-      failure_redirect_url: `${baseUrl}/email-accounts?error=true`
+      failure_redirect_url: `${baseUrl}/email-accounts?error=true`,
+      disabled_options: ['autoproxy']
     };
 
     console.log('Requesting Unipile auth link:', { url: unipileUrl, payload });
