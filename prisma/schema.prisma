@@ -238,26 +238,13 @@ model EmailAccount {
   id             String       @id @default(cuid())
   email          String       @unique
   name           String
-  password       String
-  outgoingServer String
-  outgoingServerPort Int
   organizationId String
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   isActive       Boolean      @default(true)
-  mail360AccountKey String?
-  smtpConnection Int?
-  isGmail        Boolean      @default(false)
-  incomingServer String
-  incomingServerPort Int
-  incomingUser   String
-  incomingPassword String
-  sslEnabled     Boolean      @default(true)
-  startTls       Boolean      @default(false)
-  saveSentCopy   Boolean      @default(true)
-  syncFromDate   DateTime?    @default(now())
+  unipileAccountId String?    @unique
   organization   Organization @relation(fields: [organizationId], references: [id])
-  messages       EmailMessage[]
+  emailMessages  EmailMessage[]
 
   @@index([organizationId])
 }

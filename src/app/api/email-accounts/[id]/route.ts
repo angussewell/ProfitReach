@@ -174,7 +174,8 @@ export async function DELETE(
       hasKey: !!emailAccount.mail360AccountKey
     });
 
-    // Delete from Mail360 first if we have an account key
+    let mail360DeleteSuccess = true;
+    // Try Mail360 deletion first, but don't block on failure
     if (emailAccount.mail360AccountKey) {
       try {
         const mail360 = new Mail360Client();
@@ -184,17 +185,18 @@ export async function DELETE(
           mail360AccountKey: emailAccount.mail360AccountKey
         });
       } catch (mail360Error) {
+        mail360DeleteSuccess = false;
         console.error('Failed to delete from Mail360:', {
           error: mail360Error instanceof Error ? mail360Error.message : String(mail360Error),
           stack: mail360Error instanceof Error ? mail360Error.stack : undefined,
           accountId: params.id,
           mail360AccountKey: emailAccount.mail360AccountKey
         });
-        throw mail360Error; // Re-throw to handle in outer catch
+        // Continue with database deletion even if Mail360 fails
       }
     }
 
-    // Then delete from our database
+    // Delete from our database
     try {
       await prisma.emailAccount.delete({
         where: {
@@ -204,16 +206,27 @@ export async function DELETE(
       console.log('Successfully deleted from database:', {
         accountId: params.id
       });
+
+      // If Mail360 failed but database succeeded, return partial success
+      if (!mail360DeleteSuccess) {
+        return NextResponse.json({ 
+          warning: 'Account deleted from database but Mail360 deletion failed. Please contact support.' 
+        }, { status: 207 });
+      }
+
+      return NextResponse.json({ success: true });
     } catch (dbError) {
       console.error('Failed to delete from database:', {
         error: dbError instanceof Error ? dbError.message : String(dbError),
         stack: dbError instanceof Error ? dbError.stack : undefined,
         accountId: params.id
       });
-      throw dbError; // Re-throw to handle in outer catch
+      
+      return NextResponse.json(
+        { error: 'Failed to delete account from database' },
+        { status: 500 }
+      );
     }
-
-    return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error in delete account handler:', {
       error: error instanceof Error ? error.message : String(error),
