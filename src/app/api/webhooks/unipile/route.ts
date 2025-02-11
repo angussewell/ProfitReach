@@ -26,7 +26,10 @@ const UnipileAccountDetails = z.object({
     mail: z.object({
       id: z.string(),
       username: z.string()
-    })
+    }).optional(),
+    linkedin: z.object({
+      username: z.string()
+    }).optional()
   }),
   sources: z.array(
     z.object({
@@ -136,52 +139,97 @@ export async function POST(request: Request) {
       );
     }
 
-    // Extract email from account details
-    const email = accountDetails.connection_params?.mail?.username;
-    if (!email) {
-      console.error('No email found in account details:', accountDetails);
+    // Handle different account types
+    if (accountDetails.connection_params?.mail) {
+      // Handle email account
+      const email = accountDetails.connection_params.mail.username;
+      
+      // Check if account already exists
+      const existingAccount = await prisma.emailAccount.findUnique({
+        where: {
+          unipileAccountId: body.account_id
+        }
+      });
+
+      if (existingAccount) {
+        // Update existing account
+        const updatedAccount = await prisma.emailAccount.update({
+          where: {
+            unipileAccountId: body.account_id
+          },
+          data: {
+            email,
+            isActive: true,
+            updatedAt: new Date()
+          }
+        });
+        console.log('Updated existing email account:', updatedAccount);
+        return NextResponse.json(updatedAccount);
+      }
+
+      // Create new email account
+      const newAccount = await prisma.emailAccount.create({
+        data: {
+          email,
+          name: email, // Initially set name to email, will be updated by user
+          organizationId,
+          unipileAccountId: body.account_id,
+          isActive: true
+        }
+      });
+
+      console.log('Created new email account:', newAccount);
+      return NextResponse.json(newAccount);
+    } 
+    else if (accountDetails.connection_params?.linkedin) {
+      // Handle LinkedIn account
+      const username = accountDetails.connection_params.linkedin.username;
+      
+      // Check if account already exists
+      const existingAccount = await prisma.socialAccount.findUnique({
+        where: {
+          unipileAccountId: body.account_id
+        }
+      });
+
+      if (existingAccount) {
+        // Update existing account
+        const updatedAccount = await prisma.socialAccount.update({
+          where: {
+            unipileAccountId: body.account_id
+          },
+          data: {
+            username,
+            isActive: true,
+            updatedAt: new Date()
+          }
+        });
+        console.log('Updated existing social account:', updatedAccount);
+        return NextResponse.json(updatedAccount);
+      }
+
+      // Create new social account
+      const newAccount = await prisma.socialAccount.create({
+        data: {
+          username,
+          name: username, // Initially set name to username, will be updated by user
+          provider: 'LINKEDIN',
+          organizationId,
+          unipileAccountId: body.account_id,
+          isActive: true
+        }
+      });
+
+      console.log('Created new social account:', newAccount);
+      return NextResponse.json(newAccount);
+    }
+    else {
+      console.error('Unsupported account type:', accountDetails);
       return NextResponse.json(
-        { error: 'No email found in account details' },
+        { error: 'Unsupported account type' },
         { status: 400 }
       );
     }
-
-    // Check if account already exists
-    const existingAccount = await prisma.emailAccount.findUnique({
-      where: {
-        unipileAccountId: body.account_id
-      }
-    });
-
-    if (existingAccount) {
-      // Update existing account
-      const updatedAccount = await prisma.emailAccount.update({
-        where: {
-          unipileAccountId: body.account_id
-        },
-        data: {
-          email,
-          isActive: true,
-          updatedAt: new Date()
-        }
-      });
-      console.log('Updated existing email account:', updatedAccount);
-      return NextResponse.json(updatedAccount);
-    }
-
-    // Create new account
-    const newAccount = await prisma.emailAccount.create({
-      data: {
-        email,
-        name: email, // Initially set name to email, will be updated by user
-        organizationId,
-        unipileAccountId: body.account_id,
-        isActive: true
-      }
-    });
-
-    console.log('Created new email account:', newAccount);
-    return NextResponse.json(newAccount);
 
   } catch (error) {
     console.error('Error processing webhook:', error);

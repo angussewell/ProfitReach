@@ -6,6 +6,7 @@ import { Card } from './card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './select';
 import { Checkbox } from './checkbox';
 import { Switch } from './switch';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from './tabs';
 import { Upload, Plus, Search, X, Inbox, Loader2, MessageSquare, Pencil, Trash2 } from 'lucide-react';
 
 // Re-export components directly
@@ -19,6 +20,10 @@ export { SelectItem as ClientSelectItem };
 export { SelectTrigger as ClientSelectTrigger };
 export { SelectValue as ClientSelectValue };
 export { Checkbox as ClientCheckbox };
+export { Tabs as ClientTabsRoot };
+export { TabsList as ClientTabsList };
+export { TabsTrigger as ClientTabsTrigger };
+export { TabsContent as ClientTabsContent };
 
 // Re-export icons directly
 export { Upload as ClientUploadIcon };

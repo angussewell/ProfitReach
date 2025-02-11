@@ -42,6 +42,7 @@ model Organization {
   outboundWebhookUrl String?
   attachments        Attachment[]
   emailAccounts      EmailAccount[]
+  socialAccounts     SocialAccount[]
   ghlIntegrations    GHLIntegration[]
   metrics            Metric[]
   researchResults    ResearchResult[]
@@ -296,4 +297,22 @@ model ScenarioMessage {
   @@index([threadId])
   @@index([sender])
   @@unique([threadId, sender])
+}
+
+model SocialAccount {
+  id              String       @id @default(cuid())
+  username        String
+  name            String
+  provider        String
+  organizationId  String
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  isActive        Boolean      @default(true)
+  unipileAccountId String?     @unique
+
+  // Relations
+  organization    Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@index([provider])
 }

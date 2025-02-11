@@ -72,9 +72,9 @@ export default function Sidebar(): JSX.Element {
       icon: createIcon(Icons.Webhook, 'webhook-logs-icon')
     },
     { 
-      href: '/email-accounts', 
-      label: 'Email Accounts', 
-      icon: createIcon(Icons.Mail, 'email-accounts-icon')
+      href: '/accounts', 
+      label: 'Accounts', 
+      icon: createIcon(Icons.Users, 'accounts-icon')
     },
     { 
       href: '/settings', 

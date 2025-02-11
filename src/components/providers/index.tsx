@@ -2,16 +2,11 @@
 
 import { SessionProvider } from 'next-auth/react';
 import { OrganizationProvider } from '@/contexts/OrganizationContext';
-import { Session } from 'next-auth';
+import { PropsWithChildren } from 'react';
 
-interface ProvidersProps {
-  children: React.ReactNode;
-  session: Session | null;
-}
-
-export function Providers({ children, session }: ProvidersProps) {
+export function Providers({ children }: PropsWithChildren) {
   return (
-    <SessionProvider session={session}>
+    <SessionProvider refetchInterval={0} refetchOnWindowFocus={false}>
       <OrganizationProvider>
         {children}
       </OrganizationProvider>

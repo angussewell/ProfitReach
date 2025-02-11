@@ -4,8 +4,6 @@ import '@fontsource/jetbrains-mono/500.css';
 import '@fontsource/jetbrains-mono/600.css';
 import { Inter } from 'next/font/google';
 import { Providers } from '@/components/providers';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { Toaster } from '@/components/ui/toaster';
 import { Metadata, Viewport } from 'next';
 
@@ -69,15 +67,11 @@ export const metadata: Metadata = {
   }
 };
 
-// Suppress hydration warnings caused by browser extensions modifying the DOM
-// @see https://nextjs.org/docs/messages/react-hydration-error
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const session = await getServerSession(authOptions);
-
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -88,7 +82,7 @@ export default async function RootLayout({
         <meta name="theme-color" content="#ffffff" />
       </head>
       <body className={inter.className} suppressHydrationWarning>
-        <Providers session={session}>
+        <Providers>
           {children}
         </Providers>
         <Toaster />
