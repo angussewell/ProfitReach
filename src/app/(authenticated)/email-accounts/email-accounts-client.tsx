@@ -1,18 +1,16 @@
 'use client';
 
-import { useState, useEffect, ChangeEvent } from 'react';
+import { useState, useEffect } from 'react';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { PageHeader } from '@/components/ui/page-header';
-import {
-  ClientButton,
-  ClientInput,
-  ClientCard,
-  ClientSwitch,
-  ClientSearchIcon,
-  ClientPlusIcon,
-  ClientXIcon,
-} from '@/components/ui/client-components';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card } from '@/components/ui/card';
+import { Switch } from '@/components/ui/switch';
+import { Search, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
+import type { FC, ReactNode } from 'react';
+import type { LucideProps } from 'lucide-react';
 
 interface EmailAccount {
   id: string;
@@ -22,6 +20,11 @@ interface EmailAccount {
   unipileAccountId?: string;
 }
 
+// Create wrapper components for Lucide icons
+const SearchIcon = Search;
+const PlusIcon = Plus;
+const XIcon = X;
+
 export function EmailAccountsClient() {
   const [accounts, setAccounts] = useState<EmailAccount[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,6 +32,9 @@ export function EmailAccountsClient() {
   const [connecting, setConnecting] = useState(false);
   const [pollingForAccount, setPollingForAccount] = useState(false);
   const [initialAccountCount, setInitialAccountCount] = useState<number | null>(null);
+  const [showNameModal, setShowNameModal] = useState(false);
+  const [newAccountId, setNewAccountId] = useState<string | null>(null);
+  const [newName, setNewName] = useState('');
 
   useEffect(() => {
     fetchEmailAccounts();
@@ -74,7 +80,15 @@ export function EmailAccountsClient() {
             });
             clearInterval(pollInterval);
             setPollingForAccount(false);
-            toast.success('Email account connected successfully!');
+
+            // Find the new account (it will be the one with email as name)
+            const newAccount = newAccounts.find(acc => acc.email === acc.name);
+            if (newAccount) {
+              setNewAccountId(newAccount.id);
+              setNewName(newAccount.name);
+              setShowNameModal(true);
+            }
+
             // Clear the success parameter from URL
             window.history.replaceState({}, '', window.location.pathname);
           }
@@ -167,6 +181,33 @@ export function EmailAccountsClient() {
     }
   };
 
+  const handleUpdateName = async () => {
+    if (!newAccountId || !newName.trim()) return;
+
+    try {
+      const baseUrl = window.location.origin;
+      const response = await fetch(`${baseUrl}/api/email-accounts/${newAccountId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ name: newName.trim() }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update account name');
+      }
+
+      toast.success('Account name updated successfully');
+      setShowNameModal(false);
+      fetchEmailAccounts();
+    } catch (error) {
+      console.error('Error updating account name:', error);
+      toast.error('Failed to update account name');
+    }
+  };
+
   const filteredAccounts = accounts.filter(account =>
     account.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
     account.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -179,39 +220,66 @@ export function EmailAccountsClient() {
         description="Connect and manage your email accounts (Gmail, Outlook, or IMAP)"
       />
 
+      {showNameModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-96">
+            <h3 className="text-lg font-medium mb-4">Enter Account Name</h3>
+            <input
+              type="text"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="Enter account name"
+              className="w-full p-2 border rounded mb-4"
+            />
+            <div className="flex justify-end space-x-2">
+              <button
+                onClick={() => setShowNameModal(false)}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpdateName}
+                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center space-x-2">
           <div className="relative">
-            <ClientSearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
-            <ClientInput
+            <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+            <Input
               type="text"
               placeholder="Search accounts..."
               value={searchQuery}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10 w-64"
             />
           </div>
         </div>
         <div className="flex items-center space-x-2">
-          <ClientButton
+          <Button
             onClick={handleConnect}
             disabled={connecting || pollingForAccount}
             className="flex items-center space-x-2"
           >
-            <ClientPlusIcon className="h-4 w-4" />
+            <PlusIcon className="h-4 w-4" />
             <span>
               {connecting ? 'Connecting...' : 
                pollingForAccount ? 'Waiting for account...' : 
                'Connect Email Account'}
             </span>
-          </ClientButton>
+          </Button>
         </div>
       </div>
 
-      {loading || pollingForAccount ? (
-        <div className="text-center py-12">
-          {pollingForAccount ? 'Waiting for account connection...' : 'Loading...'}
-        </div>
+      {loading ? (
+        <div>Loading...</div>
       ) : filteredAccounts.length === 0 ? (
         <div className="text-center py-12 text-slate-500">
           {searchQuery ? 'No accounts match your search' : 'No email accounts connected yet. Click "Connect Email Account" to get started.'}
@@ -219,16 +287,16 @@ export function EmailAccountsClient() {
       ) : (
         <div className="grid gap-4">
           {filteredAccounts.map((account) => (
-            <ClientCard key={account.id} className="p-4">
+            <Card key={account.id} className="p-4">
               <div className="flex justify-between items-center">
                 <div>
                   <h3 className="font-medium">{account.name}</h3>
                   <p className="text-sm text-slate-500">{account.email}</p>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <ClientSwitch
+                  <Switch
                     checked={account.isActive}
-                    onCheckedChange={async (checked: boolean) => {
+                    onCheckedChange={async (checked) => {
                       try {
                         const baseUrl = window.location.origin;
                         const response = await fetch(`${baseUrl}/api/email-accounts/${account.id}`, {
@@ -252,16 +320,16 @@ export function EmailAccountsClient() {
                       }
                     }}
                   />
-                  <ClientButton
+                  <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => handleDelete(account.id)}
                   >
-                    <ClientXIcon className="h-4 w-4" />
-                  </ClientButton>
+                    <XIcon className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
-            </ClientCard>
+            </Card>
           ))}
         </div>
       )}

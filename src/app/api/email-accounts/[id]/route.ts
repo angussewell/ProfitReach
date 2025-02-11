@@ -36,45 +36,7 @@ export async function PUT(
 
     const body = await request.json();
     
-    // Check if this is a status-only update
-    const isStatusUpdate = Object.keys(body).length === 1 && 'isActive' in body;
-    
-    if (isStatusUpdate) {
-      const validationResult = statusUpdateSchema.safeParse(body);
-      if (!validationResult.success) {
-        return NextResponse.json(
-          { error: 'Invalid data', details: validationResult.error.errors },
-          { status: 400 }
-        );
-      }
-      
-      // Check if email account exists and belongs to the organization
-      const existingAccount = await prisma.emailAccount.findFirst({
-        where: {
-          id: params.id,
-          organizationId: session.user.organizationId,
-        },
-      });
-
-      if (!existingAccount) {
-        return NextResponse.json(
-          { error: 'Email account not found' },
-          { status: 404 }
-        );
-      }
-
-      const emailAccount = await prisma.emailAccount.update({
-        where: { id: params.id },
-        data: {
-          isActive: validationResult.data.isActive
-        } as Partial<EmailAccount>
-      });
-
-      const { password, ...sanitizedAccount } = emailAccount;
-      return NextResponse.json(sanitizedAccount);
-    }
-
-    // Handle full updates
+    // Validate request body
     const validationResult = emailAccountSchema.safeParse(body);
     if (!validationResult.success) {
       return NextResponse.json(
@@ -100,43 +62,16 @@ export async function PUT(
       );
     }
 
-    // Check if new email already exists (if email is being changed)
-    if (data.email !== existingAccount.email) {
-      const duplicateEmail = await prisma.emailAccount.findFirst({
-        where: {
-          email: data.email,
-          organizationId: session.user.organizationId,
-          NOT: { id: params.id },
-        },
-      });
-
-      if (duplicateEmail) {
-        return NextResponse.json(
-          { error: 'Email account already exists' },
-          { status: 400 }
-        );
-      }
-    }
-
-    // Prepare update data
-    const updateData = {
-      email: data.email,
-      name: data.name,
-      outgoingServer: data.outgoingServer,
-      outgoingServerPort: data.outgoingServerPort,
-      ...(data.password && { password: data.password }),
-      ...(typeof data.isActive === 'boolean' && { isActive: data.isActive })
-    } as Partial<EmailAccount>;
-
+    // Update the account
     const emailAccount = await prisma.emailAccount.update({
       where: { id: params.id },
-      data: updateData,
+      data: {
+        name: data.name,
+        ...(typeof data.isActive === 'boolean' && { isActive: data.isActive })
+      },
     });
 
-    // Don't send password in the response
-    const { password, ...sanitizedAccount } = emailAccount;
-
-    return NextResponse.json(sanitizedAccount);
+    return NextResponse.json(emailAccount);
   } catch (error) {
     console.error('Error updating email account:', error);
     return NextResponse.json(

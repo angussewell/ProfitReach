@@ -159,7 +159,7 @@ export async function POST(request: Request) {
 
       console.log('Attempting to save account:', {
         unipileAccountId: accountDetails.id,
-        name: accountDetails.name,
+        name: accountDetails.identifier, // Use email as initial name
         email: accountDetails.identifier,
         organizationId: webhookData.name
       });
@@ -170,14 +170,14 @@ export async function POST(request: Request) {
         },
         update: {
           isActive: true,
-          name: accountDetails.name,
+          name: accountDetails.identifier, // Use email as initial name
           email: accountDetails.identifier
         },
         create: {
           unipileAccountId: accountDetails.id,
           organizationId: webhookData.name,
           isActive: true,
-          name: accountDetails.name,
+          name: accountDetails.identifier, // Use email as initial name
           email: accountDetails.identifier
         }
       });
