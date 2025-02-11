@@ -28,6 +28,7 @@ export function EmailAccountsClient() {
   const [searchQuery, setSearchQuery] = useState('');
   const [connecting, setConnecting] = useState(false);
   const [pollingForAccount, setPollingForAccount] = useState(false);
+  const [initialAccountCount, setInitialAccountCount] = useState<number | null>(null);
 
   useEffect(() => {
     fetchEmailAccounts();
@@ -42,6 +43,9 @@ export function EmailAccountsClient() {
       setPollingForAccount(true);
       let attempts = 0;
       const maxAttempts = 10; // 30 seconds total (10 attempts * 3 second interval)
+      
+      // Store initial account count
+      setInitialAccountCount(accounts.length);
       
       const pollInterval = setInterval(async () => {
         attempts++;
@@ -58,13 +62,19 @@ export function EmailAccountsClient() {
           }
           
           const data = await response.json();
-          const accounts = Array.isArray(data) ? data : [];
-          setAccounts(accounts);
+          const newAccounts = Array.isArray(data) ? data : [];
+          setAccounts(newAccounts);
           
-          if (accounts.length > 0) {
-            console.log('Found accounts while polling:', accounts);
+          // Check if we have more accounts than when we started
+          if (initialAccountCount !== null && newAccounts.length > initialAccountCount) {
+            console.log('Found new account while polling:', {
+              initialCount: initialAccountCount,
+              newCount: newAccounts.length,
+              accounts: newAccounts
+            });
             clearInterval(pollInterval);
             setPollingForAccount(false);
+            toast.success('Email account connected successfully!');
             // Clear the success parameter from URL
             window.history.replaceState({}, '', window.location.pathname);
           }
@@ -84,7 +94,7 @@ export function EmailAccountsClient() {
       
       return () => clearInterval(pollInterval);
     }
-  }, []);
+  }, [accounts.length, initialAccountCount]);
 
   const fetchEmailAccounts = async () => {
     try {
