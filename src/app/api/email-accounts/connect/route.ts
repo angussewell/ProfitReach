@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     const payload = {
       type: 'create',
       providers: ['GOOGLE', 'OUTLOOK', 'MAIL'],
-      api_url: UNIPILE_DSN,
+      api_url: `https://${UNIPILE_DSN}`,
       expiresOn,
       notify_url: `${baseUrl}/api/webhooks/unipile`,
       name: session.user.organizationId,
