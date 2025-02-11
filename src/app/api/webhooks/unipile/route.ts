@@ -16,7 +16,11 @@ type UnipileAccountData = z.infer<typeof UnipileAccountWebhook>;
 
 export async function POST(request: Request) {
   try {
-    console.log('Received Unipile account webhook request');
+    console.log('Received Unipile account webhook request', {
+      method: request.method,
+      url: request.url,
+      headers: Object.fromEntries(request.headers.entries())
+    });
     
     // Parse and validate webhook data
     let data: UnipileAccountData;

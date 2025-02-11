@@ -23,7 +23,14 @@ export async function POST(request: Request) {
     }
 
     // Get the base URL for webhooks
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.messagelm.com';
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
+    if (!baseUrl) {
+      console.error('Missing required environment variable: NEXT_PUBLIC_APP_URL');
+      return NextResponse.json(
+        { error: 'Application URL not configured' },
+        { status: 500 }
+      );
+    }
 
     // Format expiration date with milliseconds precision
     const expiresDate = new Date(Date.now() + 3600000);
