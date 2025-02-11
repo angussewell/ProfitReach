@@ -6,23 +6,11 @@ import { z } from 'zod';
 import type { EmailAccount } from '@prisma/client';
 import { Mail360Client } from '@/lib/mail360';
 
-// Schema for full email account updates
-const emailAccountSchema = z.object({
-  email: z.string().email(),
+// Schema for account updates
+const accountUpdateSchema = z.object({
   name: z.string().min(1),
-  password: z.string().min(1).optional(), // Password is optional for updates
-  outgoingServer: z.string().min(1),
-  outgoingServerPort: z.number().int().min(1).max(65535),
-  isActive: z.boolean().optional(),
+  isActive: z.boolean().optional()
 });
-
-// Schema for status-only updates
-const statusUpdateSchema = z.object({
-  isActive: z.boolean()
-});
-
-type EmailAccountUpdate = z.infer<typeof emailAccountSchema>;
-type StatusUpdate = z.infer<typeof statusUpdateSchema>;
 
 export async function PUT(
   request: Request,
@@ -37,7 +25,7 @@ export async function PUT(
     const body = await request.json();
     
     // Validate request body
-    const validationResult = emailAccountSchema.safeParse(body);
+    const validationResult = accountUpdateSchema.safeParse(body);
     if (!validationResult.success) {
       return NextResponse.json(
         { error: 'Invalid data', details: validationResult.error.errors },
@@ -62,12 +50,13 @@ export async function PUT(
       );
     }
 
-    // Update the account
+    // Update the account with all provided fields
     const emailAccount = await prisma.emailAccount.update({
       where: { id: params.id },
       data: {
         name: data.name,
-        ...(typeof data.isActive === 'boolean' && { isActive: data.isActive })
+        ...(data.isActive !== undefined && { isActive: data.isActive }),
+        updatedAt: new Date()
       },
     });
 
