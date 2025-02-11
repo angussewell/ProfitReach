@@ -47,6 +47,11 @@ interface OutboundData {
     name: string;
     mail360AccountKey: string;
   };
+  socialData?: {
+    name: string;
+    accountId: string;
+    provider: string;
+  };
 }
 
 export async function POST(
@@ -189,36 +194,32 @@ export async function POST(
 
       // Handle email account logic based on email sender
       let emailAccounts = null;
+      let socialAccount = null;
       const emailSender = data['Email Sender'];
       
-      if (!emailSender || emailSender.trim() === '') {
-        // Case 1: No email sender - get all active accounts
+      if (emailSender) {
         emailAccounts = await prisma.emailAccount.findMany({
-          where: { 
+          where: {
             organizationId: organization.id,
+            email: emailSender,
             isActive: true
           }
         });
-        
-        if (emailAccounts.length === 0) {
-          throw new Error('No active email accounts configured for this organization');
-        }
-      } else {
-        // Case 2 & 3: Email sender exists - try to find matching active account
-        const matchingAccount = await prisma.emailAccount.findFirst({
-          where: { 
-            organizationId: organization.id,
-            email: emailSender.trim(),
-            isActive: true
-          }
-        });
-
-        if (!matchingAccount) {
-          throw new Error(`No matching active email account found for sender: ${emailSender}`);
-        }
-
-        emailAccounts = [matchingAccount];
       }
+
+      // Find active LinkedIn account
+      socialAccount = await prisma.socialAccount.findFirst({
+        where: {
+          organizationId: organization.id,
+          provider: 'LINKEDIN',
+          isActive: true
+        }
+      });
+
+      log('info', 'Found accounts for webhook', { 
+        emailAccountsCount: emailAccounts?.length || 0,
+        hasLinkedInAccount: !!socialAccount
+      });
 
       // Process webhook variables in scenario fields
       const processedScenario = {
@@ -253,18 +254,17 @@ export async function POST(
         },
         scenarioData: processedScenario,
         prompts: processedPrompts,
-        emailData: emailAccounts[0] ? {
+        emailData: emailAccounts?.[0] ? {
           email: emailAccounts[0].email,
           name: emailAccounts[0].name,
           mail360AccountKey: emailAccounts[0].mail360AccountKey || ''
+        } : undefined,
+        socialData: socialAccount ? {
+          name: socialAccount.name,
+          accountId: socialAccount.username,
+          provider: socialAccount.provider
         } : undefined
       };
-
-      log('info', 'Prepared outbound data with email accounts', { 
-        accountCount: emailAccounts.length,
-        hasEmailSender: !!emailSender,
-        emailSender: emailSender || 'none'
-      });
 
       log('info', 'Sending outbound webhook request', {
         url: validatedWebhookUrl,
