@@ -5,6 +5,9 @@ import { z } from 'zod';
 // Force dynamic API route
 export const dynamic = 'force-dynamic';
 
+const UNIPILE_DSN = process.env.UNIPILE_DSN || 'api4.unipile.com:13465';
+const UNIPILE_API_KEY = process.env.UNIPILE_API_KEY;
+
 // Define webhook data schema
 const UnipileAccountWebhook = z.object({
   status: z.enum(['CREATION_SUCCESS', 'RECONNECTED']),
@@ -12,7 +15,57 @@ const UnipileAccountWebhook = z.object({
   name: z.string()
 });
 
+// Define Unipile account details schema
+const UnipileAccountDetails = z.object({
+  object: z.literal('Account'),
+  id: z.string(),
+  name: z.string(),
+  identifier: z.string().email(),
+  type: z.string(),
+  created_at: z.string().datetime()
+});
+
 type UnipileAccountData = z.infer<typeof UnipileAccountWebhook>;
+type UnipileAccountDetailsData = z.infer<typeof UnipileAccountDetails>;
+
+// Function to fetch and validate account details from Unipile
+async function getUnipileAccountDetails(accountId: string): Promise<UnipileAccountDetailsData> {
+  if (!UNIPILE_API_KEY) {
+    throw new Error('Missing UNIPILE_API_KEY');
+  }
+
+  console.log('Fetching Unipile account details:', { accountId });
+
+  const response = await fetch(`https://${UNIPILE_DSN}/api/v1/accounts/${accountId}`, {
+    headers: {
+      'Accept': 'application/json',
+      'X-API-KEY': UNIPILE_API_KEY,
+    },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Failed to fetch account details:', {
+      status: response.status,
+      statusText: response.statusText,
+      error: errorText
+    });
+    throw new Error(`Failed to fetch account details: ${response.statusText}`);
+  }
+
+  const rawData = await response.json();
+  console.log('Raw Unipile account details:', rawData);
+
+  try {
+    return UnipileAccountDetails.parse(rawData);
+  } catch (error) {
+    console.error('Invalid account details format:', {
+      error,
+      data: rawData
+    });
+    throw new Error('Invalid account details format from Unipile');
+  }
+}
 
 export async function POST(request: Request) {
   try {
@@ -22,54 +75,71 @@ export async function POST(request: Request) {
       headers: Object.fromEntries(request.headers.entries())
     });
     
-    // Parse and validate webhook data
-    let data: UnipileAccountData;
+    // Step 1: Parse and validate webhook data
     const rawBody = await request.text();
-    
     console.log('Raw webhook body:', rawBody);
     
+    let webhookData: UnipileAccountData;
     try {
       const parsedData = JSON.parse(rawBody);
-      data = UnipileAccountWebhook.parse(parsedData);
-      console.log('Parsed webhook data:', data);
-
+      webhookData = UnipileAccountWebhook.parse(parsedData);
+      console.log('Parsed webhook data:', webhookData);
     } catch (parseError) {
       console.error('Failed to parse webhook data:', {
         error: parseError,
         errorMessage: parseError instanceof Error ? parseError.message : String(parseError),
-        rawBody: rawBody.slice(0, 1000) // Log first 1000 chars only
+        rawBody: rawBody.slice(0, 1000)
       });
       return NextResponse.json(
         { 
-          error: 'Invalid JSON data', 
-          details: parseError instanceof Error ? parseError.message : String(parseError),
-          help: 'Please ensure the request body is valid JSON and contains the required fields'
+          error: 'Invalid webhook data', 
+          details: parseError instanceof Error ? parseError.message : String(parseError)
         },
         { status: 400 }
       );
     }
 
-    // Create or update email account
+    // Step 2: Fetch and validate account details
+    let accountDetails: UnipileAccountDetailsData;
+    try {
+      accountDetails = await getUnipileAccountDetails(webhookData.account_id);
+      console.log('Validated account details:', accountDetails);
+    } catch (error) {
+      console.error('Failed to get account details:', error);
+      return NextResponse.json(
+        { 
+          error: 'Failed to get account details',
+          details: error instanceof Error ? error.message : String(error)
+        },
+        { status: 500 }
+      );
+    }
+
+    // Step 3: Save to database only after we have valid data
     try {
       const emailAccount = await prisma.emailAccount.upsert({
         where: {
-          unipileAccountId: data.account_id
+          unipileAccountId: accountDetails.id
         },
         update: {
-          isActive: true
+          isActive: true,
+          name: accountDetails.name,
+          email: accountDetails.identifier
         },
         create: {
-          unipileAccountId: data.account_id,
-          organizationId: data.name,
+          unipileAccountId: accountDetails.id,
+          organizationId: webhookData.name,
           isActive: true,
-          name: 'Connected Email Account',
-          email: 'pending@example.com' // Will be updated when we receive first message
+          name: accountDetails.name,
+          email: accountDetails.identifier
         }
       });
       
       console.log('Email account stored:', {
         id: emailAccount.id,
-        unipileAccountId: emailAccount.unipileAccountId
+        unipileAccountId: emailAccount.unipileAccountId,
+        name: emailAccount.name,
+        email: emailAccount.email
       });
       
       return NextResponse.json({
@@ -83,35 +153,30 @@ export async function POST(request: Request) {
           stack: error.stack,
           name: error.name
         } : error,
-        type: typeof error
+        accountDetails
       });
       
       return NextResponse.json(
         { 
-          error: 'Failed to process webhook',
-          details: error instanceof Error ? error.message : String(error),
-          help: 'Please check the request format and try again'
+          error: 'Failed to store account',
+          details: error instanceof Error ? error.message : String(error)
         },
         { status: 500 }
       );
     }
-    
   } catch (error) {
-    // Log the full error details
-    console.error('Webhook error:', {
+    console.error('Webhook handler error:', {
       error: error instanceof Error ? {
         message: error.message,
         stack: error.stack,
         name: error.name
-      } : error,
-      type: typeof error
+      } : error
     });
     
     return NextResponse.json(
       { 
-        error: 'Failed to process webhook',
-        details: error instanceof Error ? error.message : String(error),
-        help: 'Please check the request format and try again'
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : String(error)
       },
       { status: 500 }
     );
