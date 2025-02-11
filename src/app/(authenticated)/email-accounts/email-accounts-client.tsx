@@ -27,9 +27,63 @@ export function EmailAccountsClient() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [connecting, setConnecting] = useState(false);
+  const [pollingForAccount, setPollingForAccount] = useState(false);
 
   useEffect(() => {
     fetchEmailAccounts();
+  }, []);
+
+  // Add polling when redirected with success=true
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const success = params.get('success');
+    
+    if (success === 'true') {
+      setPollingForAccount(true);
+      let attempts = 0;
+      const maxAttempts = 10; // 30 seconds total (10 attempts * 3 second interval)
+      
+      const pollInterval = setInterval(async () => {
+        attempts++;
+        console.log(`Polling for new account (attempt ${attempts}/${maxAttempts})...`);
+        
+        try {
+          const baseUrl = window.location.origin;
+          const response = await fetch(`${baseUrl}/api/email-accounts`, {
+            credentials: 'include'
+          });
+          
+          if (!response.ok) {
+            throw new Error('Failed to fetch accounts while polling');
+          }
+          
+          const data = await response.json();
+          const accounts = Array.isArray(data) ? data : [];
+          setAccounts(accounts);
+          
+          if (accounts.length > 0) {
+            console.log('Found accounts while polling:', accounts);
+            clearInterval(pollInterval);
+            setPollingForAccount(false);
+            // Clear the success parameter from URL
+            window.history.replaceState({}, '', window.location.pathname);
+          }
+        } catch (error) {
+          console.error('Error while polling:', error);
+        }
+        
+        if (attempts >= maxAttempts) {
+          console.log('Polling timeout reached');
+          clearInterval(pollInterval);
+          setPollingForAccount(false);
+          toast.error('Account connection is taking longer than expected. Please refresh the page in a few moments.');
+          // Clear the success parameter from URL
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+      }, 3000); // Poll every 3 seconds
+      
+      return () => clearInterval(pollInterval);
+    }
   }, []);
 
   const fetchEmailAccounts = async () => {
@@ -131,17 +185,23 @@ export function EmailAccountsClient() {
         <div className="flex items-center space-x-2">
           <ClientButton
             onClick={handleConnect}
-            disabled={connecting}
+            disabled={connecting || pollingForAccount}
             className="flex items-center space-x-2"
           >
             <ClientPlusIcon className="h-4 w-4" />
-            <span>{connecting ? 'Connecting...' : 'Connect Email Account'}</span>
+            <span>
+              {connecting ? 'Connecting...' : 
+               pollingForAccount ? 'Waiting for account...' : 
+               'Connect Email Account'}
+            </span>
           </ClientButton>
         </div>
       </div>
 
-      {loading ? (
-        <div className="text-center py-12">Loading...</div>
+      {loading || pollingForAccount ? (
+        <div className="text-center py-12">
+          {pollingForAccount ? 'Waiting for account connection...' : 'Loading...'}
+        </div>
       ) : filteredAccounts.length === 0 ? (
         <div className="text-center py-12 text-slate-500">
           {searchQuery ? 'No accounts match your search' : 'No email accounts connected yet. Click "Connect Email Account" to get started.'}
