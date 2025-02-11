@@ -65,28 +65,41 @@ export function AccountsClient() {
   const fetchAccounts = async () => {
     try {
       const baseUrl = window.location.origin;
-      const [emailResponse, socialResponse] = await Promise.all([
-        fetch(`${baseUrl}/api/email-accounts`, { credentials: 'include' }),
-        fetch(`${baseUrl}/api/social-accounts`, { credentials: 'include' })
-      ]);
       
-      if (!emailResponse.ok || !socialResponse.ok) {
-        throw new Error('Failed to fetch accounts');
+      // Fetch email accounts
+      try {
+        const emailResponse = await fetch(`${baseUrl}/api/email-accounts`, { credentials: 'include' });
+        if (emailResponse.ok) {
+          const emailData = await emailResponse.json();
+          setEmailAccounts(Array.isArray(emailData) ? emailData : []);
+        } else {
+          console.error('Failed to fetch email accounts');
+          setEmailAccounts([]);
+        }
+      } catch (emailError) {
+        console.error('Error fetching email accounts:', emailError);
+        setEmailAccounts([]);
       }
       
-      const [emailData, socialData] = await Promise.all([
-        emailResponse.json(),
-        socialResponse.json()
-      ]);
-
-      setEmailAccounts(Array.isArray(emailData) ? emailData : []);
-      setSocialAccounts(Array.isArray(socialData) ? socialData : []);
+      // Fetch social accounts
+      try {
+        const socialResponse = await fetch(`${baseUrl}/api/social-accounts`, { credentials: 'include' });
+        if (socialResponse.ok) {
+          const socialData = await socialResponse.json();
+          setSocialAccounts(Array.isArray(socialData) ? socialData : []);
+        } else {
+          console.error('Failed to fetch social accounts');
+          setSocialAccounts([]);
+        }
+      } catch (socialError) {
+        console.error('Error fetching social accounts:', socialError);
+        setSocialAccounts([]);
+      }
+      
       setLoading(false);
     } catch (error) {
-      console.error('Error fetching accounts:', error);
-      toast.error('Failed to load accounts');
-      setEmailAccounts([]);
-      setSocialAccounts([]);
+      console.error('Error in fetchAccounts:', error);
+      toast.error('Some accounts failed to load');
       setLoading(false);
     }
   };
