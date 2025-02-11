@@ -175,6 +175,30 @@ export function AccountsClient() {
     }
   };
 
+  const handleConnect = async () => {
+    try {
+      const baseUrl = window.location.origin;
+      const response = await fetch(`${baseUrl}/api/accounts/connect`, {
+        method: 'POST',
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to generate connection link');
+      }
+      
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error('Invalid response from server');
+      }
+    } catch (error) {
+      console.error('Error connecting account:', error);
+      toast.error('Failed to start account connection');
+    }
+  };
+
   const renderAccount = (account: EmailAccount | SocialAccount, type: 'email' | 'social') => (
     <Card key={account.id} className="p-4">
       <div className="flex items-center justify-between">
@@ -239,7 +263,7 @@ export function AccountsClient() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Connected Accounts</h1>
         <Button
-          onClick={() => window.open('/api/accounts/connect', '_blank')}
+          onClick={handleConnect}
         >
           Connect Account
         </Button>
