@@ -32,25 +32,34 @@ export async function POST(request: Request) {
       );
     }
 
-    // Format expiration date with milliseconds precision
+    // Format expiration date exactly as required: YYYY-MM-DDTHH:MM:SS.sssZ
     const expiresDate = new Date(Date.now() + 3600000);
-    const expiresOn = expiresDate.toISOString().split('.')[0] + '.000Z';
+    const expiresOn = expiresDate.toISOString(); // This gives us the exact format they want
 
     // Generate a Unipile hosted auth link
     const unipileUrl = `https://${UNIPILE_DSN}/api/v1/hosted/accounts/link`;
     const payload = {
-      type: 'create',
-      providers: ['GOOGLE', 'OUTLOOK', 'MAIL'],
-      api_url: UNIPILE_DSN,
+      type: "create",
+      providers: "*", // Use "*" instead of array
+      api_url: `https://${UNIPILE_DSN}`, // Include full URL
       expiresOn,
       notify_url: `${baseUrl}/api/webhooks/unipile`,
       name: session.user.organizationId,
       success_redirect_url: `${baseUrl}/email-accounts?success=true`,
       failure_redirect_url: `${baseUrl}/email-accounts?error=true`,
-      disabled_options: ['autoproxy']
+      disabled_options: ["autoproxy"]
     };
 
-    console.log('Requesting Unipile auth link:', { url: unipileUrl, payload });
+    console.log('Requesting Unipile auth link:', { 
+      url: unipileUrl, 
+      payload,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        // Redact API key in logs
+        'X-API-KEY': 'REDACTED'
+      }
+    });
 
     const response = await fetch(unipileUrl, {
       method: 'POST',
@@ -76,6 +85,7 @@ export async function POST(request: Request) {
     }
 
     const data = await response.json();
+    console.log('Successfully generated auth link:', data);
 
     return NextResponse.json(data);
   } catch (error) {
