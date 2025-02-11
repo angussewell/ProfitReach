@@ -1,16 +1,22 @@
 'use client';
 
 import { signIn } from 'next-auth/react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 export default function LoginPage() {
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl') || '/scenarios';
+  const callbackUrl = searchParams?.get('callbackUrl') || '/scenarios';
 
   // Only allow redirects to our own domain
   const safeCallbackUrl = callbackUrl.startsWith('/') ? callbackUrl : '/scenarios';
+
+  // Reset loading state after params are loaded
+  useEffect(() => {
+    setIsLoading(false);
+  }, []);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -37,6 +43,10 @@ export default function LoginPage() {
       console.error('Login error:', error);
       setError('An error occurred during login. Please try again.');
     }
+  }
+
+  if (isLoading) {
+    return <div>Loading...</div>;
   }
 
   return (
