@@ -3,7 +3,7 @@ import '@fontsource/jetbrains-mono/400.css';
 import '@fontsource/jetbrains-mono/500.css';
 import '@fontsource/jetbrains-mono/600.css';
 import { Inter } from 'next/font/google';
-import { Providers } from '@/components/providers/Providers';
+import { Providers } from '@/components/providers';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { Toaster } from '@/components/ui/toaster';
@@ -19,8 +19,8 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: 'MessageLM',
-  description: 'Automated outbound communication management with AI-enhanced capabilities',
+  title: 'ProfitReach',
+  description: 'AI-powered outbound communication management',
   icons: {
     icon: [
       {

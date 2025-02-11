@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { prisma } from '@/lib/prisma';
 
 // Use default values for development
 const UNIPILE_DSN = process.env.UNIPILE_DSN || 'api4.unipile.com:13465';
@@ -67,6 +68,7 @@ export async function POST(request: Request) {
     }
 
     const data = await response.json();
+
     return NextResponse.json(data);
   } catch (error) {
     console.error('Error generating auth link:', error);

@@ -235,16 +235,18 @@ model Snippet {
 }
 
 model EmailAccount {
-  id             String       @id @default(cuid())
-  email          String       @unique
-  name           String
-  organizationId String
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  isActive       Boolean      @default(true)
-  unipileAccountId String?    @unique
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  emailMessages  EmailMessage[]
+  id              String   @id @default(cuid())
+  email           String
+  name            String
+  organizationId  String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  isActive        Boolean  @default(true)
+  unipileAccountId String? @unique
+
+  // Relations
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  messages        EmailMessage[]
 
   @@index([organizationId])
 }
