@@ -27,8 +27,20 @@ const UnipileAccountDetails = z.object({
       id: z.string(),
       username: z.string()
     }).optional(),
-    linkedin: z.object({
-      username: z.string()
+    im: z.object({
+      id: z.string(),
+      username: z.string(),
+      premiumId: z.string().nullable(),
+      premiumFeatures: z.array(z.string()),
+      premiumContractId: z.string().nullable(),
+      organizations: z.array(
+        z.object({
+          name: z.string(),
+          messaging_enabled: z.boolean(),
+          mailbox_urn: z.string(),
+          organization_urn: z.string()
+        })
+      ).optional()
     }).optional()
   }),
   sources: z.array(
@@ -181,9 +193,10 @@ export async function POST(request: Request) {
       console.log('Created new email account:', newAccount);
       return NextResponse.json(newAccount);
     } 
-    else if (accountDetails.connection_params?.linkedin) {
+    else if (accountDetails.connection_params?.im && accountDetails.type === 'LINKEDIN') {
       // Handle LinkedIn account
-      const username = accountDetails.connection_params.linkedin.username;
+      const linkedinId = accountDetails.connection_params.im.id;
+      const name = accountDetails.name; // Use the root name field
       
       // Check if account already exists
       const existingAccount = await prisma.socialAccount.findUnique({
@@ -199,7 +212,8 @@ export async function POST(request: Request) {
             unipileAccountId: body.account_id
           },
           data: {
-            username,
+            username: linkedinId,
+            name,
             isActive: true,
             updatedAt: new Date()
           }
@@ -211,8 +225,8 @@ export async function POST(request: Request) {
       // Create new social account
       const newAccount = await prisma.socialAccount.create({
         data: {
-          username,
-          name: username, // Initially set name to username, will be updated by user
+          username: linkedinId,
+          name,
           provider: 'LINKEDIN',
           organizationId,
           unipileAccountId: body.account_id,
