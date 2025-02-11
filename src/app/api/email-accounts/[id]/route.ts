@@ -4,7 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import type { EmailAccount } from '@prisma/client';
-import { Mail360Client } from '@/lib/mail360';
+import { UnipileClient } from '@/lib/unipile';
 
 // Schema for account updates
 const accountUpdateSchema = z.object({
@@ -94,29 +94,28 @@ export async function DELETE(
 
     console.log('Attempting to delete account:', {
       accountId: params.id,
-      mail360AccountKey: emailAccount.mail360AccountKey,
-      hasKey: !!emailAccount.mail360AccountKey
+      unipileAccountId: emailAccount.unipileAccountId
     });
 
-    let mail360DeleteSuccess = true;
-    // Try Mail360 deletion first, but don't block on failure
-    if (emailAccount.mail360AccountKey) {
+    let unipileDeleteSuccess = true;
+    // Try Unipile deletion first
+    if (emailAccount.unipileAccountId) {
       try {
-        const mail360 = new Mail360Client();
-        await mail360.deleteAccount(emailAccount.mail360AccountKey);
-        console.log('Successfully deleted from Mail360:', {
+        const unipile = new UnipileClient();
+        await unipile.deleteAccount(emailAccount.unipileAccountId);
+        console.log('Successfully deleted from Unipile:', {
           accountId: params.id,
-          mail360AccountKey: emailAccount.mail360AccountKey
+          unipileAccountId: emailAccount.unipileAccountId
         });
-      } catch (mail360Error) {
-        mail360DeleteSuccess = false;
-        console.error('Failed to delete from Mail360:', {
-          error: mail360Error instanceof Error ? mail360Error.message : String(mail360Error),
-          stack: mail360Error instanceof Error ? mail360Error.stack : undefined,
+      } catch (unipileError) {
+        unipileDeleteSuccess = false;
+        console.error('Failed to delete from Unipile:', {
+          error: unipileError instanceof Error ? unipileError.message : String(unipileError),
+          stack: unipileError instanceof Error ? unipileError.stack : undefined,
           accountId: params.id,
-          mail360AccountKey: emailAccount.mail360AccountKey
+          unipileAccountId: emailAccount.unipileAccountId
         });
-        // Continue with database deletion even if Mail360 fails
+        // Continue with database deletion even if Unipile fails
       }
     }
 
@@ -131,10 +130,10 @@ export async function DELETE(
         accountId: params.id
       });
 
-      // If Mail360 failed but database succeeded, return partial success
-      if (!mail360DeleteSuccess) {
+      // If Unipile failed but database succeeded, return partial success
+      if (!unipileDeleteSuccess) {
         return NextResponse.json({ 
-          warning: 'Account deleted from database but Mail360 deletion failed. Please contact support.' 
+          warning: 'Account deleted from database but Unipile deletion failed. Please contact support.' 
         }, { status: 207 });
       }
 
