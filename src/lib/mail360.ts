@@ -251,31 +251,39 @@ export class Mail360Client {
   async deleteAccount(accountKey: string): Promise<void> {
     const accessToken = await this.getAccessToken();
 
-    const response = await fetch(`https://mail360.zoho.com/api/accounts/${accountKey}`, {
-      method: 'DELETE',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'Authorization': `Zoho-oauthtoken ${accessToken}`,
-      },
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
 
-    const responseText = await response.text();
-    console.log('Account deletion response:', {
-      status: response.status,
-      statusText: response.statusText,
-      headers: Object.fromEntries(response.headers.entries()),
-      body: responseText,
-      accountKey,
-    });
+    try {
+      const response = await fetch(`https://mail360.zoho.com/api/accounts/${accountKey}`, {
+        method: 'DELETE',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Authorization': `Zoho-oauthtoken ${accessToken}`,
+        },
+        signal: controller.signal
+      });
 
-    if (!response.ok) {
-      console.error('Failed to delete Mail360 account:', {
+      const responseText = await response.text();
+      console.log('Account deletion response:', {
         status: response.status,
         statusText: response.statusText,
-        responseBody: responseText,
+        headers: Object.fromEntries(response.headers.entries()),
+        body: responseText,
+        accountKey,
       });
-      throw new Error(`Failed to delete Mail360 account: ${responseText}`);
+
+      if (!response.ok) {
+        console.error('Failed to delete Mail360 account:', {
+          status: response.status,
+          statusText: response.statusText,
+          responseBody: responseText,
+        });
+        throw new Error(`Failed to delete Mail360 account: ${responseText}`);
+      }
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 

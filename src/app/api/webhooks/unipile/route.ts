@@ -4,12 +4,44 @@ import { headers } from 'next/headers';
 
 export async function POST(request: Request) {
   try {
-    const data = await request.json();
-    console.log('Received Unipile webhook:', data);
+    // Log raw request details
+    const headersList = headers();
+    const contentType = headersList.get('content-type');
+    const userAgent = headersList.get('user-agent');
+    
+    console.log('Received webhook request:', {
+      contentType,
+      userAgent,
+      url: request.url,
+      method: request.method
+    });
+
+    const rawBody = await request.text();
+    console.log('Raw webhook body:', rawBody);
+
+    let data;
+    try {
+      data = JSON.parse(rawBody);
+      console.log('Parsed webhook data:', data);
+    } catch (parseError) {
+      console.error('Failed to parse webhook body:', {
+        error: parseError,
+        rawBody
+      });
+      return NextResponse.json(
+        { error: 'Invalid JSON data' },
+        { status: 400 }
+      );
+    }
 
     // Validate webhook data
     if (!data.status || !data.account_id || !data.name) {
-      console.error('Invalid webhook data:', data);
+      console.error('Invalid webhook data:', {
+        status: data.status,
+        account_id: data.account_id,
+        name: data.name,
+        fullData: data
+      });
       return NextResponse.json(
         { error: 'Invalid webhook data' },
         { status: 400 }
@@ -37,7 +69,8 @@ export async function POST(request: Request) {
     // Log organization lookup result
     console.log('Organization lookup result:', {
       found: !!organization,
-      organizationId: organization?.id
+      organizationId: organization?.id,
+      searchedId: data.name
     });
 
     if (!organization) {
@@ -56,7 +89,11 @@ export async function POST(request: Request) {
     const [subdomain, port] = UNIPILE_DSN.split(':');
     const accountUrl = `https://${subdomain}/api/v1/accounts/${data.account_id}`;
     
-    console.log('Fetching account details:', { accountUrl });
+    console.log('Fetching account details:', { 
+      accountUrl,
+      accountId: data.account_id,
+      apiKey: process.env.UNIPILE_API_KEY ? 'present' : 'missing'
+    });
     
     const response = await fetch(accountUrl, {
       method: 'GET',
@@ -71,7 +108,8 @@ export async function POST(request: Request) {
       console.error('Failed to fetch account details:', {
         status: response.status,
         error: errorText,
-        url: accountUrl
+        url: accountUrl,
+        headers: Object.fromEntries(response.headers)
       });
       return NextResponse.json(
         { error: 'Failed to fetch account details', details: errorText },
@@ -113,6 +151,13 @@ export async function POST(request: Request) {
               accountDetails.connection_params?.email || '';
     }
 
+    console.log('Extracted email details:', {
+      type: accountDetails.type,
+      email,
+      name,
+      connection_params: accountDetails.connection_params
+    });
+
     if (!email) {
       console.error('No email found in account details:', {
         type: accountDetails.type,
@@ -125,36 +170,55 @@ export async function POST(request: Request) {
     }
     
     // Create or update the email account in our database
-    const emailAccount = await prisma.emailAccount.upsert({
-      where: {
-        unipileAccountId: data.account_id,
-      },
-      create: {
-        email,
-        name: name || email,
-        unipileAccountId: data.account_id,
-        organizationId: organization.id,
-        isActive: true,
-      },
-      update: {
-        email,
-        name: name || email,
-        organizationId: organization.id,
-        isActive: true,
-      },
-    });
+    try {
+      const emailAccount = await prisma.emailAccount.upsert({
+        where: {
+          unipileAccountId: data.account_id,
+        },
+        create: {
+          email,
+          name: name || email,
+          unipileAccountId: data.account_id,
+          organizationId: organization.id,
+          isActive: true,
+        },
+        update: {
+          email,
+          name: name || email,
+          organizationId: organization.id,
+          isActive: true,
+        },
+      });
 
-    console.log('Successfully processed account connection:', {
-      email: emailAccount.email,
-      name: emailAccount.name,
-      unipileAccountId: emailAccount.unipileAccountId,
-      organizationId: organization.id,
-      type: accountDetails.type
-    });
+      console.log('Successfully processed account connection:', {
+        id: emailAccount.id,
+        email: emailAccount.email,
+        name: emailAccount.name,
+        unipileAccountId: emailAccount.unipileAccountId,
+        organizationId: organization.id,
+        type: accountDetails.type
+      });
 
-    return NextResponse.json({ success: true });
+      return NextResponse.json({ success: true });
+    } catch (dbError) {
+      console.error('Database error while creating/updating account:', {
+        error: dbError,
+        email,
+        name,
+        unipileAccountId: data.account_id,
+        organizationId: organization.id
+      });
+      throw dbError;
+    }
   } catch (error) {
-    console.error('Error processing webhook:', error);
+    console.error('Error processing webhook:', {
+      error: error instanceof Error ? {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      } : error,
+      type: typeof error
+    });
     return NextResponse.json(
       { error: 'Internal server error', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }

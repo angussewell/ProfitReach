@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { prisma } from '@/lib/prisma';
 
 export async function GET() {
   return NextResponse.json(
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     }
 
     // Verify scenario exists
-    const scenario = await db.scenario.findUnique({
+    const scenario = await prisma.scenario.findUnique({
       where: { id: scenarioId }
     });
 
@@ -43,22 +43,19 @@ export async function POST(request: Request) {
     }
 
     // Create scenario message with minimal fields
-    const message = await db.$queryRaw`
-      INSERT INTO "ScenarioMessage" ("id", "scenarioId", "threadId", "messageId", "sender", "hasReplied")
-      VALUES (
-        gen_random_uuid(),
-        ${scenarioId},
-        ${messageIdentifier},
-        ${messageIdentifier},
-        ${recipientEmail},
-        false
-      )
-      RETURNING *;
-    `;
+    const message = await prisma.scenarioMessage.create({
+      data: {
+        scenarioId,
+        messageId: messageIdentifier,
+        threadId: messageIdentifier,
+        sender: recipientEmail,
+        hasReplied: false
+      }
+    });
 
     return NextResponse.json({
       success: true,
-      message: Array.isArray(message) ? message[0] : message
+      message
     });
 
   } catch (error) {
