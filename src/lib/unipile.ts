@@ -1,5 +1,3 @@
-import { headers } from 'next/headers';
-
 export class UnipileClient {
   private apiKey: string;
   private dsn: string;
