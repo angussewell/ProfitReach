@@ -3,17 +3,18 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { PageContainer } from '@/components/layout/PageContainer';
 import {
-  ClientButton as Button,
-  ClientInput as Input,
-  ClientCard as Card,
-  ClientSwitch as Switch,
+  ClientButton,
+  ClientInput,
+  ClientCard,
+  ClientSwitch,
+  ClientTabsRoot,
+  ClientTabsList,
+  ClientTabsTrigger,
+  ClientTabsContent,
   ClientPencilIcon,
   ClientTrashIcon,
-  ClientTabsRoot as Tabs,
-  ClientTabsList as TabsList,
-  ClientTabsTrigger as TabsTrigger,
-  ClientTabsContent as TabsContent,
 } from '@/components/ui/client-components';
 
 interface EmailAccount {
@@ -213,11 +214,11 @@ export function AccountsClient() {
   };
 
   const renderAccount = (account: EmailAccount | SocialAccount, type: 'email' | 'social') => (
-    <Card key={account.id} className="p-4">
+    <ClientCard key={account.id} className="p-4">
       <div className="flex items-center justify-between">
         <div className="flex-1">
           {editingAccountId === account.id ? (
-            <Input
+            <ClientInput
               value={accountName}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAccountName(e.target.value)}
               onBlur={() => handleNameInputBlur(account, type)}
@@ -228,7 +229,7 @@ export function AccountsClient() {
           ) : (
             <div className="flex items-center gap-2">
               <span className="font-medium">{account.name}</span>
-              <Button
+              <ClientButton
                 variant="ghost"
                 size="sm"
                 onClick={() => {
@@ -237,7 +238,7 @@ export function AccountsClient() {
                 }}
               >
                 <ClientPencilIcon className="h-4 w-4" />
-              </Button>
+              </ClientButton>
             </div>
           )}
           <div className="text-sm text-gray-500 mt-1">
@@ -252,84 +253,78 @@ export function AccountsClient() {
             <span className="text-sm text-gray-500">
               {account.isActive ? 'Active' : 'Inactive'}
             </span>
-            <Switch
+            <ClientSwitch
               checked={account.isActive}
               onCheckedChange={() => handleToggleActive(account, type)}
               className="data-[state=checked]:bg-green-500"
             />
           </div>
-          <Button
+          <ClientButton
             variant="ghost"
             size="sm"
             onClick={() => handleDelete(account, type)}
             className="text-gray-400 hover:text-red-500"
           >
             <ClientTrashIcon className="h-4 w-4" />
-          </Button>
+          </ClientButton>
         </div>
       </div>
-    </Card>
+    </ClientCard>
   );
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Connected Accounts</h1>
-        <Button
-          onClick={handleConnect}
-        >
-          Connect Account
-        </Button>
-      </div>
-
-      {loading ? (
-        <div>Loading...</div>
-      ) : emailAccounts.length === 0 && socialAccounts.length === 0 ? (
-        <Card className="text-center py-12 text-gray-500">
-          No accounts connected yet. Click "Connect Account" to get started.
-        </Card>
-      ) : (
-        <>
-          <div className="mb-4">
-            <Input
-              type="text"
-              placeholder="Search accounts..."
-              value={searchQuery}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
-              className="max-w-md"
-            />
+    <PageContainer>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <h2 className="text-2xl font-semibold tracking-tight">Connected Accounts</h2>
+            <p className="text-sm text-muted-foreground">
+              Manage your connected email and social media accounts
+            </p>
           </div>
+          <ClientButton onClick={handleConnect}>Connect Account</ClientButton>
+        </div>
 
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList>
-              <TabsTrigger value="email">Email Accounts</TabsTrigger>
-              <TabsTrigger value="social">Social Accounts</TabsTrigger>
-            </TabsList>
+        <div className="space-y-4">
+          <ClientInput
+            placeholder="Search accounts..."
+            value={searchQuery}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
+            className="max-w-sm"
+          />
 
-            <TabsContent value="email">
-              <div className="grid gap-4">
-                {filteredEmailAccounts.map((account) => renderAccount(account, 'email'))}
-              </div>
-              {filteredEmailAccounts.length === 0 && (
-                <Card className="text-center py-12 text-gray-500">
-                  No email accounts found.
-                </Card>
+          <ClientTabsRoot value={activeTab} onValueChange={setActiveTab}>
+            <ClientTabsList>
+              <ClientTabsTrigger value="email">Email Accounts</ClientTabsTrigger>
+              <ClientTabsTrigger value="social">Social Accounts</ClientTabsTrigger>
+            </ClientTabsList>
+
+            <ClientTabsContent value="email" className="space-y-4">
+              {loading ? (
+                <div>Loading...</div>
+              ) : filteredEmailAccounts.length > 0 ? (
+                filteredEmailAccounts.map((account) => renderAccount(account, 'email'))
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  No email accounts found
+                </div>
               )}
-            </TabsContent>
+            </ClientTabsContent>
 
-            <TabsContent value="social">
-              <div className="grid gap-4">
-                {filteredSocialAccounts.map((account) => renderAccount(account, 'social'))}
-              </div>
-              {filteredSocialAccounts.length === 0 && (
-                <Card className="text-center py-12 text-gray-500">
-                  No social accounts found.
-                </Card>
+            <ClientTabsContent value="social" className="space-y-4">
+              {loading ? (
+                <div>Loading...</div>
+              ) : filteredSocialAccounts.length > 0 ? (
+                filteredSocialAccounts.map((account) => renderAccount(account, 'social'))
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  No social accounts found
+                </div>
               )}
-            </TabsContent>
-          </Tabs>
-        </>
-      )}
-    </div>
+            </ClientTabsContent>
+          </ClientTabsRoot>
+        </div>
+      </div>
+    </PageContainer>
   );
 } 

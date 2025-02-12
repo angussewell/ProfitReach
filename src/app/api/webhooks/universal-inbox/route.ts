@@ -7,20 +7,22 @@ import { z } from 'zod';
 export const dynamic = 'force-dynamic';
 
 // Define webhook data schema
-const AttendeeSchema = z.object({
-  display_name: z.string(),
-  identifier: z.string(),
-  identifier_type: z.literal('EMAIL_ADDRESS')
-});
-
-const UnipileMessageWebhook = z.object({
+const UniversalInboxWebhook = z.object({
   event: z.literal('mail_received'),
   email_id: z.string(),
   account_id: z.string(),
   webhook_name: z.string(),
   date: z.string(),
-  from_attendee: AttendeeSchema,
-  to_attendees: z.array(AttendeeSchema),
+  from_attendee: z.object({
+    display_name: z.string(),
+    identifier: z.string(),
+    identifier_type: z.literal('EMAIL_ADDRESS')
+  }),
+  to_attendees: z.array(z.object({
+    display_name: z.string(),
+    identifier: z.string(),
+    identifier_type: z.literal('EMAIL_ADDRESS')
+  })),
   subject: z.string(),
   body: z.string(),
   body_plain: z.string(),
@@ -39,19 +41,19 @@ const UnipileMessageWebhook = z.object({
   }).optional()
 });
 
-type UnipileMessageData = z.infer<typeof UnipileMessageWebhook>;
+type UniversalInboxData = z.infer<typeof UniversalInboxWebhook>;
 
 // Helper function to classify message type
-function classifyMessageType(data: UnipileMessageData): MessageType {
-  // Check folders first - most reliable indicator
-  if (data.folders.includes('SENT')) {
-    return MessageType.OTHER;
-  }
-
+function classifyMessageType(data: UniversalInboxData): MessageType {
   const subject = data.subject.toLowerCase();
   const content = data.body_plain.toLowerCase();
   const sender = data.from_attendee.identifier.toLowerCase();
   
+  // Use folders information for better classification
+  if (data.folders.includes('SENT')) {
+    return MessageType.OTHER;
+  }
+
   // Check for warm-up email patterns (random strings)
   const warmupPattern = /[A-Z0-9]{8,}/;
   const subjectMatches = data.subject.match(warmupPattern) || [];
@@ -106,7 +108,7 @@ function classifyMessageType(data: UnipileMessageData): MessageType {
     return MessageType.REAL_REPLY;
   }
 
-  // If it's external and not caught by other rules, likely a real reply
+  // Default to REAL_REPLY for external messages
   if (data.origin === 'external') {
     return MessageType.REAL_REPLY;
   }
@@ -116,17 +118,17 @@ function classifyMessageType(data: UnipileMessageData): MessageType {
 
 export async function POST(request: Request) {
   try {
-    console.log('Received Unipile message webhook request');
+    console.log('Received Universal Inbox webhook request');
     
     // Parse and validate webhook data
-    let data: UnipileMessageData;
+    let data: UniversalInboxData;
     const rawBody = await request.text();
     
     console.log('Raw webhook body:', rawBody);
     
     try {
       const parsedData = JSON.parse(rawBody);
-      data = UnipileMessageWebhook.parse(parsedData);
+      data = UniversalInboxWebhook.parse(parsedData);
       console.log('Parsed webhook data:', data);
 
     } catch (parseError) {
@@ -149,7 +151,7 @@ export async function POST(request: Request) {
     const emailAccount = await prisma.emailAccount.findFirst({
       where: {
         unipileAccountId: data.account_id
-      }
+      } as Prisma.EmailAccountWhereInput
     });
 
     if (!emailAccount) {
@@ -174,7 +176,7 @@ export async function POST(request: Request) {
       const message = await prisma.emailMessage.create({
         data: {
           messageId: data.message_id,
-          threadId: data.in_reply_to?.message_id || data.message_id,
+          threadId: data.in_reply_to?.message_id || data.message_id, // Use in_reply_to message_id if available
           organizationId: emailAccount.organizationId,
           emailAccountId: emailAccount.id,
           subject: data.subject,

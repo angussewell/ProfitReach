@@ -42,14 +42,14 @@ model Organization {
   outboundWebhookUrl String?
   attachments        Attachment[]
   emailAccounts      EmailAccount[]
-  socialAccounts     SocialAccount[]
+  emailMessages      EmailMessage[]
   ghlIntegrations    GHLIntegration[]
   metrics            Metric[]
   researchResults    ResearchResult[]
   scenarios          Scenario[]
+  socialAccounts     SocialAccount[]
   users              User[]
   webhookLogs        WebhookLog[]
-  emailMessages      EmailMessage[]
 }
 
 model User {
@@ -101,28 +101,28 @@ model Signature {
 }
 
 model Scenario {
-  id                  String       @id @default(cuid())
-  name                String       @unique
+  id                  String            @id @default(cuid())
+  name                String            @unique
   description         String?
-  status              String       @default("active")
+  status              String            @default("active")
   signatureId         String?
   customizationPrompt String?
   emailExamplesPrompt String?
   organizationId      String
-  createdAt           DateTime     @default(now())
-  updatedAt           DateTime     @updatedAt
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
   attachmentId        String?
-  isFollowUp          Boolean      @default(false)
+  isFollowUp          Boolean           @default(false)
   snippetId           String?
   subjectLine         String?
-  touchpointType      String       @default("email")
-  filters             Json?        @default("[]")
+  touchpointType      String            @default("email")
+  filters             Json?             @default("[]")
   testEmail           String?
-  testMode            Boolean      @default(false)
-  attachment          Attachment?  @relation(fields: [attachmentId], references: [id])
-  organization        Organization @relation(fields: [organizationId], references: [id])
-  signature           Signature?   @relation(fields: [signatureId], references: [id])
-  snippet             Snippet?     @relation(fields: [snippetId], references: [id])
+  testMode            Boolean           @default(false)
+  attachment          Attachment?       @relation(fields: [attachmentId], references: [id])
+  organization        Organization      @relation(fields: [organizationId], references: [id])
+  signature           Signature?        @relation(fields: [signatureId], references: [id])
+  snippet             Snippet?          @relation(fields: [snippetId], references: [id])
   messages            ScenarioMessage[]
 
   @@index([organizationId])
@@ -236,47 +236,37 @@ model Snippet {
 }
 
 model EmailAccount {
-  id              String   @id @default(cuid())
-  email           String
-  name            String
-  organizationId  String
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  isActive        Boolean  @default(true)
-  unipileAccountId String  @unique
-
-  // Relations
-  organization    Organization @relation(fields: [organizationId], references: [id])
-  messages        EmailMessage[]
+  id               String         @id @default(cuid())
+  email            String         @unique
+  name             String
+  organizationId   String
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  isActive         Boolean        @default(true)
+  unipileAccountId String         @unique
+  organization     Organization   @relation(fields: [organizationId], references: [id])
+  messages         EmailMessage[]
 
   @@index([organizationId])
 }
 
-enum MessageType {
-  REAL_REPLY
-  BOUNCE
-  AUTO_REPLY
-  OUT_OF_OFFICE
-  OTHER
-}
-
 model EmailMessage {
-  id              String       @id @default(cuid())
-  messageId       String       @unique // From Mail360
-  threadId        String       // For conversation grouping
-  organizationId  String
-  emailAccountId  String       // The receiving account
-  subject         String
-  sender          String
-  recipientEmail  String
-  content         String       @db.Text
-  receivedAt      DateTime
-  messageType     MessageType
-  isRead          Boolean      @default(false)
-  classificationScores Json?   // Store raw classification scores
-  organization    Organization @relation(fields: [organizationId], references: [id])
-  emailAccount    EmailAccount @relation(fields: [emailAccountId], references: [id])
-  
+  id                   String       @id @default(cuid())
+  messageId            String       @unique
+  threadId             String
+  organizationId       String
+  emailAccountId       String
+  subject              String
+  sender               String
+  recipientEmail       String
+  content              String
+  receivedAt           DateTime
+  messageType          MessageType
+  isRead               Boolean      @default(false)
+  classificationScores Json?
+  emailAccount         EmailAccount @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
+  organization         Organization @relation(fields: [organizationId], references: [id])
+
   @@index([organizationId])
   @@index([emailAccountId])
   @@index([threadId])
@@ -300,19 +290,25 @@ model ScenarioMessage {
 }
 
 model SocialAccount {
-  id              String       @id @default(cuid())
-  username        String
-  name            String
-  provider        String
-  organizationId  String
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-  isActive        Boolean      @default(true)
-  unipileAccountId String?     @unique
-
-  // Relations
-  organization    Organization @relation(fields: [organizationId], references: [id])
+  id               String       @id @default(cuid())
+  username         String
+  name             String
+  provider         String
+  organizationId   String
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  isActive         Boolean      @default(true)
+  unipileAccountId String?      @unique
+  organization     Organization @relation(fields: [organizationId], references: [id])
 
   @@index([organizationId])
   @@index([provider])
+}
+
+enum MessageType {
+  REAL_REPLY
+  BOUNCE
+  AUTO_REPLY
+  OUT_OF_OFFICE
+  OTHER
 }
