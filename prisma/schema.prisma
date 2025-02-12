@@ -104,7 +104,7 @@ model Signature {
 
 model Scenario {
   id                  String            @id @default(cuid())
-  name                String            @unique
+  name                String
   description         String?
   status              String            @default("active")
   signatureId         String?
@@ -127,18 +127,20 @@ model Scenario {
   snippet             Snippet?          @relation(fields: [snippetId], references: [id])
   messages            ScenarioMessage[]
 
+  @@unique([name, organizationId])
   @@index([organizationId])
 }
 
 model Prompt {
   id             String       @id @default(cuid())
-  name           String       @unique
+  name           String
   content        String
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
 
+  @@unique([name, organizationId])
   @@index([organizationId])
 }
 
@@ -153,7 +155,7 @@ model FieldMapping {
 
 model Attachment {
   id             String       @id @default(cuid())
-  name           String       @unique
+  name           String
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   content        String
@@ -161,6 +163,7 @@ model Attachment {
   organization   Organization @relation(fields: [organizationId], references: [id])
   scenarios      Scenario[]
 
+  @@unique([name, organizationId])
   @@index([organizationId])
 }
 
@@ -234,7 +237,7 @@ model ResearchResult {
 
 model Snippet {
   id             String       @id @default(cuid())
-  name           String       @unique
+  name           String
   content        String
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
@@ -242,6 +245,7 @@ model Snippet {
   organization   Organization @relation(fields: [organizationId], references: [id])
   scenarios      Scenario[]
 
+  @@unique([name, organizationId])
   @@index([organizationId])
 }
 
