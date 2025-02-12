@@ -20,38 +20,10 @@ export const metadata: Metadata = {
   title: 'MessageLM',
   description: 'AI-powered outbound communication management',
   icons: {
-    icon: [
-      {
-        url: '/messagelm-icon.png?v=3',
-        sizes: 'any',
-        type: 'image/png'
-      },
-      {
-        url: '/messagelm-icon.png?v=3',
-        sizes: '32x32',
-        type: 'image/png'
-      },
-      {
-        url: '/messagelm-icon.png?v=3',
-        sizes: '16x16',
-        type: 'image/png'
-      }
-    ],
-    shortcut: [
-      {
-        url: '/messagelm-icon.png?v=3',
-        type: 'image/png'
-      }
-    ],
-    apple: [
-      {
-        url: '/messagelm-icon.png?v=3',
-        sizes: '180x180',
-        type: 'image/png'
-      }
-    ]
+    icon: '/messagelm-icon.png?v=5',
+    apple: '/messagelm-icon.png?v=5'
   },
-  manifest: '/site.webmanifest?v=2',
+  manifest: '/site.webmanifest?v=5',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
@@ -63,7 +35,7 @@ export const metadata: Metadata = {
   },
   other: {
     'msapplication-TileColor': '#ffffff',
-    'msapplication-config': '/browserconfig.xml?v=2'
+    'msapplication-config': '/browserconfig.xml?v=5'
   }
 };
 

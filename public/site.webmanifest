@@ -3,12 +3,12 @@
   "short_name": "MessageLM",
   "icons": [
     {
-      "src": "/messagelm-icon.png?v=3",
+      "src": "/messagelm-icon.png?v=5",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "/messagelm-icon.png?v=3",
+      "src": "/messagelm-icon.png?v=5",
       "sizes": "512x512",
       "type": "image/png"
     }
