@@ -22,30 +22,30 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       {
-        url: '/MessageLM Icon.png?v=2',
+        url: '/messagelm-icon.png?v=3',
         sizes: 'any',
         type: 'image/png'
       },
       {
-        url: '/MessageLM Icon.png?v=2',
+        url: '/messagelm-icon.png?v=3',
         sizes: '32x32',
         type: 'image/png'
       },
       {
-        url: '/MessageLM Icon.png?v=2',
+        url: '/messagelm-icon.png?v=3',
         sizes: '16x16',
         type: 'image/png'
       }
     ],
     shortcut: [
       {
-        url: '/MessageLM Icon.png?v=2',
+        url: '/messagelm-icon.png?v=3',
         type: 'image/png'
       }
     ],
     apple: [
       {
-        url: '/MessageLM Icon.png?v=2',
+        url: '/messagelm-icon.png?v=3',
         sizes: '180x180',
         type: 'image/png'
       }
