@@ -274,10 +274,10 @@ export async function POST(req: NextRequest) {
       if (userWebhookUrl) {
         try {
           // Fetch all prompts
-          const allPrompts = await prisma.prompt.findMany();
-          
-          // Process variables in all text fields
-          const processedPrompts = allPrompts.reduce((acc: Record<string, string>, prompt: { name: string; content: string }) => {
+          const prompts = await prisma.prompt.findMany({
+            where: { organizationId: organization.id }
+          });
+          const processedPrompts = prompts.reduce((acc, prompt) => {
             acc[prompt.name] = processWebhookVariables(prompt.content, contactData);
             return acc;
           }, {} as Record<string, string>);

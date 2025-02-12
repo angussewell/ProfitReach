@@ -236,7 +236,9 @@ export async function POST(
       };
 
       // Fetch and process prompts
-      const prompts = await prisma.prompt.findMany();
+      const prompts = await prisma.prompt.findMany({
+        where: { organizationId: organization.id }
+      });
       const processedPrompts = prompts.reduce((acc, prompt) => {
         acc[prompt.name] = processWebhookVariables(prompt.content, data);
         return acc;

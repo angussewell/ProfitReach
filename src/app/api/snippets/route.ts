@@ -7,7 +7,14 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user?.organizationId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const snippets = await prisma.snippet.findMany({
+      where: { organizationId: session.user.organizationId },
       orderBy: { name: 'asc' }
     });
 
@@ -25,7 +32,7 @@ export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
     
-    if (!session) {
+    if (!session?.user?.organizationId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -41,7 +48,8 @@ export async function POST(req: Request) {
     const snippet = await prisma.snippet.create({
       data: {
         name: data.name,
-        content: data.content
+        content: data.content,
+        organizationId: session.user.organizationId
       }
     });
 
@@ -59,7 +67,7 @@ export async function PUT(req: Request) {
   try {
     const session = await getServerSession(authOptions);
     
-    if (!session) {
+    if (!session?.user?.organizationId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -69,6 +77,21 @@ export async function PUT(req: Request) {
       return NextResponse.json(
         { error: 'ID, name, and content are required' },
         { status: 400 }
+      );
+    }
+
+    // First verify the snippet belongs to the organization
+    const existingSnippet = await prisma.snippet.findFirst({
+      where: {
+        id: data.id,
+        organizationId: session.user.organizationId
+      }
+    });
+
+    if (!existingSnippet) {
+      return NextResponse.json(
+        { error: 'Snippet not found' },
+        { status: 404 }
       );
     }
 
@@ -94,7 +117,7 @@ export async function DELETE(req: Request) {
   try {
     const session = await getServerSession(authOptions);
     
-    if (!session) {
+    if (!session?.user?.organizationId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -105,6 +128,21 @@ export async function DELETE(req: Request) {
       return NextResponse.json(
         { error: 'Snippet ID is required' },
         { status: 400 }
+      );
+    }
+
+    // First verify the snippet belongs to the organization
+    const existingSnippet = await prisma.snippet.findFirst({
+      where: {
+        id,
+        organizationId: session.user.organizationId
+      }
+    });
+
+    if (!existingSnippet) {
+      return NextResponse.json(
+        { error: 'Snippet not found' },
+        { status: 404 }
       );
     }
 

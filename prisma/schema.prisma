@@ -45,8 +45,10 @@ model Organization {
   emailMessages      EmailMessage[]
   ghlIntegrations    GHLIntegration[]
   metrics            Metric[]
+  prompts            Prompt[]
   researchResults    ResearchResult[]
   scenarios          Scenario[]
+  snippets           Snippet[]
   socialAccounts     SocialAccount[]
   users              User[]
   webhookLogs        WebhookLog[]
@@ -129,11 +131,15 @@ model Scenario {
 }
 
 model Prompt {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  content   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String       @id @default(cuid())
+  name           String       @unique
+  content        String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
 }
 
 model FieldMapping {
@@ -227,12 +233,16 @@ model ResearchResult {
 }
 
 model Snippet {
-  id        String     @id @default(cuid())
-  name      String     @unique
-  content   String
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  scenarios Scenario[]
+  id             String       @id @default(cuid())
+  name           String       @unique
+  content        String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  scenarios      Scenario[]
+
+  @@index([organizationId])
 }
 
 model EmailAccount {
