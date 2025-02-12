@@ -17,14 +17,14 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: 'ProfitReach',
+  title: 'MessageLM',
   description: 'AI-powered outbound communication management',
   icons: {
     icon: [
       {
-        url: '/favicon.ico',
+        url: '/MessageLM Icon.png?v=2',
         sizes: 'any',
-        type: 'image/x-icon'
+        type: 'image/png'
       },
       {
         url: '/MessageLM Icon.png?v=2',
@@ -39,8 +39,8 @@ export const metadata: Metadata = {
     ],
     shortcut: [
       {
-        url: '/favicon.ico',
-        type: 'image/x-icon'
+        url: '/MessageLM Icon.png?v=2',
+        type: 'image/png'
       }
     ],
     apple: [
