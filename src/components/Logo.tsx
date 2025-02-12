@@ -49,7 +49,7 @@ export function Logo({ className }: LogoProps) {
         )}
       >
         <Image
-          src="/MessageLM Icon.png"
+          src="/messagelm-icon.png"
           alt="MessageLM"
           width={36}
           height={36}
