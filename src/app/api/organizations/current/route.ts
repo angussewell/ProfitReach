@@ -26,6 +26,33 @@ export async function GET() {
         name: true,
         webhookUrl: true,
         outboundWebhookUrl: true,
+        billingPlan: true,
+        creditBalance: true,
+        creditUsage: {
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+          select: {
+            id: true,
+            amount: true,
+            description: true,
+            createdAt: true
+          }
+        },
+        emailAccounts: {
+          where: { isActive: true },
+          select: { id: true }
+        },
+        socialAccounts: {
+          where: { isActive: true },
+          select: { id: true }
+        },
+        connectedAccounts: {
+          select: {
+            id: true,
+            accountType: true,
+            accountId: true
+          }
+        },
         ghlIntegrations: {
           take: 1,
           orderBy: { createdAt: 'desc' },
@@ -42,7 +69,16 @@ export async function GET() {
       return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
     }
 
-    return NextResponse.json(organization);
+    // Calculate active accounts count
+    const activeAccountsCount = organization.emailAccounts.length + organization.socialAccounts.length;
+
+    // Add activeAccountsCount to the response
+    const response = {
+      ...organization,
+      activeAccountsCount
+    };
+
+    return NextResponse.json(response);
   } catch (error) {
     console.error('Error fetching current organization:', error);
     return NextResponse.json(

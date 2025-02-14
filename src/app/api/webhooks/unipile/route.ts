@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
+import { headers } from 'next/headers';
 import { prisma } from '@/lib/prisma';
+import { updateCreditBalance, reportScenarioUsage } from '@/lib/stripe';
 import { z } from 'zod';
 
 // Force dynamic API route
@@ -95,161 +97,73 @@ async function getUnipileAccountDetails(accountId: string): Promise<UnipileAccou
   }
 }
 
-export async function POST(request: Request) {
-  // Log full request details
-  console.log('Received Unipile webhook request:', {
-    url: request.url,
-    method: request.method,
-    headers: Object.fromEntries(request.headers.entries()),
-    timestamp: new Date().toISOString()
-  });
-
+export async function POST(req: Request) {
   try {
-    // Log raw request body for debugging
-    const rawBody = await request.text();
-    console.log('Raw webhook body:', rawBody);
+    const body = await req.json();
+    const organizationId = headers().get('x-organization-id');
 
-    // Parse the body as JSON
-    let body;
-    try {
-      body = JSON.parse(rawBody);
-      console.log('Parsed webhook body:', body);
-    } catch (parseError) {
-      console.error('Failed to parse webhook body:', {
-        error: parseError,
-        rawBody,
-        timestamp: new Date().toISOString()
-      });
-      return NextResponse.json(
-        { 
-          error: 'Invalid JSON',
-          details: parseError instanceof Error ? parseError.message : String(parseError)
-        },
-        { status: 400 }
-      );
+    if (!organizationId) {
+      return new NextResponse('Missing organization ID', { status: 400 });
     }
 
-    // Validate webhook payload
-    if (!body.status || !body.account_id || !body.name) {
-      console.error('Invalid webhook payload:', body);
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      );
+    const organization = await prisma.organization.findUnique({
+      where: { id: organizationId },
+    });
+
+    if (!organization) {
+      return new NextResponse('Organization not found', { status: 404 });
     }
 
-    // Get organization ID from the name field
-    const organizationId = body.name;
+    // Create webhook log
+    const webhookLog = await prisma.webhookLog.create({
+      data: {
+        accountId: body.accountId || 'unknown',
+        organizationId,
+        status: 'success',
+        scenarioName: body.scenarioName || 'Unknown',
+        contactEmail: body.contactEmail || 'Unknown',
+        contactName: body.contactName || 'Unknown',
+        company: body.company || 'Unknown',
+        requestBody: body,
+      },
+    });
 
-    // Fetch account details from Unipile
-    const accountDetails = await getUnipileAccountDetails(body.account_id);
-    if (!accountDetails) {
-      console.error('Failed to fetch account details from Unipile');
-      return NextResponse.json(
-        { error: 'Failed to fetch account details' },
-        { status: 500 }
-      );
-    }
-
-    // Handle different account types
-    if (accountDetails.connection_params?.mail) {
-      // Handle email account
-      const email = accountDetails.connection_params.mail.username;
-      
-      // Check if account already exists
-      const existingAccount = await prisma.emailAccount.findUnique({
-        where: {
-          unipileAccountId: body.account_id
-        }
-      });
-
-      if (existingAccount) {
-        // Update existing account
-        const updatedAccount = await prisma.emailAccount.update({
-          where: {
-            unipileAccountId: body.account_id
-          },
-          data: {
-            email,
-            isActive: true,
-            updatedAt: new Date()
-          }
+    // If the scenario was successful and the organization is on the at_cost plan,
+    // deduct a credit and report usage
+    if (
+      webhookLog.status === 'success' &&
+      organization.billingPlan === 'at_cost'
+    ) {
+      try {
+        await prisma.$transaction(async (tx) => {
+          await updateCreditBalance(organizationId, -1, 'Scenario run', webhookLog.id);
+          await reportScenarioUsage(organizationId);
         });
-        console.log('Updated existing email account:', updatedAccount);
-        return NextResponse.json(updatedAccount);
-      }
-
-      // Create new email account
-      const newAccount = await prisma.emailAccount.create({
-        data: {
-          email,
-          name: email, // Initially set name to email, will be updated by user
-          organizationId,
-          unipileAccountId: body.account_id,
-          isActive: true
-        }
-      });
-
-      console.log('Created new email account:', newAccount);
-      return NextResponse.json(newAccount);
-    } 
-    else if (accountDetails.connection_params?.im && accountDetails.type === 'LINKEDIN') {
-      // Handle LinkedIn account
-      const linkedinId = accountDetails.connection_params.im.id;
-      const name = accountDetails.name; // Use the root name field
-      
-      // Check if account already exists
-      const existingAccount = await prisma.socialAccount.findUnique({
-        where: {
-          unipileAccountId: body.account_id
-        }
-      });
-
-      if (existingAccount) {
-        // Update existing account
-        const updatedAccount = await prisma.socialAccount.update({
-          where: {
-            unipileAccountId: body.account_id
-          },
-          data: {
-            username: linkedinId,
-            name,
-            isActive: true,
-            updatedAt: new Date()
-          }
+      } catch (error) {
+        // If there are insufficient credits or no active subscription,
+        // update the webhook log status
+        await prisma.webhookLog.update({
+          where: { id: webhookLog.id },
+          data: { status: 'blocked' },
         });
-        console.log('Updated existing social account:', updatedAccount);
-        return NextResponse.json(updatedAccount);
-      }
 
-      // Create new social account
-      const newAccount = await prisma.socialAccount.create({
-        data: {
-          username: linkedinId,
-          name,
-          provider: 'LINKEDIN',
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error('Error processing scenario:', {
+          error: errorMessage,
           organizationId,
-          unipileAccountId: body.account_id,
-          isActive: true
-        }
-      });
+          webhookLogId: webhookLog.id,
+        });
 
-      console.log('Created new social account:', newAccount);
-      return NextResponse.json(newAccount);
-    }
-    else {
-      console.error('Unsupported account type:', accountDetails);
-      return NextResponse.json(
-        { error: 'Unsupported account type' },
-        { status: 400 }
-      );
+        return new NextResponse(
+          'Insufficient credits or no active subscription',
+          { status: 402 }
+        );
+      }
     }
 
+    return new NextResponse('Webhook processed', { status: 200 });
   } catch (error) {
     console.error('Error processing webhook:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return new NextResponse('Internal error', { status: 500 });
   }
 } 

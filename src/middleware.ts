@@ -23,7 +23,8 @@ const PROTECTED_ROUTES = [
   '/webhook-logs',
   '/email-accounts',
   '/settings',
-  '/prompts'
+  '/prompts',
+  '/user-settings'
 ];
 
 // Public API routes that don't require authentication
@@ -85,6 +86,20 @@ export async function middleware(request: NextRequest) {
   if (isAdminRoute && token?.role !== 'admin') {
     // Redirect to home page if not admin
     return NextResponse.redirect(new URL('/', request.url));
+  }
+
+  // Protect billing routes
+  if (path.startsWith('/settings/billing')) {
+    if (!token) {
+      return NextResponse.redirect(new URL('/auth/signin', request.url));
+    }
+  }
+
+  // Protect API routes
+  if (path.startsWith('/api/billing')) {
+    if (!token) {
+      return new NextResponse('Unauthorized', { status: 401 });
+    }
   }
 
   return NextResponse.next();

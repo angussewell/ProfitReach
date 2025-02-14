@@ -34,13 +34,22 @@ model Session {
 }
 
 model Organization {
-  id                 String           @id @default(cuid())
-  name               String           @unique
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
-  webhookUrl         String           @unique @default(uuid())
+  id                 String                    @id @default(cuid())
+  name               String                    @unique
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+  webhookUrl         String                    @unique @default(uuid())
   outboundWebhookUrl String?
+  stripeCustomerId   String?
+  stripeTestCustomerId String?
+  billingPlan        String?                   @default("unlimited")
+  creditBalance      Int?                      @default(0)
+  lastBillingSync    DateTime?
+  nextBillingDate    DateTime?
   attachments        Attachment[]
+  billingEvents      BillingEvent[]
+  connectedAccounts  ConnectedAccountBilling[]
+  creditUsage        CreditUsage[]
   emailAccounts      EmailAccount[]
   emailMessages      EmailMessage[]
   ghlIntegrations    GHLIntegration[]
@@ -50,6 +59,7 @@ model Organization {
   scenarios          Scenario[]
   snippets           Snippet[]
   socialAccounts     SocialAccount[]
+  subscriptions      Subscription[]
   users              User[]
   webhookLogs        WebhookLog[]
 }
@@ -132,13 +142,13 @@ model Scenario {
 }
 
 model Prompt {
-  id             String       @id @default(cuid())
+  id             String        @id @default(cuid())
   name           String
   content        String
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
   @@unique([name, organizationId])
   @@index([organizationId])
@@ -191,6 +201,7 @@ model WebhookLog {
   requestBody      Json
   responseBody     Json            @default("{}")
   ghlIntegrationId String?
+  creditUsages     CreditUsage[]
   GHLIntegration   GHLIntegration? @relation(fields: [ghlIntegrationId], references: [id])
   organization     Organization    @relation(fields: [organizationId], references: [id])
 
@@ -236,32 +247,34 @@ model ResearchResult {
 }
 
 model Snippet {
-  id             String       @id @default(cuid())
+  id             String        @id @default(cuid())
   name           String
   content        String
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  organizationId String?
   scenarios      Scenario[]
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
   @@unique([name, organizationId])
   @@index([organizationId])
 }
 
 model EmailAccount {
-  id                String         @id @default(cuid())
-  name              String
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
-  organizationId    String
-  email             String
-  isActive          Boolean        @default(true)
-  unipileAccountId  String?       @unique
-  organization      Organization   @relation(fields: [organizationId], references: [id])
-  emailMessages     EmailMessage[]
+  id               String         @id @default(cuid())
+  email            String         @unique
+  name             String
+  organizationId   String
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  isActive         Boolean        @default(true)
+  unipileAccountId String         @unique
+  outgoingServer   String
+  outgoingServerPort Int
+  password         String
+  organization     Organization   @relation(fields: [organizationId], references: [id])
+  emailMessages    EmailMessage[]
 
-  @@unique([email, organizationId])
   @@index([organizationId])
 }
 
@@ -288,20 +301,21 @@ model EmailMessage {
 }
 
 model ScenarioMessage {
-  id          String    @id @default(cuid())
-  scenarioId  String
-  messageId   String
-  threadId    String
-  sender      String?
-  hasReplied  Boolean   @default(false)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  scenario    Scenario  @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  scenarioId String
+  threadId   String
+  sender     String?
+  hasReplied Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  messageId  String
+  updatedAt  DateTime @default(now()) @updatedAt
+  scenario   Scenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
 
+  @@unique([threadId, sender])
   @@index([messageId])
   @@index([threadId])
   @@index([sender])
-  @@unique([threadId, sender])
+  @@index([scenarioId])
 }
 
 model SocialAccount {
@@ -318,6 +332,69 @@ model SocialAccount {
 
   @@index([organizationId])
   @@index([provider])
+}
+
+model CreditUsage {
+  id             String       @id @default(cuid())
+  organizationId String
+  amount         Int
+  description    String?
+  createdAt      DateTime     @default(now())
+  webhookLogId   String?
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  webhookLog     WebhookLog?  @relation(fields: [webhookLogId], references: [id], onUpdate: NoAction)
+
+  @@index([createdAt], map: "credit_usage_created_at_idx")
+  @@index([organizationId], map: "credit_usage_org_id_idx")
+}
+
+model Subscription {
+  id                   String       @id @default(cuid())
+  organizationId       String
+  stripeSubscriptionId String
+  status               String
+  currentPeriodStart   DateTime
+  currentPeriodEnd     DateTime
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  subscriptionItemId   String?
+  priceId              String?
+  quantity             Int?         @default(1)
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([organizationId], map: "subscription_org_id_idx")
+  @@index([status], map: "subscription_status_idx")
+  @@index([stripeSubscriptionId], map: "subscription_stripe_id_idx")
+}
+
+model BillingEvent {
+  id             String       @id
+  organizationId String
+  type           String
+  status         String
+  amount         Int?
+  description    String?
+  metadata       Json?        @default("{}")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([createdAt], map: "billing_event_created_at_idx")
+  @@index([organizationId], map: "billing_event_org_id_idx")
+  @@index([type], map: "billing_event_type_idx")
+}
+
+model ConnectedAccountBilling {
+  id                       String       @id @default(cuid())
+  organizationId           String
+  accountType              String
+  accountId                String
+  stripeSubscriptionItemId String?
+  createdAt                DateTime     @default(now())
+  updatedAt                DateTime     @updatedAt
+  organization             Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([organizationId, accountType, accountId], map: "connected_account_billing_unique")
 }
 
 enum MessageType {

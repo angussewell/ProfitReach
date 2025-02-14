@@ -4,12 +4,26 @@ import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { UserManagement } from '@/components/settings/user-management';
+import { BillingForm } from '@/app/settings/billing/billing-form';
 
 interface Organization {
   id: string;
   name: string;
   webhookUrl: string;
   outboundWebhookUrl?: string;
+  billingPlan: string;
+  creditBalance: number;
+  creditUsage: Array<{
+    id: string;
+    amount: number;
+    description: string | null;
+    createdAt: Date;
+  }>;
+  connectedAccounts: Array<{
+    id: string;
+    accountType: string;
+    accountId: string;
+  }>;
 }
 
 interface WebhookSettingsProps {
@@ -260,6 +274,16 @@ export default function SettingsPage() {
               >
                 User Management
               </button>
+              <button
+                onClick={() => setActiveTab('billing')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'billing'
+                    ? 'border-red-500 text-red-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Billing Settings
+              </button>
             </nav>
           </div>
         </div>
@@ -278,8 +302,10 @@ export default function SettingsPage() {
             handleOutboundWebhookUrlChange={handleOutboundWebhookUrlChange}
             handleSaveWebhookUrl={handleSaveWebhookUrl}
           />
-        ) : (
+        ) : activeTab === 'users' ? (
           <UserManagement />
+        ) : (
+          organization && <BillingForm organization={organization} />
         )}
       </div>
     </PageContainer>

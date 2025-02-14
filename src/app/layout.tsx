@@ -4,7 +4,8 @@ import '@fontsource/jetbrains-mono/500.css';
 import '@fontsource/jetbrains-mono/600.css';
 import { Inter } from 'next/font/google';
 import { Providers } from '@/components/providers';
-import { Toaster } from '@/components/ui/toaster';
+import { Toaster as ShadcnToaster } from '@/components/ui/toaster';
+import { Toaster } from 'react-hot-toast';
 import { Metadata, Viewport } from 'next';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -57,7 +58,8 @@ export default function RootLayout({
         <Providers>
           {children}
         </Providers>
-        <Toaster />
+        <ShadcnToaster />
+        <Toaster position="top-right" />
       </body>
     </html>
   );

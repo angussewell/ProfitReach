@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { UnipileClient } from '@/lib/unipile';
+import { updateAccountSubscriptionQuantity } from '@/lib/stripe';
 
 // Schema for account updates
 const accountUpdateSchema = z.object({
@@ -58,6 +59,11 @@ export async function PUT(
         updatedAt: new Date()
       },
     });
+
+    // If isActive status changed, update subscription quantity
+    if (data.isActive !== undefined && data.isActive !== existingAccount.isActive) {
+      await updateAccountSubscriptionQuantity(session.user.organizationId);
+    }
 
     return NextResponse.json(socialAccount);
   } catch (error) {

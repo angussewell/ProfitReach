@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 
 export async function POST(req: Request) {
   try {
@@ -11,14 +11,14 @@ export async function POST(req: Request) {
     }
 
     const { name } = await req.json();
-    if (!name?.trim()) {
+    if (!name) {
       return new NextResponse('Name is required', { status: 400 });
     }
 
-    // Update user name in database
+    // Update user's name
     await prisma.user.update({
       where: { id: session.user.id },
-      data: { name: name.trim() }
+      data: { name }
     });
 
     return new NextResponse('Name updated successfully', { status: 200 });

@@ -5,6 +5,11 @@ import { evaluateFilters, normalizeWebhookData } from '@/lib/filter-utils';
 import { Filter } from '@/types/filters';
 import { Prisma } from '@prisma/client';
 import { processWebhookVariables } from '@/utils/variableReplacer';
+import { NextResponse } from 'next/server';
+import { headers } from 'next/headers';
+import { stripe } from '@/lib/stripe';
+import { hasValidPaymentMethod, updateCreditBalance, reportScenarioUsage } from '@/lib/stripe';
+import { Organization, GHLIntegration, EmailAccount, SocialAccount, Prompt } from '@prisma/client';
 
 // Normalize field names consistently
 const normalizeFieldName = (field: string) => field.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -26,6 +31,19 @@ interface ScenarioWithSignature {
   } | null;
 }
 
+type OrganizationWithRelations = Prisma.OrganizationGetPayload<{
+  include: {
+    ghlIntegrations: true;
+    emailAccounts: {
+      where: { isActive: true };
+    };
+    socialAccounts: {
+      where: { isActive: true };
+    };
+    prompts: true;
+  };
+}>;
+
 interface ProcessedScenario {
   id: string;
   name: string;
@@ -33,9 +51,56 @@ interface ProcessedScenario {
   subjectLine: string | null;
   customizationPrompt: string | null;
   emailExamplesPrompt: string | null;
-  signature: {
-    content: string;
-  } | null;
+  signature: { content: string } | null;
+}
+
+interface GHLIntegration {
+  id: string;
+  locationId: string;
+  locationName: string | null;
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: Date;
+  organizationId: string;
+}
+
+interface EmailAccount {
+  id: string;
+  email: string;
+  name: string;
+  isActive: boolean;
+  unipileAccountId: string;
+  organizationId: string;
+}
+
+interface SocialAccount {
+  id: string;
+  username: string;
+  name: string;
+  provider: string;
+  isActive: boolean;
+  unipileAccountId: string | null;
+  organizationId: string;
+}
+
+interface Prompt {
+  id: string;
+  name: string;
+  content: string;
+  organizationId: string;
+}
+
+interface Organization {
+  id: string;
+  name: string;
+  webhookUrl: string;
+  outboundWebhookUrl: string | null;
+  billingPlan: string;
+  creditBalance: number;
+  ghlIntegrations: GHLIntegration[];
+  emailAccounts: EmailAccount[];
+  socialAccounts: SocialAccount[];
+  prompts: Prompt[];
 }
 
 export async function POST(req: NextRequest) {
@@ -79,8 +144,21 @@ export async function POST(req: NextRequest) {
 
     // Find organization by webhook URL
     const organization = await prisma.organization.findUnique({
-      where: { webhookUrl: userWebhookUrl }
-    });
+      where: { webhookUrl: userWebhookUrl },
+      include: {
+        ghlIntegrations: {
+          take: 1,
+          orderBy: { createdAt: 'desc' }
+        },
+        emailAccounts: {
+          where: { isActive: true }
+        },
+        socialAccounts: {
+          where: { isActive: true }
+        },
+        prompts: true
+      }
+    }) as OrganizationWithRelations | null;
 
     if (!organization) {
       log('error', 'Organization not found', { userWebhookUrl });
@@ -95,6 +173,17 @@ export async function POST(req: NextRequest) {
       userWebhookUrl,
       organizationId: organization.id
     });
+
+    // Check payment method for at-cost plan
+    if (organization.billingPlan === 'at_cost') {
+      const hasPaymentMethod = await hasValidPaymentMethod(organization.id);
+      if (!hasPaymentMethod) {
+        return Response.json({ 
+          error: 'No valid payment method found',
+          details: 'Please add a payment method in billing settings to use the at-cost plan'
+        }, { status: 402 });
+      }
+    }
 
     // Get scenario with filters and prompts
     let scenario;
@@ -304,11 +393,8 @@ export async function POST(req: NextRequest) {
       // If filters passed, send outbound webhook
       if (userWebhookUrl) {
         try {
-          // Fetch all prompts
-          const prompts = await prisma.prompt.findMany({
-            where: { organizationId: organization.id }
-          });
-          const processedPrompts = prompts.reduce((acc, prompt) => {
+          // Process prompts
+          const processedPrompts = organization.prompts.reduce((acc, prompt) => {
             acc[prompt.name] = processWebhookVariables(prompt.content, contactData);
             return acc;
           }, {} as Record<string, string>);
@@ -395,6 +481,39 @@ export async function POST(req: NextRequest) {
             prompts: processedPrompts,
             response: responseData
           });
+
+          // If the scenario was successful and the organization is on the at_cost plan,
+          // deduct a credit and report usage
+          if (
+            webhookLog.status === 'success' &&
+            organization.billingPlan === 'at_cost'
+          ) {
+            try {
+              await prisma.$transaction(async (tx) => {
+                await updateCreditBalance(organization.id, -1, 'Scenario run', webhookLog.id);
+                await reportScenarioUsage(organization.id);
+              });
+            } catch (error) {
+              // If there are insufficient credits or no active subscription,
+              // update the webhook log status
+              await prisma.webhookLog.update({
+                where: { id: webhookLog.id },
+                data: { status: 'blocked' },
+              });
+
+              const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+              console.error('Error processing scenario:', {
+                error: errorMessage,
+                organizationId: organization.id,
+                webhookLogId: webhookLog.id,
+              });
+
+              return Response.json(
+                { error: 'Insufficient credits or no active subscription' },
+                { status: 402 }
+              );
+            }
+          }
 
           return Response.json({
             status: 'success',
