@@ -256,17 +256,8 @@ model EmailAccount {
   updatedAt         DateTime       @updatedAt
   organizationId    String
   email             String
-  password          String
-  outgoingServer    String
-  outgoingServerPort Int
   isActive          Boolean        @default(true)
-  incomingServer    String
-  incomingServerPort Int
-  smtpConnection    Int
-  isGmail           Boolean        @default(false)
-  mail360AccountKey  String?
-  unipileAccountId   String?
-  syncFromDate      DateTime?
+  unipileAccountId  String?       @unique
   organization      Organization   @relation(fields: [organizationId], references: [id])
   emailMessages     EmailMessage[]
 
