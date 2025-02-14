@@ -42,7 +42,7 @@ export function UniversalInboxClient() {
   const [showReplyModal, setShowReplyModal] = useState(false);
   const [replyContent, setReplyContent] = useState('');
   const [replying, setReplying] = useState(false);
-  const [emailAccounts, setEmailAccounts] = useState<Array<{ id: string; email: string; mail360AccountKey: string | null }>>([]);
+  const [emailAccounts, setEmailAccounts] = useState<Array<{ id: string; email: string; unipileAccountId: string | null }>>([]);
   const [selectedFromEmail, setSelectedFromEmail] = useState<string>('');
 
   // Fetch messages and email accounts
@@ -118,7 +118,7 @@ export function UniversalInboxClient() {
 
       // Find the selected email account
       const selectedAccount = emailAccounts.find(account => account.email === selectedFromEmail);
-      if (!selectedAccount?.mail360AccountKey) {
+      if (!selectedAccount?.unipileAccountId) {
         throw new Error('Selected email account is not properly configured');
       }
 
@@ -422,9 +422,9 @@ export function UniversalInboxClient() {
                     <option 
                       key={account.id} 
                       value={account.email}
-                      disabled={!account.mail360AccountKey}
+                      disabled={!account.unipileAccountId}
                     >
-                      {account.email} {!account.mail360AccountKey && '(Not configured)'}
+                      {account.email} {!account.unipileAccountId && '(Not configured)'}
                     </option>
                   ))}
                 </select>

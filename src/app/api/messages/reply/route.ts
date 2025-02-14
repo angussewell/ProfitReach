@@ -99,72 +99,44 @@ export async function POST(request: Request) {
       );
     }
 
-    // Validate Mail360 account key
-    if (!emailAccount.mail360AccountKey) {
-      console.error('Mail360 account key missing for account:', emailAccount.email);
+    // Validate email account configuration
+    if (!emailAccount.unipileAccountId) {
       return NextResponse.json(
-        { error: 'Email account is not properly configured with Mail360' },
+        { error: 'Email account not properly configured' },
         { status: 400 }
       );
     }
 
-    let mail360Client;
-    try {
-      mail360Client = new Mail360Client();
-    } catch (error) {
-      console.error('Failed to initialize Mail360 client:', {
-        error: error instanceof Error ? {
-          message: error.message,
-          stack: error.stack,
-          name: error.name
-        } : error
-      });
-      return NextResponse.json(
-        { error: 'Mail360 configuration error. Please check environment variables.' },
-        { status: 500 }
-      );
-    }
-
-    // Format subject if not provided
-    const subject = validatedData.subject || formatReplySubject(originalMessage.subject || 'Re: No Subject');
-
-    // Prepare reply parameters
-    const replyParams = {
-      accountKey: emailAccount.mail360AccountKey,
+    // Send reply via Mail360
+    const mail360Client = new Mail360Client();
+    const response = await mail360Client.sendReply({
+      accountKey: emailAccount.unipileAccountId,
       messageId: originalMessage.messageId,
       fromAddress: emailAccount.email,
       content: formatEmailContent(validatedData.content, originalMessage),
-      subject,
+      subject: formatReplySubject(originalMessage.subject || 'Re: No Subject'),
       action: validatedData.action,
       toAddress: validatedData.toAddress || originalMessage.sender,
       ccAddress: validatedData.ccAddress,
       bccAddress: validatedData.bccAddress,
       mailFormat: 'html' as const,
-    };
-
-    console.log('Sending reply with params:', {
-      ...replyParams,
-      content: replyParams.content.slice(0, 100) + '...' // Log first 100 chars of content
     });
 
-    // Send reply through Mail360
-    const result = await mail360Client.sendReply(replyParams);
-
     console.log('Reply sent successfully:', {
-      messageId: result.messageId,
-      subject: result.subject
+      messageId: response.messageId,
+      subject: response.subject
     });
 
     // Store the reply in our database
     const storedReply = await prisma.emailMessage.create({
       data: {
-        messageId: result.messageId,
+        messageId: response.messageId,
         threadId: originalMessage.threadId,
         organizationId: session.user.organizationId,
         emailAccountId: emailAccount.id,
-        subject: result.subject,
+        subject: response.subject,
         sender: emailAccount.email,
-        recipientEmail: result.toAddress,
+        recipientEmail: response.toAddress,
         content: validatedData.content,
         messageType: 'REAL_REPLY',
         receivedAt: new Date(),
@@ -179,7 +151,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      messageId: result.messageId,
+      messageId: response.messageId,
     });
   } catch (error) {
     console.error('Error sending reply:', {

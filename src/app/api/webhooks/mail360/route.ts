@@ -235,9 +235,9 @@ export async function POST(request: Request) {
     const emailAccount = await prisma.emailAccount.findFirst({
       where: {
         OR: [
-          { mail360AccountKey: data.account_key },
-          { mail360AccountKey: data.account_key?.toUpperCase() },
-          { mail360AccountKey: data.account_key?.toLowerCase() }
+          { unipileAccountId: data.account_key },
+          { unipileAccountId: data.account_key?.toUpperCase() },
+          { unipileAccountId: data.account_key?.toLowerCase() }
         ]
       }
     });
@@ -246,7 +246,7 @@ export async function POST(request: Request) {
     const allAccounts = await prisma.emailAccount.findMany({
       select: {
         email: true,
-        mail360AccountKey: true
+        unipileAccountId: true
       }
     });
     
@@ -254,7 +254,7 @@ export async function POST(request: Request) {
       searchKey: data.account_key,
       foundAccount: emailAccount ? {
         email: emailAccount.email,
-        key: emailAccount.mail360AccountKey
+        key: emailAccount.unipileAccountId
       } : null,
       allAccounts: allAccounts
     });
@@ -265,7 +265,7 @@ export async function POST(request: Request) {
         available_accounts: await prisma.emailAccount.findMany({
           select: { 
             email: true, 
-            mail360AccountKey: true,
+            unipileAccountId: true,
             id: true
           }
         })

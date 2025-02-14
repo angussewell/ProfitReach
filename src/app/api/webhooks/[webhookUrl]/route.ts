@@ -45,7 +45,7 @@ interface OutboundData {
   emailData?: {
     email: string;
     name: string;
-    mail360AccountKey: string;
+    unipileAccountId: string;
   };
   socialData?: {
     name: string;
@@ -259,7 +259,7 @@ export async function POST(
         emailData: emailAccounts?.[0] ? {
           email: emailAccounts[0].email,
           name: emailAccounts[0].name,
-          mail360AccountKey: emailAccounts[0].mail360AccountKey || ''
+          unipileAccountId: emailAccounts[0].unipileAccountId || ''
         } : undefined,
         socialData: socialAccount ? {
           name: socialAccount.name,

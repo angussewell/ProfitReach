@@ -9,7 +9,7 @@ export async function POST(request: Request) {
     // Get all email accounts with Mail360 keys
     const emailAccounts = await prisma.emailAccount.findMany({
       where: {
-        mail360AccountKey: { not: null }
+        unipileAccountId: { not: null }
       }
     });
 
@@ -25,9 +25,9 @@ export async function POST(request: Request) {
     // Update each account's webhook URL
     for (const account of emailAccounts) {
       try {
-        if (!account.mail360AccountKey) continue;
+        if (!account.unipileAccountId) continue;
         
-        await mail360Client.updateAccountSettings(account.mail360AccountKey);
+        await mail360Client.updateAccountSettings(account.unipileAccountId);
         results.success++;
         
         console.log(`Updated webhook URL for account: ${account.email}`);
