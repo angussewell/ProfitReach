@@ -43,7 +43,7 @@ model Organization {
   stripeCustomerId   String?
   stripeTestCustomerId String?
   billingPlan        String?                   @default("unlimited")
-  creditBalance      Int?                      @default(0)
+  creditBalance      Int                       @default(0)
   lastBillingSync    DateTime?
   nextBillingDate    DateTime?
   attachments        Attachment[]

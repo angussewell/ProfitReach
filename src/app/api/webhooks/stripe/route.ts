@@ -134,52 +134,69 @@ export async function POST(req: Request) {
         const session = event.data.object as Stripe.Checkout.Session;
         if (session.mode === 'payment' && session.metadata?.type === 'credits') {
           const organizationId = session.metadata.organizationId;
-          const credits = parseInt(session.metadata.credits);
+          const creditsStr = session.metadata.credits;
           
-          if (!organizationId || !credits) {
-            console.error('Missing metadata in checkout session:', session);
-            break;
+          if (!organizationId) {
+            console.error('Missing organizationId in checkout session:', session);
+            return new NextResponse('Missing organizationId', { status: 400 });
           }
 
-          await prisma.$transaction(async (tx) => {
-            await tx.organization.update({
-              where: { id: organizationId },
-              data: {
-                creditBalance: {
-                  increment: credits,
+          const credits = parseInt(creditsStr);
+          if (isNaN(credits) || credits <= 0) {
+            console.error('Invalid credits value in checkout session:', { creditsStr, session });
+            return new NextResponse('Invalid credits value', { status: 400 });
+          }
+
+          try {
+            await prisma.$transaction(async (tx) => {
+              await tx.organization.update({
+                where: { id: organizationId },
+                data: {
+                  creditBalance: {
+                    increment: credits,
+                  },
+                  lastBillingSync: new Date(),
                 },
-                lastBillingSync: new Date(),
-              },
+              });
+
+              await tx.creditUsage.create({
+                data: {
+                  organizationId,
+                  amount: credits,
+                  description: `Credits purchased (Session ${session.id})`,
+                },
+              });
+
+              const billingEventId = `cs_${session.id.slice(-8)}_${Date.now()}`;
+              await tx.billingEvent.create({
+                data: {
+                  id: billingEventId,
+                  organizationId,
+                  type: 'credits_purchased',
+                  status: 'success',
+                  amount: session.amount_total || 0,
+                  description: `Purchased ${credits.toLocaleString()} credits`,
+                  metadata: session as any,
+                  isTestMode,
+                },
+              });
             });
 
-            await tx.creditUsage.create({
-              data: {
-                organizationId,
-                amount: credits,
-                description: `Credits purchased (Session ${session.id})`,
-              },
+            console.log('Credits added from checkout:', {
+              organizationId,
+              credits,
+              sessionId: session.id,
+              isTestMode,
             });
-
-            await tx.billingEvent.create({
-              data: {
-                id: `cs_${session.id}_${Date.now()}`,
-                organizationId,
-                type: 'credits_purchased',
-                status: 'success',
-                amount: session.amount_total || 0,
-                description: `Purchased ${credits.toLocaleString()} credits`,
-                metadata: session as any,
-                isTestMode,
-              },
+          } catch (error) {
+            console.error('Error processing credit purchase:', {
+              error,
+              organizationId,
+              credits,
+              sessionId: session.id,
             });
-          });
-
-          console.log('Credits added from checkout:', {
-            organizationId,
-            credits,
-            sessionId: session.id,
-            isTestMode,
-          });
+            return new NextResponse('Error processing credit purchase', { status: 500 });
+          }
         }
         break;
       }
