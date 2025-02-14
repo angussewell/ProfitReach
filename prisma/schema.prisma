@@ -250,17 +250,27 @@ model Snippet {
 }
 
 model EmailAccount {
-  id               String         @id @default(cuid())
-  email            String         @unique
-  name             String
-  organizationId   String
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
-  isActive         Boolean        @default(true)
-  unipileAccountId String         @unique
-  organization     Organization   @relation(fields: [organizationId], references: [id])
-  messages         EmailMessage[]
+  id                String         @id @default(cuid())
+  name              String
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  organizationId    String
+  email             String
+  password          String
+  outgoingServer    String
+  outgoingServerPort Int
+  isActive          Boolean        @default(true)
+  incomingServer    String
+  incomingServerPort Int
+  smtpConnection    Int
+  isGmail           Boolean        @default(false)
+  mail360AccountKey  String?
+  unipileAccountId   String?
+  syncFromDate      DateTime?
+  organization      Organization   @relation(fields: [organizationId], references: [id])
+  emailMessages     EmailMessage[]
 
+  @@unique([email, organizationId])
   @@index([organizationId])
 }
 

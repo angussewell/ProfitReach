@@ -141,41 +141,59 @@ export async function POST(req: NextRequest) {
         }, { status: 404 });
       }
 
-      // Get email accounts
-      const emailAccounts = await prisma.emailAccount.findMany({
-        where: {
-          organizationId: organization.id,
-          isActive: true
+      // Get email accounts based on email sender
+      let emailAccounts;
+      const emailSender = contactData['Email Sender'];
+      
+      if (emailSender) {
+        // If email sender specified, find matching account
+        emailAccounts = await prisma.emailAccount.findMany({
+          where: {
+            organizationId: organization.id,
+            isActive: true,
+            email: emailSender
+          }
+        });
+
+        if (emailAccounts.length === 0) {
+          // Email sender specified but no matching account found
+          return Response.json({ 
+            error: "Invalid email sender",
+            details: `No active email account found matching sender: ${emailSender}`
+          }, { status: 400 });
         }
-      });
+      } else {
+        // If no email sender specified, get all active accounts
+        emailAccounts = await prisma.emailAccount.findMany({
+          where: {
+            organizationId: organization.id,
+            isActive: true
+          }
+        });
 
-      if (emailAccounts.length === 0) {
-        throw new Error('No active email accounts found');
+        if (emailAccounts.length === 0) {
+          return Response.json({ 
+            error: "No active email accounts",
+            details: "Organization has no active email accounts configured"
+          }, { status: 400 });
+        }
       }
-
-      // Process variables in all text fields
-      const processedScenario: ProcessedScenario = {
-        id: scenario.id,
-        name: scenario.name,
-        touchpointType: scenario.touchpointType,
-        subjectLine: scenario.subjectLine ? processWebhookVariables(scenario.subjectLine, contactData) : null,
-        customizationPrompt: scenario.customizationPrompt ? processWebhookVariables(scenario.customizationPrompt, contactData) : null,
-        emailExamplesPrompt: scenario.emailExamplesPrompt ? processWebhookVariables(scenario.emailExamplesPrompt, contactData) : null,
-        signature: scenario.signature ? {
-          content: processWebhookVariables(scenario.signature.content, contactData)
-        } : null
-      };
 
       // Create initial webhook log
       const webhookLog = await prisma.webhookLog.create({
         data: {
-          status: 'processing',
+          status: emailSender && emailAccounts.length === 0 ? 'error' : 'processing',
           scenarioName: scenario.name,
           contactEmail: contactData.email || 'Unknown',
           contactName: contactData.name || 'Unknown',
           company: contactData.company || 'Unknown',
           requestBody: contactData as Record<string, any>,
-          responseBody: {} as Record<string, any>,
+          responseBody: emailSender && emailAccounts.length === 0 
+            ? { 
+                error: 'Invalid email sender',
+                details: `No active email account found matching sender: ${emailSender}`
+              } as Record<string, any>
+            : {} as Record<string, any>,
           accountId: userWebhookUrl,
           organization: {
             connect: {
@@ -189,6 +207,19 @@ export async function POST(req: NextRequest) {
           }
         }
       });
+
+      // Process variables in all text fields
+      const processedScenario: ProcessedScenario = {
+        id: scenario.id,
+        name: scenario.name,
+        touchpointType: scenario.touchpointType,
+        subjectLine: scenario.subjectLine ? processWebhookVariables(scenario.subjectLine, contactData) : null,
+        customizationPrompt: scenario.customizationPrompt ? processWebhookVariables(scenario.customizationPrompt, contactData) : null,
+        emailExamplesPrompt: scenario.emailExamplesPrompt ? processWebhookVariables(scenario.emailExamplesPrompt, contactData) : null,
+        signature: scenario.signature ? {
+          content: processWebhookVariables(scenario.signature.content, contactData)
+        } : null
+      };
 
       // Parse and evaluate filters
       let parsedFilters: Filter[] = [];
@@ -303,11 +334,17 @@ export async function POST(req: NextRequest) {
                 snippet: scenario.snippet?.content || null
               },
               prompts: processedPrompts,
-              emailData: emailAccounts[0] ? {
-                email: emailAccounts[0].email,
-                name: emailAccounts[0].name,
-                mail360AccountKey: emailAccounts[0].mail360AccountKey || ''
-              } : undefined
+              emailData: emailSender 
+                ? {
+                    email: emailAccounts[0].email,
+                    name: emailAccounts[0].name,
+                    unipileAccountId: emailAccounts[0].unipileAccountId || ''
+                  }
+                : emailAccounts.map(account => ({
+                    email: account.email,
+                    name: account.name,
+                    unipileAccountId: account.unipileAccountId || ''
+                  }))
             })
           });
 
