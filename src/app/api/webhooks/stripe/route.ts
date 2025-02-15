@@ -4,8 +4,16 @@ import { getStripeClient, getStripeWebhookSecret } from '@/lib/stripe';
 import { prisma } from '@/lib/prisma';
 import { CREDITS_PER_PACK } from '@/lib/stripe';
 import Stripe from 'stripe';
+import { PrismaClient, Prisma } from '@prisma/client';
 
-async function handleSubscriptionChange(subscription: Stripe.Subscription, isTestMode: boolean) {
+type PrismaTransaction = Omit<
+  PrismaClient,
+  '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'
+>;
+
+type TransactionClient = Parameters<Parameters<PrismaClient['$transaction']>[0]>[0];
+
+async function handleSubscriptionChange(subscription: Stripe.Subscription) {
   const organizationId = subscription.metadata.organizationId;
 
   if (!organizationId) {
@@ -27,7 +35,6 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription, isTes
         subscriptionItemId: subscription.items.data[0].id,
         priceId: subscription.items.data[0].price.id,
         quantity: subscription.items.data[0].quantity,
-        isTestMode,
       },
       update: {
         status: subscription.status,
@@ -59,7 +66,6 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription, isTes
         status: subscription.status,
         description: `Subscription ${subscription.status}`,
         metadata: subscription as any,
-        isTestMode,
       },
     });
   });
@@ -126,7 +132,7 @@ export async function POST(req: Request) {
       case 'customer.subscription.paused':
       case 'customer.subscription.deleted': {
         const subscription = event.data.object as Stripe.Subscription;
-        await handleSubscriptionChange(subscription, isTestMode);
+        await handleSubscriptionChange(subscription);
         break;
       }
 
@@ -177,7 +183,6 @@ export async function POST(req: Request) {
                   amount: session.amount_total || 0,
                   description: `Purchased ${credits.toLocaleString()} credits`,
                   metadata: session as any,
-                  isTestMode,
                 },
               });
             });
@@ -247,7 +252,6 @@ export async function POST(req: Request) {
                 amount: invoice.amount_paid,
                 description: `Invoice paid for ${CREDITS_PER_PACK} credits`,
                 metadata: invoice as any,
-                isTestMode,
               },
             });
           });
@@ -305,7 +309,6 @@ export async function POST(req: Request) {
               amount: invoice.amount_due,
               description: 'Payment failed',
               metadata: invoice as any,
-              isTestMode,
             },
           });
         });
@@ -347,9 +350,7 @@ export async function POST(req: Request) {
             eventType: event.type,
             eventId: event.id,
             error: errorMessage,
-            isTestMode,
           },
-          isTestMode,
         },
       });
     } catch (logError) {
