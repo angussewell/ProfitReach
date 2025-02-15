@@ -3,6 +3,13 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
+// Add this interface at the top of the file (after the imports)
+interface BillingOrganization {
+  billingPlan: string;
+  creditBalance: number;
+  creditUsage: { amount: number }[];
+}
+
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
@@ -26,14 +33,6 @@ export async function GET() {
           select: {
             amount: true
           }
-        },
-        emailAccounts: {
-          where: { isActive: true },
-          select: { id: true }
-        },
-        socialAccounts: {
-          where: { isActive: true },
-          select: { id: true }
         }
       }
     });
@@ -42,25 +41,21 @@ export async function GET() {
       return new NextResponse('Organization not found', { status: 404 });
     }
 
-    // Calculate monthly scenario runs cost ($30 per 5,000 credits)
-    const monthlyScenarioRuns = organization.creditUsage.reduce(
-      (total, usage) => total + Math.abs(usage.amount),
+    // Cast organization to our BillingOrganization type to satisfy TypeScript
+    const org = organization as unknown as BillingOrganization;
+
+    // Calculate monthly scenario runs
+    const monthlyScenarioRuns = org.creditUsage.reduce(
+      (total: number, usage: { amount: number }) => total + Math.abs(usage.amount),
       0
     );
-    const monthlyScenarioBill = Math.ceil(monthlyScenarioRuns / 5000) * 30;
-
-    // Calculate total active accounts
-    const activeAccountsCount = organization.emailAccounts.length + organization.socialAccounts.length;
-
-    // Calculate monthly account bill ($9 per account)
-    const monthlyAccountBill = activeAccountsCount * 9;
+    // Update price: $50 per 5000 credits
+    const monthlyScenarioBill = Math.ceil(monthlyScenarioRuns / 5000) * 50;
 
     return NextResponse.json({
-      billingPlan: organization.billingPlan,
-      creditBalance: organization.creditBalance,
-      connectedAccounts: activeAccountsCount,
+      billingPlan: org.billingPlan,
+      creditBalance: org.creditBalance,
       monthlyScenarioRuns,
-      monthlyAccountBill,
       monthlyScenarioBill
     });
   } catch (error) {

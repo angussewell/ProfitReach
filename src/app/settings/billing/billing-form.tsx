@@ -18,11 +18,10 @@ if (!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || !process.env.NEXT_PUBLIC_
 const getStripePromise = (isTestMode: boolean) => 
   loadStripe(isTestMode ? process.env.NEXT_PUBLIC_STRIPE_TEST_PUBLISHABLE_KEY! : process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
-// Add credit pack options
 const CREDIT_PACKS = [
-  { credits: 5000, price: 30 },
-  { credits: 10000, price: 55 },
-  { credits: 25000, price: 125 },
+  { credits: 5000, price: 50 },
+  { credits: 10000, price: 95 },
+  { credits: 25000, price: 225 },
 ];
 
 interface BillingFormProps {
@@ -36,12 +35,6 @@ interface BillingFormProps {
       description: string | null;
       createdAt: Date;
     }>;
-    connectedAccounts: Array<{
-      id: string;
-      accountType: string;
-      accountId: string;
-    }>;
-    activeAccountsCount: number;
   };
 }
 
@@ -49,8 +42,8 @@ export function BillingForm({ organization }: BillingFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [selectedPack, setSelectedPack] = useState(CREDIT_PACKS[0]);
-  const [isLoading, setIsLoading] = useState(false);
   const [isTestMode, setIsTestMode] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const handlePlanChange = async (plan: string) => {
     setLoading(true);
@@ -68,6 +61,7 @@ export function BillingForm({ organization }: BillingFormProps) {
       router.refresh();
     } catch (error) {
       console.error('Error updating plan:', error);
+      toast.error('Failed to update plan');
     } finally {
       setLoading(false);
     }
@@ -109,104 +103,76 @@ export function BillingForm({ organization }: BillingFormProps) {
   };
 
   return (
-    <form onSubmit={handlePurchaseCredits}>
-      <div className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Billing Plan</CardTitle>
-            <CardDescription>Choose your billing plan</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <RadioGroup
-              defaultValue={organization.billingPlan}
-              onValueChange={handlePlanChange}
-              disabled={loading}
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="unlimited" id="unlimited" />
-                <Label htmlFor="unlimited">Unlimited</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="at_cost" id="at_cost" />
-                <Label htmlFor="at_cost">At Cost ($30 per 5,000 credits)</Label>
-              </div>
-            </RadioGroup>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Credit Balance</CardTitle>
-            <CardDescription>Your current credit balance and usage history</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="mb-6">
-              <p className="text-2xl font-bold">{organization.creditBalance.toLocaleString()} credits</p>
-              {organization.billingPlan === 'at_cost' && (
-                <Button
-                  className="mt-4"
-                  onClick={handlePurchaseCredits}
-                  disabled={loading}
-                >
-                  Purchase Credits
-                </Button>
-              )}
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Billing Plan</CardTitle>
+          <CardDescription>Choose your billing plan</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <RadioGroup
+            defaultValue={organization.billingPlan}
+            onValueChange={handlePlanChange}
+            disabled={loading}
+          >
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="unlimited" id="unlimited" />
+              <Label htmlFor="unlimited">Unlimited</Label>
             </div>
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="at_cost" id="at_cost" />
+              <Label htmlFor="at_cost">At Cost ($50 per 5,000 credits)</Label>
+            </div>
+          </RadioGroup>
+        </CardContent>
+      </Card>
 
-            <div>
-              <h3 className="font-semibold mb-4">Recent Usage</h3>
-              <div className="space-y-4">
-                {organization.creditUsage.map((usage) => (
-                  <div key={usage.id} className="flex justify-between items-center">
-                    <div>
-                      <p className="font-medium">{usage.description || 'Scenario Run'}</p>
-                      <p className="text-sm text-gray-500">
-                        {new Date(usage.createdAt).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <p className={usage.amount > 0 ? 'text-green-600' : 'text-red-600'}>
-                      {usage.amount > 0 ? '+' : ''}{usage.amount}
+      <Card>
+        <CardHeader>
+          <CardTitle>Credit Balance</CardTitle>
+          <CardDescription>Your current credit balance and usage history</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="mb-6">
+            <p className="text-2xl font-bold">{organization.creditBalance.toLocaleString()} credits</p>
+            {organization.billingPlan === 'at_cost' && (
+              <Button
+                className="mt-4"
+                onClick={handlePurchaseCredits}
+                disabled={loading}
+              >
+                Purchase Credits
+              </Button>
+            )}
+          </div>
+
+          <div>
+            <h3 className="font-semibold mb-4">Recent Usage</h3>
+            <div className="space-y-4">
+              {organization.creditUsage.map((usage) => (
+                <div key={usage.id} className="flex justify-between items-center">
+                  <div>
+                    <p className="font-medium">{usage.description || 'Scenario Run'}</p>
+                    <p className="text-sm text-gray-500">
+                      {new Date(usage.createdAt).toLocaleDateString()}
                     </p>
                   </div>
-                ))}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Connected Accounts</CardTitle>
-            <CardDescription>
-              Manage billing for your connected accounts ({organization.activeAccountsCount} active)
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {organization.connectedAccounts.map((account) => (
-                <div key={account.id} className="flex justify-between items-center">
-                  <div>
-                    <p className="font-medium">{account.accountType}</p>
-                    <p className="text-sm text-gray-500">{account.accountId}</p>
-                  </div>
-                  <p>$9/month</p>
+                  <p className={usage.amount > 0 ? 'text-green-600' : 'text-red-600'}>
+                    {usage.amount > 0 ? '+' : ''}{usage.amount}
+                  </p>
                 </div>
               ))}
-              <div className="pt-4 border-t">
-                <div className="flex justify-between items-center">
-                  <p className="font-medium">Total Monthly Cost</p>
-                  <p className="font-medium">${organization.activeAccountsCount * 9}/month</p>
-                </div>
-              </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </CardContent>
+      </Card>
 
+      {organization.billingPlan === 'at_cost' && (
         <Card>
           <CardHeader>
             <CardTitle>Purchase Credits</CardTitle>
             <CardDescription>
-              Purchase additional scenario run credits
+              Select a credit pack to purchase
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -257,7 +223,7 @@ export function BillingForm({ organization }: BillingFormProps) {
             </div>
           </CardContent>
         </Card>
-      </div>
-    </form>
+      )}
+    </div>
   );
 } 

@@ -81,8 +81,8 @@ export async function POST(request: Request) {
         },
         quantity: 1,
       }],
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/settings/billing?success=true`,
-      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/settings/billing?canceled=true`,
+      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/settings?tab=billing&success=true`,
+      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/settings?tab=billing&canceled=true`,
       metadata: {
         organizationId: organization.id,
         type: 'credits',

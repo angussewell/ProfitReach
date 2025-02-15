@@ -13,9 +13,7 @@ const ClientWallet = Wallet as unknown as (props: any) => JSX.Element;
 interface BillingInfo {
   billingPlan: string;
   creditBalance: number;
-  connectedAccounts: number;
   monthlyScenarioRuns: number;
-  monthlyAccountBill: number;
   monthlyScenarioBill: number;
 }
 
@@ -140,17 +138,6 @@ export default function UserSettingsPage() {
             </div>
           ) : billingInfo ? (
             <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <div className="text-sm text-gray-500">Connected Accounts</div>
-                  <div className="text-2xl font-semibold text-gray-900">{billingInfo.connectedAccounts}</div>
-                </div>
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <div className="text-sm text-gray-500">Monthly Account Bill</div>
-                  <div className="text-2xl font-semibold text-gray-900">${billingInfo.monthlyAccountBill}</div>
-                </div>
-              </div>
-              
               {billingInfo.billingPlan === 'at_cost' && (
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

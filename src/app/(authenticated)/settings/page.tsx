@@ -188,6 +188,15 @@ export default function SettingsPage() {
   const [outboundWebhookUrl, setOutboundWebhookUrl] = useState('');
   const [urlError, setUrlError] = useState('');
 
+  useEffect(() => {
+    // Set initial tab from URL parameter
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get('tab');
+    if (tabParam && ['webhooks', 'users', 'billing'].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, []);
+
   // Fetch organization data on mount
   useEffect(() => {
     fetch('/api/organizations/current')

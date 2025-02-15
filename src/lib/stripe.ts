@@ -44,7 +44,7 @@ export function getStripePriceId(isTestMode: boolean, type: 'credits' | 'account
 }
 
 export const CREDITS_PER_PACK = 5000;
-export const COST_PER_PACK = 3000; // $30.00 in cents
+export const COST_PER_PACK = 5000; // $50.00 in cents
 export const COST_PER_ACCOUNT = 900; // $9.00 in cents
 
 export async function createOrUpdateCustomer(organizationId: string, isTestMode: boolean = false) {
