@@ -73,85 +73,65 @@ export async function POST(req: Request) {
 
     const { unipileAccountId, email, name, isActive } = validationResult.data;
 
-    // Try to find existing account by Unipile ID or email
-    const existingAccount = await prisma.emailAccount.findFirst({
+    // Find the most recent pending account
+    const pendingAccount = await prisma.emailAccount.findFirst({
       where: {
-        OR: [
-          { unipileAccountId },
-          { email }
-        ]
+        name: {
+          startsWith: 'Pending Account'
+        },
+        isActive: false
+      },
+      orderBy: {
+        createdAt: 'desc'
       }
     });
 
-    if (existingAccount) {
-      // Update existing account
-      const updatedAccount = await prisma.emailAccount.update({
-        where: { id: existingAccount.id },
-        data: {
-          email,
-          name: name || email,
-          unipileAccountId,
-          isActive
-        }
-      });
-
-      console.log(`✅ [${requestId}] Updated existing email account:`, {
-        id: updatedAccount.id,
-        email: updatedAccount.email,
-        organizationId: updatedAccount.organizationId,
-        timestamp: new Date().toISOString()
-      });
-
+    if (!pendingAccount) {
+      console.error(`❌ [${requestId}] No pending account found to update`);
       return NextResponse.json({
-        status: 'success',
-        message: 'Email account updated',
-        data: {
-          id: updatedAccount.id,
-          email: updatedAccount.email,
-          organizationId: updatedAccount.organizationId,
-          unipileAccountId: updatedAccount.unipileAccountId
-        }
-      });
+        status: 'error',
+        message: 'No pending account found to update'
+      }, { status: 404 });
     }
 
-    // If no existing account, create new one in unassigned organization
-    const unassignedOrgId = await ensureUnassignedOrganization();
-    
-    const newAccount = await prisma.emailAccount.create({
+    // Update the pending account with the real data
+    const updatedAccount = await prisma.emailAccount.update({
+      where: { id: pendingAccount.id },
       data: {
         email,
         name: name || email,
         unipileAccountId,
-        isActive,
-        organizationId: unassignedOrgId
+        isActive
       }
     });
 
-    console.log(`✅ [${requestId}] Created new email account:`, {
-      id: newAccount.id,
-      email: newAccount.email,
-      organizationId: newAccount.organizationId,
+    console.log(`✅ [${requestId}] Updated pending account with real data:`, {
+      id: updatedAccount.id,
+      email: updatedAccount.email,
+      organizationId: updatedAccount.organizationId,
+      previousName: pendingAccount.name,
       timestamp: new Date().toISOString()
     });
 
     return NextResponse.json({
       status: 'success',
-      message: 'Email account created',
+      message: 'Pending account updated with real data',
       data: {
-        id: newAccount.id,
-        email: newAccount.email,
-        organizationId: newAccount.organizationId,
-        unipileAccountId: newAccount.unipileAccountId
+        id: updatedAccount.id,
+        email: updatedAccount.email,
+        organizationId: updatedAccount.organizationId,
+        unipileAccountId: updatedAccount.unipileAccountId,
+        previousName: pendingAccount.name
       }
     });
   } catch (error) {
-    console.error(`❌ [${requestId}] Error upserting email account:`, {
+    console.error(`❌ [${requestId}] Error updating pending account:`, {
       error: error instanceof Error ? error.message : String(error),
       timestamp: new Date().toISOString()
     });
     return NextResponse.json({
       status: 'error',
-      message: 'Error upserting email account',
+      message: 'Error updating pending account',
       error: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
