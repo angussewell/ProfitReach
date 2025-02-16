@@ -1,5 +1,4 @@
 export const dynamic = 'force-dynamic';
-export const runtime = 'edge';
 
 import Sidebar from '@/components/sidebar/index';
 
@@ -14,4 +13,4 @@ export default function AuthenticatedLayout({
       <main className="flex-1 p-8">{children}</main>
     </div>
   );
-} 
+}
