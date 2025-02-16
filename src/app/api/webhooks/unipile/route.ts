@@ -15,15 +15,17 @@ console.log('🚀 Initializing Unipile webhook handler:', {
 });
 
 // Configure Unipile URLs based on environment
-const UNIPILE_DSN = process.env.UNIPILE_DSN || 'api4.unipile.com';  // Removed port number
+const UNIPILE_BASE_DSN = process.env.UNIPILE_DSN?.split(':')[0] || 'api4.unipile.com';  // Base DSN without port
+const UNIPILE_FULL_DSN = process.env.UNIPILE_DSN || 'api4.unipile.com:13465';  // Full DSN with port
 const UNIPILE_API_KEY = process.env.UNIPILE_API_KEY;
 
 // Production URL configuration
 const PRODUCTION_URL = 'https://app.messagelm.com';
 const APP_URL = process.env.NODE_ENV === 'production' ? PRODUCTION_URL : process.env.NEXT_PUBLIC_APP_URL;
 
-// Separate API and webhook URLs - using HTTPS without port for production
-const UNIPILE_API_URL = `https://${UNIPILE_DSN}`;
+// Configure Unipile URLs according to documentation
+const UNIPILE_API_URL = `https://${UNIPILE_FULL_DSN}`;  // API URL with port
+const UNIPILE_OAUTH_URL = `https://${UNIPILE_BASE_DSN}`;  // OAuth URL without port
 const WEBHOOK_URL = `${APP_URL}/api/webhooks/unipile`;
 
 // Log configuration on module load
@@ -31,8 +33,10 @@ console.log('🌍 Webhook handler configuration:', {
   NODE_ENV: process.env.NODE_ENV,
   NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   APP_URL,
-  UNIPILE_DSN,
+  UNIPILE_BASE_DSN,
+  UNIPILE_FULL_DSN,
   UNIPILE_API_URL,
+  UNIPILE_OAUTH_URL,
   WEBHOOK_URL,
   hasApiKey: !!UNIPILE_API_KEY,
   timestamp: new Date().toISOString()
@@ -386,199 +390,4 @@ export async function POST(req: Request) {
   try {
     // Read and log raw body immediately
     rawBody = await req.text();
-    console.log(`📝 [${requestId}] RAW WEBHOOK BODY:`, {
-      body: rawBody,
-      timestamp: new Date().toISOString(),
-      bodyLength: rawBody.length
-    });
-
-    try {
-      const body = JSON.parse(rawBody);
-      console.log(`✅ [${requestId}] PARSED WEBHOOK BODY:`, {
-        body,
-        timestamp: new Date().toISOString()
-      });
-
-      // Validate webhook data
-      console.log(`🔍 [${requestId}] Validating webhook data...`);
-      const validationResult = UnipileAccountWebhook.safeParse(body);
-      
-      if (!validationResult.success) {
-        console.error(`❌ [${requestId}] VALIDATION FAILED:`, {
-          error: validationResult.error,
-          body,
-          timestamp: new Date().toISOString()
-        });
-        return new NextResponse('Invalid webhook data', { status: 400 });
-      }
-
-      webhookData = validationResult.data;
-      console.log(`✅ [${requestId}] WEBHOOK DATA VALIDATED:`, {
-        data: webhookData,
-        timestamp: new Date().toISOString()
-      });
-    } catch (parseError) {
-      console.error(`❌ [${requestId}] PARSE ERROR:`, {
-        error: parseError instanceof Error ? parseError.message : String(parseError),
-        rawBody,
-        timestamp: new Date().toISOString()
-      });
-      return new NextResponse('Invalid JSON data', { status: 400 });
-    }
-
-    // Get account details from Unipile
-    try {
-      console.log(`🔍 [${requestId}] Fetching account details for:`, webhookData.account_id);
-      accountDetails = await getUnipileAccountDetails(webhookData.account_id);
-      console.log(`✅ [${requestId}] Account details retrieved:`, {
-        id: accountDetails.id,
-        type: accountDetails.type,
-        connection_params: accountDetails.connection_params
-      });
-    } catch (unipileError) {
-      console.error(`❌ [${requestId}] Failed to fetch account details:`, {
-        error: unipileError instanceof Error ? unipileError.message : String(unipileError),
-        webhookData
-      });
-      return new NextResponse('Failed to fetch account details', { status: 500 });
-    }
-
-    const organizationId = webhookData.name;
-
-    // Verify organization exists
-    try {
-      console.log(`🔍 [${requestId}] Verifying organization:`, organizationId);
-      const organization = await prisma.organization.findUnique({
-        where: { id: organizationId }
-      });
-
-      if (!organization) {
-        console.error(`❌ [${requestId}] Organization not found:`, { organizationId });
-        return new NextResponse('Organization not found', { status: 404 });
-      }
-      console.log(`✅ [${requestId}] Organization verified:`, { id: organization.id });
-    } catch (orgError) {
-      console.error(`❌ [${requestId}] Error checking organization:`, {
-        error: orgError instanceof Error ? orgError.message : String(orgError),
-        organizationId
-      });
-      return new NextResponse('Error checking organization', { status: 500 });
-    }
-
-    // Handle account based on type
-    try {
-      if (accountDetails.connection_params.mail) {
-        // Validate email account data
-        console.log(`📧 [${requestId}] Validating email account data:`, {
-          mail: accountDetails.connection_params.mail,
-          type: accountDetails.type
-        });
-        
-        // Get email from either username or email field
-        const email = accountDetails.connection_params.mail.email || 
-                     accountDetails.connection_params.mail.username;
-                     
-        if (!email) {
-          console.error(`❌ [${requestId}] No email found in account details:`, {
-            mail: accountDetails.connection_params.mail,
-            error: 'Missing email field'
-          });
-          return new NextResponse('No email found in account details', { status: 400 });
-        }
-
-        // Validate email format
-        if (!email.includes('@')) {
-          console.error(`❌ [${requestId}] Invalid email format:`, {
-            email,
-            error: 'Invalid email format'
-          });
-          return new NextResponse('Invalid email format', { status: 400 });
-        }
-
-        console.log(`📧 [${requestId}] Email validation passed:`, {
-          email,
-          organizationId: webhookData.name
-        });
-        
-        try {
-          const emailAccount = await saveEmailAccount(email, webhookData.name, webhookData.account_id);
-          console.log(`✅ [${requestId}] Email account saved:`, {
-            id: emailAccount.id,
-            email: emailAccount.email,
-            unipileAccountId: emailAccount.unipileAccountId,
-            duration: Date.now() - startTime
-          });
-        } catch (saveError) {
-          console.error(`❌ [${requestId}] Failed to save email account:`, {
-            error: saveError instanceof Error ? {
-              message: saveError.message,
-              stack: saveError.stack,
-              name: saveError.name
-            } : String(saveError),
-            email,
-            organizationId: webhookData.name,
-            duration: Date.now() - startTime
-          });
-          throw saveError;
-        }
-      } else if (accountDetails.connection_params.im) {
-        // Handle social account
-        const username = accountDetails.connection_params.im.username;
-        const socialAccount = await saveSocialAccount(
-          username,
-          organizationId,
-          webhookData.account_id,
-          accountDetails.type.toLowerCase()
-        );
-        console.log(`✅ [${requestId}] Social account saved:`, {
-          id: socialAccount.id,
-          username: socialAccount.username,
-          provider: socialAccount.provider
-        });
-      } else {
-        console.log(`⚠️ [${requestId}] Unsupported account type:`, {
-          type: accountDetails.type,
-          accountId: webhookData.account_id
-        });
-        return new NextResponse('Unsupported account type', { status: 200 });
-      }
-
-      const duration = Date.now() - startTime;
-      console.log(`✅ [${requestId}] Webhook processed successfully:`, { duration });
-      return new NextResponse('Success', { status: 200 });
-    } catch (saveError) {
-      if (saveError instanceof Prisma.PrismaClientKnownRequestError) {
-        console.error(`❌ [${requestId}] Database error:`, {
-          code: saveError.code,
-          message: saveError.message,
-          meta: saveError.meta
-        });
-        
-        if (saveError.code === 'P2002') {
-          return new NextResponse('Duplicate account', { status: 409 });
-        }
-      }
-
-      console.error(`❌ [${requestId}] Error saving account:`, {
-        error: saveError instanceof Error ? {
-          message: saveError.message,
-          stack: saveError.stack
-        } : String(saveError),
-        accountDetails
-      });
-      return new NextResponse('Error saving account', { status: 500 });
-    }
-  } catch (error) {
-    const duration = Date.now() - startTime;
-    console.error(`❌ [${requestId}] Error processing webhook:`, {
-      error: error instanceof Error ? {
-        message: error.message,
-        stack: error.stack
-      } : String(error),
-      webhookData,
-      accountDetails,
-      duration
-    });
-    return new NextResponse('Internal server error', { status: 500 });
-  }
-} 
+    console.log(`

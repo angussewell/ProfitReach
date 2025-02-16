@@ -13,24 +13,29 @@ console.log('🚀 Initializing account connection handler:', {
   handler: 'account-connection'
 });
 
-const UNIPILE_DSN = process.env.UNIPILE_DSN || 'api4.unipile.com:13465';
+// Configure Unipile URLs based on environment
+const UNIPILE_BASE_DSN = process.env.UNIPILE_DSN?.split(':')[0] || 'api4.unipile.com';  // Base DSN without port
+const UNIPILE_FULL_DSN = process.env.UNIPILE_DSN || 'api4.unipile.com:13465';  // Full DSN with port
 const UNIPILE_API_KEY = process.env.UNIPILE_API_KEY;
 
 // Production URL configuration
 const PRODUCTION_URL = 'https://app.messagelm.com';
 const APP_URL = process.env.NODE_ENV === 'production' ? PRODUCTION_URL : process.env.NEXT_PUBLIC_APP_URL;
 
-// Separate API and webhook URLs
-const UNIPILE_API_URL = `https://${UNIPILE_DSN}`;
+// Configure Unipile URLs according to documentation
+const UNIPILE_API_URL = `https://${UNIPILE_FULL_DSN}`;  // API URL with port
+const UNIPILE_OAUTH_URL = `https://${UNIPILE_BASE_DSN}`;  // OAuth URL without port
 const WEBHOOK_URL = `${APP_URL}/api/webhooks/unipile`;
 
-// Log configuration on module load
+// Log all URL configurations
 console.log('🌍 Connection configuration:', {
   NODE_ENV: process.env.NODE_ENV,
   NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   APP_URL,
-  UNIPILE_DSN,
+  UNIPILE_BASE_DSN,
+  UNIPILE_FULL_DSN,
   UNIPILE_API_URL,
+  UNIPILE_OAUTH_URL,
   WEBHOOK_URL,
   hasApiKey: !!UNIPILE_API_KEY,
   timestamp: new Date().toISOString()
@@ -93,6 +98,8 @@ export async function POST(request: Request) {
       webhook: WEBHOOK_URL,
       success: successUrl,
       failure: failureUrl,
+      oauth: UNIPILE_OAUTH_URL,
+      api: UNIPILE_API_URL,
       timestamp: new Date().toISOString()
     });
 
@@ -102,6 +109,7 @@ export async function POST(request: Request) {
       type: "create",
       providers: "*",
       api_url: UNIPILE_API_URL,
+      oauth_url: UNIPILE_OAUTH_URL,  // Add OAuth URL without port
       expiresOn,
       notify_url: WEBHOOK_URL,
       name: session.user.organizationId,
@@ -123,6 +131,8 @@ export async function POST(request: Request) {
     // Log the exact webhook URL being registered
     console.log(`🎯 [${requestId}] REGISTERING WEBHOOK URL:`, {
       url: WEBHOOK_URL,
+      api_url: UNIPILE_API_URL,
+      oauth_url: UNIPILE_OAUTH_URL,
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV,
       fullPayload: {
