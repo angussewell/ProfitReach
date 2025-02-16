@@ -33,76 +33,47 @@ const PUBLIC_API_ROUTES = [
   '/api/email-accounts/update-webhooks'
 ];
 
+const publicPaths = ['/auth/login', '/auth/register'];
+
 export async function middleware(request: NextRequest) {
-  const token = await getToken({ req: request });
-  const path = request.nextUrl.pathname;
+  const { pathname } = request.nextUrl;
 
-  console.log('Middleware processing request:', {
-    path,
-    hasToken: !!token,
-    method: request.method
-  });
-
-  // Check if this is a public API route
-  if (PUBLIC_API_ROUTES.some(route => path.startsWith(route))) {
-    console.log('Public API route detected, bypassing auth:', path);
+  // Check if the path is public
+  if (publicPaths.includes(pathname)) {
     return NextResponse.next();
   }
 
-  // If it's an API route, let the API handle authorization
-  if (path.startsWith('/api')) {
-    console.log('API route detected, passing through:', {
-      path,
-      hasToken: !!token,
-      tokenData: token ? {
-        role: token.role,
-        hasOrgId: !!token.organizationId,
-        email: token.email,
-        exp: token.exp
-      } : null,
-      headers: Object.fromEntries(request.headers.entries())
+  // Exclude API routes and static files
+  if (
+    pathname.startsWith('/_next') || 
+    pathname.startsWith('/api') ||
+    pathname.startsWith('/static') ||
+    pathname.includes('.')
+  ) {
+    return NextResponse.next();
+  }
+
+  try {
+    const token = await getToken({
+      req: request,
+      secret: process.env.NEXTAUTH_SECRET
     });
+
+    // If there's no token and we're not on a public path, redirect to login
+    if (!token && !publicPaths.includes(pathname)) {
+      const loginUrl = new URL('/auth/login', request.url);
+      loginUrl.searchParams.set('callbackUrl', pathname);
+      return NextResponse.redirect(loginUrl);
+    }
+
+    // Allow the request to proceed
     return NextResponse.next();
+  } catch (error) {
+    console.error('Middleware error:', error);
+    // On error, redirect to login as a safety measure
+    const loginUrl = new URL('/auth/login', request.url);
+    return NextResponse.redirect(loginUrl);
   }
-
-  // Check if the path requires protection
-  const isProtectedRoute = PROTECTED_ROUTES.some(route => path.startsWith(route));
-
-  // Redirect to login if accessing a protected route without being authenticated
-  if (isProtectedRoute && !token) {
-    const url = new URL('/auth/login', request.url);
-    url.searchParams.set('callbackUrl', encodeURI(request.url));
-    return NextResponse.redirect(url);
-  }
-
-  // Check admin routes - exact match for /settings or specific settings routes
-  const isAdminRoute = ADMIN_ROUTES.some(route => {
-    if (route === '/settings') {
-      return path === '/settings'; // Exact match for main settings page
-    }
-    return path.startsWith(route); // Prefix match for specific admin routes
-  });
-  
-  if (isAdminRoute && token?.role !== 'admin') {
-    // Redirect to home page if not admin
-    return NextResponse.redirect(new URL('/', request.url));
-  }
-
-  // Protect billing routes
-  if (path.startsWith('/settings/billing')) {
-    if (!token) {
-      return NextResponse.redirect(new URL('/auth/signin', request.url));
-    }
-  }
-
-  // Protect API routes
-  if (path.startsWith('/api/billing')) {
-    if (!token) {
-      return new NextResponse('Unauthorized', { status: 401 });
-    }
-  }
-
-  return NextResponse.next();
 }
 
 export const config = {
