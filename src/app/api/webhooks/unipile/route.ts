@@ -9,14 +9,19 @@ export const dynamic = 'force-dynamic';
 
 const UNIPILE_DSN = process.env.UNIPILE_DSN || 'api4.unipile.com:13465';
 const UNIPILE_API_KEY = process.env.UNIPILE_API_KEY;
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL;
+
+// Production URL configuration
+const PRODUCTION_URL = 'https://app.messagelm.com';
+const APP_URL = process.env.NODE_ENV === 'production' ? PRODUCTION_URL : process.env.NEXT_PUBLIC_APP_URL;
 
 // Log environment info on module load
 console.log('🌍 Unipile webhook handler configuration:', {
   NODE_ENV: process.env.NODE_ENV,
+  NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   APP_URL,
   UNIPILE_DSN,
   hasApiKey: !!UNIPILE_API_KEY,
+  webhookUrl: `${APP_URL}/api/webhooks/unipile`,
   timestamp: new Date().toISOString()
 });
 
