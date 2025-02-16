@@ -3,14 +3,31 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 
-// Use default values for development
+// Force dynamic API route
+export const dynamic = 'force-dynamic';
+
 const UNIPILE_DSN = process.env.UNIPILE_DSN || 'api4.unipile.com:13465';
 const UNIPILE_API_KEY = process.env.UNIPILE_API_KEY;
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL;
+
+if (!APP_URL) {
+  console.error('NEXT_PUBLIC_APP_URL is not set');
+  throw new Error('Application URL not configured');
+}
 
 export async function POST(request: Request) {
   console.log('Starting account connection process');
   
   try {
+    // Log environment details
+    console.log('Production configuration:', {
+      NODE_ENV: process.env.NODE_ENV,
+      APP_URL,
+      UNIPILE_DSN,
+      hasApiKey: !!UNIPILE_API_KEY,
+      timestamp: new Date().toISOString()
+    });
+
     // Log request details
     console.log('Request details:', {
       headers: Object.fromEntries(request.headers.entries()),
@@ -42,27 +59,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Get the base URL for webhooks
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
-    if (!baseUrl) {
-      console.error('Missing required environment variable: NEXT_PUBLIC_APP_URL');
-      return NextResponse.json(
-        { error: 'Application URL not configured' },
-        { status: 500 }
-      );
-    }
-
-    // Ensure we're using a public URL for webhooks in development
-    const webhookUrl = process.env.NODE_ENV === 'development' 
-      ? process.env.NGROK_URL || baseUrl 
-      : baseUrl;
-
-    console.log('Using webhook URL:', {
-      baseUrl,
-      webhookUrl,
-      environment: process.env.NODE_ENV
-    });
-
     // Format expiration date exactly as required: YYYY-MM-DDTHH:MM:SS.sssZ
     const expiresDate = new Date(Date.now() + 3600000);
     const expiresOn = expiresDate.toISOString();
@@ -74,10 +70,10 @@ export async function POST(request: Request) {
       providers: "*",
       api_url: `https://${UNIPILE_DSN}`,
       expiresOn,
-      notify_url: `${webhookUrl}/api/webhooks/unipile`,
+      notify_url: `${APP_URL}/api/webhooks/unipile`,
       name: session.user.organizationId,
-      success_redirect_url: `${baseUrl}/accounts?success=true`,
-      failure_redirect_url: `${baseUrl}/accounts?error=true`,
+      success_redirect_url: `${APP_URL}/accounts?success=true`,
+      failure_redirect_url: `${APP_URL}/accounts?error=true`,
       disabled_options: ["autoproxy"]
     };
 

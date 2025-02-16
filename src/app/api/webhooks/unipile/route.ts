@@ -10,6 +10,16 @@ export const dynamic = 'force-dynamic';
 
 const UNIPILE_DSN = process.env.UNIPILE_DSN || 'api4.unipile.com:13465';
 const UNIPILE_API_KEY = process.env.UNIPILE_API_KEY;
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL;
+
+// Log environment info on module load
+console.log('Unipile webhook handler configuration:', {
+  NODE_ENV: process.env.NODE_ENV,
+  APP_URL,
+  UNIPILE_DSN,
+  hasApiKey: !!UNIPILE_API_KEY,
+  timestamp: new Date().toISOString()
+});
 
 // Define webhook data schema
 const UnipileAccountWebhook = z.object({
@@ -99,33 +109,31 @@ async function getUnipileAccountDetails(accountId: string): Promise<UnipileAccou
 }
 
 export async function POST(req: Request) {
+  console.log('🔔 Unipile webhook received:', {
+    url: req.url,
+    method: req.method,
+    headers: Object.fromEntries(req.headers.entries()),
+    timestamp: new Date().toISOString()
+  });
+
   const startTime = Date.now();
   let webhookData;
   let accountDetails;
   let rawBody;
   
   try {
-    // Log request details
-    const headersList = Object.fromEntries(req.headers.entries());
-    console.log('Received Unipile webhook request:', {
-      method: req.method,
-      url: req.url,
-      headers: headersList,
-      timestamp: new Date().toISOString()
-    });
-
     // Read and log raw body
     rawBody = await req.text();
-    console.log('Raw webhook body:', rawBody);
+    console.log('📝 Raw webhook body:', rawBody);
 
     try {
       const body = JSON.parse(rawBody);
-      console.log('Parsed webhook body:', body);
+      console.log('✅ Parsed webhook body:', body);
 
       // Validate webhook data
       const validationResult = UnipileAccountWebhook.safeParse(body);
       if (!validationResult.success) {
-        console.error('Invalid webhook data:', {
+        console.error('❌ Invalid webhook data:', {
           error: validationResult.error,
           body,
           timestamp: new Date().toISOString()
@@ -134,9 +142,9 @@ export async function POST(req: Request) {
       }
 
       webhookData = validationResult.data;
-      console.log('Validated webhook data:', webhookData);
+      console.log('✅ Validated webhook data:', webhookData);
     } catch (parseError) {
-      console.error('Failed to parse webhook body as JSON:', {
+      console.error('❌ Failed to parse webhook body as JSON:', {
         error: parseError instanceof Error ? parseError.message : String(parseError),
         rawBody,
         timestamp: new Date().toISOString()
