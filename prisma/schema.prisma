@@ -262,7 +262,7 @@ model Snippet {
 
 model EmailAccount {
   id               String         @id @default(cuid())
-  email            String         @unique
+  email            String
   name             String
   organizationId   String
   createdAt        DateTime       @default(now())
@@ -272,6 +272,7 @@ model EmailAccount {
   organization     Organization   @relation(fields: [organizationId], references: [id])
   emailMessages    EmailMessage[]
 
+  @@unique([email, organizationId])
   @@index([organizationId])
 }
 

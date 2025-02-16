@@ -14,14 +14,19 @@ const UNIPILE_API_KEY = process.env.UNIPILE_API_KEY;
 const PRODUCTION_URL = 'https://app.messagelm.com';
 const APP_URL = process.env.NODE_ENV === 'production' ? PRODUCTION_URL : process.env.NEXT_PUBLIC_APP_URL;
 
+// Separate API and webhook URLs
+const UNIPILE_API_URL = `https://${UNIPILE_DSN}`;
+const WEBHOOK_URL = `${APP_URL}/api/webhooks/unipile`;
+
 // Log environment info on module load
-console.log('🌍 Unipile webhook handler configuration:', {
+console.log('🌍 Unipile configuration:', {
   NODE_ENV: process.env.NODE_ENV,
   NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   APP_URL,
   UNIPILE_DSN,
+  UNIPILE_API_URL,
+  WEBHOOK_URL,
   hasApiKey: !!UNIPILE_API_KEY,
-  webhookUrl: `${APP_URL}/api/webhooks/unipile`,
   timestamp: new Date().toISOString()
 });
 
@@ -67,9 +72,12 @@ async function getUnipileAccountDetails(accountId: string): Promise<UnipileAccou
     throw new Error('Missing UNIPILE_API_KEY');
   }
 
-  console.log('🔍 Fetching Unipile account details:', { accountId });
+  console.log('🔍 Fetching Unipile account details:', { 
+    accountId,
+    apiUrl: UNIPILE_API_URL
+  });
 
-  const response = await fetch(`https://${UNIPILE_DSN}/api/v1/accounts/${accountId}`, {
+  const response = await fetch(`${UNIPILE_API_URL}/api/v1/accounts/${accountId}`, {
     headers: {
       'Accept': 'application/json',
       'X-API-KEY': UNIPILE_API_KEY,
@@ -112,16 +120,57 @@ async function saveEmailAccount(email: string, organizationId: string, unipileAc
   console.log('📧 Saving email account:', { email, organizationId, unipileAccountId });
   
   try {
-    // First check if account exists
-    const existing = await prisma.emailAccount.findUnique({
+    // First check if account exists by unipileAccountId
+    const existingByUnipileId = await prisma.emailAccount.findUnique({
       where: { unipileAccountId }
     });
-    console.log('📧 Existing account check:', { 
-      exists: !!existing,
-      id: existing?.id,
-      email: existing?.email 
+    console.log('📧 Existing account check (by unipileAccountId):', { 
+      exists: !!existingByUnipileId,
+      id: existingByUnipileId?.id,
+      email: existingByUnipileId?.email 
     });
 
+    // Then check if email exists in this organization
+    const existingByEmail = await prisma.emailAccount.findFirst({
+      where: {
+        email,
+        organizationId
+      }
+    });
+    console.log('📧 Existing account check (by email in org):', {
+      exists: !!existingByEmail,
+      id: existingByEmail?.id,
+      unipileAccountId: existingByEmail?.unipileAccountId
+    });
+
+    // If email exists in org but with different unipileAccountId, we need to handle this
+    if (existingByEmail && existingByEmail.unipileAccountId !== unipileAccountId) {
+      console.log('📧 Email exists in organization with different unipileAccountId:', {
+        existingId: existingByEmail.id,
+        existingUnipileId: existingByEmail.unipileAccountId,
+        newUnipileId: unipileAccountId
+      });
+      
+      // Update the existing account with the new unipileAccountId
+      const result = await prisma.emailAccount.update({
+        where: { id: existingByEmail.id },
+        data: {
+          unipileAccountId,
+          updatedAt: new Date()
+        }
+      });
+      
+      console.log('📧 Updated existing email account:', {
+        id: result.id,
+        email: result.email,
+        unipileAccountId: result.unipileAccountId,
+        organizationId: result.organizationId
+      });
+      
+      return result;
+    }
+
+    // Otherwise, proceed with normal upsert
     const result = await prisma.emailAccount.upsert({
       where: { unipileAccountId },
       create: {
@@ -149,6 +198,22 @@ async function saveEmailAccount(email: string, organizationId: string, unipileAc
     
     return result;
   } catch (error) {
+    // Log detailed error information for constraint violations
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === 'P2002') {
+        console.error('📧 Unique constraint violation:', {
+          error: {
+            code: error.code,
+            message: error.message,
+            meta: error.meta
+          },
+          email,
+          organizationId,
+          unipileAccountId
+        });
+      }
+    }
+    
     console.error('📧 Error saving email account:', {
       error: error instanceof Error ? {
         message: error.message,
