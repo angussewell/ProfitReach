@@ -83,9 +83,9 @@ const UNASSIGNED_ORG_ID = 'cm78a5qs00000ha6e89p5tgm4';  // Fixed ID for unassign
 const UNASSIGNED_ORG_NAME = 'Unassigned Accounts';
 
 // Constants for retry logic
-const MAX_RETRIES = 3;
-const INITIAL_RETRY_DELAY = 2000; // 2 seconds
-const MAX_RETRY_DELAY = 10000; // 10 seconds
+const MAX_RETRIES = 5;
+const INITIAL_RETRY_DELAY = 5000;
+const MAX_RETRY_DELAY = 20000;
 
 // Helper function to wait
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -162,24 +162,45 @@ async function saveEmailAccountWithFallback(
   }
 }
 
-// Function to fetch and validate account details from Unipile with retry
-async function getUnipileAccountDetails(accountId: string): Promise<UnipileAccountDetailsData> {
-  const fetchId = Math.random().toString(36).substring(7);
+// Function to verify database connectivity
+async function verifyDatabaseConnection(requestId: string): Promise<boolean> {
+  try {
+    // Try a simple query to verify connection
+    await prisma.$queryRaw`SELECT 1`;
+    console.log(`✅ [${requestId}] Database connection verified`);
+    return true;
+  } catch (error) {
+    console.error(`❌ [${requestId}] Database connection failed:`, {
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString()
+    });
+    return false;
+  }
+}
+
+// Combined function to fetch and validate account details
+async function getValidatedAccountDetails(
+  accountId: string,
+  accountType: string,
+  requestId: string
+): Promise<{
+  status: 'success' | 'processing' | 'error';
+  accountDetails?: UnipileAccountDetailsData;
+  email?: string;
+  error?: string;
+  shouldRetry?: boolean;
+}> {
   let lastError: Error | null = null;
   
-  if (!UNIPILE_API_KEY) {
-    console.error(`❌ [${fetchId}] Missing UNIPILE_API_KEY`);
-    throw new Error('Missing UNIPILE_API_KEY');
-  }
-
   // Initial delay for account provisioning
   await wait(INITIAL_RETRY_DELAY);
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
       const apiUrl = `https://${UNIPILE_FULL_DSN}/api/v1/accounts/${accountId}`;
-      console.log(`🔍 [${fetchId}] Fetching Unipile account details (attempt ${attempt + 1}/${MAX_RETRIES}):`, { 
+      console.log(`🔍 [${requestId}] Fetching account details (attempt ${attempt + 1}/${MAX_RETRIES}):`, { 
         accountId,
+        accountType,
         apiUrl,
         timestamp: new Date().toISOString()
       });
@@ -187,12 +208,12 @@ async function getUnipileAccountDetails(accountId: string): Promise<UnipileAccou
       const response = await fetch(apiUrl, {
         headers: {
           'Accept': 'application/json',
-          'X-API-KEY': UNIPILE_API_KEY,
+          'X-API-KEY': UNIPILE_API_KEY!,
         },
       });
 
       const responseText = await response.text();
-      console.log(`📦 [${fetchId}] Raw response (attempt ${attempt + 1}):`, {
+      console.log(`📦 [${requestId}] Raw response (attempt ${attempt + 1}):`, {
         status: response.status,
         headers: Object.fromEntries(response.headers.entries()),
         body: responseText,
@@ -206,29 +227,66 @@ async function getUnipileAccountDetails(accountId: string): Promise<UnipileAccou
       let data;
       try {
         data = JSON.parse(responseText);
-      } catch (parseError) {
-        console.error(`❌ [${fetchId}] JSON parse error:`, {
-          error: parseError instanceof Error ? parseError.message : String(parseError),
-          responseText,
-          timestamp: new Date().toISOString()
-        });
-        throw new Error('Invalid JSON response from Unipile API');
+      } catch (error) {
+        throw new Error(`Invalid JSON response: ${error instanceof Error ? error.message : String(error)}`);
       }
 
-      // Attempt to parse with our schema
-      try {
-        return UnipileAccountDetails.parse(data);
-      } catch (parseError) {
-        console.error(`❌ [${fetchId}] Schema validation error:`, {
-          error: parseError instanceof Error ? parseError.message : String(parseError),
-          data,
-          timestamp: new Date().toISOString()
-        });
-        throw new Error('Invalid account details format');
+      const accountDetails = UnipileAccountDetails.parse(data);
+      
+      // For Google OAuth accounts, validate email
+      if (accountType.toUpperCase() === 'GOOGLE_OAUTH') {
+        if (!accountDetails.connection_params.mail) {
+          console.log(`⏳ [${requestId}] Mail parameters not yet available (attempt ${attempt + 1})`);
+          if (attempt < MAX_RETRIES - 1) {
+            const delay = getRetryDelay(attempt);
+            await wait(delay);
+            continue;
+          }
+          return {
+            status: 'error',
+            error: 'Missing mail parameters for Google OAuth account',
+            shouldRetry: false
+          };
+        }
+
+        const email = accountDetails.connection_params.mail.email;
+        if (!email) {
+          console.log(`⏳ [${requestId}] Email not yet available (attempt ${attempt + 1})`);
+          if (attempt < MAX_RETRIES - 1) {
+            const delay = getRetryDelay(attempt);
+            await wait(delay);
+            continue;
+          }
+          return {
+            status: 'error',
+            error: 'Missing email for Google OAuth account',
+            shouldRetry: false
+          };
+        }
+
+        if (!email.includes('@')) {
+          return {
+            status: 'error',
+            error: 'Invalid email format',
+            shouldRetry: false
+          };
+        }
+
+        return {
+          status: 'success',
+          accountDetails,
+          email
+        };
       }
+
+      // For other account types
+      return {
+        status: 'success',
+        accountDetails
+      };
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
-      console.error(`❌ [${fetchId}] Error fetching account details (attempt ${attempt + 1}):`, {
+      console.error(`❌ [${requestId}] Error fetching/validating account (attempt ${attempt + 1}):`, {
         error: lastError.message,
         stack: lastError.stack,
         timestamp: new Date().toISOString()
@@ -236,13 +294,17 @@ async function getUnipileAccountDetails(accountId: string): Promise<UnipileAccou
 
       if (attempt < MAX_RETRIES - 1) {
         const delay = getRetryDelay(attempt);
-        console.log(`⏳ [${fetchId}] Retrying in ${delay}ms...`);
+        console.log(`⏳ [${requestId}] Retrying in ${delay}ms...`);
         await wait(delay);
       }
     }
   }
 
-  throw lastError || new Error('Failed to fetch account details after all retries');
+  return {
+    status: 'error',
+    error: lastError?.message || 'Failed to fetch and validate account details after all retries',
+    shouldRetry: false
+  };
 }
 
 // Function to save email account
@@ -375,53 +437,6 @@ function extractOrganizationId(name: string): string | null {
   return name.replace('org_', '');
 }
 
-// Function to validate Google OAuth account details with retry support
-async function validateGoogleOAuthAccount(details: UnipileAccountDetailsData, requestId: string): Promise<{ 
-  isValid: boolean; 
-  email?: string; 
-  error?: string; 
-  shouldRetry?: boolean;
-}> {
-  console.log(`🔍 [${requestId}] Validating Google OAuth account:`, {
-    id: details.id,
-    type: details.type,
-    hasMailParams: !!details.connection_params.mail,
-    timestamp: new Date().toISOString()
-  });
-
-  // For Google OAuth, we expect mail params with email
-  if (!details.connection_params.mail) {
-    return { 
-      isValid: false, 
-      error: 'Missing mail parameters for Google OAuth account',
-      shouldRetry: true // Retry as the account might not be fully provisioned
-    };
-  }
-
-  const email = details.connection_params.mail.email;
-  if (!email) {
-    return { 
-      isValid: false, 
-      error: 'Missing email for Google OAuth account',
-      shouldRetry: true // Retry as the email might not be available yet
-    };
-  }
-
-  // Validate email format
-  if (!email.includes('@')) {
-    return { 
-      isValid: false, 
-      error: 'Invalid email format',
-      shouldRetry: false // Don't retry as this is a format error
-    };
-  }
-
-  return { 
-    isValid: true, 
-    email 
-  };
-}
-
 // Add test endpoint for webhook verification
 export async function GET(req: Request) {
   const testId = Math.random().toString(36).substring(7);
@@ -450,6 +465,15 @@ export async function POST(req: Request) {
     headers: Object.fromEntries(req.headers.entries()),
     timestamp: new Date().toISOString()
   });
+
+  // Verify database connection first
+  if (!await verifyDatabaseConnection(requestId)) {
+    return NextResponse.json({
+      status: 'error',
+      message: 'Database connection failed',
+      timestamp: new Date().toISOString()
+    }, { status: 500 });
+  }
 
   try {
     // Read and log raw body
@@ -495,66 +519,65 @@ export async function POST(req: Request) {
     // Handle account creation success
     if (message === 'CREATION_SUCCESS') {
       try {
-        // Fetch account details from Unipile with retry
-        const accountDetails = await getUnipileAccountDetails(account_id);
+        // Fetch and validate account details
+        const result = await getValidatedAccountDetails(account_id, account_type, requestId);
         
-        // Log full account details for debugging
-        console.log(`📦 [${requestId}] Parsed account details:`, {
-          id: accountDetails.id,
-          type: accountDetails.type,
-          name: accountDetails.name,
-          connection_params: accountDetails.connection_params,
-          timestamp: new Date().toISOString()
-        });
-
-        // Special handling for Google OAuth accounts
-        if (account_type.toUpperCase() === 'GOOGLE_OAUTH') {
-          const validation = await validateGoogleOAuthAccount(accountDetails, requestId);
+        if (result.status === 'error') {
+          console.error(`❌ [${requestId}] Account validation failed:`, {
+            error: result.error,
+            shouldRetry: result.shouldRetry,
+            accountId: account_id,
+            timestamp: new Date().toISOString()
+          });
           
-          // If validation suggests retry and we haven't exceeded retries
-          if (!validation.isValid && validation.shouldRetry) {
-            console.log(`⏳ [${requestId}] Account validation suggests retry:`, {
-              error: validation.error,
+          return NextResponse.json({
+            status: 'error',
+            message: result.error,
+            details: {
               accountId: account_id,
-              timestamp: new Date().toISOString()
-            });
-            
-            // Return a 202 Accepted status to indicate processing
-            return NextResponse.json({
-              status: 'processing',
-              message: 'Account is being provisioned',
-              details: {
-                accountId: account_id,
-                accountType: account_type,
-                validationError: validation.error
-              }
-            }, { status: 202 });
-          }
+              accountType: account_type,
+              error: result.error
+            }
+          }, { status: 400 });
+        }
 
-          if (!validation.isValid) {
-            console.error(`❌ [${requestId}] Google OAuth validation failed:`, {
-              error: validation.error,
+        if (!result.accountDetails) {
+          return NextResponse.json({
+            status: 'error',
+            message: 'No account details available',
+            details: {
               accountId: account_id,
-              timestamp: new Date().toISOString()
-            });
+              accountType: account_type
+            }
+          }, { status: 400 });
+        }
+
+        // Handle Google OAuth accounts
+        if (account_type.toUpperCase() === 'GOOGLE_OAUTH') {
+          if (!result.email) {
             return NextResponse.json({
               status: 'error',
-              message: validation.error,
+              message: 'No email available for Google OAuth account',
               details: {
                 accountId: account_id,
-                accountType: account_type,
-                validationError: validation.error
+                accountType: account_type
               }
             }, { status: 400 });
           }
 
-          // Use validated email
           const emailAccount = await saveEmailAccountWithFallback(
-            validation.email!,
-            accountDetails.name?.startsWith('org_') ? extractOrganizationId(accountDetails.name) : null,
-            accountDetails.id,
+            result.email,
+            result.accountDetails.name?.startsWith('org_') ? extractOrganizationId(result.accountDetails.name) : null,
+            result.accountDetails.id,
             requestId
           );
+
+          console.log(`✅ [${requestId}] Successfully saved Google OAuth account:`, {
+            accountId: emailAccount.id,
+            email: emailAccount.email,
+            organizationId: emailAccount.organizationId,
+            timestamp: new Date().toISOString()
+          });
 
           return NextResponse.json({
             status: 'success',
@@ -570,11 +593,11 @@ export async function POST(req: Request) {
         }
 
         // Handle other account types
-        if (accountDetails.connection_params.mail?.email) {
+        if (result.accountDetails.connection_params.mail?.email) {
           const emailAccount = await saveEmailAccountWithFallback(
-            accountDetails.connection_params.mail.email,
-            accountDetails.name?.startsWith('org_') ? extractOrganizationId(accountDetails.name) : null,
-            accountDetails.id,
+            result.accountDetails.connection_params.mail.email,
+            result.accountDetails.name?.startsWith('org_') ? extractOrganizationId(result.accountDetails.name) : null,
+            result.accountDetails.id,
             requestId
           );
 
@@ -595,7 +618,7 @@ export async function POST(req: Request) {
         console.error(`❌ [${requestId}] No valid email found in account details:`, {
           accountId: account_id,
           accountType: account_type,
-          connection_params: accountDetails.connection_params,
+          connection_params: result.accountDetails.connection_params,
           timestamp: new Date().toISOString()
         });
         return NextResponse.json({
@@ -604,7 +627,7 @@ export async function POST(req: Request) {
           details: {
             accountId: account_id,
             accountType: account_type,
-            hasMailParams: !!accountDetails.connection_params.mail,
+            hasMailParams: !!result.accountDetails.connection_params.mail,
             timestamp: new Date().toISOString()
           }
         }, { status: 400 });
