@@ -87,6 +87,14 @@ const MAX_RETRIES = 5;
 const INITIAL_RETRY_DELAY = 5000;
 const MAX_RETRY_DELAY = 20000;
 
+// Constants for webhook processing
+const WEBHOOK_STATUS = {
+  PENDING: 'PENDING',
+  PROCESSING: 'PROCESSING',
+  SUCCESS: 'SUCCESS',
+  ERROR: 'ERROR'
+} as const;
+
 // Helper function to wait
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -455,6 +463,142 @@ export async function GET(req: Request) {
   });
 }
 
+// Function to store webhook data
+async function storeWebhook(
+  webhookData: UnipileAccountStatusData,
+  requestId: string
+): Promise<string> {
+  try {
+    // Get or create unassigned organization for initial storage
+    const organizationId = await ensureUnassignedOrganization();
+    
+    // Store webhook data
+    const webhookLog = await prisma.webhookLog.create({
+      data: {
+        accountId: webhookData.AccountStatus.account_id,
+        organizationId,
+        status: WEBHOOK_STATUS.PENDING,
+        scenarioName: 'Account Creation',
+        requestBody: webhookData,
+        responseBody: {},
+      }
+    });
+
+    console.log(`📝 [${requestId}] Stored webhook:`, {
+      id: webhookLog.id,
+      status: webhookLog.status,
+      timestamp: new Date().toISOString()
+    });
+
+    return webhookLog.id;
+  } catch (error) {
+    console.error(`❌ [${requestId}] Failed to store webhook:`, {
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString()
+    });
+    throw error;
+  }
+}
+
+// Function to process webhook asynchronously
+async function processWebhook(
+  webhookId: string,
+  webhookData: UnipileAccountStatusData,
+  requestId: string
+) {
+  try {
+    // Update status to processing
+    await prisma.webhookLog.update({
+      where: { id: webhookId },
+      data: { 
+        status: WEBHOOK_STATUS.PROCESSING
+      }
+    });
+
+    const { account_id, message, account_type } = webhookData.AccountStatus;
+
+    // Only process creation success messages
+    if (message === 'CREATION_SUCCESS') {
+      // Fetch and validate account details
+      const result = await getValidatedAccountDetails(account_id, account_type, requestId);
+      
+      if (result.status === 'error') {
+        await prisma.webhookLog.update({
+          where: { id: webhookId },
+          data: {
+            status: WEBHOOK_STATUS.ERROR,
+            responseBody: { error: result.error }
+          }
+        });
+        return;
+      }
+
+      if (!result.accountDetails) {
+        await prisma.webhookLog.update({
+          where: { id: webhookId },
+          data: {
+            status: WEBHOOK_STATUS.ERROR,
+            responseBody: { error: 'No account details available' }
+          }
+        });
+        return;
+      }
+
+      // Handle Google OAuth accounts
+      if (account_type.toUpperCase() === 'GOOGLE_OAUTH') {
+        if (!result.email) {
+          await prisma.webhookLog.update({
+            where: { id: webhookId },
+            data: {
+              status: WEBHOOK_STATUS.ERROR,
+              responseBody: { error: 'No email available for Google OAuth account' }
+            }
+          });
+          return;
+        }
+
+        const emailAccount = await saveEmailAccountWithFallback(
+          result.email,
+          result.accountDetails.name?.startsWith('org_') ? extractOrganizationId(result.accountDetails.name) : null,
+          result.accountDetails.id,
+          requestId
+        );
+
+        // Update webhook log with success
+        await prisma.webhookLog.update({
+          where: { id: webhookId },
+          data: {
+            status: WEBHOOK_STATUS.SUCCESS,
+            organizationId: emailAccount.organizationId,
+            responseBody: {
+              accountId: emailAccount.id,
+              email: emailAccount.email,
+              organizationId: emailAccount.organizationId
+            }
+          }
+        });
+      }
+    }
+  } catch (error) {
+    console.error(`❌ [${requestId}] Error processing webhook:`, {
+      error: error instanceof Error ? error.message : String(error),
+      webhookId,
+      timestamp: new Date().toISOString()
+    });
+
+    // Update webhook log with error
+    await prisma.webhookLog.update({
+      where: { id: webhookId },
+      data: {
+        status: WEBHOOK_STATUS.ERROR,
+        responseBody: { 
+          error: error instanceof Error ? error.message : String(error)
+        }
+      }
+    });
+  }
+}
+
 export async function POST(req: Request) {
   const requestId = Math.random().toString(36).substring(7);
   const startTime = Date.now();
@@ -465,15 +609,6 @@ export async function POST(req: Request) {
     headers: Object.fromEntries(req.headers.entries()),
     timestamp: new Date().toISOString()
   });
-
-  // Verify database connection first
-  if (!await verifyDatabaseConnection(requestId)) {
-    return NextResponse.json({
-      status: 'error',
-      message: 'Database connection failed',
-      timestamp: new Date().toISOString()
-    }, { status: 500 });
-  }
 
   try {
     // Read and log raw body
@@ -514,155 +649,29 @@ export async function POST(req: Request) {
       }, { status: 400 });
     }
 
-    const { account_id, message, account_type } = webhookData.AccountStatus;
+    // Store webhook immediately
+    const webhookId = await storeWebhook(webhookData, requestId);
 
-    // Handle account creation success
-    if (message === 'CREATION_SUCCESS') {
-      try {
-        // Fetch and validate account details
-        const result = await getValidatedAccountDetails(account_id, account_type, requestId);
-        
-        if (result.status === 'error') {
-          console.error(`❌ [${requestId}] Account validation failed:`, {
-            error: result.error,
-            shouldRetry: result.shouldRetry,
-            accountId: account_id,
-            timestamp: new Date().toISOString()
-          });
-          
-          return NextResponse.json({
-            status: 'error',
-            message: result.error,
-            details: {
-              accountId: account_id,
-              accountType: account_type,
-              error: result.error
-            }
-          }, { status: 400 });
-        }
+    // Process webhook asynchronously
+    processWebhook(webhookId, webhookData, requestId).catch(error => {
+      console.error(`❌ [${requestId}] Async processing error:`, {
+        error: error instanceof Error ? error.message : String(error),
+        webhookId,
+        timestamp: new Date().toISOString()
+      });
+    });
 
-        if (!result.accountDetails) {
-          return NextResponse.json({
-            status: 'error',
-            message: 'No account details available',
-            details: {
-              accountId: account_id,
-              accountType: account_type
-            }
-          }, { status: 400 });
-        }
-
-        // Handle Google OAuth accounts
-        if (account_type.toUpperCase() === 'GOOGLE_OAUTH') {
-          if (!result.email) {
-            return NextResponse.json({
-              status: 'error',
-              message: 'No email available for Google OAuth account',
-              details: {
-                accountId: account_id,
-                accountType: account_type
-              }
-            }, { status: 400 });
-          }
-
-          const emailAccount = await saveEmailAccountWithFallback(
-            result.email,
-            result.accountDetails.name?.startsWith('org_') ? extractOrganizationId(result.accountDetails.name) : null,
-            result.accountDetails.id,
-            requestId
-          );
-
-          console.log(`✅ [${requestId}] Successfully saved Google OAuth account:`, {
-            accountId: emailAccount.id,
-            email: emailAccount.email,
-            organizationId: emailAccount.organizationId,
-            timestamp: new Date().toISOString()
-          });
-
-          return NextResponse.json({
-            status: 'success',
-            message: 'Email account created',
-            data: {
-              accountId: emailAccount.id,
-              email: emailAccount.email,
-              organizationId: emailAccount.organizationId,
-              isUnassigned: emailAccount.organizationId === UNASSIGNED_ORG_ID,
-              processingTime: Date.now() - startTime
-            }
-          });
-        }
-
-        // Handle other account types
-        if (result.accountDetails.connection_params.mail?.email) {
-          const emailAccount = await saveEmailAccountWithFallback(
-            result.accountDetails.connection_params.mail.email,
-            result.accountDetails.name?.startsWith('org_') ? extractOrganizationId(result.accountDetails.name) : null,
-            result.accountDetails.id,
-            requestId
-          );
-
-          return NextResponse.json({
-            status: 'success',
-            message: 'Email account created',
-            data: {
-              accountId: emailAccount.id,
-              email: emailAccount.email,
-              organizationId: emailAccount.organizationId,
-              isUnassigned: emailAccount.organizationId === UNASSIGNED_ORG_ID,
-              processingTime: Date.now() - startTime
-            }
-          });
-        }
-
-        // No valid email found
-        console.error(`❌ [${requestId}] No valid email found in account details:`, {
-          accountId: account_id,
-          accountType: account_type,
-          connection_params: result.accountDetails.connection_params,
-          timestamp: new Date().toISOString()
-        });
-        return NextResponse.json({
-          status: 'error',
-          message: 'No valid email found in account details',
-          details: {
-            accountId: account_id,
-            accountType: account_type,
-            hasMailParams: !!result.accountDetails.connection_params.mail,
-            timestamp: new Date().toISOString()
-          }
-        }, { status: 400 });
-      } catch (error) {
-        console.error(`❌ [${requestId}] Error processing account creation:`, {
-          error: error instanceof Error ? error.message : String(error),
-          accountId: account_id,
-          timestamp: new Date().toISOString()
-        });
-        return NextResponse.json({
-          status: 'error',
-          message: 'Error processing account creation',
-          error: error instanceof Error ? error.message : String(error),
-          details: {
-            accountId: account_id,
-            accountType: account_type,
-            timestamp: new Date().toISOString()
-          }
-        }, { status: 500 });
-      }
-    }
-
-    // For other status updates, just acknowledge receipt
+    // Acknowledge receipt immediately
     return NextResponse.json({
       status: 'success',
-      message: 'Webhook received',
+      message: 'Webhook received and queued for processing',
       data: {
-        accountId: account_id,
-        status: message,
-        type: account_type,
+        webhookId,
         processingTime: Date.now() - startTime
       }
     });
   } catch (error) {
-    console.error(`❌ [${requestId}] Error processing webhook:`, {
+    console.error(`❌ [${requestId}] Error handling webhook:`, {
       error: error instanceof Error ? error.message : String(error),
       timestamp: new Date().toISOString()
     });
