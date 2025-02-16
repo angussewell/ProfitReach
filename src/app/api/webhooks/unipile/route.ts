@@ -390,4 +390,130 @@ export async function POST(req: Request) {
   try {
     // Read and log raw body immediately
     rawBody = await req.text();
-    console.log(`
+    console.log(`🔔 [${requestId}] WEBHOOK BODY RECEIVED:`, {
+      bodyLength: rawBody.length,
+      preview: rawBody.length > 500 ? `${rawBody.substring(0, 500)}...` : rawBody,
+      timestamp: new Date().toISOString(),
+      handler: 'unipile-webhook'
+    });
+
+    // Parse webhook data
+    try {
+      webhookData = JSON.parse(rawBody);
+      console.log(`📦 [${requestId}] Parsed webhook data:`, {
+        status: webhookData.status,
+        accountId: webhookData.account_id,
+        timestamp: new Date().toISOString()
+      });
+
+      // Validate webhook data
+      const validationResult = UnipileAccountWebhook.safeParse(webhookData);
+      if (!validationResult.success) {
+        console.error(`❌ [${requestId}] Invalid webhook data format:`, {
+          error: validationResult.error.issues,
+          timestamp: new Date().toISOString()
+        });
+        return NextResponse.json({ 
+          status: 'error',
+          message: 'Invalid webhook data format',
+          error: validationResult.error.issues
+        }, { status: 400 });
+      }
+
+      // Get account details from Unipile
+      accountDetails = await getUnipileAccountDetails(webhookData.account_id);
+      
+      // Extract organization ID from the name field as per Unipile docs
+      const organizationId = webhookData.name;
+      
+      if (!organizationId) {
+        console.error(`❌ [${requestId}] Missing organization ID in webhook data`);
+        return NextResponse.json({ 
+          status: 'error',
+          message: 'Missing organization ID'
+        }, { status: 400 });
+      }
+
+      let savedEmailAccount = null;
+      let savedSocialAccount = null;
+
+      // Handle email account if present
+      if (accountDetails.connection_params.mail) {
+        const emailParams = accountDetails.connection_params.mail;
+        if (emailParams.email) {
+          console.log(`📧 [${requestId}] Saving email account:`, {
+            email: emailParams.email,
+            organizationId,
+            accountId: accountDetails.id
+          });
+          
+          savedEmailAccount = await saveEmailAccount(
+            emailParams.email,
+            organizationId,
+            accountDetails.id
+          );
+        }
+      }
+
+      // Handle social account if present
+      if (accountDetails.connection_params.im) {
+        const imParams = accountDetails.connection_params.im;
+        console.log(`👥 [${requestId}] Saving social account:`, {
+          username: imParams.username,
+          organizationId,
+          accountId: accountDetails.id,
+          provider: accountDetails.type
+        });
+        
+        savedSocialAccount = await saveSocialAccount(
+          imParams.username,
+          organizationId,
+          accountDetails.id,
+          accountDetails.type
+        );
+      }
+
+      // Return success response with saved accounts
+      return NextResponse.json({
+        status: 'success',
+        message: 'Account details processed successfully',
+        data: {
+          requestId,
+          processingTime: Date.now() - startTime,
+          emailAccount: savedEmailAccount,
+          socialAccount: savedSocialAccount
+        }
+      }, { status: 200 });
+
+    } catch (parseError) {
+      console.error(`❌ [${requestId}] Error processing webhook data:`, {
+        error: parseError instanceof Error ? {
+          message: parseError.message,
+          stack: parseError.stack
+        } : String(parseError),
+        timestamp: new Date().toISOString()
+      });
+      
+      return NextResponse.json({ 
+        status: 'error',
+        message: 'Error processing webhook data',
+        error: parseError instanceof Error ? parseError.message : String(parseError)
+      }, { status: 500 });
+    }
+  } catch (error) {
+    console.error(`❌ [${requestId}] Error processing webhook:`, {
+      error: error instanceof Error ? {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      } : String(error),
+      timestamp: new Date().toISOString()
+    });
+    
+    return NextResponse.json({ 
+      status: 'error',
+      message: 'Internal server error',
+      error: error instanceof Error ? error.message : String(error)
+    }, { status: 500 });
+  }
+}
