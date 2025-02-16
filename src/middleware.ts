@@ -59,9 +59,10 @@ export async function middleware(request: NextRequest) {
   }
 
   try {
+    // Only verify JWT token, don't initialize full auth
     const token = await getToken({
       req: request,
-      secret: process.env.NEXTAUTH_SECRET
+      secret: process.env.NEXTAUTH_SECRET,
     });
 
     // If there's no token and we're not on a public path, redirect to login
@@ -76,7 +77,6 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL('/', request.url));
     }
 
-    // Allow the request to proceed
     return NextResponse.next();
   } catch (error) {
     console.error('Middleware error:', error);
