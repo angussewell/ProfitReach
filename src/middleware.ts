@@ -36,6 +36,11 @@ const PUBLIC_API_ROUTES = [
 const PUBLIC_PATHS = ['/auth/login', '/auth/register'];
 
 export async function middleware(request: NextRequest) {
+  // Skip auth checks during build time
+  if (process.env.NEXT_PHASE === 'phase-production-build') {
+    return NextResponse.next();
+  }
+
   const { pathname } = request.nextUrl;
 
   // Handle root path redirect

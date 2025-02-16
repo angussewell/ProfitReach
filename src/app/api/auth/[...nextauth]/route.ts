@@ -62,6 +62,9 @@ declare module 'next-auth/jwt' {
 
 const isDevelopment = process.env.NODE_ENV === 'development';
 
+// Skip database operations during build
+const isBuildTime = process.env.NEXT_PHASE === 'phase-production-build';
+
 export const authOptions: AuthOptions = {
   providers: [
     CredentialsProvider({
@@ -196,6 +199,11 @@ export const authOptions: AuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
   callbacks: {
     async jwt({ token, user, trigger, session }) {
+      // Skip database operations during build
+      if (isBuildTime) {
+        return token;
+      }
+
       if (user) {
         // Initial sign in
         token.id = user.id;
@@ -203,24 +211,26 @@ export const authOptions: AuthOptions = {
         token.organizationId = user.organizationId;
         
         // Fetch organizations only once during sign in
-        const organizations = user.role === 'admin'
-          ? await prisma.organization.findMany({
-              orderBy: { name: 'asc' },
-              select: { id: true, name: true }
-            })
-          : await prisma.organization.findMany({
-              where: {
-                users: { some: { id: user.id } }
-              },
-              select: { id: true, name: true }
-            });
-        
-        token.organizations = organizations;
-        
-        if (user.organizationId) {
-          const org = organizations.find(o => o.id === user.organizationId);
-          if (org) {
-            token.organizationName = org.name;
+        if (!isBuildTime) {
+          const organizations = user.role === 'admin'
+            ? await prisma.organization.findMany({
+                orderBy: { name: 'asc' },
+                select: { id: true, name: true }
+              })
+            : await prisma.organization.findMany({
+                where: {
+                  users: { some: { id: user.id } }
+                },
+                select: { id: true, name: true }
+              });
+          
+          token.organizations = organizations;
+          
+          if (user.organizationId) {
+            const org = organizations.find(o => o.id === user.organizationId);
+            if (org) {
+              token.organizationName = org.name;
+            }
           }
         }
       } else if (trigger === 'update' && session?.organizationId) {
@@ -277,8 +287,8 @@ export const authOptions: AuthOptions = {
   }
 };
 
-// Only validate and log during runtime
-if (process.env.NODE_ENV !== 'test') {
+// Only validate and log during runtime, not during build
+if (!isBuildTime && process.env.NODE_ENV !== 'test') {
   validateEnv();
   logEnvironment();
 }
