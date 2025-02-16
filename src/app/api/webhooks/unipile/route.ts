@@ -37,7 +37,8 @@ const UnipileAccountDetails = z.object({
   connection_params: z.object({
     mail: z.object({
       id: z.string(),
-      username: z.string()
+      username: z.string().optional(),
+      email: z.string().optional()
     }).optional(),
     im: z.object({
       id: z.string(),
@@ -105,20 +106,32 @@ async function getUnipileAccountDetails(accountId: string): Promise<UnipileAccou
 async function saveEmailAccount(email: string, organizationId: string, unipileAccountId: string) {
   console.log('📧 Saving email account:', { email, organizationId, unipileAccountId });
   
-  return await prisma.emailAccount.upsert({
-    where: { unipileAccountId },
-    create: {
+  try {
+    const result = await prisma.emailAccount.upsert({
+      where: { unipileAccountId },
+      create: {
+        email,
+        name: email,
+        organizationId,
+        unipileAccountId,
+        isActive: true
+      },
+      update: {
+        email,
+        updatedAt: new Date()
+      }
+    });
+    console.log('📧 Email account saved successfully:', result);
+    return result;
+  } catch (error) {
+    console.error('📧 Error saving email account:', {
+      error: error instanceof Error ? error.message : String(error),
       email,
-      name: email,
       organizationId,
-      unipileAccountId,
-      isActive: true
-    },
-    update: {
-      email,
-      updatedAt: new Date()
-    }
-  });
+      unipileAccountId
+    });
+    throw error;
+  }
 }
 
 // Function to save social account
@@ -223,11 +236,24 @@ export async function POST(req: Request) {
     try {
       if (accountDetails.connection_params.mail) {
         // Handle email account
-        const email = accountDetails.connection_params.mail.username;
+        console.log('📧 Processing email account:', accountDetails.connection_params.mail);
+        
+        // Get email from either username or email field
+        const email = accountDetails.connection_params.mail.email || 
+                     accountDetails.connection_params.mail.username;
+                     
+        if (!email) {
+          console.error('❌ No email found in account details:', accountDetails.connection_params.mail);
+          return new NextResponse('No email found in account details', { status: 400 });
+        }
+
+        console.log('📧 Found email:', email);
+        
         const emailAccount = await saveEmailAccount(email, organizationId, webhookData.account_id);
         console.log('✅ Email account saved:', {
           id: emailAccount.id,
-          email: emailAccount.email
+          email: emailAccount.email,
+          unipileAccountId: emailAccount.unipileAccountId
         });
       } else if (accountDetails.connection_params.im) {
         // Handle social account
