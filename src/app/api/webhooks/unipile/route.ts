@@ -3,6 +3,7 @@ import { headers } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { updateCreditBalance, reportScenarioUsage } from '@/lib/stripe';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 
 // Force dynamic API route
 export const dynamic = 'force-dynamic';
@@ -101,34 +102,60 @@ export async function POST(req: Request) {
   const startTime = Date.now();
   let webhookData;
   let accountDetails;
+  let rawBody;
   
   try {
-    const body = await req.json();
-    console.log('Received Unipile webhook:', {
-      body,
-      headers: Object.fromEntries(req.headers.entries()),
-      url: req.url,
+    // Log request details
+    const headersList = Object.fromEntries(req.headers.entries());
+    console.log('Received Unipile webhook request:', {
       method: req.method,
+      url: req.url,
+      headers: headersList,
       timestamp: new Date().toISOString()
     });
 
-    // Validate webhook data
-    const validationResult = UnipileAccountWebhook.safeParse(body);
-    if (!validationResult.success) {
-      console.error('Invalid webhook data:', {
-        error: validationResult.error,
-        body,
+    // Read and log raw body
+    rawBody = await req.text();
+    console.log('Raw webhook body:', rawBody);
+
+    try {
+      const body = JSON.parse(rawBody);
+      console.log('Parsed webhook body:', body);
+
+      // Validate webhook data
+      const validationResult = UnipileAccountWebhook.safeParse(body);
+      if (!validationResult.success) {
+        console.error('Invalid webhook data:', {
+          error: validationResult.error,
+          body,
+          timestamp: new Date().toISOString()
+        });
+        return new NextResponse('Invalid webhook data', { status: 400 });
+      }
+
+      webhookData = validationResult.data;
+      console.log('Validated webhook data:', webhookData);
+    } catch (parseError) {
+      console.error('Failed to parse webhook body as JSON:', {
+        error: parseError instanceof Error ? parseError.message : String(parseError),
+        rawBody,
         timestamp: new Date().toISOString()
       });
-      return new NextResponse('Invalid webhook data', { status: 400 });
+      return new NextResponse('Invalid JSON data', { status: 400 });
     }
 
-    webhookData = validationResult.data;
-    console.log('Validated webhook data:', webhookData);
-
     // Get account details from Unipile
-    accountDetails = await getUnipileAccountDetails(webhookData.account_id);
-    console.log('Account details:', accountDetails);
+    try {
+      accountDetails = await getUnipileAccountDetails(webhookData.account_id);
+      console.log('Account details:', accountDetails);
+    } catch (unipileError) {
+      console.error('Failed to fetch Unipile account details:', {
+        error: unipileError instanceof Error ? unipileError.message : String(unipileError),
+        webhookData,
+        timestamp: new Date().toISOString()
+      });
+      return new NextResponse('Failed to fetch account details', { status: 500 });
+    }
 
     // Only process email accounts
     if (!accountDetails.connection_params.mail) {
@@ -150,38 +177,88 @@ export async function POST(req: Request) {
       timestamp: new Date().toISOString()
     });
 
-    // Create or update the email account
-    const emailAccount = await prisma.emailAccount.upsert({
-      where: {
-        unipileAccountId: webhookData.account_id
-      },
-      create: {
+    // Verify organization exists
+    try {
+      const organization = await prisma.organization.findUnique({
+        where: { id: organizationId }
+      });
+
+      if (!organization) {
+        console.error('Organization not found:', {
+          organizationId,
+          timestamp: new Date().toISOString()
+        });
+        return new NextResponse('Organization not found', { status: 404 });
+      }
+    } catch (orgError) {
+      console.error('Error checking organization:', {
+        error: orgError instanceof Error ? orgError.message : String(orgError),
+        organizationId,
+        timestamp: new Date().toISOString()
+      });
+      return new NextResponse('Error checking organization', { status: 500 });
+    }
+
+    // Create or update the email account with detailed error handling
+    try {
+      const emailAccount = await prisma.emailAccount.upsert({
+        where: {
+          unipileAccountId: webhookData.account_id
+        },
+        create: {
+          email,
+          name: email, // Use email as initial name
+          organizationId,
+          unipileAccountId: webhookData.account_id,
+          isActive: true
+        },
+        update: {
+          email,
+          updatedAt: new Date()
+        }
+      });
+
+      const duration = Date.now() - startTime;
+      console.log('Email account created/updated successfully:', {
+        id: emailAccount.id,
+        email: emailAccount.email,
+        organizationId: emailAccount.organizationId,
+        duration,
+        timestamp: new Date().toISOString()
+      });
+
+      return new NextResponse('Success', { status: 200 });
+    } catch (prismaError) {
+      // Handle specific Prisma errors
+      if (prismaError instanceof Prisma.PrismaClientKnownRequestError) {
+        console.error('Prisma known error:', {
+          code: prismaError.code,
+          message: prismaError.message,
+          meta: prismaError.meta,
+          timestamp: new Date().toISOString()
+        });
+
+        if (prismaError.code === 'P2002') {
+          return new NextResponse('Duplicate unique field', { status: 409 });
+        } else if (prismaError.code === 'P2003') {
+          return new NextResponse('Foreign key constraint failed', { status: 400 });
+        }
+      }
+
+      console.error('Error creating/updating email account:', {
+        error: prismaError instanceof Error ? {
+          message: prismaError.message,
+          stack: prismaError.stack,
+          name: prismaError.name
+        } : String(prismaError),
         email,
-        name: email, // Use email as initial name
         organizationId,
         unipileAccountId: webhookData.account_id,
-        isActive: true,
-        updatedAt: new Date(),
-        outgoingServer: '',
-        outgoingServerPort: 0,
-        password: ''
-      },
-      update: {
-        email,
-        updatedAt: new Date()
-      }
-    });
+        timestamp: new Date().toISOString()
+      });
 
-    const duration = Date.now() - startTime;
-    console.log('Email account created/updated successfully:', {
-      id: emailAccount.id,
-      email: emailAccount.email,
-      organizationId: emailAccount.organizationId,
-      duration,
-      timestamp: new Date().toISOString()
-    });
-
-    return new NextResponse('Success', { status: 200 });
+      return new NextResponse('Database error', { status: 500 });
+    }
   } catch (error) {
     const duration = Date.now() - startTime;
     console.error('Error processing Unipile webhook:', {
@@ -192,6 +269,7 @@ export async function POST(req: Request) {
       } : String(error),
       webhookData,
       accountDetails,
+      rawBody,
       duration,
       timestamp: new Date().toISOString()
     });
