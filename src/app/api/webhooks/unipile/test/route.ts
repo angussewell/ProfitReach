@@ -94,81 +94,47 @@ async function testDirectPrismaOperations(organizationId: string) {
   }
 }
 
+// Test endpoint to verify webhook functionality
+export async function GET(req: Request) {
+  console.log('🧪 Test endpoint accessed:', {
+    url: req.url,
+    method: req.method,
+    headers: Object.fromEntries(req.headers.entries()),
+    timestamp: new Date().toISOString()
+  });
+
+  return NextResponse.json({
+    status: 'ok',
+    message: 'Webhook test endpoint is working',
+    timestamp: new Date().toISOString()
+  });
+}
+
+// Test endpoint to simulate a webhook
 export async function POST(req: Request) {
-  // Only allow in development
-  if (process.env.NODE_ENV === 'production') {
-    return new NextResponse('Test endpoint not available in production', { status: 403 });
-  }
+  console.log('🧪 Test webhook received:', {
+    url: req.url,
+    method: req.method,
+    headers: Object.fromEntries(req.headers.entries()),
+    timestamp: new Date().toISOString()
+  });
 
-  console.log('🧪 Starting webhook test');
-
+  let body;
   try {
-    const body = await req.json();
-    const { type, organizationId } = body;
-
-    if (!organizationId) {
-      return new NextResponse('organizationId is required', { status: 400 });
-    }
-
-    console.log('🧪 Test parameters:', { type, organizationId });
-
-    // Test direct Prisma operations first
-    const prismaTest = await testDirectPrismaOperations(organizationId);
-    if (!prismaTest) {
-      return new NextResponse('Direct Prisma operations failed', { status: 500 });
-    }
-
-    // Prepare webhook URL
-    const webhookUrl = new URL('/api/webhooks/unipile', req.url);
-    console.log('🧪 Webhook URL:', webhookUrl.toString());
-
-    // Test account based on type
-    const testData = type === 'email' ? testEmailAccount : testSocialAccount;
-    const testDetails = type === 'email' ? testEmailAccountDetails : testSocialAccountDetails;
-
-    // Set organization ID
-    testData.name = organizationId;
-
-    // First request: webhook data
-    console.log('🧪 Sending webhook data:', testData);
-    const webhookResponse = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(testData)
-    });
-
-    const webhookResult = await webhookResponse.text();
-    console.log('🧪 Webhook response:', {
-      status: webhookResponse.status,
-      result: webhookResult
-    });
-
-    // Mock the account details fetch
-    global.fetch = async (url: string, options: any) => {
-      if (url.includes('/accounts/')) {
-        console.log('🧪 Mocking account details response');
-        return {
-          ok: true,
-          json: async () => testDetails
-        };
-      }
-      throw new Error('Unexpected fetch call');
-    };
-
-    return new NextResponse(JSON.stringify({
-      success: true,
-      webhookStatus: webhookResponse.status,
-      webhookResult
-    }));
+    body = await req.json();
+    console.log('🧪 Test webhook body:', body);
   } catch (error) {
-    console.error('❌ Test failed:', {
-      error: error instanceof Error ? {
-        message: error.message,
-        stack: error.stack
-      } : String(error)
-    });
-    return new NextResponse('Test failed', { status: 500 });
+    console.error('🧪 Error parsing test webhook body:', error);
+    return NextResponse.json({
+      status: 'error',
+      message: 'Invalid JSON body'
+    }, { status: 400 });
   }
+
+  return NextResponse.json({
+    status: 'ok',
+    message: 'Test webhook received successfully',
+    receivedBody: body,
+    timestamp: new Date().toISOString()
+  });
 } 

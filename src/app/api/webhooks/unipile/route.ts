@@ -185,14 +185,17 @@ async function saveSocialAccount(username: string, organizationId: string, unipi
 }
 
 export async function POST(req: Request) {
-  console.log('🔔 Unipile webhook received:', {
+  const startTime = Date.now();
+  const requestId = Math.random().toString(36).substring(7);
+  
+  // Log raw request immediately
+  console.log(`🔔 [${requestId}] Unipile webhook received:`, {
     url: req.url,
     method: req.method,
     headers: Object.fromEntries(req.headers.entries()),
     timestamp: new Date().toISOString()
   });
 
-  const startTime = Date.now();
   let webhookData;
   let accountDetails;
   let rawBody;
@@ -200,16 +203,18 @@ export async function POST(req: Request) {
   try {
     // Read and log raw body
     rawBody = await req.text();
-    console.log('📝 Raw webhook body:', rawBody);
+    console.log(`📝 [${requestId}] Raw webhook body:`, rawBody);
 
     try {
       const body = JSON.parse(rawBody);
-      console.log('✅ Parsed webhook body:', body);
+      console.log(`✅ [${requestId}] Parsed webhook body:`, body);
 
       // Validate webhook data
+      console.log(`🔍 [${requestId}] Validating webhook data...`);
       const validationResult = UnipileAccountWebhook.safeParse(body);
+      
       if (!validationResult.success) {
-        console.error('❌ Invalid webhook data:', {
+        console.error(`❌ [${requestId}] Invalid webhook data:`, {
           error: validationResult.error,
           body
         });
@@ -217,9 +222,9 @@ export async function POST(req: Request) {
       }
 
       webhookData = validationResult.data;
-      console.log('✅ Validated webhook data:', webhookData);
+      console.log(`✅ [${requestId}] Validated webhook data:`, webhookData);
     } catch (parseError) {
-      console.error('❌ Failed to parse webhook body:', {
+      console.error(`❌ [${requestId}] Failed to parse webhook body:`, {
         error: parseError instanceof Error ? parseError.message : String(parseError),
         rawBody
       });
@@ -228,13 +233,15 @@ export async function POST(req: Request) {
 
     // Get account details from Unipile
     try {
+      console.log(`🔍 [${requestId}] Fetching account details for:`, webhookData.account_id);
       accountDetails = await getUnipileAccountDetails(webhookData.account_id);
-      console.log('✅ Account details retrieved:', {
+      console.log(`✅ [${requestId}] Account details retrieved:`, {
         id: accountDetails.id,
-        type: accountDetails.type
+        type: accountDetails.type,
+        connection_params: accountDetails.connection_params
       });
     } catch (unipileError) {
-      console.error('❌ Failed to fetch account details:', {
+      console.error(`❌ [${requestId}] Failed to fetch account details:`, {
         error: unipileError instanceof Error ? unipileError.message : String(unipileError),
         webhookData
       });
@@ -245,16 +252,18 @@ export async function POST(req: Request) {
 
     // Verify organization exists
     try {
+      console.log(`🔍 [${requestId}] Verifying organization:`, organizationId);
       const organization = await prisma.organization.findUnique({
         where: { id: organizationId }
       });
 
       if (!organization) {
-        console.error('❌ Organization not found:', { organizationId });
+        console.error(`❌ [${requestId}] Organization not found:`, { organizationId });
         return new NextResponse('Organization not found', { status: 404 });
       }
+      console.log(`✅ [${requestId}] Organization verified:`, { id: organization.id });
     } catch (orgError) {
-      console.error('❌ Error checking organization:', {
+      console.error(`❌ [${requestId}] Error checking organization:`, {
         error: orgError instanceof Error ? orgError.message : String(orgError),
         organizationId
       });
@@ -265,21 +274,21 @@ export async function POST(req: Request) {
     try {
       if (accountDetails.connection_params.mail) {
         // Handle email account
-        console.log('📧 Processing email account:', accountDetails.connection_params.mail);
+        console.log(`📧 [${requestId}] Processing email account:`, accountDetails.connection_params.mail);
         
         // Get email from either username or email field
         const email = accountDetails.connection_params.mail.email || 
                      accountDetails.connection_params.mail.username;
                      
         if (!email) {
-          console.error('❌ No email found in account details:', accountDetails.connection_params.mail);
+          console.error(`❌ [${requestId}] No email found in account details:`, accountDetails.connection_params.mail);
           return new NextResponse('No email found in account details', { status: 400 });
         }
 
-        console.log('📧 Found email:', email);
+        console.log(`📧 [${requestId}] Found email:`, email);
         
         const emailAccount = await saveEmailAccount(email, organizationId, webhookData.account_id);
-        console.log('✅ Email account saved:', {
+        console.log(`✅ [${requestId}] Email account saved:`, {
           id: emailAccount.id,
           email: emailAccount.email,
           unipileAccountId: emailAccount.unipileAccountId
@@ -293,13 +302,13 @@ export async function POST(req: Request) {
           webhookData.account_id,
           accountDetails.type.toLowerCase()
         );
-        console.log('✅ Social account saved:', {
+        console.log(`✅ [${requestId}] Social account saved:`, {
           id: socialAccount.id,
           username: socialAccount.username,
           provider: socialAccount.provider
         });
       } else {
-        console.log('⚠️ Unsupported account type:', {
+        console.log(`⚠️ [${requestId}] Unsupported account type:`, {
           type: accountDetails.type,
           accountId: webhookData.account_id
         });
@@ -307,11 +316,11 @@ export async function POST(req: Request) {
       }
 
       const duration = Date.now() - startTime;
-      console.log('✅ Webhook processed successfully:', { duration });
+      console.log(`✅ [${requestId}] Webhook processed successfully:`, { duration });
       return new NextResponse('Success', { status: 200 });
     } catch (saveError) {
       if (saveError instanceof Prisma.PrismaClientKnownRequestError) {
-        console.error('❌ Database error:', {
+        console.error(`❌ [${requestId}] Database error:`, {
           code: saveError.code,
           message: saveError.message,
           meta: saveError.meta
@@ -322,7 +331,7 @@ export async function POST(req: Request) {
         }
       }
 
-      console.error('❌ Error saving account:', {
+      console.error(`❌ [${requestId}] Error saving account:`, {
         error: saveError instanceof Error ? {
           message: saveError.message,
           stack: saveError.stack
@@ -333,7 +342,7 @@ export async function POST(req: Request) {
     }
   } catch (error) {
     const duration = Date.now() - startTime;
-    console.error('❌ Error processing webhook:', {
+    console.error(`❌ [${requestId}] Error processing webhook:`, {
       error: error instanceof Error ? {
         message: error.message,
         stack: error.stack
