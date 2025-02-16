@@ -96,57 +96,50 @@ async function testDirectPrismaOperations(organizationId: string) {
 
 // Test endpoint to verify webhook functionality
 export async function GET(req: Request) {
-  const requestId = Math.random().toString(36).substring(7);
+  const testId = Math.random().toString(36).substring(7);
   
-  // Log test request
-  console.log(`🧪 [${requestId}] TEST ENDPOINT HIT:`, {
+  console.log(`🧪 [${testId}] TEST ENDPOINT HIT:`, {
     url: req.url,
     method: req.method,
     headers: Object.fromEntries(req.headers.entries()),
-    timestamp: new Date().toISOString(),
-    handler: 'unipile-webhook-test'
+    timestamp: new Date().toISOString()
   });
 
-  // Return success response
   return NextResponse.json({
     status: 'success',
-    message: 'Webhook test endpoint is working',
-    requestId,
+    message: 'Test endpoint is working',
+    testId,
     timestamp: new Date().toISOString()
   });
 }
 
-// Test endpoint to simulate a webhook
+// Test webhook simulation endpoint
 export async function POST(req: Request) {
-  const requestId = Math.random().toString(36).substring(7);
+  const testId = Math.random().toString(36).substring(7);
   
-  // Log test request
-  console.log(`🧪 [${requestId}] TEST WEBHOOK SIMULATION:`, {
+  console.log(`🧪 [${testId}] SIMULATING WEBHOOK:`, {
     url: req.url,
     method: req.method,
     headers: Object.fromEntries(req.headers.entries()),
-    timestamp: new Date().toISOString(),
-    handler: 'unipile-webhook-test'
+    timestamp: new Date().toISOString()
   });
 
   try {
-    // Read and log request body
     const rawBody = await req.text();
-    console.log(`🧪 [${requestId}] TEST WEBHOOK BODY:`, {
+    console.log(`🧪 [${testId}] Test webhook body:`, {
       body: rawBody,
       timestamp: new Date().toISOString()
     });
 
-    // Return success response
     return NextResponse.json({
       status: 'success',
-      message: 'Test webhook received successfully',
-      requestId,
-      timestamp: new Date().toISOString(),
-      receivedBody: rawBody
+      message: 'Test webhook received',
+      testId,
+      bodyLength: rawBody.length,
+      timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error(`❌ [${requestId}] TEST WEBHOOK ERROR:`, {
+    console.error(`❌ [${testId}] Test webhook error:`, {
       error: error instanceof Error ? error.message : String(error),
       timestamp: new Date().toISOString()
     });
@@ -154,8 +147,6 @@ export async function POST(req: Request) {
     return NextResponse.json({
       status: 'error',
       message: 'Error processing test webhook',
-      requestId,
-      timestamp: new Date().toISOString(),
       error: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }

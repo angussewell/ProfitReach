@@ -7,11 +7,13 @@ import { Prisma } from '@prisma/client';
 // Force dynamic API route
 export const dynamic = 'force-dynamic';
 
-// Log module initialization
+// Log module initialization with more details
 console.log('🚀 Initializing Unipile webhook handler:', {
   timestamp: new Date().toISOString(),
   environment: process.env.NODE_ENV,
-  handler: 'unipile-webhook'
+  handler: 'unipile-webhook',
+  database_url_type: process.env.DATABASE_URL?.includes('pooled') ? 'pooled' : 'unpooled',
+  node_version: process.version
 });
 
 // Configure Unipile URLs based on environment
@@ -19,14 +21,10 @@ const UNIPILE_BASE_DSN = process.env.UNIPILE_DSN?.split(':')[0] || 'api4.unipile
 const UNIPILE_FULL_DSN = process.env.UNIPILE_DSN || 'api4.unipile.com:13465';  // Full DSN with port
 const UNIPILE_API_KEY = process.env.UNIPILE_API_KEY;
 
-// Production URL configuration
+// Production URL configuration - ensure no trailing slashes
 const PRODUCTION_URL = 'https://app.messagelm.com';
 const APP_URL = process.env.NODE_ENV === 'production' ? PRODUCTION_URL : process.env.NEXT_PUBLIC_APP_URL;
-
-// Configure Unipile URLs according to documentation
-const UNIPILE_API_URL = `https://${UNIPILE_FULL_DSN}`;  // API URL with port
-const UNIPILE_OAUTH_URL = `https://${UNIPILE_BASE_DSN}`;  // OAuth URL without port
-const WEBHOOK_URL = `${APP_URL}/api/webhooks/unipile`;
+const WEBHOOK_URL = `${APP_URL}/api/webhooks/unipile`.replace(/\/$/, '');
 
 // Log configuration on module load
 console.log('🌍 Webhook handler configuration:', {
@@ -35,8 +33,8 @@ console.log('🌍 Webhook handler configuration:', {
   APP_URL,
   UNIPILE_BASE_DSN,
   UNIPILE_FULL_DSN,
-  UNIPILE_API_URL,
-  UNIPILE_OAUTH_URL,
+  UNIPILE_API_URL: `https://${UNIPILE_FULL_DSN}`,
+  UNIPILE_OAUTH_URL: `https://${UNIPILE_BASE_DSN}`,
   WEBHOOK_URL,
   hasApiKey: !!UNIPILE_API_KEY,
   timestamp: new Date().toISOString()
@@ -87,7 +85,7 @@ async function getUnipileAccountDetails(accountId: string): Promise<UnipileAccou
     throw new Error('Missing UNIPILE_API_KEY');
   }
 
-  const apiUrl = `${UNIPILE_API_URL}/api/v1/accounts/${accountId}`;
+  const apiUrl = `https://${UNIPILE_FULL_DSN}/api/v1/accounts/${accountId}`;
   console.log(`🔍 [${fetchId}] Fetching Unipile account details:`, { 
     accountId,
     apiUrl,
@@ -97,7 +95,7 @@ async function getUnipileAccountDetails(accountId: string): Promise<UnipileAccou
   try {
     // Test API connectivity first
     console.log(`🔄 [${fetchId}] Testing API connectivity:`, {
-      url: UNIPILE_API_URL,
+      url: `https://${UNIPILE_FULL_DSN}`,
       timestamp: new Date().toISOString()
     });
 
@@ -370,17 +368,36 @@ async function saveSocialAccount(username: string, organizationId: string, unipi
   });
 }
 
+// Add test endpoint for webhook verification
+export async function GET(req: Request) {
+  const testId = Math.random().toString(36).substring(7);
+  console.log(`🧪 [${testId}] Webhook test endpoint hit:`, {
+    url: req.url,
+    method: req.method,
+    headers: Object.fromEntries(req.headers.entries()),
+    timestamp: new Date().toISOString()
+  });
+  
+  return NextResponse.json({
+    status: 'success',
+    message: 'Webhook endpoint is reachable',
+    testId,
+    timestamp: new Date().toISOString()
+  });
+}
+
 export async function POST(req: Request) {
   const startTime = Date.now();
   const requestId = Math.random().toString(36).substring(7);
   
-  // Immediate request logging
-  console.log(`🔔 [${requestId}] WEBHOOK RECEIVED - INITIAL REQUEST:`, {
+  // Enhanced request logging
+  console.log(`🔔 [${requestId}] WEBHOOK RECEIVED:`, {
     url: req.url,
     method: req.method,
     headers: Object.fromEntries(req.headers.entries()),
     timestamp: new Date().toISOString(),
-    handler: 'unipile-webhook'
+    handler: 'unipile-webhook',
+    database_url_type: process.env.DATABASE_URL?.includes('pooled') ? 'pooled' : 'unpooled'
   });
 
   let webhookData;
@@ -390,116 +407,130 @@ export async function POST(req: Request) {
   try {
     // Read and log raw body immediately
     rawBody = await req.text();
-    console.log(`🔔 [${requestId}] WEBHOOK BODY RECEIVED:`, {
+    console.log(`📦 [${requestId}] Webhook body:`, {
       bodyLength: rawBody.length,
       preview: rawBody.length > 500 ? `${rawBody.substring(0, 500)}...` : rawBody,
-      timestamp: new Date().toISOString(),
-      handler: 'unipile-webhook'
+      timestamp: new Date().toISOString()
     });
 
-    // Parse webhook data
+    // Parse and validate webhook data
     try {
       webhookData = JSON.parse(rawBody);
-      console.log(`📦 [${requestId}] Parsed webhook data:`, {
-        status: webhookData.status,
-        accountId: webhookData.account_id,
+    } catch (parseError) {
+      console.error(`❌ [${requestId}] JSON parse error:`, {
+        error: parseError instanceof Error ? parseError.message : String(parseError),
+        rawBody: rawBody.substring(0, 100) + '...',
         timestamp: new Date().toISOString()
       });
+      return NextResponse.json({
+        status: 'error',
+        message: 'Invalid JSON in webhook body',
+        requestId
+      }, { status: 400 });
+    }
 
-      // Validate webhook data
-      const validationResult = UnipileAccountWebhook.safeParse(webhookData);
-      if (!validationResult.success) {
-        console.error(`❌ [${requestId}] Invalid webhook data format:`, {
-          error: validationResult.error.issues,
-          timestamp: new Date().toISOString()
-        });
-        return NextResponse.json({ 
-          status: 'error',
-          message: 'Invalid webhook data format',
-          error: validationResult.error.issues
-        }, { status: 400 });
-      }
+    // Log parsed webhook data
+    console.log(`📋 [${requestId}] Parsed webhook data:`, {
+      status: webhookData.status,
+      accountId: webhookData.account_id,
+      name: webhookData.name,
+      timestamp: new Date().toISOString()
+    });
 
-      // Get account details from Unipile
-      accountDetails = await getUnipileAccountDetails(webhookData.account_id);
-      
-      // Extract organization ID from the name field as per Unipile docs
-      const organizationId = webhookData.name;
-      
-      if (!organizationId) {
-        console.error(`❌ [${requestId}] Missing organization ID in webhook data`);
-        return NextResponse.json({ 
-          status: 'error',
-          message: 'Missing organization ID'
-        }, { status: 400 });
-      }
+    // Validate webhook data format
+    const validationResult = UnipileAccountWebhook.safeParse(webhookData);
+    if (!validationResult.success) {
+      console.error(`❌ [${requestId}] Webhook validation failed:`, {
+        errors: validationResult.error.issues,
+        timestamp: new Date().toISOString()
+      });
+      return NextResponse.json({
+        status: 'error',
+        message: 'Invalid webhook data format',
+        errors: validationResult.error.issues,
+        requestId
+      }, { status: 400 });
+    }
 
-      let savedEmailAccount = null;
-      let savedSocialAccount = null;
+    // Extract and validate organization ID
+    const organizationId = webhookData.name;
+    if (!organizationId) {
+      console.error(`❌ [${requestId}] Missing organization ID in webhook`);
+      return NextResponse.json({
+        status: 'error',
+        message: 'Missing organization ID in webhook data',
+        requestId
+      }, { status: 400 });
+    }
 
-      // Handle email account if present
-      if (accountDetails.connection_params.mail) {
-        const emailParams = accountDetails.connection_params.mail;
-        if (emailParams.email) {
-          console.log(`📧 [${requestId}] Saving email account:`, {
-            email: emailParams.email,
-            organizationId,
-            accountId: accountDetails.id
-          });
-          
-          savedEmailAccount = await saveEmailAccount(
-            emailParams.email,
-            organizationId,
-            accountDetails.id
-          );
-        }
-      }
+    // Verify organization exists
+    const organization = await prisma.organization.findUnique({
+      where: { id: organizationId }
+    });
 
-      // Handle social account if present
-      if (accountDetails.connection_params.im) {
-        const imParams = accountDetails.connection_params.im;
-        console.log(`👥 [${requestId}] Saving social account:`, {
-          username: imParams.username,
+    if (!organization) {
+      console.error(`❌ [${requestId}] Organization not found:`, { organizationId });
+      return NextResponse.json({
+        status: 'error',
+        message: 'Organization not found',
+        requestId
+      }, { status: 404 });
+    }
+
+    // Get account details from Unipile
+    accountDetails = await getUnipileAccountDetails(webhookData.account_id);
+    
+    let savedEmailAccount = null;
+    let savedSocialAccount = null;
+
+    // Handle email account if present
+    if (accountDetails.connection_params.mail) {
+      const emailParams = accountDetails.connection_params.mail;
+      if (emailParams.email) {
+        console.log(`📧 [${requestId}] Saving email account:`, {
+          email: emailParams.email,
           organizationId,
-          accountId: accountDetails.id,
-          provider: accountDetails.type
+          accountId: accountDetails.id
         });
         
-        savedSocialAccount = await saveSocialAccount(
-          imParams.username,
+        savedEmailAccount = await saveEmailAccount(
+          emailParams.email,
           organizationId,
-          accountDetails.id,
-          accountDetails.type
+          accountDetails.id
         );
       }
+    }
 
-      // Return success response with saved accounts
-      return NextResponse.json({
-        status: 'success',
-        message: 'Account details processed successfully',
-        data: {
-          requestId,
-          processingTime: Date.now() - startTime,
-          emailAccount: savedEmailAccount,
-          socialAccount: savedSocialAccount
-        }
-      }, { status: 200 });
-
-    } catch (parseError) {
-      console.error(`❌ [${requestId}] Error processing webhook data:`, {
-        error: parseError instanceof Error ? {
-          message: parseError.message,
-          stack: parseError.stack
-        } : String(parseError),
-        timestamp: new Date().toISOString()
+    // Handle social account if present
+    if (accountDetails.connection_params.im) {
+      const imParams = accountDetails.connection_params.im;
+      console.log(`👥 [${requestId}] Saving social account:`, {
+        username: imParams.username,
+        organizationId,
+        accountId: accountDetails.id,
+        provider: accountDetails.type
       });
       
-      return NextResponse.json({ 
-        status: 'error',
-        message: 'Error processing webhook data',
-        error: parseError instanceof Error ? parseError.message : String(parseError)
-      }, { status: 500 });
+      savedSocialAccount = await saveSocialAccount(
+        imParams.username,
+        organizationId,
+        accountDetails.id,
+        accountDetails.type
+      );
     }
+
+    // Return success response with saved accounts
+    return NextResponse.json({
+      status: 'success',
+      message: 'Account details processed successfully',
+      data: {
+        requestId,
+        processingTime: Date.now() - startTime,
+        emailAccount: savedEmailAccount,
+        socialAccount: savedSocialAccount
+      }
+    }, { status: 200 });
+
   } catch (error) {
     console.error(`❌ [${requestId}] Error processing webhook:`, {
       error: error instanceof Error ? {
