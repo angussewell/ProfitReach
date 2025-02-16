@@ -117,91 +117,155 @@ async function getUnipileAccountDetails(accountId: string): Promise<UnipileAccou
 
 // Function to save email account
 async function saveEmailAccount(email: string, organizationId: string, unipileAccountId: string) {
-  console.log('📧 Saving email account:', { email, organizationId, unipileAccountId });
+  const saveId = Math.random().toString(36).substring(7);
+  console.log(`📧 [${saveId}] Starting email account save:`, { 
+    email, 
+    organizationId, 
+    unipileAccountId,
+    timestamp: new Date().toISOString()
+  });
   
   try {
     // First check if account exists by unipileAccountId
+    console.log(`📧 [${saveId}] Checking for existing account by unipileAccountId`);
     const existingByUnipileId = await prisma.emailAccount.findUnique({
       where: { unipileAccountId }
     });
-    console.log('📧 Existing account check (by unipileAccountId):', { 
+    console.log(`📧 [${saveId}] Existing account check (by unipileAccountId):`, { 
       exists: !!existingByUnipileId,
       id: existingByUnipileId?.id,
-      email: existingByUnipileId?.email 
+      email: existingByUnipileId?.email,
+      constraints: {
+        unipileAccountId,
+        organizationId
+      }
     });
 
     // Then check if email exists in this organization
+    console.log(`📧 [${saveId}] Checking for existing account by email in organization`);
     const existingByEmail = await prisma.emailAccount.findFirst({
       where: {
         email,
         organizationId
       }
     });
-    console.log('📧 Existing account check (by email in org):', {
+    console.log(`📧 [${saveId}] Existing account check (by email in org):`, {
       exists: !!existingByEmail,
       id: existingByEmail?.id,
-      unipileAccountId: existingByEmail?.unipileAccountId
+      unipileAccountId: existingByEmail?.unipileAccountId,
+      constraints: {
+        email,
+        organizationId
+      }
     });
 
     // If email exists in org but with different unipileAccountId, we need to handle this
     if (existingByEmail && existingByEmail.unipileAccountId !== unipileAccountId) {
-      console.log('📧 Email exists in organization with different unipileAccountId:', {
+      console.log(`📧 [${saveId}] Email exists in organization with different unipileAccountId:`, {
         existingId: existingByEmail.id,
         existingUnipileId: existingByEmail.unipileAccountId,
-        newUnipileId: unipileAccountId
+        newUnipileId: unipileAccountId,
+        action: 'updating_existing'
       });
       
-      // Update the existing account with the new unipileAccountId
-      const result = await prisma.emailAccount.update({
-        where: { id: existingByEmail.id },
-        data: {
+      try {
+        // Update the existing account with the new unipileAccountId
+        const result = await prisma.emailAccount.update({
+          where: { id: existingByEmail.id },
+          data: {
+            unipileAccountId,
+            updatedAt: new Date()
+          }
+        });
+        
+        console.log(`📧 [${saveId}] Updated existing email account:`, {
+          id: result.id,
+          email: result.email,
+          unipileAccountId: result.unipileAccountId,
+          organizationId: result.organizationId,
+          action: 'update_successful'
+        });
+        
+        return result;
+      } catch (updateError) {
+        console.error(`📧 [${saveId}] Failed to update existing account:`, {
+          error: updateError instanceof Error ? {
+            message: updateError.message,
+            stack: updateError.stack,
+            name: updateError.name
+          } : String(updateError),
+          existingId: existingByEmail.id,
+          action: 'update_failed'
+        });
+        throw updateError;
+      }
+    }
+
+    // Otherwise, proceed with normal upsert
+    console.log(`📧 [${saveId}] Proceeding with upsert operation:`, {
+      where: { unipileAccountId },
+      email,
+      organizationId,
+      action: 'upserting'
+    });
+
+    try {
+      const result = await prisma.emailAccount.upsert({
+        where: { unipileAccountId },
+        create: {
+          email,
+          name: email,
+          organizationId,
           unipileAccountId,
+          isActive: true
+        },
+        update: {
+          email,
           updatedAt: new Date()
         }
       });
       
-      console.log('📧 Updated existing email account:', {
+      console.log(`📧 [${saveId}] Email account saved successfully:`, {
         id: result.id,
         email: result.email,
         unipileAccountId: result.unipileAccountId,
-        organizationId: result.organizationId
+        organizationId: result.organizationId,
+        isActive: result.isActive,
+        createdAt: result.createdAt,
+        updatedAt: result.updatedAt,
+        action: 'upsert_successful'
       });
       
       return result;
+    } catch (upsertError) {
+      console.error(`📧 [${saveId}] Upsert operation failed:`, {
+        error: upsertError instanceof Error ? {
+          message: upsertError.message,
+          stack: upsertError.stack,
+          name: upsertError.name
+        } : String(upsertError),
+        constraints: {
+          email,
+          organizationId,
+          unipileAccountId
+        },
+        action: 'upsert_failed'
+      });
+      throw upsertError;
     }
-
-    // Otherwise, proceed with normal upsert
-    const result = await prisma.emailAccount.upsert({
-      where: { unipileAccountId },
-      create: {
-        email,
-        name: email,
-        organizationId,
-        unipileAccountId,
-        isActive: true
-      },
-      update: {
-        email,
-        updatedAt: new Date()
-      }
-    });
-    
-    console.log('📧 Email account saved successfully:', {
-      id: result.id,
-      email: result.email,
-      unipileAccountId: result.unipileAccountId,
-      organizationId: result.organizationId,
-      isActive: result.isActive,
-      createdAt: result.createdAt,
-      updatedAt: result.updatedAt
-    });
-    
-    return result;
   } catch (error) {
     // Log detailed error information for constraint violations
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      console.error(`📧 [${saveId}] Prisma error:`, {
+        code: error.code,
+        message: error.message,
+        meta: error.meta,
+        target: error.meta?.target,
+        action: 'prisma_error'
+      });
+
       if (error.code === 'P2002') {
-        console.error('📧 Unique constraint violation:', {
+        console.error(`📧 [${saveId}] Unique constraint violation:`, {
           error: {
             code: error.code,
             message: error.message,
@@ -209,12 +273,13 @@ async function saveEmailAccount(email: string, organizationId: string, unipileAc
           },
           email,
           organizationId,
-          unipileAccountId
+          unipileAccountId,
+          action: 'constraint_violation'
         });
       }
     }
     
-    console.error('📧 Error saving email account:', {
+    console.error(`📧 [${saveId}] Error saving email account:`, {
       error: error instanceof Error ? {
         message: error.message,
         stack: error.stack,
@@ -222,7 +287,8 @@ async function saveEmailAccount(email: string, organizationId: string, unipileAc
       } : String(error),
       email,
       organizationId,
-      unipileAccountId
+      unipileAccountId,
+      action: 'save_failed'
     });
     throw error;
   }
@@ -338,26 +404,59 @@ export async function POST(req: Request) {
     // Handle account based on type
     try {
       if (accountDetails.connection_params.mail) {
-        // Handle email account
-        console.log(`📧 [${requestId}] Processing email account:`, accountDetails.connection_params.mail);
+        // Validate email account data
+        console.log(`📧 [${requestId}] Validating email account data:`, {
+          mail: accountDetails.connection_params.mail,
+          type: accountDetails.type
+        });
         
         // Get email from either username or email field
         const email = accountDetails.connection_params.mail.email || 
                      accountDetails.connection_params.mail.username;
                      
         if (!email) {
-          console.error(`❌ [${requestId}] No email found in account details:`, accountDetails.connection_params.mail);
+          console.error(`❌ [${requestId}] No email found in account details:`, {
+            mail: accountDetails.connection_params.mail,
+            error: 'Missing email field'
+          });
           return new NextResponse('No email found in account details', { status: 400 });
         }
 
-        console.log(`📧 [${requestId}] Found email:`, email);
-        
-        const emailAccount = await saveEmailAccount(email, organizationId, webhookData.account_id);
-        console.log(`✅ [${requestId}] Email account saved:`, {
-          id: emailAccount.id,
-          email: emailAccount.email,
-          unipileAccountId: emailAccount.unipileAccountId
+        // Validate email format
+        if (!email.includes('@')) {
+          console.error(`❌ [${requestId}] Invalid email format:`, {
+            email,
+            error: 'Invalid email format'
+          });
+          return new NextResponse('Invalid email format', { status: 400 });
+        }
+
+        console.log(`📧 [${requestId}] Email validation passed:`, {
+          email,
+          organizationId: webhookData.name
         });
+        
+        try {
+          const emailAccount = await saveEmailAccount(email, webhookData.name, webhookData.account_id);
+          console.log(`✅ [${requestId}] Email account saved:`, {
+            id: emailAccount.id,
+            email: emailAccount.email,
+            unipileAccountId: emailAccount.unipileAccountId,
+            duration: Date.now() - startTime
+          });
+        } catch (saveError) {
+          console.error(`❌ [${requestId}] Failed to save email account:`, {
+            error: saveError instanceof Error ? {
+              message: saveError.message,
+              stack: saveError.stack,
+              name: saveError.name
+            } : String(saveError),
+            email,
+            organizationId: webhookData.name,
+            duration: Date.now() - startTime
+          });
+          throw saveError;
+        }
       } else if (accountDetails.connection_params.im) {
         // Handle social account
         const username = accountDetails.connection_params.im.username;
