@@ -7,19 +7,27 @@ import { Prisma } from '@prisma/client';
 // Force dynamic API route
 export const dynamic = 'force-dynamic';
 
-const UNIPILE_DSN = process.env.UNIPILE_DSN || 'api4.unipile.com:13465';
+// Log module initialization
+console.log('🚀 Initializing Unipile webhook handler:', {
+  timestamp: new Date().toISOString(),
+  environment: process.env.NODE_ENV,
+  handler: 'unipile-webhook'
+});
+
+// Configure Unipile URLs based on environment
+const UNIPILE_DSN = process.env.UNIPILE_DSN || 'api4.unipile.com';  // Removed port number
 const UNIPILE_API_KEY = process.env.UNIPILE_API_KEY;
 
 // Production URL configuration
 const PRODUCTION_URL = 'https://app.messagelm.com';
 const APP_URL = process.env.NODE_ENV === 'production' ? PRODUCTION_URL : process.env.NEXT_PUBLIC_APP_URL;
 
-// Separate API and webhook URLs
+// Separate API and webhook URLs - using HTTPS without port for production
 const UNIPILE_API_URL = `https://${UNIPILE_DSN}`;
 const WEBHOOK_URL = `${APP_URL}/api/webhooks/unipile`;
 
-// Log environment info on module load
-console.log('🌍 Unipile configuration:', {
+// Log configuration on module load
+console.log('🌍 Webhook handler configuration:', {
   NODE_ENV: process.env.NODE_ENV,
   NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   APP_URL,
@@ -68,50 +76,93 @@ type UnipileAccountDetailsData = z.infer<typeof UnipileAccountDetails>;
 
 // Function to fetch and validate account details from Unipile
 async function getUnipileAccountDetails(accountId: string): Promise<UnipileAccountDetailsData> {
+  const fetchId = Math.random().toString(36).substring(7);
+  
   if (!UNIPILE_API_KEY) {
+    console.error(`❌ [${fetchId}] Missing UNIPILE_API_KEY`);
     throw new Error('Missing UNIPILE_API_KEY');
   }
 
-  console.log('🔍 Fetching Unipile account details:', { 
+  const apiUrl = `${UNIPILE_API_URL}/api/v1/accounts/${accountId}`;
+  console.log(`🔍 [${fetchId}] Fetching Unipile account details:`, { 
     accountId,
-    apiUrl: UNIPILE_API_URL
+    apiUrl,
+    timestamp: new Date().toISOString()
   });
-
-  const response = await fetch(`${UNIPILE_API_URL}/api/v1/accounts/${accountId}`, {
-    headers: {
-      'Accept': 'application/json',
-      'X-API-KEY': UNIPILE_API_KEY,
-    },
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('❌ Failed to fetch account details:', {
-      status: response.status,
-      statusText: response.statusText,
-      error: errorText
-    });
-    throw new Error(`Failed to fetch account details: ${response.statusText}`);
-  }
-
-  const rawData = await response.json();
-  console.log('📦 Raw Unipile account details:', rawData);
 
   try {
-    const accountDetails = UnipileAccountDetails.parse(rawData);
-    console.log('✅ Validated account details:', {
-      id: accountDetails.id,
-      type: accountDetails.type,
-      hasMailParams: !!accountDetails.connection_params.mail,
-      hasImParams: !!accountDetails.connection_params.im
+    // Test API connectivity first
+    console.log(`🔄 [${fetchId}] Testing API connectivity:`, {
+      url: UNIPILE_API_URL,
+      timestamp: new Date().toISOString()
     });
-    return accountDetails;
+
+    const response = await fetch(apiUrl, {
+      headers: {
+        'Accept': 'application/json',
+        'X-API-KEY': UNIPILE_API_KEY,
+      },
+    });
+
+    // Log detailed response information
+    console.log(`📡 [${fetchId}] Unipile API response:`, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: Object.fromEntries(response.headers.entries()),
+      timestamp: new Date().toISOString()
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`❌ [${fetchId}] Failed to fetch account details:`, {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorText,
+        url: apiUrl,
+        timestamp: new Date().toISOString(),
+        headers: Object.fromEntries(response.headers.entries())
+      });
+      throw new Error(`Failed to fetch account details: ${response.status} ${response.statusText} - ${errorText}`);
+    }
+
+    const rawData = await response.json();
+    console.log(`📦 [${fetchId}] Raw Unipile account details:`, {
+      data: rawData,
+      timestamp: new Date().toISOString()
+    });
+
+    try {
+      const accountDetails = UnipileAccountDetails.parse(rawData);
+      console.log(`✅ [${fetchId}] Validated account details:`, {
+        id: accountDetails.id,
+        type: accountDetails.type,
+        hasMailParams: !!accountDetails.connection_params.mail,
+        hasImParams: !!accountDetails.connection_params.im,
+        timestamp: new Date().toISOString()
+      });
+      return accountDetails;
+    } catch (parseError) {
+      console.error(`❌ [${fetchId}] Invalid account details format:`, {
+        error: parseError instanceof Error ? {
+          message: parseError.message,
+          stack: parseError.stack
+        } : String(parseError),
+        data: rawData,
+        timestamp: new Date().toISOString()
+      });
+      throw new Error('Invalid account details format from Unipile');
+    }
   } catch (error) {
-    console.error('❌ Invalid account details format:', {
-      error,
-      data: rawData
+    console.error(`❌ [${fetchId}] Error fetching account details:`, {
+      error: error instanceof Error ? {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      } : String(error),
+      url: apiUrl,
+      timestamp: new Date().toISOString()
     });
-    throw new Error('Invalid account details format from Unipile');
+    throw error;
   }
 }
 
@@ -319,12 +370,13 @@ export async function POST(req: Request) {
   const startTime = Date.now();
   const requestId = Math.random().toString(36).substring(7);
   
-  // Log raw request immediately
-  console.log(`🔔 [${requestId}] Unipile webhook received:`, {
+  // Immediate request logging
+  console.log(`🔔 [${requestId}] WEBHOOK RECEIVED - INITIAL REQUEST:`, {
     url: req.url,
     method: req.method,
     headers: Object.fromEntries(req.headers.entries()),
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    handler: 'unipile-webhook'
   });
 
   let webhookData;
@@ -332,32 +384,44 @@ export async function POST(req: Request) {
   let rawBody;
   
   try {
-    // Read and log raw body
+    // Read and log raw body immediately
     rawBody = await req.text();
-    console.log(`📝 [${requestId}] Raw webhook body:`, rawBody);
+    console.log(`📝 [${requestId}] RAW WEBHOOK BODY:`, {
+      body: rawBody,
+      timestamp: new Date().toISOString(),
+      bodyLength: rawBody.length
+    });
 
     try {
       const body = JSON.parse(rawBody);
-      console.log(`✅ [${requestId}] Parsed webhook body:`, body);
+      console.log(`✅ [${requestId}] PARSED WEBHOOK BODY:`, {
+        body,
+        timestamp: new Date().toISOString()
+      });
 
       // Validate webhook data
       console.log(`🔍 [${requestId}] Validating webhook data...`);
       const validationResult = UnipileAccountWebhook.safeParse(body);
       
       if (!validationResult.success) {
-        console.error(`❌ [${requestId}] Invalid webhook data:`, {
+        console.error(`❌ [${requestId}] VALIDATION FAILED:`, {
           error: validationResult.error,
-          body
+          body,
+          timestamp: new Date().toISOString()
         });
         return new NextResponse('Invalid webhook data', { status: 400 });
       }
 
       webhookData = validationResult.data;
-      console.log(`✅ [${requestId}] Validated webhook data:`, webhookData);
+      console.log(`✅ [${requestId}] WEBHOOK DATA VALIDATED:`, {
+        data: webhookData,
+        timestamp: new Date().toISOString()
+      });
     } catch (parseError) {
-      console.error(`❌ [${requestId}] Failed to parse webhook body:`, {
+      console.error(`❌ [${requestId}] PARSE ERROR:`, {
         error: parseError instanceof Error ? parseError.message : String(parseError),
-        rawBody
+        rawBody,
+        timestamp: new Date().toISOString()
       });
       return new NextResponse('Invalid JSON data', { status: 400 });
     }

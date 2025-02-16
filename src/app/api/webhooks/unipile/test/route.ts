@@ -96,45 +96,67 @@ async function testDirectPrismaOperations(organizationId: string) {
 
 // Test endpoint to verify webhook functionality
 export async function GET(req: Request) {
-  console.log('🧪 Test endpoint accessed:', {
+  const requestId = Math.random().toString(36).substring(7);
+  
+  // Log test request
+  console.log(`🧪 [${requestId}] TEST ENDPOINT HIT:`, {
     url: req.url,
     method: req.method,
     headers: Object.fromEntries(req.headers.entries()),
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    handler: 'unipile-webhook-test'
   });
 
+  // Return success response
   return NextResponse.json({
-    status: 'ok',
+    status: 'success',
     message: 'Webhook test endpoint is working',
+    requestId,
     timestamp: new Date().toISOString()
   });
 }
 
 // Test endpoint to simulate a webhook
 export async function POST(req: Request) {
-  console.log('🧪 Test webhook received:', {
+  const requestId = Math.random().toString(36).substring(7);
+  
+  // Log test request
+  console.log(`🧪 [${requestId}] TEST WEBHOOK SIMULATION:`, {
     url: req.url,
     method: req.method,
     headers: Object.fromEntries(req.headers.entries()),
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    handler: 'unipile-webhook-test'
   });
 
-  let body;
   try {
-    body = await req.json();
-    console.log('🧪 Test webhook body:', body);
+    // Read and log request body
+    const rawBody = await req.text();
+    console.log(`🧪 [${requestId}] TEST WEBHOOK BODY:`, {
+      body: rawBody,
+      timestamp: new Date().toISOString()
+    });
+
+    // Return success response
+    return NextResponse.json({
+      status: 'success',
+      message: 'Test webhook received successfully',
+      requestId,
+      timestamp: new Date().toISOString(),
+      receivedBody: rawBody
+    });
   } catch (error) {
-    console.error('🧪 Error parsing test webhook body:', error);
+    console.error(`❌ [${requestId}] TEST WEBHOOK ERROR:`, {
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString()
+    });
+
     return NextResponse.json({
       status: 'error',
-      message: 'Invalid JSON body'
-    }, { status: 400 });
+      message: 'Error processing test webhook',
+      requestId,
+      timestamp: new Date().toISOString(),
+      error: error instanceof Error ? error.message : String(error)
+    }, { status: 500 });
   }
-
-  return NextResponse.json({
-    status: 'ok',
-    message: 'Test webhook received successfully',
-    receivedBody: body,
-    timestamp: new Date().toISOString()
-  });
 } 
