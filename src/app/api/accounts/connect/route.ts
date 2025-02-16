@@ -41,6 +41,34 @@ console.log('🌍 Connection configuration:', {
   timestamp: new Date().toISOString()
 });
 
+// Function to create temporary email account
+async function createTemporaryEmailAccount(organizationId: string, requestId: string): Promise<string> {
+  try {
+    const tempAccount = await prisma.emailAccount.create({
+      data: {
+        email: `pending_${requestId}@temp.messagelm.com`,
+        name: `Pending Account ${requestId}`,
+        organizationId,
+        isActive: false
+      }
+    });
+
+    console.log(`✅ [${requestId}] Created temporary email account:`, {
+      id: tempAccount.id,
+      organizationId,
+      timestamp: new Date().toISOString()
+    });
+
+    return tempAccount.id;
+  } catch (error) {
+    console.error(`❌ [${requestId}] Failed to create temporary account:`, {
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString()
+    });
+    throw error;
+  }
+}
+
 export async function POST(request: Request) {
   const requestId = Math.random().toString(36).substring(7);
   console.log(`🔄 [${requestId}] Starting account connection process:`, {
@@ -67,14 +95,14 @@ export async function POST(request: Request) {
     });
 
     if (!session?.user?.organizationId) {
-      console.error(`❌ [${requestId}] Unauthorized - Missing session or organization ID:`, {
+      console.error(`❌ [${requestId}] Unauthorized - Missing organization ID:`, {
         hasSession: !!session,
         hasUser: !!session?.user,
         timestamp: new Date().toISOString()
       });
       return NextResponse.json({ 
         error: 'Unauthorized', 
-        details: !session ? 'No session found' : 'No organization ID found'
+        details: 'No organization ID found'
       }, { status: 401 });
     }
 
@@ -86,7 +114,10 @@ export async function POST(request: Request) {
       );
     }
 
-    // Format expiration date exactly as required: YYYY-MM-DDTHH:MM:SS.sssZ
+    // Create temporary email account
+    const tempAccountId = await createTemporaryEmailAccount(session.user.organizationId, requestId);
+
+    // Format expiration date
     const expiresDate = new Date(Date.now() + 3600000);
     const expiresOn = expiresDate.toISOString();
 
@@ -94,54 +125,38 @@ export async function POST(request: Request) {
     const successUrl = `${APP_URL}/accounts?success=true`;
     const failureUrl = `${APP_URL}/accounts?error=true`;
 
-    console.log(`🔗 [${requestId}] Generated URLs:`, {
-      webhook: WEBHOOK_URL,
-      success: successUrl,
-      failure: failureUrl,
-      oauth: UNIPILE_OAUTH_URL,
-      api: UNIPILE_API_URL,
+    // Encode temporary account ID for tracking
+    const encodedName = `temp_${tempAccountId}`;
+    console.log(`🏢 [${requestId}] Encoded temporary account ID:`, {
+      tempAccountId,
+      encoded: encodedName,
       timestamp: new Date().toISOString()
     });
 
-    // Generate a Unipile hosted auth link
-    const unipileUrl = `${UNIPILE_API_URL}/api/v1/hosted/accounts/link`;
+    // Generate Unipile hosted auth link
     const payload = {
       type: "create",
       providers: "*",
       api_url: UNIPILE_API_URL,
-      oauth_url: UNIPILE_OAUTH_URL,  // Add OAuth URL without port
+      oauth_url: UNIPILE_OAUTH_URL,
       expiresOn,
       notify_url: WEBHOOK_URL,
-      name: session.user.organizationId,
+      name: encodedName,
       success_redirect_url: successUrl,
       failure_redirect_url: failureUrl,
       disabled_options: ["autoproxy"]
     };
 
-    console.log(`📤 [${requestId}] Requesting Unipile auth link:`, { 
-      url: unipileUrl, 
+    console.log(`📤 [${requestId}] Requesting Unipile auth link:`, {
+      url: `${UNIPILE_API_URL}/api/v1/hosted/accounts/link`,
       payload: {
         ...payload,
-        // Redact sensitive data in logs
-        name: '[REDACTED]',
+        name: '[REDACTED]'
       },
       timestamp: new Date().toISOString()
     });
 
-    // Log the exact webhook URL being registered
-    console.log(`🎯 [${requestId}] REGISTERING WEBHOOK URL:`, {
-      url: WEBHOOK_URL,
-      api_url: UNIPILE_API_URL,
-      oauth_url: UNIPILE_OAUTH_URL,
-      timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV,
-      fullPayload: {
-        ...payload,
-        name: '[REDACTED]'
-      }
-    });
-
-    const response = await fetch(unipileUrl, {
+    const response = await fetch(`${UNIPILE_API_URL}/api/v1/hosted/accounts/link`, {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
@@ -153,7 +168,7 @@ export async function POST(request: Request) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`❌ [${requestId}] Failed to generate Unipile auth link:`, {
+      console.error(`❌ [${requestId}] Failed to generate auth link:`, {
         status: response.status,
         error: errorText,
         timestamp: new Date().toISOString()
@@ -165,26 +180,23 @@ export async function POST(request: Request) {
     }
 
     const data = await response.json();
-    console.log(`✅ [${requestId}] Successfully generated auth link:`, {
-      timestamp: new Date().toISOString(),
-      hasUrl: !!data.url
+    console.log(`✅ [${requestId}] Generated auth link:`, {
+      hasUrl: !!data.url,
+      tempAccountId,
+      timestamp: new Date().toISOString()
     });
 
-    return NextResponse.json(data);
+    return NextResponse.json({
+      ...data,
+      tempAccountId
+    });
   } catch (error) {
-    console.error(`❌ [${requestId}] Error generating auth link:`, {
-      error: error instanceof Error ? {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
-      } : String(error),
+    console.error(`❌ [${requestId}] Error:`, {
+      error: error instanceof Error ? error.message : String(error),
       timestamp: new Date().toISOString()
     });
     return NextResponse.json(
-      { 
-        error: 'Internal server error', 
-        details: error instanceof Error ? error.message : String(error)
-      },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }
