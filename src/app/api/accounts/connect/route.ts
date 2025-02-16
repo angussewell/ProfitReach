@@ -8,10 +8,30 @@ const UNIPILE_DSN = process.env.UNIPILE_DSN || 'api4.unipile.com:13465';
 const UNIPILE_API_KEY = process.env.UNIPILE_API_KEY;
 
 export async function POST(request: Request) {
+  console.log('Starting account connection process');
+  
   try {
+    // Log request details
+    console.log('Request details:', {
+      headers: Object.fromEntries(request.headers.entries()),
+      cookies: request.headers.get('cookie'),
+      url: request.url
+    });
+
     const session = await getServerSession(authOptions);
+    console.log('Session data:', {
+      hasSession: !!session,
+      hasUser: !!session?.user,
+      organizationId: session?.user?.organizationId,
+      email: session?.user?.email
+    });
+
     if (!session?.user?.organizationId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      console.error('Unauthorized - Missing session or organization ID');
+      return NextResponse.json({ 
+        error: 'Unauthorized', 
+        details: !session ? 'No session found' : 'No organization ID found'
+      }, { status: 401 });
     }
 
     if (!UNIPILE_API_KEY) {
@@ -32,18 +52,29 @@ export async function POST(request: Request) {
       );
     }
 
+    // Ensure we're using a public URL for webhooks in development
+    const webhookUrl = process.env.NODE_ENV === 'development' 
+      ? process.env.NGROK_URL || baseUrl 
+      : baseUrl;
+
+    console.log('Using webhook URL:', {
+      baseUrl,
+      webhookUrl,
+      environment: process.env.NODE_ENV
+    });
+
     // Format expiration date exactly as required: YYYY-MM-DDTHH:MM:SS.sssZ
     const expiresDate = new Date(Date.now() + 3600000);
-    const expiresOn = expiresDate.toISOString(); // This gives us the exact format they want
+    const expiresOn = expiresDate.toISOString();
 
     // Generate a Unipile hosted auth link
     const unipileUrl = `https://${UNIPILE_DSN}/api/v1/hosted/accounts/link`;
     const payload = {
       type: "create",
-      providers: "*", // Use "*" instead of array
-      api_url: `https://${UNIPILE_DSN}`, // Include full URL
+      providers: "*",
+      api_url: `https://${UNIPILE_DSN}`,
       expiresOn,
-      notify_url: `${baseUrl}/api/webhooks/unipile`,
+      notify_url: `${webhookUrl}/api/webhooks/unipile`,
       name: session.user.organizationId,
       success_redirect_url: `${baseUrl}/accounts?success=true`,
       failure_redirect_url: `${baseUrl}/accounts?error=true`,
@@ -89,9 +120,18 @@ export async function POST(request: Request) {
 
     return NextResponse.json(data);
   } catch (error) {
-    console.error('Error generating auth link:', error);
+    console.error('Error generating auth link:', {
+      error: error instanceof Error ? {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      } : String(error)
+    });
     return NextResponse.json(
-      { error: 'Internal server error', details: error instanceof Error ? error.message : String(error) },
+      { 
+        error: 'Internal server error', 
+        details: error instanceof Error ? error.message : String(error)
+      },
       { status: 500 }
     );
   }

@@ -6,6 +6,7 @@ import { z } from 'zod';
 import type { EmailAccount } from '@prisma/client';
 import { UnipileClient } from '@/lib/unipile';
 import { updateAccountSubscriptionQuantity } from '@/lib/stripe';
+import { Prisma } from '@prisma/client';
 
 // Schema for account updates
 const accountUpdateSchema = z.object({
@@ -17,19 +18,35 @@ export async function PUT(
   request: Request,
   { params }: { params: { id: string } }
 ) {
+  const startTime = Date.now();
+  let requestBody;
+  let validationResult;
+  let existingAccount;
+  
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.organizationId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await request.json();
+    requestBody = await request.json();
+    
+    console.log('Updating email account:', {
+      accountId: params.id,
+      body: requestBody,
+      organizationId: session.user.organizationId,
+      timestamp: new Date().toISOString()
+    });
     
     // Validate request body
-    const validationResult = accountUpdateSchema.safeParse(body);
+    validationResult = accountUpdateSchema.safeParse(requestBody);
     if (!validationResult.success) {
       return NextResponse.json(
-        { error: 'Invalid data', details: validationResult.error.errors },
+        { 
+          error: 'Invalid data', 
+          details: validationResult.error.errors,
+          timestamp: new Date().toISOString()
+        },
         { status: 400 }
       );
     }
@@ -37,28 +54,47 @@ export async function PUT(
     const data = validationResult.data;
 
     // Check if email account exists and belongs to the organization
-    const existingAccount = await prisma.emailAccount.findFirst({
+    existingAccount = await prisma.emailAccount.findFirst({
       where: {
         id: params.id,
         organizationId: session.user.organizationId,
       },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        isActive: true,
+        organizationId: true,
+        unipileAccountId: true
+      }
     });
 
     if (!existingAccount) {
       return NextResponse.json(
-        { error: 'Email account not found' },
+        { 
+          error: 'Email account not found',
+          timestamp: new Date().toISOString()
+        },
         { status: 404 }
       );
     }
 
-    // Update the account with all provided fields
+    // Update the account with only the specified fields
     const emailAccount = await prisma.emailAccount.update({
       where: { id: params.id },
       data: {
         name: data.name,
-        ...(data.isActive !== undefined && { isActive: data.isActive }),
-        updatedAt: new Date()
+        ...(data.isActive !== undefined && { isActive: data.isActive })
       },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        unipileAccountId: true,
+        createdAt: true,
+        updatedAt: true,
+        isActive: true
+      }
     });
 
     // If isActive status changed, update subscription quantity
@@ -66,11 +102,56 @@ export async function PUT(
       await updateAccountSubscriptionQuantity(session.user.organizationId);
     }
 
+    const duration = Date.now() - startTime;
+    console.log('Email account updated successfully:', {
+      accountId: params.id,
+      duration,
+      timestamp: new Date().toISOString()
+    });
+
     return NextResponse.json(emailAccount);
   } catch (error) {
-    console.error('Error updating email account:', error);
+    const duration = Date.now() - startTime;
+    console.error('Error updating email account:', {
+      error: error instanceof Error ? {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+        code: error instanceof Prisma.PrismaClientKnownRequestError ? error.code : undefined,
+        meta: error instanceof Prisma.PrismaClientKnownRequestError ? error.meta : undefined
+      } : String(error),
+      params,
+      requestBody,
+      validationResult,
+      existingAccount: existingAccount ? {
+        id: existingAccount.id,
+        name: existingAccount.name,
+        isActive: existingAccount.isActive
+      } : null,
+      duration,
+      timestamp: new Date().toISOString()
+    });
+
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      const errorMessage = error.code === 'P2002' ? 'This email account already exists' :
+                          error.code === 'P2025' ? 'Email account not found' :
+                          error.code === 'P2003' ? 'Operation failed due to related records' :
+                          `Database error: ${error.message}`;
+      
+      return NextResponse.json(
+        { 
+          error: errorMessage,
+          code: error.code,
+          meta: error.meta
+        },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json(
-      { error: 'Failed to update email account' },
+      { 
+        error: error instanceof Error ? error.message : 'Failed to update email account'
+      },
       { status: 500 }
     );
   }
@@ -164,7 +245,7 @@ export async function DELETE(
     });
     
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to delete email account' },
+      { error: 'Failed to delete account' },
       { status: 500 }
     );
   }

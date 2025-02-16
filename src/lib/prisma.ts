@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, Prisma } from '@prisma/client'
 
 // PrismaClient is attached to the `global` object in development to prevent
 // exhausting your database connection limit.
@@ -6,41 +6,88 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
 }
 
-// Add connection validation function
-async function validateConnection(prisma: PrismaClient) {
+const MAX_TRANSACTION_TIMEOUT = 30000; // 30 seconds
+const MAX_CONNECTION_TIMEOUT = 20000; // 20 seconds
+const MAX_QUERY_TIMEOUT = 30000; // 30 seconds
+
+// Health check function
+const healthCheck = async (prisma: PrismaClient) => {
   try {
     await prisma.$queryRaw`SELECT 1`
-    console.log('Database connection successful')
     return true
   } catch (error) {
-    console.error('Database connection failed:', error)
+    console.error('Health check failed:', {
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString()
+    })
     return false
   }
 }
 
-// Initialize Prisma Client with immediate validation
-async function initializePrismaClient(): Promise<PrismaClient> {
-  const client = new PrismaClient({
-    log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-    datasources: {
-      db: {
-        url: process.env.DATABASE_URL,
-      },
+const prismaClientOptions: Prisma.PrismaClientOptions = {
+  log: process.env.NODE_ENV === 'development' 
+    ? [
+        { level: 'query', emit: 'event' },
+        { level: 'error', emit: 'event' },
+        { level: 'warn', emit: 'event' },
+        { level: 'info', emit: 'event' }
+      ]
+    : [{ level: 'error', emit: 'event' }],
+  datasources: {
+    db: {
+      url: process.env.DATABASE_URL,
     },
-  })
+  },
+}
 
-  // Validate connection immediately
-  const isValid = await validateConnection(client)
-  if (!isValid) {
-    throw new Error('Failed to establish database connection')
+// Initialize Prisma Client with enhanced error handling
+function initializePrismaClient(): PrismaClient {
+  const client = new PrismaClient(prismaClientOptions)
+
+  // Log all database events in development
+  if (process.env.NODE_ENV === 'development') {
+    client.$on('query', (e: Prisma.QueryEvent) => {
+      console.log('Query: ' + e.query)
+      console.log('Duration: ' + e.duration + 'ms')
+    })
+    
+    client.$on('error', (e: Prisma.LogEvent) => {
+      console.error('Prisma Error:', e)
+    })
   }
 
-  // Add middleware for operation retries
+  // Health check middleware with improved error handling
+  client.$use(async (params, next) => {
+    try {
+      if (!await healthCheck(client)) {
+        console.log('Attempting to recover from stale connection...')
+        await client.$disconnect()
+        await client.$connect()
+      }
+      return next(params)
+    } catch (error) {
+      console.error('Middleware error:', {
+        error: error instanceof Error ? {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        } : String(error),
+        params: {
+          model: params.model,
+          operation: params.action,
+        },
+        timestamp: new Date().toISOString()
+      })
+      throw error
+    }
+  })
+
+  // Enhanced retry middleware with exponential backoff
   client.$use(async (params: any, next: any) => {
     const startTime = Date.now()
     let attempts = 0
-    const maxAttempts = 3
-    const backoffMs = 1000
+    const maxAttempts = 5
+    const baseBackoffMs = 1000
 
     while (attempts < maxAttempts) {
       try {
@@ -48,17 +95,43 @@ async function initializePrismaClient(): Promise<PrismaClient> {
         const duration = Date.now() - startTime
         
         if (process.env.NODE_ENV === 'development') {
-          console.log(`Database operation completed in ${duration}ms`)
+          console.log('Database operation completed:', {
+            duration,
+            model: params.model,
+            operation: params.action
+          })
         }
         
         return result
       } catch (error: any) {
-        console.error(`Database operation failed (attempt ${attempts + 1}/${maxAttempts}):`, error)
         attempts++
+        
+        // Detailed error logging
+        console.error('Database operation failed:', {
+          attempt: attempts,
+          maxAttempts,
+          error: {
+            message: error.message,
+            code: error.code,
+            meta: error.meta,
+            stack: error.stack
+          },
+          params: {
+            model: params.model,
+            operation: params.action,
+          },
+          duration: Date.now() - startTime,
+          timestamp: new Date().toISOString()
+        })
+
         if (attempts === maxAttempts) {
           throw error
         }
-        await new Promise(resolve => setTimeout(resolve, backoffMs * attempts))
+
+        // Exponential backoff with jitter
+        const jitter = Math.random() * 1000
+        const backoffMs = baseBackoffMs * Math.pow(2, attempts - 1) + jitter
+        await new Promise(resolve => setTimeout(resolve, backoffMs))
       }
     }
   })
@@ -66,46 +139,42 @@ async function initializePrismaClient(): Promise<PrismaClient> {
   return client
 }
 
-// Initialize with immediate validation
+// Initialize with proper singleton pattern
 let prisma: PrismaClient
 
 if (process.env.NODE_ENV === 'production') {
-  // In production, create a new client instance
-  prisma = new PrismaClient({
-    log: ['error'],
-    datasources: {
-      db: {
-        url: process.env.DATABASE_URL,
-      },
-    },
-  })
+  prisma = initializePrismaClient()
 } else {
   // In development, reuse the existing client
   if (!globalForPrisma.prisma) {
-    globalForPrisma.prisma = new PrismaClient({
-      log: ['query', 'error', 'warn'],
-      datasources: {
-        db: {
-          url: process.env.DATABASE_URL,
-        },
-      },
-    })
+    globalForPrisma.prisma = initializePrismaClient()
   }
   prisma = globalForPrisma.prisma
 }
 
-// Validate connection on first use
-validateConnection(prisma).catch(error => {
+// Validate initial connection
+healthCheck(prisma).catch(error => {
   console.error('Initial database connection validation failed:', error)
   process.exit(1)
 })
 
-// Ensure connections are closed in production
-if (process.env.NODE_ENV === 'production') {
-  process.on('beforeExit', async () => {
-    await prisma.$disconnect()
-  })
-}
+// Ensure connections are properly managed
+process.on('beforeExit', async () => {
+  await prisma.$disconnect()
+})
+
+// Handle unexpected errors
+process.on('uncaughtException', async (error) => {
+  console.error('Uncaught exception:', error)
+  await prisma.$disconnect()
+  process.exit(1)
+})
+
+process.on('unhandledRejection', async (error) => {
+  console.error('Unhandled rejection:', error)
+  await prisma.$disconnect()
+  process.exit(1)
+})
 
 export { prisma }
 export default prisma 

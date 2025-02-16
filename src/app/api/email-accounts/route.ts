@@ -23,6 +23,15 @@ export async function GET(request: Request) {
         where: {
           organizationId: session.user.organizationId
         },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          unipileAccountId: true,
+          createdAt: true,
+          updatedAt: true,
+          isActive: true
+        },
         orderBy: {
           createdAt: 'desc'
         }

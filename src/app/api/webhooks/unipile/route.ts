@@ -98,72 +98,106 @@ async function getUnipileAccountDetails(accountId: string): Promise<UnipileAccou
 }
 
 export async function POST(req: Request) {
+  const startTime = Date.now();
+  let webhookData;
+  let accountDetails;
+  
   try {
     const body = await req.json();
-    const organizationId = headers().get('x-organization-id');
-
-    if (!organizationId) {
-      return new NextResponse('Missing organization ID', { status: 400 });
-    }
-
-    const organization = await prisma.organization.findUnique({
-      where: { id: organizationId },
+    console.log('Received Unipile webhook:', {
+      body,
+      headers: Object.fromEntries(req.headers.entries()),
+      url: req.url,
+      method: req.method,
+      timestamp: new Date().toISOString()
     });
 
-    if (!organization) {
-      return new NextResponse('Organization not found', { status: 404 });
+    // Validate webhook data
+    const validationResult = UnipileAccountWebhook.safeParse(body);
+    if (!validationResult.success) {
+      console.error('Invalid webhook data:', {
+        error: validationResult.error,
+        body,
+        timestamp: new Date().toISOString()
+      });
+      return new NextResponse('Invalid webhook data', { status: 400 });
     }
 
-    // Create webhook log
-    const webhookLog = await prisma.webhookLog.create({
-      data: {
-        accountId: body.accountId || 'unknown',
-        organizationId,
-        status: 'success',
-        scenarioName: body.scenarioName || 'Unknown',
-        contactEmail: body.contactEmail || 'Unknown',
-        contactName: body.contactName || 'Unknown',
-        company: body.company || 'Unknown',
-        requestBody: body,
+    webhookData = validationResult.data;
+    console.log('Validated webhook data:', webhookData);
+
+    // Get account details from Unipile
+    accountDetails = await getUnipileAccountDetails(webhookData.account_id);
+    console.log('Account details:', accountDetails);
+
+    // Only process email accounts
+    if (!accountDetails.connection_params.mail) {
+      console.log('Not an email account, skipping:', {
+        accountId: webhookData.account_id,
+        type: accountDetails.type,
+        timestamp: new Date().toISOString()
+      });
+      return new NextResponse('Not an email account', { status: 200 });
+    }
+
+    const email = accountDetails.connection_params.mail.username;
+    const organizationId = webhookData.name; // We pass the organizationId in the name field
+
+    console.log('Creating/updating email account:', {
+      email,
+      organizationId,
+      unipileAccountId: webhookData.account_id,
+      timestamp: new Date().toISOString()
+    });
+
+    // Create or update the email account
+    const emailAccount = await prisma.emailAccount.upsert({
+      where: {
+        unipileAccountId: webhookData.account_id
       },
+      create: {
+        email,
+        name: email, // Use email as initial name
+        organizationId,
+        unipileAccountId: webhookData.account_id,
+        isActive: true,
+        updatedAt: new Date(),
+        outgoingServer: '',
+        outgoingServerPort: 0,
+        password: ''
+      },
+      update: {
+        email,
+        updatedAt: new Date()
+      }
     });
 
-    // If the scenario was successful and the organization is on the at_cost plan,
-    // deduct a credit and report usage
-    if (
-      webhookLog.status === 'success' &&
-      organization.billingPlan === 'at_cost'
-    ) {
-      try {
-        await prisma.$transaction(async (tx) => {
-          await updateCreditBalance(organizationId, -1, 'Scenario run', webhookLog.id);
-          await reportScenarioUsage(organizationId);
-        });
-      } catch (error) {
-        // If there are insufficient credits or no active subscription,
-        // update the webhook log status
-        await prisma.webhookLog.update({
-          where: { id: webhookLog.id },
-          data: { status: 'blocked' },
-        });
+    const duration = Date.now() - startTime;
+    console.log('Email account created/updated successfully:', {
+      id: emailAccount.id,
+      email: emailAccount.email,
+      organizationId: emailAccount.organizationId,
+      duration,
+      timestamp: new Date().toISOString()
+    });
 
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        console.error('Error processing scenario:', {
-          error: errorMessage,
-          organizationId,
-          webhookLogId: webhookLog.id,
-        });
-
-        return new NextResponse(
-          'Insufficient credits or no active subscription',
-          { status: 402 }
-        );
-      }
-    }
-
-    return new NextResponse('Webhook processed', { status: 200 });
+    return new NextResponse('Success', { status: 200 });
   } catch (error) {
-    console.error('Error processing webhook:', error);
-    return new NextResponse('Internal error', { status: 500 });
+    const duration = Date.now() - startTime;
+    console.error('Error processing Unipile webhook:', {
+      error: error instanceof Error ? {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      } : String(error),
+      webhookData,
+      accountDetails,
+      duration,
+      timestamp: new Date().toISOString()
+    });
+    return new NextResponse(
+      'Internal server error',
+      { status: 500 }
+    );
   }
 } 

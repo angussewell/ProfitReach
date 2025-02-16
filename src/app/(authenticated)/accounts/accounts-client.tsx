@@ -117,11 +117,14 @@ export function AccountsClient() {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify({ name: accountName.trim() }),
+        body: JSON.stringify({ 
+          name: accountName.trim()
+        }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update account name');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update account name');
       }
 
       toast.success('Account name updated successfully');
@@ -129,7 +132,7 @@ export function AccountsClient() {
       fetchAccounts();
     } catch (error) {
       console.error('Error updating account name:', error);
-      toast.error('Failed to update account name');
+      toast.error(error instanceof Error ? error.message : 'Failed to update account name');
     }
   };
 
@@ -149,7 +152,7 @@ export function AccountsClient() {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify({ name: account.name, isActive: !account.isActive }),
+        body: JSON.stringify({ isActive: !account.isActive }),
       });
 
       if (!response.ok) {
@@ -192,24 +195,66 @@ export function AccountsClient() {
   const handleConnect = async () => {
     try {
       const baseUrl = window.location.origin;
+      
+      // First verify the session
+      console.log('Verifying session...');
+      const sessionResponse = await fetch(`${baseUrl}/api/auth/session`, {
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+      
+      if (!sessionResponse.ok) {
+        console.error('Session verification failed:', {
+          status: sessionResponse.status,
+          statusText: sessionResponse.statusText
+        });
+        throw new Error('Authentication failed. Please try logging in again.');
+      }
+      
+      const session = await sessionResponse.json();
+      console.log('Session verified:', {
+        hasSession: !!session,
+        hasUser: !!session?.user,
+        organizationId: session?.user?.organizationId
+      });
+
+      if (!session?.user?.organizationId) {
+        throw new Error('No organization found. Please contact support.');
+      }
+      
+      // Now try to get the connection link
+      console.log('Requesting connection link...');
       const response = await fetch(`${baseUrl}/api/accounts/connect`, {
         method: 'POST',
-        credentials: 'include'
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
       });
       
       if (!response.ok) {
-        throw new Error('Failed to generate connection link');
+        const errorData = await response.json();
+        console.error('Failed to get connection link:', {
+          status: response.status,
+          error: errorData
+        });
+        throw new Error(errorData.details || errorData.error || 'Failed to generate connection link');
       }
       
       const data = await response.json();
+      console.log('Got connection link:', { hasUrl: !!data.url });
+
       if (data.url) {
         window.location.href = data.url;
       } else {
-        throw new Error('Invalid response from server');
+        throw new Error('Invalid response from server - no URL returned');
       }
     } catch (error) {
       console.error('Error connecting account:', error);
-      toast.error('Failed to start account connection');
+      toast.error(error instanceof Error ? error.message : 'Failed to start account connection');
     }
   };
 

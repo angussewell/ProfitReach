@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
-import { Mail360Client } from '@/lib/mail360';
+import { UnipileClient } from '@/lib/unipile';
 import { z } from 'zod';
 
 // Schema for reply request validation
@@ -19,28 +19,6 @@ const replyRequestSchema = z.object({
 
 export async function POST(request: Request) {
   try {
-    // Check Mail360 environment variables first
-    const requiredEnvVars = {
-      'MAIL360_CLIENT_ID': process.env.MAIL360_CLIENT_ID,
-      'MAIL360_CLIENT_SECRET': process.env.MAIL360_CLIENT_SECRET,
-      'MAIL360_REFRESH_TOKEN': process.env.MAIL360_REFRESH_TOKEN,
-    };
-
-    const missingEnvVars = Object.entries(requiredEnvVars)
-      .filter(([_, value]) => !value)
-      .map(([key]) => key);
-
-    if (missingEnvVars.length > 0) {
-      console.error('Missing required Mail360 environment variables:', missingEnvVars);
-      return NextResponse.json(
-        { 
-          error: 'Mail360 configuration error',
-          details: `Missing environment variables: ${missingEnvVars.join(', ')}`
-        },
-        { status: 500 }
-      );
-    }
-
     const session = await getServerSession(authOptions);
     if (!session?.user?.organizationId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -107,19 +85,19 @@ export async function POST(request: Request) {
       );
     }
 
-    // Send reply via Mail360
-    const mail360Client = new Mail360Client();
-    const response = await mail360Client.sendReply({
-      accountKey: emailAccount.unipileAccountId,
+    // Send reply via Unipile
+    const unipileClient = new UnipileClient();
+    const response = await unipileClient.sendReply({
+      accountId: emailAccount.unipileAccountId,
       messageId: originalMessage.messageId,
-      fromAddress: emailAccount.email,
+      from: emailAccount.email,
       content: formatEmailContent(validatedData.content, originalMessage),
       subject: formatReplySubject(originalMessage.subject || 'Re: No Subject'),
-      action: validatedData.action,
-      toAddress: validatedData.toAddress || originalMessage.sender,
-      ccAddress: validatedData.ccAddress,
-      bccAddress: validatedData.bccAddress,
-      mailFormat: 'html' as const,
+      replyType: validatedData.action,
+      to: validatedData.toAddress || originalMessage.sender,
+      cc: validatedData.ccAddress,
+      bcc: validatedData.bccAddress,
+      format: 'html',
     });
 
     console.log('Reply sent successfully:', {
@@ -136,7 +114,7 @@ export async function POST(request: Request) {
         emailAccountId: emailAccount.id,
         subject: response.subject,
         sender: emailAccount.email,
-        recipientEmail: response.toAddress,
+        recipientEmail: response.to,
         content: validatedData.content,
         messageType: 'REAL_REPLY',
         receivedAt: new Date(),
@@ -150,35 +128,13 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({
-      success: true,
-      messageId: response.messageId,
+      message: 'Reply sent successfully',
+      messageId: response.messageId
     });
   } catch (error) {
-    console.error('Error sending reply:', {
-      error: error instanceof Error ? {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
-      } : error,
-      type: typeof error
-    });
-
-    // Determine if it's a validation error
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        {
-          error: 'Invalid request data',
-          details: error.errors,
-        },
-        { status: 400 }
-      );
-    }
-
+    console.error('Error sending reply:', error);
     return NextResponse.json(
-      {
-        error: 'Failed to send reply',
-        details: error instanceof Error ? error.message : String(error),
-      },
+      { error: 'Failed to send reply' },
       { status: 500 }
     );
   }

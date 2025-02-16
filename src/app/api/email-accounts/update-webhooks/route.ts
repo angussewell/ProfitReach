@@ -1,21 +1,23 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { Mail360Client } from '@/lib/mail360';
+import { UnipileClient } from '@/lib/unipile';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
-    // Get all email accounts with Mail360 keys
+    // Get all email accounts with Unipile IDs
     const emailAccounts = await prisma.emailAccount.findMany({
       where: {
-        unipileAccountId: { not: null }
+        unipileAccountId: {
+          not: '',
+        }
       }
     });
 
-    console.log(`Found ${emailAccounts.length} Mail360 accounts to update`);
+    console.log(`Found ${emailAccounts.length} email accounts to update`);
 
-    const mail360Client = new Mail360Client();
+    const unipileClient = new UnipileClient();
     const results = {
       success: 0,
       failed: 0,
@@ -27,7 +29,7 @@ export async function POST(request: Request) {
       try {
         if (!account.unipileAccountId) continue;
         
-        await mail360Client.updateAccountSettings(account.unipileAccountId);
+        await unipileClient.setWebhookUrl(account.unipileAccountId, 'https://app.messagelm.com/api/webhooks/unipile');
         results.success++;
         
         console.log(`Updated webhook URL for account: ${account.email}`);

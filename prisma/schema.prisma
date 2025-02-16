@@ -268,10 +268,7 @@ model EmailAccount {
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
   isActive         Boolean        @default(true)
-  unipileAccountId String         @unique
-  outgoingServer   String
-  outgoingServerPort Int
-  password         String
+  unipileAccountId String?        @unique
   organization     Organization   @relation(fields: [organizationId], references: [id])
   emailMessages    EmailMessage[]
 
