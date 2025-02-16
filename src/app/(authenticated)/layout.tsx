@@ -1,25 +1,28 @@
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-export const fetchCache = 'force-no-store';
+'use client';
 
-import { headers } from 'next/headers';
-import { redirect } from 'next/navigation';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 import Sidebar from '@/components/sidebar/index';
 
-export default async function AuthenticatedLayout({
+export default function AuthenticatedLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const session = await getServerSession(authOptions);
-  
-  // Redirect to login if no session
-  if (!session) {
-    const headersList = headers();
-    const pathname = headersList.get('x-invoke-path') || '';
-    redirect(`/auth/login?callbackUrl=${encodeURIComponent(pathname)}`);
+  const { status } = useSession();
+  const router = useRouter();
+
+  useEffect(() => {
+    // Client-side redirect if no session
+    if (status === 'unauthenticated') {
+      router.push(`/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`);
+    }
+  }, [status, router]);
+
+  // Show nothing while loading or redirecting
+  if (status !== 'authenticated') {
+    return null;
   }
 
   return (

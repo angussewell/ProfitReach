@@ -8,26 +8,26 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 
-// Add environment validation at the top of the file
-if (!process.env.NEXTAUTH_SECRET) {
-  console.error('NEXTAUTH_SECRET is not set');
-  throw new Error('NEXTAUTH_SECRET must be set');
-}
+// Validate environment variables only in runtime
+const validateEnv = () => {
+  if (!process.env.NEXTAUTH_SECRET) {
+    throw new Error('NEXTAUTH_SECRET must be set');
+  }
+  if (!process.env.NEXTAUTH_URL) {
+    throw new Error('NEXTAUTH_URL must be set');
+  }
+};
 
-if (!process.env.NEXTAUTH_URL) {
-  console.error('NEXTAUTH_URL is not set');
-  throw new Error('NEXTAUTH_URL must be set');
-}
-
-// Determine if we're in development
-const isDevelopment = process.env.NODE_ENV === 'development';
-
-console.log('NextAuth Environment:', {
-  NEXTAUTH_URL: process.env.NEXTAUTH_URL,
-  hasSecret: !!process.env.NEXTAUTH_SECRET,
-  cookieDomain: isDevelopment ? 'none' : 'app.messagelm.com',
-  isDevelopment
-});
+// Only log in runtime
+const logEnvironment = () => {
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  console.log('NextAuth Environment:', {
+    NEXTAUTH_URL: process.env.NEXTAUTH_URL,
+    hasSecret: !!process.env.NEXTAUTH_SECRET,
+    cookieDomain: isDevelopment ? 'none' : 'app.messagelm.com',
+    isDevelopment
+  });
+};
 
 declare module 'next-auth' {
   interface Session {
@@ -59,6 +59,8 @@ declare module 'next-auth/jwt' {
     organizations?: { id: string; name: string }[];
   }
 }
+
+const isDevelopment = process.env.NODE_ENV === 'development';
 
 export const authOptions: AuthOptions = {
   providers: [
@@ -274,6 +276,12 @@ export const authOptions: AuthOptions = {
     }
   }
 };
+
+// Only validate and log during runtime
+if (process.env.NODE_ENV !== 'test') {
+  validateEnv();
+  logEnvironment();
+}
 
 const handler = NextAuth(authOptions);
 export { handler as GET, handler as POST }; 
