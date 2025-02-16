@@ -183,6 +183,41 @@ export async function POST(req: NextRequest) {
           details: 'Please add a payment method in billing settings to use the at-cost plan'
         }, { status: 402 });
       }
+
+      // Check credit balance
+      if (organization.creditBalance < 1) {
+        // Create webhook log for blocked request
+        await prisma.webhookLog.create({
+          data: {
+            status: 'blocked',
+            scenarioName,
+            contactEmail: contactData.email || 'Unknown',
+            contactName: contactData.name || 'Unknown',
+            company: contactData.company || 'Unknown',
+            requestBody: contactData as Record<string, any>,
+            responseBody: { 
+              error: 'Insufficient credits',
+              details: 'Please purchase more credits to continue sending messages'
+            } as Record<string, any>,
+            accountId: userWebhookUrl,
+            organization: {
+              connect: {
+                id: organization.id
+              }
+            },
+            GHLIntegration: {
+              connect: {
+                id: userWebhookUrl
+              }
+            }
+          }
+        });
+
+        return Response.json({ 
+          error: 'Insufficient credits',
+          details: 'Please purchase more credits to continue sending messages'
+        }, { status: 402 });
+      }
     }
 
     // Get scenario with filters and prompts
