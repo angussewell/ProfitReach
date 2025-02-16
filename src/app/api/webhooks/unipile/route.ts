@@ -107,6 +107,16 @@ async function saveEmailAccount(email: string, organizationId: string, unipileAc
   console.log('📧 Saving email account:', { email, organizationId, unipileAccountId });
   
   try {
+    // First check if account exists
+    const existing = await prisma.emailAccount.findUnique({
+      where: { unipileAccountId }
+    });
+    console.log('📧 Existing account check:', { 
+      exists: !!existing,
+      id: existing?.id,
+      email: existing?.email 
+    });
+
     const result = await prisma.emailAccount.upsert({
       where: { unipileAccountId },
       create: {
@@ -121,11 +131,25 @@ async function saveEmailAccount(email: string, organizationId: string, unipileAc
         updatedAt: new Date()
       }
     });
-    console.log('📧 Email account saved successfully:', result);
+    
+    console.log('📧 Email account saved successfully:', {
+      id: result.id,
+      email: result.email,
+      unipileAccountId: result.unipileAccountId,
+      organizationId: result.organizationId,
+      isActive: result.isActive,
+      createdAt: result.createdAt,
+      updatedAt: result.updatedAt
+    });
+    
     return result;
   } catch (error) {
     console.error('📧 Error saving email account:', {
-      error: error instanceof Error ? error.message : String(error),
+      error: error instanceof Error ? {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      } : String(error),
       email,
       organizationId,
       unipileAccountId
