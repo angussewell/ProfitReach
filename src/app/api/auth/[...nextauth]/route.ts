@@ -191,95 +191,57 @@ export const authOptions: AuthOptions = {
   callbacks: {
     async jwt({ token, user, trigger, session }) {
       if (user) {
-        console.log('Updating JWT with user data:', {
-          userId: user.id,
-          role: user.role,
-          organizationCount: user.organizations?.length || 0
-        });
+        // Initial sign in
         token.id = user.id;
         token.role = user.role;
         token.organizationId = user.organizationId;
-        token.organizationName = user.organizationName;
-        token.organizations = user.organizations;
-      }
-
-      // Handle organization updates
-      if (trigger === 'update' && session?.organizationId) {
-        // Get the updated organization info
-        const org = await prisma.organization.findUnique({
-          where: { id: session.organizationId },
-          select: { id: true, name: true }
-        });
         
+        // Fetch organizations only once during sign in
+        const organizations = user.role === 'admin'
+          ? await prisma.organization.findMany({
+              orderBy: { name: 'asc' },
+              select: { id: true, name: true }
+            })
+          : await prisma.organization.findMany({
+              where: {
+                users: { some: { id: user.id } }
+              },
+              select: { id: true, name: true }
+            });
+        
+        token.organizations = organizations;
+        
+        if (user.organizationId) {
+          const org = organizations.find(o => o.id === user.organizationId);
+          if (org) {
+            token.organizationName = org.name;
+          }
+        }
+      } else if (trigger === 'update' && session?.organizationId) {
+        // Handle organization switch
+        token.organizationId = session.organizationId;
+        const org = token.organizations?.find(o => o.id === session.organizationId);
         if (org) {
-          token.organizationId = org.id;
           token.organizationName = org.name;
         }
       }
-
+      
       return token;
     },
     async session({ session, token }) {
-      // First verify the user still exists
-      const user = await prisma.user.findUnique({
-        where: { id: token.id },
-        select: { id: true, role: true }
-      });
-
-      if (!user) {
-        console.error('User not found in session callback:', { tokenId: token.id });
-        // Return minimal session without organization data
-        return {
-          ...session,
-          user: {
-            ...session.user,
-            id: token.id,
-            role: token.role,
-            organizationId: undefined,
-            organizationName: undefined,
-            organizations: []
-          }
-        };
+      if (!token?.id) {
+        return session;
       }
 
-      // Get fresh organization data
-      const org = token.organizationId ? await prisma.organization.findUnique({
-        where: { id: token.organizationId },
-        select: { id: true, name: true }
-      }) : null;
-
-      // Get fresh organizations list
-      const organizations = user.role === 'admin'
-        ? await prisma.organization.findMany({
-            orderBy: { name: 'asc' },
-            select: { id: true, name: true }
-          })
-        : await prisma.organization.findMany({
-            where: {
-              users: { some: { id: user.id } }
-            },
-            select: { id: true, name: true }
-          });
-
-      // If current organization doesn't exist and we have other organizations,
-      // use the first available one
-      const currentOrg = org || (organizations.length > 0 ? organizations[0] : null);
-
+      // Use cached data from token instead of querying database
       session.user = {
         ...session.user,
-        id: user.id,
-        role: user.role,
-        organizationId: currentOrg?.id,
-        organizationName: currentOrg?.name,
-        organizations
+        id: token.id,
+        role: token.role,
+        organizationId: token.organizationId,
+        organizationName: token.organizationName,
+        organizations: token.organizations || []
       };
-
-      console.log('Session updated with organizations:', {
-        userId: session.user.id,
-        organizationId: session.user.organizationId,
-        organizationName: session.user.organizationName,
-        organizationCount: organizations.length
-      });
 
       return session;
     }
