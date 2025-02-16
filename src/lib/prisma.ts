@@ -1,10 +1,7 @@
 import { PrismaClient, Prisma } from '@prisma/client'
 
-// PrismaClient is attached to the `global` object in development to prevent
-// exhausting your database connection limit.
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined
-}
+// Prevent multiple instances during build and hot reloads
+const globalForPrisma = globalThis as unknown as { prisma: PrismaClient }
 
 const MAX_TRANSACTION_TIMEOUT = 30000; // 30 seconds
 const MAX_CONNECTION_TIMEOUT = 20000; // 20 seconds
@@ -139,17 +136,15 @@ function initializePrismaClient(): PrismaClient {
   return client
 }
 
-// Initialize with proper singleton pattern
-let prisma: PrismaClient
+// Initialize Prisma Client with minimal logging during build
+const prisma = globalForPrisma.prisma ?? new PrismaClient({
+  log: process.env.NODE_ENV === 'development' 
+    ? ['query', 'error', 'warn'] as Prisma.LogLevel[] 
+    : ['error'] as Prisma.LogLevel[],
+})
 
-if (process.env.NODE_ENV === 'production') {
-  prisma = initializePrismaClient()
-} else {
-  // In development, reuse the existing client
-  if (!globalForPrisma.prisma) {
-    globalForPrisma.prisma = initializePrismaClient()
-  }
-  prisma = globalForPrisma.prisma
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma;
 }
 
 // Validate initial connection

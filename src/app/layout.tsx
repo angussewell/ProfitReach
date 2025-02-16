@@ -3,9 +3,9 @@ import '@fontsource/jetbrains-mono/400.css';
 import '@fontsource/jetbrains-mono/500.css';
 import '@fontsource/jetbrains-mono/600.css';
 import { Inter } from 'next/font/google';
+import { Toaster } from 'react-hot-toast';
 import { Providers } from '@/components/providers';
 import { Toaster as ShadcnToaster } from '@/components/ui/toaster';
-import { Toaster } from 'react-hot-toast';
 import { Metadata, Viewport } from 'next';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -17,9 +17,13 @@ export const viewport: Viewport = {
   themeColor: '#ffffff'
 };
 
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+export const runtime = 'nodejs';
+
 export const metadata: Metadata = {
-  title: 'MessageLM',
-  description: 'AI-powered outbound communication management',
+  title: 'ProfitReach',
+  description: 'Automated outbound communication management with AI-enhanced capabilities',
   icons: {
     icon: '/messagelm-icon.png?v=5',
     apple: '/messagelm-icon.png?v=5'
