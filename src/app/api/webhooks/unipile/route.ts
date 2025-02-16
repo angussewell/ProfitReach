@@ -329,6 +329,66 @@ function extractOrganizationId(name: string): string | null {
   return name.replace('org_', '');
 }
 
+// Function to validate Google OAuth account details
+function validateGoogleOAuthAccount(details: UnipileAccountDetailsData, requestId: string): { 
+  isValid: boolean; 
+  email?: string; 
+  error?: string; 
+} {
+  console.log(`🔍 [${requestId}] Validating Google OAuth account:`, {
+    id: details.id,
+    type: details.type,
+    hasMailParams: !!details.connection_params.mail,
+    timestamp: new Date().toISOString()
+  });
+
+  // For Google OAuth, we expect mail params with email
+  if (!details.connection_params.mail) {
+    console.error(`❌ [${requestId}] Missing mail parameters for Google OAuth account:`, {
+      id: details.id,
+      type: details.type,
+      connection_params: details.connection_params,
+      timestamp: new Date().toISOString()
+    });
+    return { 
+      isValid: false, 
+      error: 'Missing mail parameters for Google OAuth account' 
+    };
+  }
+
+  const email = details.connection_params.mail.email;
+  if (!email) {
+    console.error(`❌ [${requestId}] Missing email for Google OAuth account:`, {
+      id: details.id,
+      type: details.type,
+      mail_params: details.connection_params.mail,
+      timestamp: new Date().toISOString()
+    });
+    return { 
+      isValid: false, 
+      error: 'Missing email for Google OAuth account' 
+    };
+  }
+
+  // Validate email format
+  if (!email.includes('@')) {
+    console.error(`❌ [${requestId}] Invalid email format:`, {
+      id: details.id,
+      email,
+      timestamp: new Date().toISOString()
+    });
+    return { 
+      isValid: false, 
+      error: 'Invalid email format' 
+    };
+  }
+
+  return { 
+    isValid: true, 
+    email 
+  };
+}
+
 // Add test endpoint for webhook verification
 export async function GET(req: Request) {
   const testId = Math.random().toString(36).substring(7);
@@ -405,21 +465,39 @@ export async function POST(req: Request) {
         // Fetch account details from Unipile
         const accountDetails = await getUnipileAccountDetails(account_id);
         
-        // Try to extract organization ID from name field
-        let preferredOrgId = null;
-        if (accountDetails.name?.startsWith('org_')) {
-          preferredOrgId = extractOrganizationId(accountDetails.name);
-          console.log(`🏢 [${requestId}] Extracted organization ID:`, {
-            encoded: accountDetails.name,
-            decoded: preferredOrgId
-          });
-        }
+        // Log full account details for debugging
+        console.log(`📦 [${requestId}] Parsed account details:`, {
+          id: accountDetails.id,
+          type: accountDetails.type,
+          name: accountDetails.name,
+          connection_params: accountDetails.connection_params,
+          timestamp: new Date().toISOString()
+        });
 
-        // Handle email account with fallback
-        if (accountDetails.connection_params.mail?.email) {
+        // Special handling for Google OAuth accounts
+        if (account_type.toUpperCase() === 'GOOGLE_OAUTH') {
+          const validation = validateGoogleOAuthAccount(accountDetails, requestId);
+          if (!validation.isValid) {
+            console.error(`❌ [${requestId}] Google OAuth validation failed:`, {
+              error: validation.error,
+              accountId: account_id,
+              timestamp: new Date().toISOString()
+            });
+            return NextResponse.json({
+              status: 'error',
+              message: validation.error,
+              details: {
+                accountId: account_id,
+                accountType: account_type,
+                validationError: validation.error
+              }
+            }, { status: 400 });
+          }
+
+          // Use validated email
           const emailAccount = await saveEmailAccountWithFallback(
-            accountDetails.connection_params.mail.email,
-            preferredOrgId,
+            validation.email!,
+            accountDetails.name?.startsWith('org_') ? extractOrganizationId(accountDetails.name) : null,
             accountDetails.id,
             requestId
           );
@@ -437,15 +515,44 @@ export async function POST(req: Request) {
           });
         }
 
-        // If we get here, no valid email was found
+        // Handle other account types
+        if (accountDetails.connection_params.mail?.email) {
+          const emailAccount = await saveEmailAccountWithFallback(
+            accountDetails.connection_params.mail.email,
+            accountDetails.name?.startsWith('org_') ? extractOrganizationId(accountDetails.name) : null,
+            accountDetails.id,
+            requestId
+          );
+
+          return NextResponse.json({
+            status: 'success',
+            message: 'Email account created',
+            data: {
+              accountId: emailAccount.id,
+              email: emailAccount.email,
+              organizationId: emailAccount.organizationId,
+              isUnassigned: emailAccount.organizationId === UNASSIGNED_ORG_ID,
+              processingTime: Date.now() - startTime
+            }
+          });
+        }
+
+        // No valid email found
         console.error(`❌ [${requestId}] No valid email found in account details:`, {
           accountId: account_id,
           accountType: account_type,
+          connection_params: accountDetails.connection_params,
           timestamp: new Date().toISOString()
         });
         return NextResponse.json({
           status: 'error',
-          message: 'No valid email found in account details'
+          message: 'No valid email found in account details',
+          details: {
+            accountId: account_id,
+            accountType: account_type,
+            hasMailParams: !!accountDetails.connection_params.mail,
+            timestamp: new Date().toISOString()
+          }
         }, { status: 400 });
       } catch (error) {
         console.error(`❌ [${requestId}] Error processing account creation:`, {
@@ -456,7 +563,12 @@ export async function POST(req: Request) {
         return NextResponse.json({
           status: 'error',
           message: 'Error processing account creation',
-          error: error instanceof Error ? error.message : String(error)
+          error: error instanceof Error ? error.message : String(error),
+          details: {
+            accountId: account_id,
+            accountType: account_type,
+            timestamp: new Date().toISOString()
+          }
         }, { status: 500 });
       }
     }
