@@ -33,13 +33,18 @@ const PUBLIC_API_ROUTES = [
   '/api/email-accounts/update-webhooks'
 ];
 
-const publicPaths = ['/auth/login', '/auth/register'];
+const PUBLIC_PATHS = ['/auth/login', '/auth/register'];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Handle root path redirect
+  if (pathname === '/') {
+    return NextResponse.redirect(new URL('/scenarios', request.url));
+  }
+
   // Check if the path is public
-  if (publicPaths.includes(pathname)) {
+  if (PUBLIC_PATHS.includes(pathname)) {
     return NextResponse.next();
   }
 
@@ -60,10 +65,15 @@ export async function middleware(request: NextRequest) {
     });
 
     // If there's no token and we're not on a public path, redirect to login
-    if (!token && !publicPaths.includes(pathname)) {
+    if (!token && !PUBLIC_PATHS.includes(pathname)) {
       const loginUrl = new URL('/auth/login', request.url);
-      loginUrl.searchParams.set('callbackUrl', pathname);
+      loginUrl.searchParams.set('callbackUrl', encodeURIComponent(pathname));
       return NextResponse.redirect(loginUrl);
+    }
+
+    // Check admin routes
+    if (ADMIN_ROUTES.some(route => pathname.startsWith(route)) && token?.role !== 'admin') {
+      return NextResponse.redirect(new URL('/', request.url));
     }
 
     // Allow the request to proceed
