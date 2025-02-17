@@ -14,21 +14,14 @@ console.log('🚀 Initializing account connection handler:', {
 });
 
 // Configure Unipile URLs based on environment
-const UNIPILE_DSN = process.env.UNIPILE_DSN || 'api4.unipile.com:13465';
+const UNIPILE_BASE_URL = 'https://api4.unipile.com';  // Base URL without port
 const UNIPILE_API_KEY = process.env.UNIPILE_API_KEY;
 
-// Extract DSN parts
-const [dsn, port] = UNIPILE_DSN.split(':');
-const UNIPILE_BASE_URL = `https://${dsn}`;
-const UNIPILE_API_URL = port ? `${UNIPILE_BASE_URL}:${port}` : UNIPILE_BASE_URL;
-
-// Log all URL configurations (safely)
+// Log configuration on module load
 console.log('🌍 Connection configuration:', {
   NODE_ENV: process.env.NODE_ENV,
   NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
-  UNIPILE_DSN: UNIPILE_DSN,
   UNIPILE_BASE_URL,
-  UNIPILE_API_URL,
   hasApiKey: !!UNIPILE_API_KEY,
   timestamp: new Date().toISOString()
 });
@@ -36,7 +29,7 @@ console.log('🌍 Connection configuration:', {
 // Test Unipile connection
 async function testUnipileConnection(requestId: string) {
   try {
-    const response = await fetch(`${UNIPILE_API_URL}/api/v1/accounts`, {
+    const response = await fetch(`${UNIPILE_BASE_URL}/api/v1/accounts`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -73,7 +66,7 @@ console.log('🌍 Connection configuration:', {
   APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   UNIPILE_BASE_DSN,
   UNIPILE_FULL_DSN,
-  UNIPILE_API_URL,
+  UNIPILE_API_URL: UNIPILE_BASE_URL,
   UNIPILE_OAUTH_URL,
   WEBHOOK_URL,
   hasApiKey: !!UNIPILE_API_KEY,
@@ -109,11 +102,14 @@ const validateEnvironment = () => {
 const getEnvironmentUrls = () => {
   const isProduction = process.env.NODE_ENV === 'production';
   const PRODUCTION_URL = 'https://app.messagelm.com';
+  const baseUrl = isProduction ? PRODUCTION_URL : process.env.NEXT_PUBLIC_APP_URL;
   
+  // Ensure URLs don't have trailing slashes
   return {
-    baseUrl: isProduction ? PRODUCTION_URL : process.env.NEXT_PUBLIC_APP_URL,
-    authUrl: isProduction ? PRODUCTION_URL : process.env.NEXTAUTH_URL,
-    webhookUrl: `${isProduction ? PRODUCTION_URL : process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/unipile`
+    baseUrl: baseUrl?.replace(/\/$/, ''),
+    webhookUrl: `${baseUrl?.replace(/\/$/, '')}/api/webhooks/unipile`,
+    successUrl: `${baseUrl?.replace(/\/$/, '')}/accounts?success=true`,
+    failureUrl: `${baseUrl?.replace(/\/$/, '')}/accounts?error=true`
   };
 };
 
@@ -182,7 +178,7 @@ const validateUnipileConfig = () => {
     UNIPILE_DSN: process.env.UNIPILE_DSN,
     UNIPILE_BASE_DSN: UNIPILE_BASE_DSN,
     UNIPILE_FULL_DSN: UNIPILE_FULL_DSN,
-    UNIPILE_API_URL: UNIPILE_API_URL,
+    UNIPILE_API_URL: UNIPILE_BASE_URL,
     UNIPILE_OAUTH_URL: UNIPILE_OAUTH_URL
   };
 
@@ -330,10 +326,6 @@ export async function POST(request: Request) {
     const expiresDate = new Date(Date.now() + 3600000);
     const expiresOn = expiresDate.toISOString();
 
-    // Generate success and failure URLs
-    const successUrl = `${urls.baseUrl}/accounts?success=true`;
-    const failureUrl = `${urls.baseUrl}/accounts?error=true`;
-
     // Encode temporary account ID and type for tracking
     const encodedName = `temp_${accountType.toLowerCase()}_${tempAccountId}`;
     console.log(`🏢 [${requestId}] Encoded temporary account ID:`, {
@@ -347,19 +339,25 @@ export async function POST(request: Request) {
     const payload = {
       type: "create",
       providers: accountType === 'LINKEDIN' ? ["linkedin"] : ["GOOGLE", "LINKEDIN", "WHATSAPP"],
-      api_url: unipileConfig.UNIPILE_API_URL,
+      api_url: UNIPILE_BASE_URL,
+      oauth_url: UNIPILE_BASE_URL,
       expiresOn,
       notify_url: urls.webhookUrl,
       name: encodedName,
-      success_redirect_url: successUrl,
-      failure_redirect_url: failureUrl
+      success_redirect_url: urls.successUrl,
+      failure_redirect_url: urls.failureUrl
     };
 
     // Validate payload
     validatePayload(payload, requestId);
 
+    // Ensure API key is available
+    if (!UNIPILE_API_KEY) {
+      throw new Error('UNIPILE_API_KEY is required');
+    }
+
     console.log(`📤 [${requestId}] Requesting Unipile auth link:`, {
-      url: `${unipileConfig.UNIPILE_API_URL}/api/v1/hosted/accounts/link`,
+      url: `${UNIPILE_BASE_URL}/api/v1/hosted/accounts/link`,
       payload: {
         ...payload,
         name: '[REDACTED]'
@@ -367,12 +365,12 @@ export async function POST(request: Request) {
       timestamp: new Date().toISOString()
     });
 
-    const response = await fetch(`${unipileConfig.UNIPILE_API_URL}/api/v1/hosted/accounts/link`, {
+    const response = await fetch(`${UNIPILE_BASE_URL}/api/v1/hosted/accounts/link`, {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
-        'X-API-KEY': unipileConfig.UNIPILE_API_KEY || ''
+        'X-API-KEY': UNIPILE_API_KEY
       },
       body: JSON.stringify(payload),
     });
@@ -390,7 +388,7 @@ export async function POST(request: Request) {
         status: response.status,
         error: responseText,
         request: {
-          url: `${unipileConfig.UNIPILE_API_URL}/api/v1/hosted/accounts/link`,
+          url: `${UNIPILE_BASE_URL}/api/v1/hosted/accounts/link`,
           method: 'POST',
           headers: {
             'Accept': 'application/json',
