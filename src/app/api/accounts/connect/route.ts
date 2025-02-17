@@ -136,6 +136,70 @@ async function createTemporarySocialAccount(organizationId: string, requestId: s
   }
 }
 
+// Validate Unipile configuration
+const validateUnipileConfig = () => {
+  const config = {
+    UNIPILE_API_KEY: process.env.UNIPILE_API_KEY,
+    UNIPILE_DSN: process.env.UNIPILE_DSN,
+    UNIPILE_BASE_DSN: UNIPILE_BASE_DSN,
+    UNIPILE_FULL_DSN: UNIPILE_FULL_DSN,
+    UNIPILE_API_URL: UNIPILE_API_URL,
+    UNIPILE_OAUTH_URL: UNIPILE_OAUTH_URL
+  };
+
+  console.log('🔍 Validating Unipile configuration:', {
+    ...config,
+    UNIPILE_API_KEY: config.UNIPILE_API_KEY ? '[REDACTED]' : undefined,
+    timestamp: new Date().toISOString()
+  });
+
+  if (!config.UNIPILE_API_KEY) {
+    throw new Error('Missing UNIPILE_API_KEY');
+  }
+
+  if (!config.UNIPILE_DSN) {
+    throw new Error('Missing UNIPILE_DSN');
+  }
+
+  // Validate DSN format
+  if (!config.UNIPILE_DSN.includes(':')) {
+    throw new Error('Invalid UNIPILE_DSN format. Expected format: domain:port');
+  }
+
+  return config;
+};
+
+// Validate hosted auth payload
+const validatePayload = (payload: any, requestId: string) => {
+  const requiredFields = [
+    'type',
+    'providers',
+    'api_url',
+    'oauth_url',
+    'expiresOn',
+    'notify_url',
+    'name',
+    'success_redirect_url',
+    'failure_redirect_url'
+  ];
+
+  const missingFields = requiredFields.filter(field => !payload[field]);
+  
+  if (missingFields.length > 0) {
+    console.error(`❌ [${requestId}] Invalid payload:`, {
+      missingFields,
+      payload: {
+        ...payload,
+        name: '[REDACTED]'
+      },
+      timestamp: new Date().toISOString()
+    });
+    throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
+  }
+
+  return true;
+};
+
 export async function POST(request: Request) {
   const requestId = Math.random().toString(36).substring(7);
   console.log(`🔄 [${requestId}] Starting account connection process:`, {
@@ -152,6 +216,9 @@ export async function POST(request: Request) {
         details: 'Missing required environment variables'
       }, { status: 500 });
     }
+
+    // Validate Unipile configuration
+    const unipileConfig = validateUnipileConfig();
 
     // Get environment-specific URLs
     const urls = getEnvironmentUrls();
@@ -231,8 +298,8 @@ export async function POST(request: Request) {
     const payload = {
       type: "create",
       providers: accountType === 'LINKEDIN' ? "linkedin" : "*",
-      api_url: UNIPILE_API_URL,
-      oauth_url: UNIPILE_OAUTH_URL,
+      api_url: unipileConfig.UNIPILE_API_URL,
+      oauth_url: unipileConfig.UNIPILE_OAUTH_URL,
       expiresOn,
       notify_url: urls.webhookUrl,
       name: encodedName,
@@ -241,8 +308,11 @@ export async function POST(request: Request) {
       disabled_options: ["autoproxy"]
     };
 
+    // Validate payload
+    validatePayload(payload, requestId);
+
     console.log(`📤 [${requestId}] Requesting Unipile auth link:`, {
-      url: `${UNIPILE_API_URL}/api/v1/hosted/accounts/link`,
+      url: `${unipileConfig.UNIPILE_API_URL}/api/v1/hosted/accounts/link`,
       payload: {
         ...payload,
         name: '[REDACTED]'
@@ -250,30 +320,72 @@ export async function POST(request: Request) {
       timestamp: new Date().toISOString()
     });
 
-    const response = await fetch(`${UNIPILE_API_URL}/api/v1/hosted/accounts/link`, {
+    const response = await fetch(`${unipileConfig.UNIPILE_API_URL}/api/v1/hosted/accounts/link`, {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
-        'X-API-KEY': UNIPILE_API_KEY,
+        'X-API-KEY': unipileConfig.UNIPILE_API_KEY || ''
       },
       body: JSON.stringify(payload),
     });
 
+    const responseText = await response.text();
+    console.log(`📥 [${requestId}] Unipile response:`, {
+      status: response.status,
+      headers: Object.fromEntries(response.headers.entries()),
+      body: responseText,
+      timestamp: new Date().toISOString()
+    });
+
     if (!response.ok) {
-      const errorText = await response.text();
       console.error(`❌ [${requestId}] Failed to generate auth link:`, {
         status: response.status,
-        error: errorText,
+        error: responseText,
+        request: {
+          url: `${unipileConfig.UNIPILE_API_URL}/api/v1/hosted/accounts/link`,
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'X-API-KEY': '[REDACTED]'
+          },
+          payload: {
+            ...payload,
+            name: '[REDACTED]'
+          }
+        },
         timestamp: new Date().toISOString()
       });
       return NextResponse.json(
-        { error: 'Failed to generate account connection link', details: errorText },
+        { 
+          error: 'Failed to generate account connection link', 
+          details: responseText,
+          requestId 
+        },
         { status: response.status }
       );
     }
 
-    const data = await response.json();
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (error) {
+      console.error(`❌ [${requestId}] Failed to parse response:`, {
+        error: error instanceof Error ? error.message : String(error),
+        responseText,
+        timestamp: new Date().toISOString()
+      });
+      return NextResponse.json(
+        { 
+          error: 'Invalid response from Unipile', 
+          details: 'Failed to parse response',
+          requestId
+        },
+        { status: 500 }
+      );
+    }
+
     console.log(`✅ [${requestId}] Generated auth link:`, {
       hasUrl: !!data.url,
       tempAccountId,
@@ -284,7 +396,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ...data,
       tempAccountId,
-      accountType
+      accountType,
+      requestId
     });
   } catch (error) {
     console.error(`❌ [${requestId}] Error:`, {
@@ -299,7 +412,8 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { 
         error: 'Internal server error',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        details: error instanceof Error ? error.message : 'Unknown error',
+        requestId
       },
       { status: 500 }
     );
