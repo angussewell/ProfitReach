@@ -8,13 +8,26 @@ export const dynamic = 'force-dynamic';
 
 // Unipile configuration
 const UNIPILE_DSN = process.env.UNIPILE_DSN || 'api4.unipile.com:13465';
+const [UNIPILE_HOST, UNIPILE_PORT] = UNIPILE_DSN.split(':');
+
 const UNIPILE_CONFIG = {
-  API_URL: `https://${UNIPILE_DSN}`,
+  API_URL: `https://${UNIPILE_DSN}`,  // Full URL with port for API calls
+  OAUTH_URL: `https://${UNIPILE_HOST}`,  // Base URL without port for OAuth
   API_KEY: process.env.UNIPILE_API_KEY
 };
 
 // Development fallback URL
 const DEV_URL = 'http://localhost:3000';
+
+// Validate URL function
+function isValidUrl(url: string): boolean {
+  try {
+    new URL(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 // Function to create placeholder account
 async function createPlaceholderAccount(organizationId: string, accountType: string) {
@@ -51,13 +64,26 @@ export async function POST(request: Request) {
   const requestId = Math.random().toString(36).substring(7);
   
   try {
-    // Log initial configuration
+    // Log initial configuration with URL validation
     console.log(`🔧 [${requestId}] Configuration:`, {
       UNIPILE_DSN,
+      UNIPILE_HOST,
       API_URL: UNIPILE_CONFIG.API_URL,
+      OAUTH_URL: UNIPILE_CONFIG.OAUTH_URL,
       hasApiKey: !!UNIPILE_CONFIG.API_KEY,
-      environment: process.env.NODE_ENV
+      environment: process.env.NODE_ENV,
+      isValidApiUrl: isValidUrl(UNIPILE_CONFIG.API_URL),
+      isValidOauthUrl: isValidUrl(UNIPILE_CONFIG.OAUTH_URL)
     });
+
+    // Validate URLs
+    if (!isValidUrl(UNIPILE_CONFIG.API_URL) || !isValidUrl(UNIPILE_CONFIG.OAUTH_URL)) {
+      console.error(`❌ [${requestId}] Invalid Unipile URLs configured`);
+      return NextResponse.json({ 
+        error: 'Configuration error',
+        details: 'Invalid Unipile URLs'
+      }, { status: 500 });
+    }
 
     // Check for API key
     if (!UNIPILE_CONFIG.API_KEY) {
@@ -106,7 +132,7 @@ export async function POST(request: Request) {
       type: "create",
       providers: accountType === 'LINKEDIN' ? ["LINKEDIN"] : ["GOOGLE"],
       api_url: UNIPILE_CONFIG.API_URL,
-      oauth_url: UNIPILE_CONFIG.API_URL,
+      oauth_url: UNIPILE_CONFIG.OAUTH_URL,  // Use base URL without port for OAuth
       expiresOn: new Date(Date.now() + 3600000).toISOString(),
       notify_url: `${appUrl}/api/webhooks/unipile`,
       name: contextName,
@@ -131,7 +157,10 @@ export async function POST(request: Request) {
     let response;
     try {
       // Make request to Unipile
-      response = await fetch(`${UNIPILE_CONFIG.API_URL}/api/v1/hosted/accounts/link`, {
+      const apiUrl = `${UNIPILE_CONFIG.API_URL}/api/v1/hosted/accounts/link`;
+      console.log(`🔗 [${requestId}] Making request to:`, { apiUrl });
+      
+      response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Accept': 'application/json',
@@ -171,10 +200,21 @@ export async function POST(request: Request) {
       console.log(`📥 [${requestId}] Raw Unipile response:`, {
         status: response.status,
         headers: Object.fromEntries(response.headers.entries()),
-        body: responseText
+        body: responseText,
+        contentType: response.headers.get('content-type')
       });
 
       if (!response.ok) {
+        // Try to parse error response as JSON
+        let errorDetails = responseText;
+        try {
+          const errorJson = JSON.parse(responseText);
+          errorDetails = errorJson.error || errorJson.message || responseText;
+        } catch {
+          // If parsing fails, use the raw text
+          console.log(`⚠️ [${requestId}] Could not parse error response as JSON`);
+        }
+
         // Clean up placeholder account on error
         if (placeholderAccount.type === 'social') {
           await prisma.socialAccount.delete({
@@ -188,7 +228,8 @@ export async function POST(request: Request) {
 
         return NextResponse.json({ 
           error: 'Failed to get connection link',
-          details: responseText
+          details: errorDetails,
+          status: response.status
         }, { status: response.status });
       }
 
