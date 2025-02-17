@@ -41,6 +41,43 @@ console.log('🌍 Connection configuration:', {
   timestamp: new Date().toISOString()
 });
 
+// Validate environment configuration
+const validateEnvironment = () => {
+  const requiredVars = {
+    UNIPILE_API_KEY: process.env.UNIPILE_API_KEY,
+    UNIPILE_DSN: process.env.UNIPILE_DSN,
+    NEXTAUTH_URL: process.env.NEXTAUTH_URL,
+    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL
+  };
+
+  const missingVars = Object.entries(requiredVars)
+    .filter(([_, value]) => !value)
+    .map(([key]) => key);
+
+  if (missingVars.length > 0) {
+    console.error('❌ Missing required environment variables:', {
+      missingVars,
+      environment: process.env.NODE_ENV,
+      timestamp: new Date().toISOString()
+    });
+    return false;
+  }
+
+  return true;
+};
+
+// Configure environment-specific URLs
+const getEnvironmentUrls = () => {
+  const isProduction = process.env.NODE_ENV === 'production';
+  const PRODUCTION_URL = 'https://app.messagelm.com';
+  
+  return {
+    baseUrl: isProduction ? PRODUCTION_URL : process.env.NEXT_PUBLIC_APP_URL,
+    authUrl: isProduction ? PRODUCTION_URL : process.env.NEXTAUTH_URL,
+    webhookUrl: `${isProduction ? PRODUCTION_URL : process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/unipile`
+  };
+};
+
 // Function to create temporary email account
 async function createTemporaryEmailAccount(organizationId: string, requestId: string): Promise<string> {
   try {
@@ -103,10 +140,26 @@ export async function POST(request: Request) {
   const requestId = Math.random().toString(36).substring(7);
   console.log(`🔄 [${requestId}] Starting account connection process:`, {
     timestamp: new Date().toISOString(),
-    handler: 'account-connection'
+    handler: 'account-connection',
+    environment: process.env.NODE_ENV
   });
   
   try {
+    // Validate environment configuration
+    if (!validateEnvironment()) {
+      return NextResponse.json({ 
+        error: 'Server configuration error', 
+        details: 'Missing required environment variables'
+      }, { status: 500 });
+    }
+
+    // Get environment-specific URLs
+    const urls = getEnvironmentUrls();
+    console.log(`🌍 [${requestId}] Environment URLs:`, {
+      ...urls,
+      timestamp: new Date().toISOString()
+    });
+
     // Parse request body to get account type
     const body = await request.json();
     const accountType = body.accountType?.toUpperCase() || 'EMAIL';
@@ -162,8 +215,8 @@ export async function POST(request: Request) {
     const expiresOn = expiresDate.toISOString();
 
     // Generate success and failure URLs
-    const successUrl = `${APP_URL}/accounts?success=true`;
-    const failureUrl = `${APP_URL}/accounts?error=true`;
+    const successUrl = `${urls.baseUrl}/accounts?success=true`;
+    const failureUrl = `${urls.baseUrl}/accounts?error=true`;
 
     // Encode temporary account ID and type for tracking
     const encodedName = `temp_${accountType.toLowerCase()}_${tempAccountId}`;
@@ -181,7 +234,7 @@ export async function POST(request: Request) {
       api_url: UNIPILE_API_URL,
       oauth_url: UNIPILE_OAUTH_URL,
       expiresOn,
-      notify_url: WEBHOOK_URL,
+      notify_url: urls.webhookUrl,
       name: encodedName,
       success_redirect_url: successUrl,
       failure_redirect_url: failureUrl,
@@ -235,11 +288,19 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error(`❌ [${requestId}] Error:`, {
-      error: error instanceof Error ? error.message : String(error),
+      error: error instanceof Error ? {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      } : String(error),
+      environment: process.env.NODE_ENV,
       timestamp: new Date().toISOString()
     });
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
       { status: 500 }
     );
   }
