@@ -69,6 +69,36 @@ async function createTemporaryEmailAccount(organizationId: string, requestId: st
   }
 }
 
+// Function to create temporary social account
+async function createTemporarySocialAccount(organizationId: string, requestId: string, provider: string): Promise<string> {
+  try {
+    const tempAccount = await prisma.socialAccount.create({
+      data: {
+        username: `pending_${requestId}`,
+        name: `Pending Account ${requestId}`,
+        provider,
+        organizationId,
+        isActive: false
+      }
+    });
+
+    console.log(`✅ [${requestId}] Created temporary social account:`, {
+      id: tempAccount.id,
+      provider,
+      organizationId,
+      timestamp: new Date().toISOString()
+    });
+
+    return tempAccount.id;
+  } catch (error) {
+    console.error(`❌ [${requestId}] Failed to create temporary social account:`, {
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString()
+    });
+    throw error;
+  }
+}
+
 export async function POST(request: Request) {
   const requestId = Math.random().toString(36).substring(7);
   console.log(`🔄 [${requestId}] Starting account connection process:`, {
@@ -77,11 +107,16 @@ export async function POST(request: Request) {
   });
   
   try {
+    // Parse request body to get account type
+    const body = await request.json();
+    const accountType = body.accountType?.toUpperCase() || 'EMAIL';
+
     // Log request details
     console.log(`📝 [${requestId}] Request details:`, {
       headers: Object.fromEntries(request.headers.entries()),
       cookies: request.headers.get('cookie'),
       url: request.url,
+      body,
       timestamp: new Date().toISOString()
     });
 
@@ -114,8 +149,13 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create temporary email account
-    const tempAccountId = await createTemporaryEmailAccount(session.user.organizationId, requestId);
+    // Create temporary account based on type
+    let tempAccountId;
+    if (accountType === 'LINKEDIN') {
+      tempAccountId = await createTemporarySocialAccount(session.user.organizationId, requestId, 'LINKEDIN');
+    } else {
+      tempAccountId = await createTemporaryEmailAccount(session.user.organizationId, requestId);
+    }
 
     // Format expiration date
     const expiresDate = new Date(Date.now() + 3600000);
@@ -125,10 +165,11 @@ export async function POST(request: Request) {
     const successUrl = `${APP_URL}/accounts?success=true`;
     const failureUrl = `${APP_URL}/accounts?error=true`;
 
-    // Encode temporary account ID for tracking
-    const encodedName = `temp_${tempAccountId}`;
+    // Encode temporary account ID and type for tracking
+    const encodedName = `temp_${accountType.toLowerCase()}_${tempAccountId}`;
     console.log(`🏢 [${requestId}] Encoded temporary account ID:`, {
       tempAccountId,
+      accountType,
       encoded: encodedName,
       timestamp: new Date().toISOString()
     });
@@ -136,7 +177,7 @@ export async function POST(request: Request) {
     // Generate Unipile hosted auth link
     const payload = {
       type: "create",
-      providers: "*",
+      providers: accountType === 'LINKEDIN' ? "linkedin" : "*",
       api_url: UNIPILE_API_URL,
       oauth_url: UNIPILE_OAUTH_URL,
       expiresOn,
@@ -183,12 +224,14 @@ export async function POST(request: Request) {
     console.log(`✅ [${requestId}] Generated auth link:`, {
       hasUrl: !!data.url,
       tempAccountId,
+      accountType,
       timestamp: new Date().toISOString()
     });
 
     return NextResponse.json({
       ...data,
-      tempAccountId
+      tempAccountId,
+      accountType
     });
   } catch (error) {
     console.error(`❌ [${requestId}] Error:`, {
