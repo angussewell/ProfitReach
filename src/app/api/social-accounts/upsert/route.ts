@@ -45,11 +45,11 @@ export async function POST(req: Request) {
 
     const { unipileAccountId, username, name, provider, isActive } = validationResult.data;
 
-    // Find the most recent pending account for this provider
+    // Find the pending account for this provider
     const pendingAccount = await prisma.socialAccount.findFirst({
       where: {
         name: {
-          startsWith: 'Pending Account'
+          startsWith: `PENDING_${provider.toUpperCase()}`
         },
         provider: provider.toUpperCase(),
         isActive: false
@@ -60,12 +60,18 @@ export async function POST(req: Request) {
     });
 
     if (!pendingAccount) {
-      console.error(`❌ [${requestId}] No pending ${provider} account found to update`);
+      console.error(`❌ [${requestId}] No pending ${provider} account found to update`, {
+        provider,
+        timestamp: new Date().toISOString()
+      });
       return NextResponse.json({
         status: 'error',
-        message: `No pending ${provider} account found to update`
+        message: `No pending ${provider} account found to update. This could mean the account was already updated or the placeholder was deleted. Please try connecting the account again.`
       }, { status: 404 });
     }
+
+    // Extract organizationId from pending account name
+    const [, , organizationId] = pendingAccount.name.split('_');
 
     // Update the pending account with the real data
     const updatedAccount = await prisma.socialAccount.update({
