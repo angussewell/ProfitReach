@@ -69,6 +69,14 @@ export async function POST(
       );
     }
 
+    // Clone request for multiple reads
+    const clonedRequest = request.clone();
+    
+    // Parse webhook data early to get contact information
+    const rawData = await clonedRequest.json();
+    const validationResult = webhookSchema.safeParse(rawData);
+    const data = validationResult.success ? validationResult.data : rawData;
+
     // Find organization by webhook URL
     const organization = await prisma.organization.findUnique({
       where: { webhookUrl: params.webhookUrl },
@@ -99,67 +107,13 @@ export async function POST(
       );
     }
 
-    // Check payment method and credits for at-cost plan
-    if (organization.billingPlan === 'at_cost') {
-      const hasPaymentMethod = await hasValidPaymentMethod(organization.id);
-      if (!hasPaymentMethod) {
-        return NextResponse.json({ 
-          error: 'No valid payment method found',
-          details: 'Please add a payment method in billing settings to use the at-cost plan'
-        }, { status: 402 });
-      }
-
-      // Check credit balance
-      if (organization.creditBalance < 1) {
-        // Create webhook log for blocked request
-        await prisma.webhookLog.create({
-          data: {
-            accountId: 'unknown',
-            organizationId: organization.id,
-            status: 'blocked',
-            scenarioName: 'Unknown',
-            contactEmail: 'Unknown',
-            contactName: 'Unknown',
-            company: 'Unknown',
-            requestBody: {},
-            responseBody: { 
-              error: 'Insufficient credits',
-              details: 'Please purchase more credits to continue sending messages'
-            } as Prisma.JsonObject,
-            ghlIntegrationId: organization.ghlIntegrations[0]?.id
-          }
-        });
-
-        return NextResponse.json({ 
-          error: 'Insufficient credits',
-          details: 'Please purchase more credits to continue sending messages'
-        }, { status: 402 });
-      }
-    }
-
-    // Parse and validate webhook data
-    const rawData = await request.json();
-    const validationResult = webhookSchema.safeParse(rawData);
-
-    if (!validationResult.success) {
-      log('error', 'Invalid webhook data', { errors: validationResult.error.errors });
-      return NextResponse.json(
-        { error: 'Invalid webhook data', details: validationResult.error.errors },
-        { status: 400 }
-      );
-    }
-
-    // Register webhook fields
-    const data = validationResult.data;
-    await registerWebhookFields(data);
-
     // Get the most recent GHL integration
     const ghlIntegration = organization.ghlIntegrations[0];
     if (!ghlIntegration) {
       log('warn', 'No GHL integration found', { organizationId: organization.id });
     }
 
-    // Create webhook log
+    // Create initial webhook log
     const webhookLog = await prisma.webhookLog.create({
       data: {
         accountId: data.contact_id || 'unknown',
@@ -174,6 +128,72 @@ export async function POST(
         ...(ghlIntegration && { ghlIntegrationId: ghlIntegration.id })
       }
     });
+
+    // Check payment method for at-cost plan
+    if (organization.billingPlan === 'at_cost') {
+      const hasPaymentMethod = await hasValidPaymentMethod(organization.id);
+      if (!hasPaymentMethod) {
+        // Update webhook log to blocked status
+        await prisma.webhookLog.update({
+          where: { id: webhookLog.id },
+          data: {
+            status: 'blocked',
+            responseBody: {
+              error: 'No valid payment method found',
+              details: 'Please add a payment method in billing settings to use the at-cost plan'
+            } as Prisma.JsonObject
+          }
+        });
+
+        return NextResponse.json({ 
+          error: 'No valid payment method found',
+          details: 'Please add a payment method in billing settings to use the at-cost plan'
+        }, { status: 402 });
+      }
+
+      // Check credit balance
+      if (organization.creditBalance < 1) {
+        // Update webhook log to blocked status
+        await prisma.webhookLog.update({
+          where: { id: webhookLog.id },
+          data: {
+            status: 'blocked',
+            responseBody: { 
+              error: 'Insufficient credits',
+              details: 'Please purchase more credits to continue sending messages'
+            } as Prisma.JsonObject
+          }
+        });
+
+        return NextResponse.json({ 
+          error: 'Insufficient credits',
+          details: 'Please purchase more credits to continue sending messages'
+        }, { status: 402 });
+      }
+    }
+
+    // Validate webhook data
+    if (!validationResult.success) {
+      await prisma.webhookLog.update({
+        where: { id: webhookLog.id },
+        data: {
+          status: 'error',
+          responseBody: { 
+            error: 'Invalid webhook data',
+            details: JSON.stringify(validationResult.error.errors)
+          } as Prisma.JsonObject
+        }
+      });
+
+      log('error', 'Invalid webhook data', { errors: validationResult.error.errors });
+      return NextResponse.json(
+        { error: 'Invalid webhook data', details: validationResult.error.errors },
+        { status: 400 }
+      );
+    }
+
+    // Register webhook fields
+    await registerWebhookFields(validationResult.data);
 
     // Use organization's outbound webhook URL
     const outboundWebhookUrl = organization.outboundWebhookUrl;
@@ -403,11 +423,14 @@ export async function POST(
           log('info', 'Processing credit deduction', {
             organizationId: organization.id,
             webhookLogId: webhookLog.id,
-            currentBalance: organization.creditBalance
+            currentBalance: organization.creditBalance,
+            scenarioId: scenario.id,
+            scenarioName: scenario.name
           });
 
+          let newBalance;
           await prisma.$transaction(async (tx) => {
-            await updateCreditBalance(organization.id, -1, 'Webhook processed', webhookLog.id);
+            newBalance = await updateCreditBalance(organization.id, -1, 'Webhook processed', webhookLog.id);
             await reportScenarioUsage(organization.id);
           });
 
@@ -415,7 +438,10 @@ export async function POST(
             organizationId: organization.id,
             webhookLogId: webhookLog.id,
             deductedAmount: 1,
-            newBalance: organization.creditBalance - 1
+            previousBalance: organization.creditBalance,
+            newBalance: newBalance,
+            scenarioId: scenario.id,
+            scenarioName: scenario.name
           });
         } catch (error) {
           // If there are insufficient credits or no active subscription,
@@ -430,7 +456,9 @@ export async function POST(
             error: errorMessage,
             organizationId: organization.id,
             webhookLogId: webhookLog.id,
-            currentBalance: organization.creditBalance
+            currentBalance: organization.creditBalance,
+            scenarioId: scenario?.id,
+            scenarioName: scenario?.name
           });
 
           return NextResponse.json(
