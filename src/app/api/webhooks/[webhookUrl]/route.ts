@@ -8,6 +8,7 @@ import { processWebhookVariables } from '@/utils/variableReplacer';
 import { Filter } from '@/types/filters';
 import { evaluateFilters } from '@/lib/filter-utils';
 import { decrypt } from '@/lib/encryption';
+import { hasValidPaymentMethod, updateCreditBalance, reportScenarioUsage } from '@/lib/stripe';
 
 export const dynamic = 'force-dynamic';
 
@@ -76,6 +77,8 @@ export async function POST(
         name: true,
         webhookUrl: true,
         outboundWebhookUrl: true,
+        billingPlan: true,
+        creditBalance: true,
         ghlIntegrations: {
           take: 1,
           orderBy: { createdAt: 'desc' },
@@ -94,6 +97,44 @@ export async function POST(
         { error: 'Invalid webhook URL' },
         { status: 404 }
       );
+    }
+
+    // Check payment method and credits for at-cost plan
+    if (organization.billingPlan === 'at_cost') {
+      const hasPaymentMethod = await hasValidPaymentMethod(organization.id);
+      if (!hasPaymentMethod) {
+        return NextResponse.json({ 
+          error: 'No valid payment method found',
+          details: 'Please add a payment method in billing settings to use the at-cost plan'
+        }, { status: 402 });
+      }
+
+      // Check credit balance
+      if (organization.creditBalance < 1) {
+        // Create webhook log for blocked request
+        await prisma.webhookLog.create({
+          data: {
+            accountId: 'unknown',
+            organizationId: organization.id,
+            status: 'blocked',
+            scenarioName: 'Unknown',
+            contactEmail: 'Unknown',
+            contactName: 'Unknown',
+            company: 'Unknown',
+            requestBody: {},
+            responseBody: { 
+              error: 'Insufficient credits',
+              details: 'Please purchase more credits to continue sending messages'
+            } as Prisma.JsonObject,
+            ghlIntegrationId: organization.ghlIntegrations[0]?.id
+          }
+        });
+
+        return NextResponse.json({ 
+          error: 'Insufficient credits',
+          details: 'Please purchase more credits to continue sending messages'
+        }, { status: 402 });
+      }
     }
 
     // Parse and validate webhook data
@@ -351,6 +392,53 @@ export async function POST(
             : responseData as Prisma.JsonObject
         }
       });
+
+      // If the webhook was successful and the organization is on the at_cost plan,
+      // deduct a credit and report usage
+      if (
+        !scenario?.testMode &&
+        organization.billingPlan === 'at_cost'
+      ) {
+        try {
+          log('info', 'Processing credit deduction', {
+            organizationId: organization.id,
+            webhookLogId: webhookLog.id,
+            currentBalance: organization.creditBalance
+          });
+
+          await prisma.$transaction(async (tx) => {
+            await updateCreditBalance(organization.id, -1, 'Webhook processed', webhookLog.id);
+            await reportScenarioUsage(organization.id);
+          });
+
+          log('info', 'Credit deduction successful', {
+            organizationId: organization.id,
+            webhookLogId: webhookLog.id,
+            deductedAmount: 1,
+            newBalance: organization.creditBalance - 1
+          });
+        } catch (error) {
+          // If there are insufficient credits or no active subscription,
+          // update the webhook log status
+          await prisma.webhookLog.update({
+            where: { id: webhookLog.id },
+            data: { status: 'blocked' },
+          });
+
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          log('error', 'Error processing webhook credits:', {
+            error: errorMessage,
+            organizationId: organization.id,
+            webhookLogId: webhookLog.id,
+            currentBalance: organization.creditBalance
+          });
+
+          return NextResponse.json(
+            { error: 'Insufficient credits or no active subscription' },
+            { status: 402 }
+          );
+        }
+      }
 
       return NextResponse.json({ 
         message: 'Webhook processed successfully',
