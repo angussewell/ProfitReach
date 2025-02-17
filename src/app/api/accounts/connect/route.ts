@@ -14,24 +14,63 @@ console.log('🚀 Initializing account connection handler:', {
 });
 
 // Configure Unipile URLs based on environment
-const UNIPILE_BASE_DSN = process.env.UNIPILE_DSN?.split(':')[0] || 'api4.unipile.com';  // Base DSN without port
-const UNIPILE_FULL_DSN = process.env.UNIPILE_DSN || 'api4.unipile.com:13465';  // Full DSN with port
+const UNIPILE_DSN = process.env.UNIPILE_DSN || 'api4.unipile.com:13465';
 const UNIPILE_API_KEY = process.env.UNIPILE_API_KEY;
 
-// Production URL configuration
-const PRODUCTION_URL = 'https://app.messagelm.com';
-const APP_URL = process.env.NODE_ENV === 'production' ? PRODUCTION_URL : process.env.NEXT_PUBLIC_APP_URL;
+// Extract DSN parts
+const [dsn, port] = UNIPILE_DSN.split(':');
+const UNIPILE_BASE_URL = `https://${dsn}`;
+const UNIPILE_API_URL = port ? `${UNIPILE_BASE_URL}:${port}` : UNIPILE_BASE_URL;
+
+// Log all URL configurations (safely)
+console.log('🌍 Connection configuration:', {
+  NODE_ENV: process.env.NODE_ENV,
+  NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+  UNIPILE_DSN: UNIPILE_DSN,
+  UNIPILE_BASE_URL,
+  UNIPILE_API_URL,
+  hasApiKey: !!UNIPILE_API_KEY,
+  timestamp: new Date().toISOString()
+});
+
+// Test Unipile connection
+async function testUnipileConnection(requestId: string) {
+  try {
+    const response = await fetch(`${UNIPILE_API_URL}/api/v1/accounts`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'X-API-KEY': UNIPILE_API_KEY || ''
+      }
+    });
+
+    console.log(`🔍 [${requestId}] Unipile connection test:`, {
+      status: response.status,
+      ok: response.ok,
+      timestamp: new Date().toISOString()
+    });
+
+    return response.ok;
+  } catch (error) {
+    console.error(`❌ [${requestId}] Unipile connection test failed:`, {
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString()
+    });
+    return false;
+  }
+}
 
 // Configure Unipile URLs according to documentation
-const UNIPILE_API_URL = `https://${UNIPILE_FULL_DSN}`;  // API URL with port
+const UNIPILE_BASE_DSN = process.env.UNIPILE_DSN?.split(':')[0] || 'api4.unipile.com';  // Base DSN without port
+const UNIPILE_FULL_DSN = process.env.UNIPILE_DSN || 'api4.unipile.com:13465';  // Full DSN with port
 const UNIPILE_OAUTH_URL = `https://${UNIPILE_BASE_DSN}`;  // OAuth URL without port
-const WEBHOOK_URL = `${APP_URL}/api/webhooks/unipile`;
+const WEBHOOK_URL = `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/unipile`;
 
 // Log all URL configurations
 console.log('🌍 Connection configuration:', {
   NODE_ENV: process.env.NODE_ENV,
   NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
-  APP_URL,
+  APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   UNIPILE_BASE_DSN,
   UNIPILE_FULL_DSN,
   UNIPILE_API_URL,
@@ -209,6 +248,16 @@ export async function POST(request: Request) {
   });
   
   try {
+    // Test Unipile connection first
+    const isConnected = await testUnipileConnection(requestId);
+    if (!isConnected) {
+      return NextResponse.json({ 
+        error: 'Unipile connection failed', 
+        details: 'Unable to connect to Unipile API',
+        requestId
+      }, { status: 500 });
+    }
+
     // Validate environment configuration
     if (!validateEnvironment()) {
       return NextResponse.json({ 
@@ -294,18 +343,16 @@ export async function POST(request: Request) {
       timestamp: new Date().toISOString()
     });
 
-    // Generate Unipile hosted auth link
+    // Generate Unipile hosted auth link with exact payload format from docs
     const payload = {
       type: "create",
-      providers: accountType === 'LINKEDIN' ? "linkedin" : "*",
+      providers: accountType === 'LINKEDIN' ? ["linkedin"] : ["GOOGLE", "LINKEDIN", "WHATSAPP"],
       api_url: unipileConfig.UNIPILE_API_URL,
-      oauth_url: unipileConfig.UNIPILE_OAUTH_URL,
       expiresOn,
       notify_url: urls.webhookUrl,
       name: encodedName,
       success_redirect_url: successUrl,
-      failure_redirect_url: failureUrl,
-      disabled_options: ["autoproxy"]
+      failure_redirect_url: failureUrl
     };
 
     // Validate payload
@@ -403,7 +450,6 @@ export async function POST(request: Request) {
     console.error(`❌ [${requestId}] Error:`, {
       error: error instanceof Error ? {
         message: error.message,
-        stack: error.stack,
         name: error.name
       } : String(error),
       environment: process.env.NODE_ENV,
