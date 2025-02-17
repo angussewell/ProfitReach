@@ -5,10 +5,6 @@ import { z } from 'zod';
 // Force dynamic API route
 export const dynamic = 'force-dynamic';
 
-// Constants for unassigned organization
-const UNASSIGNED_ORG_ID = 'cm78a5qs00000ha6e89p5tgm4';  // Fixed ID for unassigned organization
-const UNASSIGNED_ORG_NAME = 'Unassigned Accounts';
-
 // Define upsert request schema
 const UpsertEmailAccountSchema = z.object({
   unipileAccountId: z.string(),
@@ -17,30 +13,8 @@ const UpsertEmailAccountSchema = z.object({
   isActive: z.boolean().default(true)
 });
 
-// Function to ensure unassigned organization exists
-async function ensureUnassignedOrganization(): Promise<string> {
-  try {
-    const existing = await prisma.organization.findUnique({
-      where: { id: UNASSIGNED_ORG_ID }
-    });
-
-    if (!existing) {
-      const created = await prisma.organization.create({
-        data: {
-          id: UNASSIGNED_ORG_ID,
-          name: UNASSIGNED_ORG_NAME,
-          webhookUrl: `unassigned-${Date.now()}`,
-        }
-      });
-      return created.id;
-    }
-
-    return existing.id;
-  } catch (error) {
-    console.error('❌ Error ensuring unassigned organization:', error);
-    throw error;
-  }
-}
+// Helper function to wait
+const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export async function POST(req: Request) {
   const requestId = Math.random().toString(36).substring(7);
@@ -73,12 +47,45 @@ export async function POST(req: Request) {
 
     const { unipileAccountId, email, name, isActive } = validationResult.data;
 
-    // Find the most recent pending account
-    const pendingAccount = await prisma.emailAccount.findFirst({
+    // Verify database connection
+    try {
+      const totalAccounts = await prisma.emailAccount.count();
+      console.log(`📊 [${requestId}] Database connection verified. Total accounts:`, totalAccounts);
+    } catch (dbError) {
+      console.error(`❌ [${requestId}] Database connection error:`, {
+        error: dbError instanceof Error ? dbError.message : String(dbError),
+        timestamp: new Date().toISOString()
+      });
+      throw dbError;
+    }
+
+    // Add a small delay to ensure account creation is committed
+    await wait(1000);
+
+    // Find all recently created accounts
+    const recentAccounts = await prisma.emailAccount.findMany({
+      orderBy: {
+        createdAt: 'desc'
+      },
+      take: 5
+    });
+
+    console.log(`🔍 [${requestId}] Recent accounts:`, {
+      count: recentAccounts.length,
+      accounts: recentAccounts.map(acc => ({
+        id: acc.id,
+        email: acc.email,
+        name: acc.name,
+        isActive: acc.isActive,
+        createdAt: acc.createdAt,
+        organizationId: acc.organizationId
+      })),
+      timestamp: new Date().toISOString()
+    });
+
+    // Now find inactive accounts
+    const inactiveAccounts = await prisma.emailAccount.findMany({
       where: {
-        name: {
-          startsWith: 'Pending Account'
-        },
         isActive: false
       },
       orderBy: {
@@ -86,17 +93,46 @@ export async function POST(req: Request) {
       }
     });
 
-    if (!pendingAccount) {
-      console.error(`❌ [${requestId}] No pending account found to update`);
+    console.log(`🔍 [${requestId}] Inactive accounts:`, {
+      count: inactiveAccounts.length,
+      accounts: inactiveAccounts.map(acc => ({
+        id: acc.id,
+        email: acc.email,
+        name: acc.name,
+        createdAt: acc.createdAt,
+        organizationId: acc.organizationId
+      })),
+      timestamp: new Date().toISOString()
+    });
+
+    // Try to find the most recently created account, regardless of status
+    const mostRecentAccount = recentAccounts[0];
+
+    if (!mostRecentAccount) {
+      console.error(`❌ [${requestId}] No accounts found in database`);
       return NextResponse.json({
         status: 'error',
-        message: 'No pending account found to update'
+        message: 'No accounts found in database',
+        debug: {
+          totalAccounts: await prisma.emailAccount.count()
+        }
       }, { status: 404 });
     }
 
-    // Update the pending account with the real data
+    // Log the account we'll try to update
+    console.log(`✅ [${requestId}] Found most recent account:`, {
+      id: mostRecentAccount.id,
+      email: mostRecentAccount.email,
+      name: mostRecentAccount.name,
+      isActive: mostRecentAccount.isActive,
+      organizationId: mostRecentAccount.organizationId,
+      createdAt: mostRecentAccount.createdAt,
+      timestamp: new Date().toISOString()
+    });
+
+    // Update the account
     const updatedAccount = await prisma.emailAccount.update({
-      where: { id: pendingAccount.id },
+      where: { id: mostRecentAccount.id },
       data: {
         email,
         name: name || email,
@@ -105,34 +141,33 @@ export async function POST(req: Request) {
       }
     });
 
-    console.log(`✅ [${requestId}] Updated pending account with real data:`, {
+    console.log(`✅ [${requestId}] Updated account with real data:`, {
       id: updatedAccount.id,
       email: updatedAccount.email,
+      name: updatedAccount.name,
       organizationId: updatedAccount.organizationId,
-      previousName: pendingAccount.name,
       timestamp: new Date().toISOString()
     });
 
     return NextResponse.json({
       status: 'success',
-      message: 'Pending account updated with real data',
+      message: 'Account updated successfully',
       data: {
         id: updatedAccount.id,
         email: updatedAccount.email,
         organizationId: updatedAccount.organizationId,
-        unipileAccountId: updatedAccount.unipileAccountId,
-        previousName: pendingAccount.name
+        unipileAccountId: updatedAccount.unipileAccountId
       }
     });
   } catch (error) {
-    console.error(`❌ [${requestId}] Error updating pending account:`, {
+    console.error(`❌ [${requestId}] Error updating account:`, {
       error: error instanceof Error ? error.message : String(error),
       timestamp: new Date().toISOString()
     });
     return NextResponse.json({
       status: 'error',
-      message: 'Error updating pending account',
+      message: 'Error updating account',
       error: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
-} 
+}
