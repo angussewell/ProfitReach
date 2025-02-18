@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { PageHeader } from '@/components/ui/page-header';
 import { ClientCard, ClientButton, ClientInput } from '@/components/ui/client-components';
-import { Inbox, Loader2, MessageSquare, Filter, X, Reply, Send } from 'lucide-react';
+import { Inbox, Loader2, MessageSquare, Reply, Send, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { LucideProps } from 'lucide-react';
 import { toast } from 'sonner';
@@ -28,17 +28,14 @@ interface EmailMessage {
 const LoaderIcon: React.FC<LucideProps> = Loader2;
 const InboxIcon: React.FC<LucideProps> = Inbox;
 const MessageIcon: React.FC<LucideProps> = MessageSquare;
-const FilterIcon: React.FC<LucideProps> = Filter;
-const CloseIcon: React.FC<LucideProps> = X;
 const ReplyIcon: React.FC<LucideProps> = Reply;
 const SendIcon: React.FC<LucideProps> = Send;
+const CloseIcon: React.FC<LucideProps> = X;
 
 export function UniversalInboxClient() {
   const [selectedThread, setSelectedThread] = useState<string | null>(null);
   const [messages, setMessages] = useState<EmailMessage[]>([]);
-  const [filteredMessages, setFilteredMessages] = useState<EmailMessage[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showFilteredMessages, setShowFilteredMessages] = useState(false);
   const [showReplyModal, setShowReplyModal] = useState(false);
   const [replyContent, setReplyContent] = useState('');
   const [replying, setReplying] = useState(false);
@@ -50,23 +47,20 @@ export function UniversalInboxClient() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [repliesResponse, filteredResponse, accountsResponse] = await Promise.all([
+        const [messagesResponse, accountsResponse] = await Promise.all([
           fetch('/api/messages'),
-          fetch('/api/messages?includeFiltered=true'),
           fetch('/api/email-accounts')
         ]);
         
-        if (!repliesResponse.ok || !filteredResponse.ok || !accountsResponse.ok) 
+        if (!messagesResponse.ok || !accountsResponse.ok) 
           throw new Error('Failed to fetch data');
         
-        const [replies, filtered, accounts] = await Promise.all([
-          repliesResponse.json(),
-          filteredResponse.json(),
+        const [messages, accounts] = await Promise.all([
+          messagesResponse.json(),
           accountsResponse.json()
         ]);
         
-        setMessages(replies);
-        setFilteredMessages(filtered);
+        setMessages(messages);
         setEmailAccounts(accounts);
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -97,16 +91,6 @@ export function UniversalInboxClient() {
   }, {} as Record<string, EmailMessage[]>);
 
   const hasMessages = Object.keys(threadGroups).length > 0;
-  const hasFilteredMessages = filteredMessages.length > 0;
-
-  // Group filtered messages by type
-  const filteredMessagesByType = filteredMessages.reduce((acc, message) => {
-    if (!acc[message.messageType]) {
-      acc[message.messageType] = [];
-    }
-    acc[message.messageType].push(message);
-    return acc;
-  }, {} as Record<MessageType, EmailMessage[]>);
 
   const handleReply = async () => {
     if (!selectedThread || !replyContent.trim() || !selectedFromEmail) return;
@@ -145,21 +129,10 @@ export function UniversalInboxClient() {
       setReplyContent('');
       
       // Refresh messages
-      const [repliesResponse, filteredResponse] = await Promise.all([
-        fetch('/api/messages'),
-        fetch('/api/messages?includeFiltered=true')
-      ]);
-      
-      if (!repliesResponse.ok || !filteredResponse.ok) 
-        throw new Error('Failed to fetch messages');
-      
-      const [replies, filtered] = await Promise.all([
-        repliesResponse.json(),
-        filteredResponse.json()
-      ]);
-      
-      setMessages(replies);
-      setFilteredMessages(filtered);
+      const messagesResponse = await fetch('/api/messages');
+      if (!messagesResponse.ok) throw new Error('Failed to fetch messages');
+      const messages = await messagesResponse.json();
+      setMessages(messages);
     } catch (error) {
       console.error('Error sending reply:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to send reply');
@@ -199,29 +172,13 @@ export function UniversalInboxClient() {
 
         <div className="grid grid-cols-12 gap-6">
           {/* Thread List */}
-          <div className="col-span-5">
+          <div className="col-span-4">
             <ClientCard className="h-[calc(100vh-14rem)] overflow-hidden flex flex-col border-slate-200/60 shadow-lg shadow-slate-200/50">
-              <div className="px-6 py-4 border-b border-slate-200/60 flex justify-between items-center bg-white/95">
+              <div className="px-6 py-4 border-b border-slate-200/60 flex items-center bg-white/95">
                 <h2 className="text-lg font-semibold flex items-center gap-2 text-slate-900">
                   <InboxIcon className="h-5 w-5 text-slate-500" />
                   <span>Conversations</span>
                 </h2>
-                <ClientButton
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowFilteredMessages(true)}
-                  className={cn(
-                    "flex items-center gap-2 text-slate-600 hover:text-amber-700",
-                    filteredMessages.length > 0 && "text-amber-700"
-                  )}
-                >
-                  <FilterIcon className="h-4 w-4" />
-                  {filteredMessages.length > 0 && (
-                    <span className="text-xs font-medium bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded-full">
-                      {filteredMessages.length}
-                    </span>
-                  )}
-                </ClientButton>
               </div>
               
               {hasMessages ? (
@@ -235,10 +192,10 @@ export function UniversalInboxClient() {
                       <button
                         key={threadId}
                         className={cn(
-                          "w-full px-6 py-4 text-left transition-all",
-                          "hover:bg-slate-50",
-                          selectedThread === threadId ? "bg-slate-100" : "",
-                          !latestMessage.isRead && "bg-blue-50/80 hover:bg-blue-50"
+                          "w-full px-6 py-3.5 text-left transition-all",
+                          "hover:bg-slate-50/80",
+                          selectedThread === threadId ? "bg-slate-100/90" : "",
+                          !latestMessage.isRead && "bg-blue-50/70 hover:bg-blue-50/90"
                         )}
                         onClick={() => setSelectedThread(threadId)}
                       >
@@ -253,12 +210,17 @@ export function UniversalInboxClient() {
                             <p className="text-sm text-slate-600 truncate mt-1">
                               {latestMessage.sender}
                             </p>
-                            <p className="text-xs text-slate-400 mt-1.5">
-                              {new Date(latestMessage.receivedAt).toLocaleString()}
+                            <p className="text-xs text-slate-400 mt-1">
+                              {new Date(latestMessage.receivedAt).toLocaleString(undefined, {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: 'numeric',
+                                minute: '2-digit'
+                              })}
                             </p>
                           </div>
                           {!latestMessage.isRead && (
-                            <div className="w-2.5 h-2.5 bg-blue-500 rounded-full flex-shrink-0 mt-1" />
+                            <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-1" />
                           )}
                         </div>
                       </button>
@@ -280,11 +242,11 @@ export function UniversalInboxClient() {
           </div>
           
           {/* Conversation View */}
-          <div className="col-span-7">
+          <div className="col-span-8">
             <ClientCard className="h-[calc(100vh-14rem)] overflow-hidden flex flex-col border-slate-200/60 shadow-lg shadow-slate-200/50">
               {selectedThread ? (
                 <>
-                  <div className="px-6 py-4 border-b border-slate-200/60 bg-white/95 flex justify-between items-center">
+                  <div className="px-6 py-4 border-b border-slate-200/60 bg-white/95 flex justify-between items-center sticky top-0">
                     <h2 className="text-lg font-semibold text-slate-900">
                       {threadGroups[selectedThread][0].subject}
                     </h2>
@@ -296,27 +258,35 @@ export function UniversalInboxClient() {
                       Reply
                     </ClientButton>
                   </div>
-                  <div className="p-6 space-y-6 overflow-y-auto flex-1">
+                  <div className="p-6 space-y-4 overflow-y-auto flex-1">
                     {threadGroups[selectedThread]
                       ?.sort((a, b) => new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime())
-                      .map(message => (
+                      .map((message, index, array) => (
                         <div 
                           key={message.id} 
-                          className="bg-white rounded-xl border border-slate-200/60 shadow-sm p-5 transition-all hover:shadow-md"
+                          className={cn(
+                            "bg-white rounded-xl border border-slate-200/60 shadow-sm p-5 transition-all hover:shadow-md",
+                            index === array.length - 1 && "bg-blue-50/30"
+                          )}
                         >
                           <div className="flex justify-between items-start">
                             <div>
                               <p className="font-medium text-slate-900">{message.sender}</p>
-                              <p className="text-sm text-slate-500 mt-0.5">
-                                To: {message.recipientEmail}
+                              <p className="text-xs text-slate-500 mt-0.5">
+                                to {message.recipientEmail}
                               </p>
                             </div>
-                            <p className="text-sm text-slate-400">
-                              {new Date(message.receivedAt).toLocaleString()}
+                            <p className="text-xs text-slate-400">
+                              {new Date(message.receivedAt).toLocaleString(undefined, {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: 'numeric',
+                                minute: '2-digit'
+                              })}
                             </p>
                           </div>
                           <div className="prose prose-slate prose-sm max-w-none mt-4">
-                            <p className="text-slate-600">{message.content}</p>
+                            <p className="text-slate-600 whitespace-pre-wrap">{message.content}</p>
                           </div>
                         </div>
                       ))}
@@ -337,57 +307,6 @@ export function UniversalInboxClient() {
           </div>
         </div>
       </div>
-
-      {/* Filtered Messages Modal */}
-      {showFilteredMessages && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl w-[800px] max-h-[80vh] flex flex-col shadow-xl border border-slate-200/60">
-            <div className="px-6 py-4 border-b border-slate-200/60 flex justify-between items-center bg-white/95">
-              <h2 className="text-lg font-semibold flex items-center gap-2 text-slate-900">
-                <FilterIcon className="h-5 w-5 text-slate-500" />
-                <span>Filtered Messages</span>
-              </h2>
-              <button
-                onClick={() => setShowFilteredMessages(false)}
-                className="text-slate-400 hover:text-slate-600 transition-colors"
-              >
-                <CloseIcon className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="p-6 overflow-y-auto flex-1">
-              {Object.entries(filteredMessagesByType).map(([type, messages]) => (
-                <div key={type} className="mb-8 last:mb-0">
-                  <h3 className="text-sm font-medium text-slate-900 mb-4 flex items-center gap-2">
-                    {type.split('_').map(word => word.charAt(0) + word.slice(1).toLowerCase()).join(' ')}
-                    <span className="px-2 py-0.5 text-xs rounded-full bg-slate-100 text-slate-600">
-                      {messages.length}
-                    </span>
-                  </h3>
-                  <div className="space-y-4">
-                    {messages.map(message => (
-                      <div 
-                        key={message.id} 
-                        className="bg-slate-50 rounded-lg p-4 hover:bg-slate-100/80 transition-colors"
-                      >
-                        <div className="flex justify-between items-start mb-3">
-                          <div>
-                            <p className="font-medium text-slate-900 text-sm">{message.subject}</p>
-                            <p className="text-sm text-slate-600 mt-0.5">{message.sender}</p>
-                          </div>
-                          <p className="text-xs text-slate-500">
-                            {new Date(message.receivedAt).toLocaleString()}
-                          </p>
-                        </div>
-                        <p className="text-sm text-slate-600">{message.content}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Reply Modal */}
       {showReplyModal && (
