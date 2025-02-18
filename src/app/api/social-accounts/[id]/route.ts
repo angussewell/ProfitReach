@@ -3,7 +3,6 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
-import { UnipileClient } from '@/lib/unipile';
 import { updateAccountSubscriptionQuantity } from '@/lib/stripe';
 
 // Schema for account updates
@@ -11,6 +10,12 @@ const accountUpdateSchema = z.object({
   name: z.string().min(1),
   isActive: z.boolean().optional()
 });
+
+// Webhook URLs
+const WEBHOOK_URLS = [
+  'https://messagelm.app.n8n.cloud/webhook-test/sending-replies',
+  'https://messagelm.app.n8n.cloud/webhook/sending-replies'
+];
 
 export async function PUT(
   request: Request,
@@ -85,33 +90,60 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if social account exists and belongs to the organization
-    const existingAccount = await prisma.socialAccount.findFirst({
-      where: {
-        id: params.id,
-        organizationId: session.user.organizationId,
-      },
+    const { id } = params;
+
+    // Get the social account
+    const socialAccount = await prisma.socialAccount.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        organizationId: true,
+        unipileAccountId: true
+      }
     });
 
-    if (!existingAccount) {
+    if (!socialAccount) {
       return NextResponse.json(
         { error: 'Social account not found' },
         { status: 404 }
       );
     }
 
-    // Delete from Unipile first
-    if (existingAccount.unipileAccountId) {
-      const unipileClient = new UnipileClient();
-      await unipileClient.deleteAccount(existingAccount.unipileAccountId);
+    // Verify organization access
+    if (socialAccount.organizationId !== session.user.organizationId) {
+      return NextResponse.json(
+        { error: 'Access denied to this social account' },
+        { status: 403 }
+      );
     }
 
-    // Delete from our database
+    // Notify webhook endpoints about account deletion
+    if (socialAccount.unipileAccountId) {
+      try {
+        await Promise.all(WEBHOOK_URLS.map(url =>
+          fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              accountId: socialAccount.unipileAccountId,
+              organizationId: socialAccount.organizationId,
+              action: 'delete_social_account'
+            })
+          })
+        ));
+      } catch (error) {
+        console.error('Failed to notify webhook endpoints:', error);
+        // Continue with deletion even if webhook notification fails
+      }
+    }
+
+    // Delete the social account
     await prisma.socialAccount.delete({
-      where: { id: params.id },
+      where: { id }
     });
 
     return NextResponse.json({ success: true });
+
   } catch (error) {
     console.error('Error deleting social account:', error);
     return NextResponse.json(

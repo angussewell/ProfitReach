@@ -14,6 +14,12 @@ const accountUpdateSchema = z.object({
   isActive: z.boolean().optional()
 });
 
+// Webhook URLs
+const WEBHOOK_URLS = [
+  'https://messagelm.app.n8n.cloud/webhook-test/sending-replies',
+  'https://messagelm.app.n8n.cloud/webhook/sending-replies'
+];
+
 export async function PUT(
   request: Request,
   { params }: { params: { id: string } }
@@ -167,85 +173,64 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { id } = params;
+
     // Get the email account
-    const emailAccount = await prisma.emailAccount.findFirst({
-      where: {
-        id: params.id,
-        organizationId: session.user.organizationId,
-      },
+    const emailAccount = await prisma.emailAccount.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        organizationId: true,
+        unipileAccountId: true
+      }
     });
 
     if (!emailAccount) {
-      return NextResponse.json({ error: 'Email account not found' }, { status: 404 });
-    }
-
-    console.log('Attempting to delete account:', {
-      accountId: params.id,
-      unipileAccountId: emailAccount.unipileAccountId
-    });
-
-    let unipileDeleteSuccess = true;
-    // Try Unipile deletion first
-    if (emailAccount.unipileAccountId) {
-      try {
-        const unipile = new UnipileClient();
-        await unipile.deleteAccount(emailAccount.unipileAccountId);
-        console.log('Successfully deleted from Unipile:', {
-          accountId: params.id,
-          unipileAccountId: emailAccount.unipileAccountId
-        });
-      } catch (unipileError) {
-        unipileDeleteSuccess = false;
-        console.error('Failed to delete from Unipile:', {
-          error: unipileError instanceof Error ? unipileError.message : String(unipileError),
-          stack: unipileError instanceof Error ? unipileError.stack : undefined,
-          accountId: params.id,
-          unipileAccountId: emailAccount.unipileAccountId
-        });
-        // Continue with database deletion even if Unipile fails
-      }
-    }
-
-    // Delete from our database
-    try {
-      await prisma.emailAccount.delete({
-        where: {
-          id: params.id,
-        },
-      });
-      console.log('Successfully deleted from database:', {
-        accountId: params.id
-      });
-
-      // If Unipile failed but database succeeded, return partial success
-      if (!unipileDeleteSuccess) {
-        return NextResponse.json({ 
-          warning: 'Account deleted from database but Unipile deletion failed. Please contact support.' 
-        }, { status: 207 });
-      }
-
-      return NextResponse.json({ success: true });
-    } catch (dbError) {
-      console.error('Failed to delete from database:', {
-        error: dbError instanceof Error ? dbError.message : String(dbError),
-        stack: dbError instanceof Error ? dbError.stack : undefined,
-        accountId: params.id
-      });
-      
       return NextResponse.json(
-        { error: 'Failed to delete account from database' },
-        { status: 500 }
+        { error: 'Email account not found' },
+        { status: 404 }
       );
     }
-  } catch (error) {
-    console.error('Error in delete account handler:', {
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-      accountId: params.id
+
+    // Verify organization access
+    if (emailAccount.organizationId !== session.user.organizationId) {
+      return NextResponse.json(
+        { error: 'Access denied to this email account' },
+        { status: 403 }
+      );
+    }
+
+    // Notify webhook endpoints about account deletion
+    if (emailAccount.unipileAccountId) {
+      try {
+        await Promise.all(WEBHOOK_URLS.map(url =>
+          fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              accountId: emailAccount.unipileAccountId,
+              organizationId: emailAccount.organizationId,
+              action: 'delete_account'
+            })
+          })
+        ));
+      } catch (error) {
+        console.error('Failed to notify webhook endpoints:', error);
+        // Continue with deletion even if webhook notification fails
+      }
+    }
+
+    // Delete the email account
+    await prisma.emailAccount.delete({
+      where: { id }
     });
-    
+
+    return NextResponse.json({ success: true });
+
+  } catch (error) {
+    console.error('Error deleting email account:', error);
     return NextResponse.json(
-      { error: 'Failed to delete account' },
+      { error: 'Failed to delete email account' },
       { status: 500 }
     );
   }
