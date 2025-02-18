@@ -224,37 +224,70 @@ export function AccountsClient() {
         throw new Error('No organization found. Please contact support.');
       }
       
+      // Determine account type based on active tab
+      const accountType = activeTab === 'social' ? 'LINKEDIN' : 'EMAIL';
+      
       // Now try to get the connection link
-      console.log('Requesting connection link...');
+      console.log('Requesting connection link...', {
+        accountType,
+        activeTab
+      });
+
       const response = await fetch(`${baseUrl}/api/accounts/connect`, {
         method: 'POST',
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
-        }
+        },
+        body: JSON.stringify({ accountType })
       });
       
+      // Get response text first
+      const responseText = await response.text();
+      
+      // Try to parse as JSON
+      let errorData;
+      try {
+        errorData = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('Failed to parse error response:', {
+          status: response.status,
+          text: responseText,
+          error: parseError
+        });
+        throw new Error('Unexpected response from server. Please try again.');
+      }
+      
       if (!response.ok) {
-        const errorData = await response.json();
         console.error('Failed to get connection link:', {
           status: response.status,
           error: errorData
         });
-        throw new Error(errorData.details || errorData.error || 'Failed to generate connection link');
+        
+        // Extract error message from response
+        let errorMessage = 'Failed to generate connection link';
+        if (errorData.details) {
+          errorMessage = errorData.details;
+        } else if (errorData.error) {
+          errorMessage = typeof errorData.error === 'object' 
+            ? JSON.stringify(errorData.error) 
+            : errorData.error;
+        }
+        
+        throw new Error(errorMessage);
       }
       
-      const data = await response.json();
-      console.log('Got connection link:', { hasUrl: !!data.url });
-
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        throw new Error('Invalid response from server - no URL returned');
+      if (!errorData.url) {
+        console.error('No connection URL in response:', errorData);
+        throw new Error('Invalid response from server. Please try again.');
       }
+
+      // Redirect to the connection URL
+      window.location.href = errorData.url;
     } catch (error) {
       console.error('Error connecting account:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to start account connection');
+      toast.error(error instanceof Error ? error.message : 'Failed to connect account');
     }
   };
 

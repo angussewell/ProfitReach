@@ -2,27 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { loadStripe } from '@stripe/stripe-js';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'react-hot-toast';
-import { Switch } from '@/components/ui/switch';
-
-if (!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || !process.env.NEXT_PUBLIC_STRIPE_TEST_PUBLISHABLE_KEY) {
-  throw new Error('Missing Stripe publishable keys');
-}
-
-const getStripePromise = (isTestMode: boolean) => 
-  loadStripe(isTestMode ? process.env.NEXT_PUBLIC_STRIPE_TEST_PUBLISHABLE_KEY! : process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
-
-const CREDIT_PACKS = [
-  { credits: 5000, price: 50 },
-  { credits: 10000, price: 95 },
-  { credits: 25000, price: 225 },
-];
 
 interface BillingFormProps {
   organization: {
@@ -36,14 +16,21 @@ interface BillingFormProps {
       createdAt: Date;
     }>;
   };
+  onPlanChange?: (plan: string) => void;
 }
 
-export function BillingForm({ organization }: BillingFormProps) {
+const CREDIT_PACKS = [
+  { credits: 5000, price: 50 },
+  { credits: 10000, price: 95 },
+  { credits: 25000, price: 225 },
+];
+
+export function BillingForm({ organization, onPlanChange }: BillingFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [currentPlan, setCurrentPlan] = useState(organization.billingPlan);
   const [selectedPack, setSelectedPack] = useState(CREDIT_PACKS[0]);
   const [isTestMode, setIsTestMode] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
 
   const handlePlanChange = async (plan: string) => {
     setLoading(true);
@@ -58,6 +45,9 @@ export function BillingForm({ organization }: BillingFormProps) {
         throw new Error('Failed to update plan');
       }
 
+      setCurrentPlan(plan);
+      toast.success('Billing plan updated successfully');
+      onPlanChange?.(plan);
       router.refresh();
     } catch (error) {
       console.error('Error updating plan:', error);
@@ -69,7 +59,6 @@ export function BillingForm({ organization }: BillingFormProps) {
 
   const handlePurchaseCredits = async () => {
     try {
-      setIsLoading(true);
       const response = await fetch('/api/billing/create-checkout', {
         method: 'POST',
         headers: {
@@ -87,142 +76,123 @@ export function BillingForm({ organization }: BillingFormProps) {
       }
 
       const { sessionId } = await response.json();
-      const stripe = await getStripePromise(isTestMode);
-      
-      if (!stripe) {
-        throw new Error('Failed to load Stripe');
-      }
-
-      await stripe.redirectToCheckout({ sessionId });
+      window.location.href = `https://checkout.stripe.com/pay/${sessionId}`;
     } catch (error) {
       console.error('Error creating checkout session:', error);
       toast.error('Failed to create checkout session');
-    } finally {
-      setIsLoading(false);
     }
   };
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Billing Plan</CardTitle>
-          <CardDescription>Choose your billing plan</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <RadioGroup
-            defaultValue={organization.billingPlan}
-            onValueChange={handlePlanChange}
-            disabled={loading}
-          >
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="unlimited" id="unlimited" />
-              <Label htmlFor="unlimited">Unlimited</Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="at_cost" id="at_cost" />
-              <Label htmlFor="at_cost">At Cost ($50 per 5,000 credits)</Label>
-            </div>
-          </RadioGroup>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Credit Balance</CardTitle>
-          <CardDescription>Your current credit balance and usage history</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="mb-6">
-            <p className="text-2xl font-bold">{organization.creditBalance.toLocaleString()} credits</p>
-            {organization.billingPlan === 'at_cost' && (
-              <Button
-                className="mt-4"
-                onClick={handlePurchaseCredits}
-                disabled={loading}
-              >
-                Purchase Credits
-              </Button>
-            )}
+      <div className="bg-white rounded-xl shadow-sm p-6">
+        <div className="mb-4">
+          <h2 className="text-xl font-semibold">Billing Plan</h2>
+          <p className="text-sm text-gray-500">Choose your billing plan</p>
+        </div>
+        <div className="space-y-4">
+          <div className="flex items-center space-x-2">
+            <input
+              type="radio"
+              id="unlimited"
+              name="billingPlan"
+              value="unlimited"
+              checked={currentPlan === 'unlimited'}
+              onChange={(e) => handlePlanChange(e.target.value)}
+              disabled={loading}
+              className="h-4 w-4 text-red-600 focus:ring-red-500"
+            />
+            <label htmlFor="unlimited" className="text-sm font-medium">
+              Unlimited
+            </label>
           </div>
-
-          <div>
-            <h3 className="font-semibold mb-4">Recent Usage</h3>
-            <div className="space-y-4">
-              {organization.creditUsage.map((usage) => (
-                <div key={usage.id} className="flex justify-between items-center">
-                  <div>
-                    <p className="font-medium">{usage.description || 'Scenario Run'}</p>
-                    <p className="text-sm text-gray-500">
-                      {new Date(usage.createdAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <p className={usage.amount > 0 ? 'text-green-600' : 'text-red-600'}>
-                    {usage.amount > 0 ? '+' : ''}{usage.amount}
-                  </p>
-                </div>
-              ))}
-            </div>
+          <div className="flex items-center space-x-2">
+            <input
+              type="radio"
+              id="at_cost"
+              name="billingPlan"
+              value="at_cost"
+              checked={currentPlan === 'at_cost'}
+              onChange={(e) => handlePlanChange(e.target.value)}
+              disabled={loading}
+              className="h-4 w-4 text-red-600 focus:ring-red-500"
+            />
+            <label htmlFor="at_cost" className="text-sm font-medium">
+              At Cost ($50 per 5,000 credits)
+            </label>
           </div>
-        </CardContent>
-      </Card>
+          {loading && (
+            <div className="text-sm text-gray-500">
+              Updating billing plan...
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm p-6">
+        <div className="mb-4">
+          <h2 className="text-xl font-semibold">Credit Balance</h2>
+          <p className="text-sm text-gray-500">Your current credit balance and usage history</p>
+        </div>
+        <div>
+          <p className="text-2xl font-bold">{organization.creditBalance.toLocaleString()} credits</p>
+          {organization.billingPlan === 'at_cost' && (
+            <button
+              onClick={handlePurchaseCredits}
+              disabled={loading}
+              className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+            >
+              Purchase Credits
+            </button>
+          )}
+        </div>
+      </div>
 
       {organization.billingPlan === 'at_cost' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Purchase Credits</CardTitle>
-            <CardDescription>
-              Select a credit pack to purchase
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Test Mode</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Enable to use test cards and simulate payments
-                  </p>
-                </div>
-                <Switch
-                  checked={isTestMode}
-                  onCheckedChange={setIsTestMode}
-                />
+        <div className="bg-white rounded-xl shadow-sm p-6">
+          <div className="mb-4">
+            <h2 className="text-xl font-semibold">Purchase Credits</h2>
+            <p className="text-sm text-gray-500">Select a credit pack to purchase</p>
+          </div>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <label className="text-sm font-medium">Test Mode</label>
+                <p className="text-sm text-gray-500">
+                  Enable to use test cards and simulate payments
+                </p>
               </div>
-              <div className="space-y-2">
-                <Label>Select Credit Pack</Label>
-                <Select
-                  value={selectedPack.credits.toString()}
-                  onValueChange={(value) => 
-                    setSelectedPack(CREDIT_PACKS.find(pack => pack.credits.toString() === value)!)
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select credits" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CREDIT_PACKS.map((pack) => (
-                      <SelectItem key={pack.credits} value={pack.credits.toString()}>
-                        {pack.credits.toLocaleString()} credits (${pack.price})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button
-                onClick={handlePurchaseCredits}
-                disabled={isLoading}
-                className="w-full"
-              >
-                {isLoading ? (
-                  <span>Processing...</span>
-                ) : (
-                  <span>Purchase ${selectedPack.price} of Credits</span>
-                )}
-              </Button>
+              <input
+                type="checkbox"
+                checked={isTestMode}
+                onChange={(e) => setIsTestMode(e.target.checked)}
+                className="h-4 w-4 text-red-600 focus:ring-red-500 rounded"
+              />
             </div>
-          </CardContent>
-        </Card>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Select Credit Pack</label>
+              <select
+                value={selectedPack.credits.toString()}
+                onChange={(e) => 
+                  setSelectedPack(CREDIT_PACKS.find(pack => pack.credits.toString() === e.target.value)!)
+                }
+                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              >
+                {CREDIT_PACKS.map((pack) => (
+                  <option key={pack.credits} value={pack.credits.toString()}>
+                    {pack.credits.toLocaleString()} credits (${pack.price})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              onClick={handlePurchaseCredits}
+              className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+            >
+              Purchase ${selectedPack.price} of Credits
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

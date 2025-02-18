@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { PageHeader } from '@/components/ui/page-header';
 import { ClientCard, ClientButton, ClientInput } from '@/components/ui/client-components';
-import { Inbox, Loader2, MessageSquare, Reply, Send, X } from 'lucide-react';
+import { Inbox, Loader2, MessageSquare, Reply, Send, Trash2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { LucideProps } from 'lucide-react';
 import { toast } from 'sonner';
@@ -25,12 +25,20 @@ interface EmailMessage {
   isRead: boolean;
 }
 
+// Define email account interface
+interface EmailAccount {
+  id: string;
+  email: string;
+  name: string;
+}
+
 const LoaderIcon: React.FC<LucideProps> = Loader2;
 const InboxIcon: React.FC<LucideProps> = Inbox;
 const MessageIcon: React.FC<LucideProps> = MessageSquare;
 const ReplyIcon: React.FC<LucideProps> = Reply;
 const SendIcon: React.FC<LucideProps> = Send;
 const CloseIcon: React.FC<LucideProps> = X;
+const TrashIcon: React.FC<LucideProps> = Trash2;
 
 export function UniversalInboxClient() {
   const [selectedThread, setSelectedThread] = useState<string | null>(null);
@@ -39,7 +47,10 @@ export function UniversalInboxClient() {
   const [showReplyModal, setShowReplyModal] = useState(false);
   const [replyContent, setReplyContent] = useState('');
   const [replying, setReplying] = useState(false);
-  const [emailAccounts, setEmailAccounts] = useState<Array<{ id: string; email: string; unipileAccountId: string | null }>>([]);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [messageToDelete, setMessageToDelete] = useState<EmailMessage | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [emailAccounts, setEmailAccounts] = useState<EmailAccount[]>([]);
   const [selectedFromEmail, setSelectedFromEmail] = useState<string>('');
 
   // Fetch messages and email accounts
@@ -72,14 +83,53 @@ export function UniversalInboxClient() {
     fetchData();
   }, []);
 
+  // Helper function to check if an email belongs to our accounts
+  const isOurEmail = (email: string) => {
+    return emailAccounts.some(account => account.email === email);
+  };
+
+  // Helper function to find the other participant in a thread
+  const findOtherParticipant = (messages: EmailMessage[]) => {
+    // Sort messages by date (oldest first) to find the original conversation
+    const sortedMessages = [...messages].sort(
+      (a, b) => new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime()
+    );
+
+    // First try to find the original recipient if we started the thread
+    const firstMessage = sortedMessages[0];
+    if (isOurEmail(firstMessage.sender)) {
+      return firstMessage.recipientEmail;
+    }
+
+    // Otherwise, use the first sender who isn't us
+    const externalParticipant = sortedMessages.find(
+      msg => !isOurEmail(msg.sender)
+    );
+    if (externalParticipant) {
+      return externalParticipant.sender;
+    }
+
+    // Fallback to the original recipient (shouldn't reach here in normal cases)
+    return firstMessage.recipientEmail;
+  };
+
   // Reset selected email when opening reply modal
   useEffect(() => {
-    if (showReplyModal && selectedThread) {
-      const latestMessage = threadGroups[selectedThread]
-        .sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime())[0];
-      setSelectedFromEmail(latestMessage.recipientEmail);
+    if (showReplyModal && selectedThread && emailAccounts.length > 0) {
+      const messages = threadGroups[selectedThread];
+      
+      // Find our email account that was involved in the conversation
+      const ourEmail = emailAccounts.find(account => 
+        messages.some(msg => 
+          msg.sender === account.email || msg.recipientEmail === account.email
+        )
+      );
+
+      if (ourEmail) {
+        setSelectedFromEmail(ourEmail.email);
+      }
     }
-  }, [showReplyModal, selectedThread]);
+  }, [showReplyModal, selectedThread, emailAccounts]);
 
   // Group messages by thread
   const threadGroups = messages.reduce((groups, message) => {
@@ -97,14 +147,19 @@ export function UniversalInboxClient() {
     
     setReplying(true);
     try {
-      const latestMessage = threadGroups[selectedThread]
-        .sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime())[0];
+      const threadMessages = threadGroups[selectedThread];
+      const latestMessage = threadMessages.sort((a, b) => 
+        new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime()
+      )[0];
 
       // Find the selected email account
       const selectedAccount = emailAccounts.find(account => account.email === selectedFromEmail);
-      if (!selectedAccount?.unipileAccountId) {
-        throw new Error('Selected email account is not properly configured');
+      if (!selectedAccount) {
+        throw new Error('Please select a valid email account to send from');
       }
+
+      // Get the correct recipient email (the other participant in the thread)
+      const toAddress = findOtherParticipant(threadMessages);
 
       const response = await fetch('/api/messages/reply', {
         method: 'POST',
@@ -115,7 +170,8 @@ export function UniversalInboxClient() {
           messageId: latestMessage.messageId,
           content: replyContent,
           action: 'reply',
-          fromEmail: selectedFromEmail
+          fromEmail: selectedFromEmail,
+          toAddress
         }),
       });
 
@@ -138,6 +194,51 @@ export function UniversalInboxClient() {
       toast.error(error instanceof Error ? error.message : 'Failed to send reply');
     } finally {
       setReplying(false);
+    }
+  };
+
+  // Handle message deletion
+  const handleDelete = async (message: EmailMessage) => {
+    setMessageToDelete(message);
+    setShowDeleteModal(true);
+  };
+
+  // Confirm and execute deletion
+  const confirmDelete = async () => {
+    if (!messageToDelete) return;
+    
+    setDeleting(true);
+    try {
+      const response = await fetch(`/api/messages/${messageToDelete.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete message');
+      }
+
+      // Remove message from state
+      setMessages(prevMessages => 
+        prevMessages.filter(msg => msg.id !== messageToDelete.id)
+      );
+
+      // Clear selected thread if it was the last message
+      const remainingThreadMessages = messages.filter(
+        msg => msg.threadId === messageToDelete.threadId && msg.id !== messageToDelete.id
+      );
+      if (remainingThreadMessages.length === 0) {
+        setSelectedThread(null);
+      }
+
+      toast.success('Message deleted successfully');
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to delete message');
+    } finally {
+      setDeleting(false);
+      setShowDeleteModal(false);
+      setMessageToDelete(null);
     }
   };
 
@@ -250,13 +351,23 @@ export function UniversalInboxClient() {
                     <h2 className="text-lg font-semibold text-slate-900">
                       {threadGroups[selectedThread][0].subject}
                     </h2>
-                    <ClientButton
-                      onClick={() => setShowReplyModal(true)}
-                      className="flex items-center gap-2"
-                    >
-                      <ReplyIcon className="h-4 w-4" />
-                      Reply
-                    </ClientButton>
+                    <div className="flex items-center gap-2">
+                      <ClientButton
+                        onClick={() => setShowReplyModal(true)}
+                        className="flex items-center gap-2"
+                      >
+                        <ReplyIcon className="h-4 w-4" />
+                        Reply
+                      </ClientButton>
+                      <ClientButton
+                        variant="outline"
+                        onClick={() => handleDelete(threadGroups[selectedThread][0])}
+                        className="flex items-center gap-2 text-red-600 hover:text-red-700"
+                      >
+                        <TrashIcon className="h-4 w-4" />
+                        Delete
+                      </ClientButton>
+                    </div>
                   </div>
                   <div className="p-6 space-y-4 overflow-y-auto flex-1">
                     {threadGroups[selectedThread]
@@ -337,13 +448,13 @@ export function UniversalInboxClient() {
                   onChange={(e) => setSelectedFromEmail(e.target.value)}
                   className="w-full p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
+                  <option value="">Select an email account</option>
                   {emailAccounts.map(account => (
                     <option 
                       key={account.id} 
                       value={account.email}
-                      disabled={!account.unipileAccountId}
                     >
-                      {account.email} {!account.unipileAccountId && '(Not configured)'}
+                      {account.email}
                     </option>
                   ))}
                 </select>
@@ -376,6 +487,57 @@ export function UniversalInboxClient() {
                   <SendIcon className="h-4 w-4" />
                 )}
                 {replying ? 'Sending...' : 'Send Reply'}
+              </ClientButton>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && messageToDelete && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl w-[400px] flex flex-col shadow-xl border border-slate-200/60">
+            <div className="px-6 py-4 border-b border-slate-200/60 flex justify-between items-center bg-white/95">
+              <h2 className="text-lg font-semibold flex items-center gap-2 text-slate-900">
+                <TrashIcon className="h-5 w-5 text-red-500" />
+                <span>Delete Message</span>
+              </h2>
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setMessageToDelete(null);
+                }}
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <CloseIcon className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="p-6">
+              <p className="text-slate-700">
+                Are you sure you want to delete this message? This action cannot be undone.
+              </p>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-200/60 flex justify-end gap-3">
+              <ClientButton
+                variant="outline"
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setMessageToDelete(null);
+                }}
+              >
+                Cancel
+              </ClientButton>
+              <ClientButton
+                onClick={confirmDelete}
+                disabled={deleting}
+                className="bg-red-600 hover:bg-red-700 text-white flex items-center gap-2"
+              >
+                {deleting ? (
+                  <LoaderIcon className="h-4 w-4 animate-spin" />
+                ) : (
+                  <TrashIcon className="h-4 w-4" />
+                )}
+                {deleting ? 'Deleting...' : 'Delete Message'}
               </ClientButton>
             </div>
           </div>
