@@ -208,23 +208,26 @@ export async function POST(req: NextRequest) {
 
     // Check payment method for at-cost plan
     if (organization.billingPlan?.toLowerCase().trim() === 'at_cost') {
-      const hasPaymentMethod = await hasValidPaymentMethod(organization.id);
-      if (!hasPaymentMethod) {
-        await prisma.webhookLog.update({
-          where: { id: webhookLog.id },
-          data: {
-            status: 'blocked',
-            responseBody: {
-              error: 'No valid payment method found',
-              details: 'Please add a payment method in billing settings to use the at-cost plan'
-            } as Record<string, any>
-          }
-        });
+      // Skip payment method check if they have credits
+      if (organization.creditBalance <= 0) {
+        const hasPaymentMethod = await hasValidPaymentMethod(organization.id);
+        if (!hasPaymentMethod) {
+          await prisma.webhookLog.update({
+            where: { id: webhookLog.id },
+            data: {
+              status: 'blocked',
+              responseBody: {
+                error: 'No valid payment method found',
+                details: 'Please add a payment method in billing settings to use the at-cost plan'
+              } as Record<string, any>
+            }
+          });
 
-        return Response.json({ 
-          error: 'No valid payment method found',
-          details: 'Please add a payment method in billing settings to use the at-cost plan'
-        }, { status: 402 });
+          return Response.json({ 
+            error: 'No valid payment method found',
+            details: 'Please add a payment method in billing settings to use the at-cost plan'
+          }, { status: 402 });
+        }
       }
 
       // Check and reserve credit in a transaction

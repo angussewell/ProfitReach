@@ -320,29 +320,73 @@ export async function reportScenarioUsage(organizationId: string) {
   );
 }
 
-export async function hasValidPaymentMethod(organizationId: string): Promise<boolean> {
+export async function hasValidPaymentMethod(organizationId: string, isTestMode: boolean = false): Promise<boolean> {
   const organization = await prisma.organization.findUnique({
     where: { id: organizationId },
+    select: {
+      stripeCustomerId: true,
+      stripeTestCustomerId: true,
+      creditBalance: true
+    }
   });
 
-  if (!organization?.stripeCustomerId) {
+  if (!organization) {
+    console.log('Organization not found:', organizationId);
+    return false;
+  }
+
+  // If they have credits, don't require a payment method
+  if (organization.creditBalance > 0) {
+    console.log('Organization has credits, skipping payment method check:', {
+      organizationId,
+      creditBalance: organization.creditBalance
+    });
+    return true;
+  }
+
+  const customerId = isTestMode ? organization.stripeTestCustomerId : organization.stripeCustomerId;
+  
+  if (!customerId) {
+    console.log('No Stripe customer ID found:', {
+      organizationId,
+      isTestMode,
+      hasLiveCustomer: !!organization.stripeCustomerId,
+      hasTestCustomer: !!organization.stripeTestCustomerId
+    });
     return false;
   }
 
   try {
-    const customer = await stripe.customers.retrieve(organization.stripeCustomerId);
+    const stripe = getStripeClient(isTestMode);
+    const customer = await stripe.customers.retrieve(customerId);
+    
     if (customer.deleted) {
+      console.log('Stripe customer is deleted:', { organizationId, customerId });
       return false;
     }
 
     const paymentMethods = await stripe.paymentMethods.list({
-      customer: organization.stripeCustomerId,
+      customer: customerId,
       type: 'card',
     });
 
-    return paymentMethods.data.length > 0;
+    const hasPaymentMethod = paymentMethods.data.length > 0;
+    console.log('Payment method check result:', {
+      organizationId,
+      customerId,
+      isTestMode,
+      hasPaymentMethod,
+      methodCount: paymentMethods.data.length
+    });
+
+    return hasPaymentMethod;
   } catch (error) {
-    console.error('Error checking payment method:', error);
+    console.error('Error checking payment method:', {
+      error,
+      organizationId,
+      customerId,
+      isTestMode
+    });
     return false;
   }
 }
