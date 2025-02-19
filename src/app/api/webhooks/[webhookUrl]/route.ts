@@ -139,8 +139,17 @@ export async function POST(
       }
     });
 
+    // Add detailed billing plan logging
+    log('info', 'Organization billing details', {
+      organizationId: organization.id,
+      billingPlan: organization.billingPlan,
+      billingPlanType: typeof organization.billingPlan,
+      creditBalance: organization.creditBalance,
+      rawBillingPlan: JSON.stringify(organization.billingPlan)
+    });
+
     // Check payment method for at-cost plan
-    if (organization.billingPlan === 'at_cost') {
+    if (organization.billingPlan?.toLowerCase().trim() === 'at_cost') {
       const hasPaymentMethod = await hasValidPaymentMethod(organization.id);
       if (!hasPaymentMethod) {
         // Update webhook log to blocked status
