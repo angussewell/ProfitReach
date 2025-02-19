@@ -172,10 +172,46 @@ export async function POST(req: NextRequest) {
       organizationId: organization.id
     });
 
+    // Create initial webhook log
+    const webhookLog = await prisma.webhookLog.create({
+      data: {
+        status: 'processing',
+        scenarioName,
+        contactEmail: contactData.email || 'Unknown',
+        contactName: contactData.name || 'Unknown',
+        company: contactData.company || 'Unknown',
+        requestBody: contactData as Record<string, any>,
+        accountId: userWebhookUrl,
+        organization: {
+          connect: {
+            id: organization.id
+          }
+        },
+        GHLIntegration: userWebhookUrl ? {
+          connect: {
+            id: userWebhookUrl
+          }
+        } : undefined
+      }
+    });
+
+    log('info', 'Created initial webhook log', { webhookLogId: webhookLog.id });
+
     // Check payment method for at-cost plan
     if (organization.billingPlan === 'at_cost') {
       const hasPaymentMethod = await hasValidPaymentMethod(organization.id);
       if (!hasPaymentMethod) {
+        await prisma.webhookLog.update({
+          where: { id: webhookLog.id },
+          data: {
+            status: 'blocked',
+            responseBody: {
+              error: 'No valid payment method found',
+              details: 'Please add a payment method in billing settings to use the at-cost plan'
+            } as Record<string, any>
+          }
+        });
+
         return Response.json({ 
           error: 'No valid payment method found',
           details: 'Please add a payment method in billing settings to use the at-cost plan'
@@ -184,7 +220,11 @@ export async function POST(req: NextRequest) {
 
       // Check and reserve credit in a transaction
       try {
-        let webhookLog;
+        log('info', 'Starting credit check transaction', { 
+          organizationId: organization.id,
+          webhookLogId: webhookLog.id 
+        });
+
         await prisma.$transaction(async (tx) => {
           const org = await tx.organization.findUnique({
             where: { id: organization.id },
@@ -195,27 +235,9 @@ export async function POST(req: NextRequest) {
             throw new Error('Insufficient credits');
           }
 
-          // Create webhook log first
-          webhookLog = await tx.webhookLog.create({
-            data: {
-              status: 'processing',
-              scenarioName,
-              contactEmail: contactData.email || 'Unknown',
-              contactName: contactData.name || 'Unknown',
-              company: contactData.company || 'Unknown',
-              requestBody: contactData as Record<string, any>,
-              accountId: userWebhookUrl,
-              organization: {
-                connect: {
-                  id: organization.id
-                }
-              },
-              GHLIntegration: userWebhookUrl ? {
-                connect: {
-                  id: userWebhookUrl
-                }
-              } : undefined
-            }
+          log('info', 'Found sufficient credits', { 
+            currentBalance: org.creditBalance,
+            webhookLogId: webhookLog.id 
           });
 
           // Reserve the credit by updating the balance
@@ -233,35 +255,26 @@ export async function POST(req: NextRequest) {
               webhookLogId: webhookLog.id
             }
           });
+
+          log('info', 'Credit deducted successfully', { 
+            newBalance: org.creditBalance - 1,
+            webhookLogId: webhookLog.id 
+          });
+        });
+      } catch (error) {
+        log('error', 'Credit check failed', {
+          error: error instanceof Error ? error.message : String(error),
+          webhookLogId: webhookLog.id
         });
 
-        // Store webhookLog for later use
-        return { webhookLog };
-      } catch (error) {
-        // Create webhook log for blocked request
-        const blockedWebhookLog = await prisma.webhookLog.create({
+        await prisma.webhookLog.update({
+          where: { id: webhookLog.id },
           data: {
             status: 'blocked',
-            scenarioName,
-            contactEmail: contactData.email || 'Unknown',
-            contactName: contactData.name || 'Unknown',
-            company: contactData.company || 'Unknown',
-            requestBody: contactData as Record<string, any>,
             responseBody: { 
               error: 'Insufficient credits',
               details: 'Please purchase more credits to continue sending messages'
-            } as Record<string, any>,
-            accountId: userWebhookUrl,
-            organization: {
-              connect: {
-                id: organization.id
-              }
-            },
-            GHLIntegration: userWebhookUrl ? {
-              connect: {
-                id: userWebhookUrl
-              }
-            } : undefined
+            } as Record<string, any>
           }
         });
 
@@ -354,35 +367,6 @@ export async function POST(req: NextRequest) {
           }, { status: 400 });
         }
       }
-
-      // Create initial webhook log
-      const webhookLog = await prisma.webhookLog.create({
-        data: {
-          status: emailSender && emailAccounts.length === 0 ? 'error' : 'processing',
-          scenarioName: scenario.name,
-          contactEmail: contactData.email || 'Unknown',
-          contactName: contactData.name || 'Unknown',
-          company: contactData.company || 'Unknown',
-          requestBody: contactData as Record<string, any>,
-          responseBody: emailSender && emailAccounts.length === 0 
-            ? { 
-                error: 'Invalid email sender',
-                details: `No active email account found matching sender: ${emailSender}`
-              } as Record<string, any>
-            : {} as Record<string, any>,
-          accountId: userWebhookUrl,
-          organization: {
-            connect: {
-              id: organization.id
-            }
-          },
-          GHLIntegration: {
-            connect: {
-              id: userWebhookUrl
-            }
-          }
-        }
-      });
 
       // Process variables in all text fields
       const processedScenario: ProcessedScenario = {
