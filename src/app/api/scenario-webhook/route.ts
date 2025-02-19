@@ -7,9 +7,7 @@ import { Prisma } from '@prisma/client';
 import { processWebhookVariables } from '@/utils/variableReplacer';
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
-import { stripe } from '@/lib/stripe';
-import { hasValidPaymentMethod, updateCreditBalance, reportScenarioUsage } from '@/lib/stripe';
-import { Organization, GHLIntegration, EmailAccount, SocialAccount, Prompt } from '@prisma/client';
+import { hasValidPaymentMethod, reportScenarioUsage } from '@/lib/stripe';
 
 // Normalize field names consistently
 const normalizeFieldName = (field: string) => field.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -184,10 +182,64 @@ export async function POST(req: NextRequest) {
         }, { status: 402 });
       }
 
-      // Check credit balance
-      if (organization.creditBalance < 1) {
+      // Check and reserve credit in a transaction
+      try {
+        let webhookLog;
+        await prisma.$transaction(async (tx) => {
+          const org = await tx.organization.findUnique({
+            where: { id: organization.id },
+            select: { creditBalance: true }
+          });
+
+          if (!org || org.creditBalance < 1) {
+            throw new Error('Insufficient credits');
+          }
+
+          // Create webhook log first
+          webhookLog = await tx.webhookLog.create({
+            data: {
+              status: 'processing',
+              scenarioName,
+              contactEmail: contactData.email || 'Unknown',
+              contactName: contactData.name || 'Unknown',
+              company: contactData.company || 'Unknown',
+              requestBody: contactData as Record<string, any>,
+              accountId: userWebhookUrl,
+              organization: {
+                connect: {
+                  id: organization.id
+                }
+              },
+              GHLIntegration: userWebhookUrl ? {
+                connect: {
+                  id: userWebhookUrl
+                }
+              } : undefined
+            }
+          });
+
+          // Reserve the credit by updating the balance
+          await tx.organization.update({
+            where: { id: organization.id },
+            data: { creditBalance: org.creditBalance - 1 }
+          });
+
+          // Log credit usage
+          await tx.creditUsage.create({
+            data: {
+              organizationId: organization.id,
+              amount: -1,
+              description: 'Scenario run',
+              webhookLogId: webhookLog.id
+            }
+          });
+        });
+
+        // Store webhookLog for later use
+        return { webhookLog };
+      } catch (error) {
         // Create webhook log for blocked request
-        await prisma.webhookLog.create({
+        const blockedWebhookLog = await prisma.webhookLog.create({
           data: {
             status: 'blocked',
             scenarioName,
@@ -205,11 +257,11 @@ export async function POST(req: NextRequest) {
                 id: organization.id
               }
             },
-            GHLIntegration: {
+            GHLIntegration: userWebhookUrl ? {
               connect: {
                 id: userWebhookUrl
               }
-            }
+            } : undefined
           }
         });
 
@@ -517,36 +569,19 @@ export async function POST(req: NextRequest) {
             response: responseData
           });
 
-          // If the scenario was successful and the organization is on the at_cost plan,
-          // deduct a credit and report usage
+          // Remove the duplicate credit deduction at the end
           if (
             webhookLog.status === 'success' &&
             organization.billingPlan === 'at_cost'
           ) {
             try {
-              await prisma.$transaction(async (tx) => {
-                await updateCreditBalance(organization.id, -1, 'Scenario run', webhookLog.id);
-                await reportScenarioUsage(organization.id);
-              });
+              await reportScenarioUsage(organization.id);
             } catch (error) {
-              // If there are insufficient credits or no active subscription,
-              // update the webhook log status
-              await prisma.webhookLog.update({
-                where: { id: webhookLog.id },
-                data: { status: 'blocked' },
-              });
-
-              const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-              console.error('Error processing scenario:', {
-                error: errorMessage,
+              console.error('Error reporting scenario usage:', {
+                error: error instanceof Error ? error.message : 'Unknown error',
                 organizationId: organization.id,
                 webhookLogId: webhookLog.id,
               });
-
-              return Response.json(
-                { error: 'Insufficient credits or no active subscription' },
-                { status: 402 }
-              );
             }
           }
 

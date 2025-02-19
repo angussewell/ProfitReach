@@ -161,8 +161,35 @@ export async function POST(
         }, { status: 402 });
       }
 
-      // Check credit balance
-      if (organization.creditBalance < 1) {
+      // Check and reserve credit in a transaction
+      try {
+        await prisma.$transaction(async (tx) => {
+          const org = await tx.organization.findUnique({
+            where: { id: organization.id },
+            select: { creditBalance: true }
+          });
+
+          if (!org || org.creditBalance < 1) {
+            throw new Error('Insufficient credits');
+          }
+
+          // Reserve the credit by updating the balance
+          await tx.organization.update({
+            where: { id: organization.id },
+            data: { creditBalance: org.creditBalance - 1 }
+          });
+
+          // Log credit usage
+          await tx.creditUsage.create({
+            data: {
+              organizationId: organization.id,
+              amount: -1,
+              description: 'Webhook processed',
+              webhookLogId: webhookLog.id
+            }
+          });
+        });
+      } catch (error) {
         // Update webhook log to blocked status
         await prisma.webhookLog.update({
           where: { id: webhookLog.id },
@@ -469,58 +496,19 @@ export async function POST(
         }
       });
 
-      // If the webhook was successful and the organization is on the at_cost plan,
-      // deduct a credit and report usage
+      // Remove the duplicate credit deduction at the end of the webhook processing
       if (
         !scenario?.testMode &&
         organization.billingPlan === 'at_cost'
       ) {
         try {
-          log('info', 'Processing credit deduction', {
-            organizationId: organization.id,
-            webhookLogId: webhookLog.id,
-            currentBalance: organization.creditBalance,
-            scenarioId: scenario.id,
-            scenarioName: scenario.name
-          });
-
-          let newBalance;
-          await prisma.$transaction(async (tx) => {
-            newBalance = await updateCreditBalance(organization.id, -1, 'Webhook processed', webhookLog.id);
-            await reportScenarioUsage(organization.id);
-          });
-
-          log('info', 'Credit deduction successful', {
-            organizationId: organization.id,
-            webhookLogId: webhookLog.id,
-            deductedAmount: 1,
-            previousBalance: organization.creditBalance,
-            newBalance: newBalance,
-            scenarioId: scenario.id,
-            scenarioName: scenario.name
-          });
+          await reportScenarioUsage(organization.id);
         } catch (error) {
-          // If there are insufficient credits or no active subscription,
-          // update the webhook log status
-          await prisma.webhookLog.update({
-            where: { id: webhookLog.id },
-            data: { status: 'blocked' },
-          });
-
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          log('error', 'Error processing webhook credits:', {
-            error: errorMessage,
+          log('error', 'Error reporting scenario usage:', {
+            error: error instanceof Error ? error.message : 'Unknown error',
             organizationId: organization.id,
-            webhookLogId: webhookLog.id,
-            currentBalance: organization.creditBalance,
-            scenarioId: scenario?.id,
-            scenarioName: scenario?.name
+            webhookLogId: webhookLog.id
           });
-
-          return NextResponse.json(
-            { error: 'Insufficient credits or no active subscription' },
-            { status: 402 }
-          );
         }
       }
 
