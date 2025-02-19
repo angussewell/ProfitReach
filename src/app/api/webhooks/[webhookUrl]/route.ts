@@ -43,16 +43,25 @@ interface OutboundData {
     snippet: string | null;
   };
   prompts: Record<string, string>;
-  emailData?: {
-    email: string;
-    name: string;
-    unipileAccountId: string;
+  emailInfo: {
+    matchedAccount?: {
+      email: string;
+      name: string;
+      unipileAccountId: string;
+    };
+    allAccounts?: Array<{
+      email: string;
+      name: string;
+      unipileAccountId: string;
+    }>;
+    error?: string;
   };
-  socialData?: {
+  socialAccounts: Array<{
     name: string;
     accountId: string;
     provider: string;
-  };
+  }>;
+  crmData: Record<string, any>; // Placeholder for future CRM data
 }
 
 export async function POST(
@@ -95,7 +104,8 @@ export async function POST(
             locationId: true,
             locationName: true
           }
-        }
+        },
+        socialAccounts: true
       }
     });
 
@@ -266,6 +276,14 @@ export async function POST(
             isActive: true
           }
         });
+      } else {
+        // Fetch all active email accounts when no sender specified
+        emailAccounts = await prisma.emailAccount.findMany({
+          where: {
+            organizationId: organization.id,
+            isActive: true
+          }
+        });
       }
 
       // Find active LinkedIn account
@@ -305,11 +323,56 @@ export async function POST(
         return acc;
       }, {} as Record<string, string>);
 
+      // Process email accounts based on email sender
+      const emailInfo: OutboundData['emailInfo'] = {};
+      if (data['Email Sender']) {
+        const matchedAccount = emailAccounts?.find(account => 
+          account.email.toLowerCase() === data['Email Sender'].toLowerCase()
+        );
+        
+        if (!matchedAccount) {
+          emailInfo.error = `No active email account found matching sender: ${data['Email Sender']}`;
+          
+          // Update webhook log with error
+          await prisma.webhookLog.update({
+            where: { id: webhookLog.id },
+            data: { 
+              status: 'error',
+              responseBody: { 
+                error: emailInfo.error
+              } as Prisma.JsonObject
+            }
+          });
+          
+          return NextResponse.json({ 
+            error: emailInfo.error
+          }, { status: 400 });
+        }
+        
+        emailInfo.matchedAccount = {
+          email: matchedAccount.email,
+          name: matchedAccount.name,
+          unipileAccountId: matchedAccount.unipileAccountId || ''
+        };
+      } else {
+        emailInfo.allAccounts = (emailAccounts || []).map(account => ({
+          email: account.email,
+          name: account.name,
+          unipileAccountId: account.unipileAccountId || ''
+        }));
+      }
+
+      // Get all active social accounts
+      const socialAccounts = organization.socialAccounts.map(account => ({
+        name: account.name,
+        accountId: account.username,
+        provider: account.provider
+      }));
+
       // Prepare outbound data
       const outboundData: OutboundData = {
         contactData: {
           ...data,
-          // If test mode is enabled, override email
           ...(scenario.testMode && scenario.testEmail && {
             email: scenario.testEmail,
             contact_id: ''
@@ -317,16 +380,9 @@ export async function POST(
         },
         scenarioData: processedScenario,
         prompts: processedPrompts,
-        emailData: emailAccounts?.[0] ? {
-          email: emailAccounts[0].email,
-          name: emailAccounts[0].name,
-          unipileAccountId: emailAccounts[0].unipileAccountId || ''
-        } : undefined,
-        socialData: socialAccount ? {
-          name: socialAccount.name,
-          accountId: socialAccount.username,
-          provider: socialAccount.provider
-        } : undefined
+        emailInfo,
+        socialAccounts,
+        crmData: {} // Placeholder for future CRM data
       };
 
       log('info', 'Sending outbound webhook request', {

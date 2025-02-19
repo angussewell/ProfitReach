@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
+import { useStripe } from '@/components/providers/StripeProvider';
 
 interface BillingFormProps {
   organization: {
@@ -30,7 +31,7 @@ export function BillingForm({ organization, onPlanChange }: BillingFormProps) {
   const [loading, setLoading] = useState(false);
   const [currentPlan, setCurrentPlan] = useState(organization.billingPlan);
   const [selectedPack, setSelectedPack] = useState(CREDIT_PACKS[0]);
-  const [isTestMode, setIsTestMode] = useState(false);
+  const { stripe, isTestMode, setIsTestMode } = useStripe();
 
   const handlePlanChange = async (plan: string) => {
     setLoading(true);
@@ -58,6 +59,11 @@ export function BillingForm({ organization, onPlanChange }: BillingFormProps) {
   };
 
   const handlePurchaseCredits = async () => {
+    if (!stripe) {
+      toast.error('Stripe is not initialized');
+      return;
+    }
+
     try {
       const response = await fetch('/api/billing/create-checkout', {
         method: 'POST',
@@ -76,7 +82,11 @@ export function BillingForm({ organization, onPlanChange }: BillingFormProps) {
       }
 
       const { sessionId } = await response.json();
-      window.location.href = `https://checkout.stripe.com/pay/${sessionId}`;
+      const { error } = await stripe.redirectToCheckout({ sessionId });
+      
+      if (error) {
+        throw error;
+      }
     } catch (error) {
       console.error('Error creating checkout session:', error);
       toast.error('Failed to create checkout session');
