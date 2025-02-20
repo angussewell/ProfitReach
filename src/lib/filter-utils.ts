@@ -145,18 +145,24 @@ async function evaluateFilter(
   filter: Filter,
   data: Record<string, any>
 ): Promise<{ passed: boolean; reason: string; details?: any }> {
-  // Log filter evaluation start
+  // Log filter evaluation start with complete data structure
   log('info', 'Evaluating filter', { 
     filter,
-    availableFields: Object.keys(data.contactData || {})
+    dataStructure: {
+      keys: Object.keys(data),
+      hasContactData: 'contactData' in data,
+      topLevelFields: Object.keys(data)
+    }
   });
 
-  // Get the actual value from contactData
-  const fieldValue = data.contactData?.[filter.field];
+  // Get the actual value - try both direct access and contactData
+  const fieldValue = data[filter.field] || data.contactData?.[filter.field];
 
-  // Log the value lookup
-  log('info', 'Field value lookup', {
+  // Log the value lookup attempt
+  log('info', 'Field value lookup result', {
     field: filter.field,
+    directValue: data[filter.field],
+    contactDataValue: data.contactData?.[filter.field],
     resolvedValue: fieldValue,
     filterValue: filter.value,
     operator: filter.operator
@@ -164,27 +170,35 @@ async function evaluateFilter(
 
   // Special handling for exists/not exists
   if (filter.operator === 'exists') {
-    const passed = fieldValue !== undefined && fieldValue !== null;
+    const passed = fieldValue !== undefined && fieldValue !== null && fieldValue !== '';
     return {
       passed,
       reason: `${filter.field} ${passed ? 'exists' : 'does not exist'}`,
       details: {
         field: filter.field,
         value: fieldValue,
-        operator: filter.operator
+        operator: filter.operator,
+        dataStructure: {
+          hasDirectField: filter.field in data,
+          hasContactDataField: data.contactData && filter.field in data.contactData
+        }
       }
     };
   }
 
   if (filter.operator === 'not exists') {
-    const passed = fieldValue === undefined || fieldValue === null;
+    const passed = fieldValue === undefined || fieldValue === null || fieldValue === '';
     return {
       passed,
       reason: `${filter.field} ${passed ? 'does not exist' : 'exists'}`,
       details: {
         field: filter.field,
         value: fieldValue,
-        operator: filter.operator
+        operator: filter.operator,
+        dataStructure: {
+          hasDirectField: filter.field in data,
+          hasContactDataField: data.contactData && filter.field in data.contactData
+        }
       }
     };
   }
@@ -363,90 +377,51 @@ const FilterPipeline = {
 
 // Evaluate filter groups
 export async function evaluateFilters(
-  filterGroups: Array<{ logic: string; filters: Filter[] }>,
+  filters: Filter[],
   data: Record<string, any>
-): Promise<{ passed: boolean; reason: string }> {
-  // Log the incoming filter groups for debugging
-  log('info', 'Starting filter evaluation', { 
-    filterGroups,
-    hasGroups: !!filterGroups?.length,
-    groupCount: filterGroups?.length || 0,
-    data
+): Promise<{
+  passed: boolean;
+  results: Array<{
+    filter: Filter;
+    passed: boolean;
+    reason: string;
+    details?: any;
+  }>;
+}> {
+  // Log start of filter evaluation
+  log('info', 'Starting filter evaluation', {
+    filterCount: filters.length,
+    dataFields: Object.keys(data)
   });
 
-  // Validate filter groups
-  if (!Array.isArray(filterGroups)) {
-    log('warn', 'Filter groups is not an array', { filterGroups });
-    return { passed: true, reason: 'No valid filters configured' };
-  }
-
-  // Remove any empty or invalid groups
-  const validGroups = filterGroups.filter(group => 
-    group && Array.isArray(group.filters) && group.filters.length > 0
+  // Evaluate each filter
+  const results = await Promise.all(
+    filters.map(async (filter) => {
+      const result = await evaluateFilter(filter, data);
+      return {
+        filter,
+        ...result
+      };
+    })
   );
 
-  log('info', 'Valid filter groups', {
-    originalCount: filterGroups.length,
-    validCount: validGroups.length,
-    validGroups
+  // Check if all filters passed
+  const allPassed = results.every((r) => r.passed);
+
+  // Log evaluation results
+  log('info', 'Filter evaluation complete', {
+    passed: allPassed,
+    results: results.map(r => ({
+      field: r.filter.field,
+      operator: r.filter.operator,
+      value: r.filter.value,
+      passed: r.passed,
+      reason: r.reason
+    }))
   });
 
-  if (validGroups.length === 0) {
-    log('info', 'No valid filter groups found after validation');
-    return { passed: true, reason: 'No filters configured' };
-  }
-
-  // Evaluate each group
-  const groupResults = await Promise.all(validGroups.map(async group => {
-    // Log group evaluation
-    log('info', 'Evaluating filter group', {
-      logic: group.logic,
-      filterCount: group.filters.length,
-      filters: group.filters
-    });
-
-    // Evaluate each filter in the group
-    const filterResults = await Promise.all(
-      group.filters.map(async filter => {
-        const result = await evaluateFilter(filter, data);
-        log('info', 'Filter evaluation result', {
-          filter,
-          result,
-          data: {
-            fieldValue: data[filter.field],
-            contactDataValue: data.contactData?.[filter.field]
-          }
-        });
-        return result;
-      })
-    );
-
-    // Group passes if all filters pass (AND logic)
-    const groupPassed = filterResults.every(r => r.passed);
-    const groupReason = filterResults
-      .map(r => r.reason)
-      .join(' AND ');
-
-    log('info', 'Group evaluation result', {
-      passed: groupPassed,
-      reason: groupReason,
-      filterResults
-    });
-
-    return { passed: groupPassed, reason: groupReason };
-  }));
-
-  // Overall result passes if any group passes (OR logic between groups)
-  const passed = groupResults.some(r => r.passed);
-  const reason = groupResults
-    .map(r => `(${r.reason})`)
-    .join(' OR ');
-
-  log('info', 'Final evaluation result', {
-    passed,
-    reason,
-    groupResults
-  });
-
-  return { passed, reason };
+  return {
+    passed: allPassed,
+    results
+  };
 } 

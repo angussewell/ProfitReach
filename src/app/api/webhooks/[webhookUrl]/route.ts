@@ -546,6 +546,72 @@ export async function POST(
         }
       }
 
+      // Evaluate filters if present
+      if (scenario.filters && Array.isArray(scenario.filters) && scenario.filters.length > 0) {
+        // Cast filters to the correct type with type guards
+        const typedFilters = scenario.filters
+          .filter((f): f is { field: string; operator: string; value: string } => 
+            typeof f === 'object' && f !== null && 
+            'field' in f && 'operator' in f && 'value' in f)
+          .map(f => ({
+            field: String(f.field),
+            operator: String(f.operator),
+            value: String(f.value)
+          })) as Filter[];
+
+        log('info', 'Evaluating scenario filters', {
+          scenarioName: scenario.name,
+          filterCount: typedFilters.length,
+          filters: typedFilters
+        });
+
+        const filterResults = await evaluateFilters(typedFilters, data);
+        
+        // Log filter evaluation results
+        log('info', 'Filter evaluation results', {
+          scenarioName: scenario.name,
+          passed: filterResults.passed,
+          results: filterResults.results.map(r => ({
+            field: r.filter.field,
+            operator: r.filter.operator,
+            value: r.filter.value,
+            passed: r.passed,
+            reason: r.reason
+          }))
+        });
+
+        if (!filterResults.passed) {
+          // Update webhook log with filter results
+          await prisma.webhookLog.update({
+            where: { id: webhookLog.id },
+            data: {
+              status: 'blocked',
+              responseBody: {
+                error: 'Blocked by filters',
+                details: filterResults.results.map(r => ({
+                  field: r.filter.field,
+                  operator: r.filter.operator,
+                  value: r.filter.value,
+                  passed: r.passed,
+                  reason: r.reason
+                }))
+              } as Record<string, any>
+            }
+          });
+
+          return NextResponse.json({
+            error: 'Blocked by filters',
+            details: filterResults.results.map(r => ({
+              field: r.filter.field,
+              operator: r.filter.operator,
+              value: r.filter.value,
+              passed: r.passed,
+              reason: r.reason
+            }))
+          }, { status: 400 });
+        }
+      }
+
       return NextResponse.json({ 
         message: 'Webhook processed successfully',
         fieldsRegistered: true

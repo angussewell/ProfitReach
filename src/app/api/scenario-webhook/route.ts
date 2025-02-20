@@ -315,7 +315,8 @@ export async function POST(req: NextRequest) {
         include: {
           snippet: true,
           attachment: true,
-          signature: true
+          signature: true,
+          filters: true
         }
       });
 
