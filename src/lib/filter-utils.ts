@@ -385,9 +385,28 @@ export async function evaluateFilters(
     filter: Filter;
     passed: boolean;
     reason: string;
-    details?: any;
+    details: {
+      originalValue: any;
+      normalizedValue: string;
+      expectedValue: string;
+      normalizedExpected: string;
+      fieldPath: string;
+      dataStructure: {
+        hasDirectField: boolean;
+        hasContactDataField: boolean;
+        availableFields: string[];
+      };
+    };
   }>;
+  summary: {
+    totalFilters: number;
+    passedFilters: number;
+    failedFilters: number;
+    evaluationTime: string;
+  };
 }> {
+  const startTime = Date.now();
+
   // Log start of filter evaluation
   log('info', 'Starting filter evaluation', {
     filterCount: filters.length,
@@ -398,30 +417,58 @@ export async function evaluateFilters(
   const results = await Promise.all(
     filters.map(async (filter) => {
       const result = await evaluateFilter(filter, data);
+      
+      // Get the actual value - try both direct access and contactData
+      const fieldValue = data[filter.field] || data.contactData?.[filter.field];
+      
       return {
         filter,
-        ...result
+        passed: result.passed,
+        reason: result.reason,
+        details: {
+          originalValue: fieldValue,
+          normalizedValue: normalizeValue(fieldValue),
+          expectedValue: filter.value,
+          normalizedExpected: normalizeValue(filter.value),
+          fieldPath: filter.field,
+          dataStructure: {
+            hasDirectField: filter.field in data,
+            hasContactDataField: data.contactData && filter.field in data.contactData,
+            availableFields: Object.keys(data).concat(Object.keys(data.contactData || {}))
+          }
+        }
       };
     })
   );
 
-  // Check if all filters passed
   const allPassed = results.every((r) => r.passed);
+  const endTime = Date.now();
+
+  // Create summary
+  const summary = {
+    totalFilters: filters.length,
+    passedFilters: results.filter(r => r.passed).length,
+    failedFilters: results.filter(r => !r.passed).length,
+    evaluationTime: `${endTime - startTime}ms`
+  };
 
   // Log evaluation results
   log('info', 'Filter evaluation complete', {
     passed: allPassed,
+    summary,
     results: results.map(r => ({
       field: r.filter.field,
       operator: r.filter.operator,
       value: r.filter.value,
       passed: r.passed,
-      reason: r.reason
+      reason: r.reason,
+      details: r.details
     }))
   });
 
   return {
     passed: allPassed,
-    results
+    results,
+    summary
   };
 } 

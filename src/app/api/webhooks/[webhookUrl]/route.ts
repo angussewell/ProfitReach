@@ -6,7 +6,7 @@ import { log } from '@/lib/logging';
 import { Prisma } from '@prisma/client';
 import { processWebhookVariables } from '@/utils/variableReplacer';
 import { Filter } from '@/types/filters';
-import { evaluateFilters } from '@/lib/filter-utils';
+import { evaluateFilters, normalizeWebhookData } from '@/lib/filter-utils';
 import { decrypt } from '@/lib/encryption';
 import { hasValidPaymentMethod, updateCreditBalance, reportScenarioUsage } from '@/lib/stripe';
 
@@ -297,325 +297,340 @@ export async function POST(
         organizationId: organization.id
       });
 
-      const scenario = await prisma.scenario.findFirst({
-        where: { 
-          name: scenarioName || '',
-          organizationId: organization.id
-        },
-        include: {
-          snippet: true,
-          attachment: true
-        }
-      });
-
-      if (!scenario) {
-        log('error', 'Scenario not found', { 
-          scenarioName,
-          currentScenario: data['Current Scenario '],
-          makeSequence: data.make_sequence,
-          organizationId: organization.id
-        });
-        throw new Error('Scenario not found');
-      }
-
-      log('info', 'Found scenario', { 
-        scenarioId: scenario.id,
-        scenarioName: scenario.name,
-        touchpointType: scenario.touchpointType
-      });
-
-      // Handle email account logic based on email sender
-      let emailAccounts = null;
-      let socialAccount = null;
-      const emailSender = data['Email Sender'];
-      
-      if (emailSender) {
-        emailAccounts = await prisma.emailAccount.findMany({
-          where: {
-            organizationId: organization.id,
-            email: emailSender,
-            isActive: true
+      // Get scenario with filters and prompts
+      let scenario;
+      try {
+        scenario = await prisma.scenario.findFirst({
+          where: { 
+            name: scenarioName,
+            organizationId: organization.id
+          },
+          include: {
+            snippet: true,
+            attachment: true,
+            signature: true
           }
         });
-      } else {
-        // Fetch all active email accounts when no sender specified
-        emailAccounts = await prisma.emailAccount.findMany({
-          where: {
-            organizationId: organization.id,
-            isActive: true
-          }
-        });
-      }
 
-      // Find active LinkedIn account
-      socialAccount = await prisma.socialAccount.findFirst({
-        where: {
-          organizationId: organization.id,
-          provider: 'LINKEDIN',
-          isActive: true
+        if (!scenario) {
+          log('error', 'Scenario not found', { scenarioName });
+          await prisma.webhookLog.update({
+            where: { id: webhookLog.id },
+            data: {
+              status: 'error',
+              responseBody: { error: 'Scenario not found' } as Record<string, any>
+            }
+          });
+          return NextResponse.json({ 
+            error: "Scenario not found",
+            scenarioName 
+          }, { status: 404 });
         }
-      });
 
-      log('info', 'Found accounts for webhook', { 
-        emailAccountsCount: emailAccounts?.length || 0,
-        hasLinkedInAccount: !!socialAccount
-      });
+        // Evaluate filters early if present
+        let filterEvaluation = null;
+        if (scenario.filters && Array.isArray(scenario.filters) && scenario.filters.length > 0) {
+          // Cast filters to the correct type with type guards
+          const typedFilters = scenario.filters
+            .filter((f): f is { field: string; operator: string; value: string } => 
+              typeof f === 'object' && f !== null && 
+              'field' in f && 'operator' in f && 'value' in f)
+            .map(f => ({
+              field: String(f.field),
+              operator: String(f.operator),
+              value: String(f.value)
+            })) as Filter[];
 
-      // Process webhook variables in scenario fields
-      const processedScenario = {
-        id: scenario.id,
-        name: scenario.name,
-        touchpointType: scenario.touchpointType,
-        customizationPrompt: scenario.customizationPrompt ? processWebhookVariables(scenario.customizationPrompt, data) : null,
-        emailExamplesPrompt: scenario.emailExamplesPrompt ? processWebhookVariables(scenario.emailExamplesPrompt, data) : null,
-        subjectLine: scenario.subjectLine ? processWebhookVariables(scenario.subjectLine, data) : null,
-        followUp: scenario.isFollowUp || false,
-        attachment: scenario.attachment?.content || null,
-        attachmentName: scenario.attachment?.name || null,
-        snippet: scenario.snippet?.content || null
-      };
+          log('info', 'Evaluating scenario filters', {
+            scenarioName: scenario.name,
+            filterCount: typedFilters.length,
+            filters: typedFilters
+          });
 
-      // Fetch and process prompts
-      const prompts = await prisma.prompt.findMany({
-        where: { organizationId: organization.id }
-      });
-      const processedPrompts = prompts.reduce((acc, prompt) => {
-        acc[prompt.name] = processWebhookVariables(prompt.content, data);
-        return acc;
-      }, {} as Record<string, string>);
-
-      // Process email accounts based on email sender
-      const emailInfo: OutboundData['emailInfo'] = {};
-      if (data['Email Sender']) {
-        const matchedAccount = emailAccounts?.find(account => 
-          account.email.toLowerCase() === data['Email Sender'].toLowerCase()
-        );
-        
-        if (!matchedAccount) {
-          emailInfo.error = `No active email account found matching sender: ${data['Email Sender']}`;
+          // Normalize webhook data
+          const normalizedData = normalizeWebhookData(data);
+          filterEvaluation = await evaluateFilters(typedFilters, normalizedData);
           
-          // Update webhook log with error
+          // Log filter evaluation results
+          log('info', 'Filter evaluation results', {
+            scenarioName: scenario.name,
+            passed: filterEvaluation.passed,
+            summary: filterEvaluation.summary,
+            results: filterEvaluation.results
+          });
+
+          // If filters didn't pass, update log and return
+          if (!filterEvaluation.passed) {
+            await prisma.webhookLog.update({
+              where: { id: webhookLog.id },
+              data: {
+                status: 'blocked',
+                responseBody: {
+                  error: 'Blocked by filters',
+                  filterEvaluation: {
+                    results: filterEvaluation.results,
+                    summary: filterEvaluation.summary
+                  },
+                  scenario: {
+                    name: scenario.name,
+                    filters: typedFilters
+                  }
+                } as Record<string, any>
+              }
+            });
+            return NextResponse.json({
+              error: 'Blocked by filters',
+              filterEvaluation: {
+                results: filterEvaluation.results,
+                summary: filterEvaluation.summary
+              },
+              scenario: {
+                name: scenario.name,
+                filters: typedFilters
+              }
+            }, { status: 400 });
+          }
+        }
+
+        // Process webhook variables in scenario fields
+        const processedScenario = {
+          id: scenario.id,
+          name: scenario.name,
+          touchpointType: scenario.touchpointType,
+          filters: scenario.filters, // Include filters in processed scenario
+          filterEvaluation, // Include filter evaluation results
+          customizationPrompt: scenario.customizationPrompt ? processWebhookVariables(scenario.customizationPrompt, data) : null,
+          emailExamplesPrompt: scenario.emailExamplesPrompt ? processWebhookVariables(scenario.emailExamplesPrompt, data) : null,
+          subjectLine: scenario.subjectLine ? processWebhookVariables(scenario.subjectLine, data) : null,
+          followUp: scenario.isFollowUp || false,
+          attachment: scenario.attachment?.content || null,
+          attachmentName: scenario.attachment?.name || null,
+          snippet: scenario.snippet?.content || null
+        };
+
+        // Fetch and process prompts
+        const prompts = await prisma.prompt.findMany({
+          where: { organizationId: organization.id }
+        });
+        const processedPrompts = prompts.reduce((acc, prompt) => {
+          acc[prompt.name] = processWebhookVariables(prompt.content, data);
+          return acc;
+        }, {} as Record<string, string>);
+
+        // Process email accounts based on email sender
+        const emailInfo: OutboundData['emailInfo'] = {};
+        if (data['Email Sender']) {
+          const matchedAccount = await prisma.emailAccount.findFirst({
+            where: {
+              organizationId: organization.id,
+              email: data['Email Sender'],
+              isActive: true
+            }
+          });
+          
+          if (!matchedAccount) {
+            emailInfo.error = `No active email account found matching sender: ${data['Email Sender']}`;
+            
+            // Update webhook log with error
+            await prisma.webhookLog.update({
+              where: { id: webhookLog.id },
+              data: { 
+                status: 'error',
+                responseBody: { 
+                  error: emailInfo.error
+                } as Prisma.JsonObject
+              }
+            });
+            
+            return NextResponse.json({ 
+              error: emailInfo.error
+            }, { status: 400 });
+          }
+          
+          emailInfo.matchedAccount = {
+            email: matchedAccount.email,
+            name: matchedAccount.name,
+            unipileAccountId: matchedAccount.unipileAccountId || ''
+          };
+        } else {
+          emailInfo.allAccounts = (await prisma.emailAccount.findMany({
+            where: {
+              organizationId: organization.id,
+              isActive: true
+            }
+          }))
+            .map(account => ({
+              email: account.email,
+              name: account.name,
+              unipileAccountId: account.unipileAccountId || ''
+            }));
+        }
+
+        // Get all active social accounts
+        const socialAccounts = organization.socialAccounts.map(account => ({
+          name: account.name,
+          accountId: account.username,
+          provider: account.provider
+        }));
+
+        // Prepare outbound data with enhanced filter information
+        const outboundData = {
+          contactData: {
+            ...data,
+            ...(scenario.testMode && scenario.testEmail && {
+              email: scenario.testEmail,
+              contact_id: ''
+            })
+          },
+          scenarioData: processedScenario,
+          filterInfo: filterEvaluation ? {
+            passed: filterEvaluation.passed,
+            summary: filterEvaluation.summary,
+            results: filterEvaluation.results
+          } : null,
+          prompts: processedPrompts,
+          emailInfo,
+          socialAccounts,
+          crmData: {} // Placeholder for future CRM data
+        };
+
+        log('info', 'Sending outbound webhook request', {
+          url: validatedWebhookUrl,
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'User-Agent': 'ProfitReach-API'
+          }
+        });
+
+        const outboundResponse = await fetch(validatedWebhookUrl, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'User-Agent': 'ProfitReach-API'
+          },
+          body: JSON.stringify(outboundData)
+        });
+
+        // Log response headers for debugging
+        const responseHeaders: Record<string, string> = {};
+        outboundResponse.headers.forEach((value, key) => {
+          responseHeaders[key] = value;
+        });
+        
+        // Get response text first for better error logging
+        const responseText = await outboundResponse.text();
+        log('info', 'Outbound webhook response', { 
+          status: outboundResponse.status,
+          headers: responseHeaders,
+          response: responseText,
+          url: validatedWebhookUrl
+        });
+
+        // Check if response looks like a sign-in page
+        const isSignInPage = responseText.toLowerCase().includes('sign in') || 
+                            responseText.toLowerCase().includes('login') ||
+                            responseText.toLowerCase().includes('authentication required');
+
+        if (!outboundResponse.ok) {
+          const errorMessage = isSignInPage 
+            ? 'Outbound webhook failed - received a sign-in page. Please check if the webhook URL is correct and accessible without authentication.'
+            : `Outbound webhook failed with status ${outboundResponse.status}`;
+
           await prisma.webhookLog.update({
             where: { id: webhookLog.id },
             data: { 
               status: 'error',
               responseBody: { 
-                error: emailInfo.error
+                error: errorMessage,
+                response: responseText,
+                url: validatedWebhookUrl
               } as Prisma.JsonObject
             }
           });
-          
           return NextResponse.json({ 
-            error: emailInfo.error
-          }, { status: 400 });
+            message: 'Fields registered but outbound webhook failed',
+            fieldsRegistered: true,
+            error: errorMessage
+          });
         }
         
-        emailInfo.matchedAccount = {
-          email: matchedAccount.email,
-          name: matchedAccount.name,
-          unipileAccountId: matchedAccount.unipileAccountId || ''
-        };
-      } else {
-        emailInfo.allAccounts = (emailAccounts || []).map(account => ({
-          email: account.email,
-          name: account.name,
-          unipileAccountId: account.unipileAccountId || ''
-        }));
-      }
-
-      // Get all active social accounts
-      const socialAccounts = organization.socialAccounts.map(account => ({
-        name: account.name,
-        accountId: account.username,
-        provider: account.provider
-      }));
-
-      // Prepare outbound data
-      const outboundData: OutboundData = {
-        contactData: {
-          ...data,
-          ...(scenario.testMode && scenario.testEmail && {
-            email: scenario.testEmail,
-            contact_id: ''
-          })
-        },
-        scenarioData: processedScenario,
-        prompts: processedPrompts,
-        emailInfo,
-        socialAccounts,
-        crmData: {} // Placeholder for future CRM data
-      };
-
-      log('info', 'Sending outbound webhook request', {
-        url: validatedWebhookUrl,
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'User-Agent': 'ProfitReach-API'
+        // Try to parse as JSON only if it looks like JSON
+        let responseData: any = responseText;
+        if (responseText.trim().startsWith('{') || responseText.trim().startsWith('[')) {
+          try {
+            responseData = JSON.parse(responseText);
+          } catch (e) {
+            log('warn', 'Failed to parse response as JSON, using raw text', { error: String(e) });
+          }
         }
-      });
 
-      const outboundResponse = await fetch(validatedWebhookUrl, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'User-Agent': 'ProfitReach-API'
-        },
-        body: JSON.stringify(outboundData)
-      });
+        // Update to success status
+        await prisma.webhookLog.update({
+          where: { id: webhookLog.id },
+          data: { 
+            status: scenario.testMode ? 'testing' : 'success',
+            responseBody: {
+              ...responseData,
+              filterInfo: filterEvaluation ? {
+                passed: filterEvaluation.passed,
+                summary: filterEvaluation.summary,
+                results: filterEvaluation.results
+              } : null,
+              scenario: {
+                name: scenario.name,
+                filters: scenario.filters
+              }
+            } as Record<string, any>
+          }
+        });
 
-      // Log response headers for debugging
-      const responseHeaders: Record<string, string> = {};
-      outboundResponse.headers.forEach((value, key) => {
-        responseHeaders[key] = value;
-      });
-      
-      // Get response text first for better error logging
-      const responseText = await outboundResponse.text();
-      log('info', 'Outbound webhook response', { 
-        status: outboundResponse.status,
-        headers: responseHeaders,
-        response: responseText,
-        url: validatedWebhookUrl
-      });
+        // Remove the duplicate credit deduction at the end of the webhook processing
+        if (
+          !scenario.testMode &&
+          organization.billingPlan === 'at_cost'
+        ) {
+          try {
+            await reportScenarioUsage(organization.id);
+          } catch (error) {
+            log('error', 'Error reporting scenario usage:', {
+              error: error instanceof Error ? error.message : 'Unknown error',
+              organizationId: organization.id,
+              webhookLogId: webhookLog.id
+            });
+          }
+        }
 
-      // Check if response looks like a sign-in page
-      const isSignInPage = responseText.toLowerCase().includes('sign in') || 
-                          responseText.toLowerCase().includes('login') ||
-                          responseText.toLowerCase().includes('authentication required');
-
-      if (!outboundResponse.ok) {
-        const errorMessage = isSignInPage 
-          ? 'Outbound webhook failed - received a sign-in page. Please check if the webhook URL is correct and accessible without authentication.'
-          : `Outbound webhook failed with status ${outboundResponse.status}`;
-
+        return NextResponse.json({
+          status: 'success',
+          filterInfo: filterEvaluation ? {
+            passed: filterEvaluation.passed,
+            summary: filterEvaluation.summary,
+            results: filterEvaluation.results
+          } : null,
+          scenario: {
+            name: scenario.name,
+            filters: scenario.filters
+          }
+        });
+      } catch (error) {
         await prisma.webhookLog.update({
           where: { id: webhookLog.id },
           data: { 
             status: 'error',
             responseBody: { 
-              error: errorMessage,
-              response: responseText,
-              url: validatedWebhookUrl
+              error: error instanceof Error ? error.message : 'Unknown error' 
             } as Prisma.JsonObject
           }
         });
         return NextResponse.json({ 
-          message: 'Fields registered but outbound webhook failed',
+          message: 'Fields registered but webhook processing failed',
           fieldsRegistered: true,
-          error: errorMessage
+          error: error instanceof Error ? error.message : 'Unknown error'
         });
       }
-      
-      // Try to parse as JSON only if it looks like JSON
-      let responseData: any = responseText;
-      if (responseText.trim().startsWith('{') || responseText.trim().startsWith('[')) {
-        try {
-          responseData = JSON.parse(responseText);
-        } catch (e) {
-          log('warn', 'Failed to parse response as JSON, using raw text', { error: String(e) });
-        }
-      }
-
-      // Update to success status
-      await prisma.webhookLog.update({
-        where: { id: webhookLog.id },
-        data: { 
-          status: scenario?.testMode ? 'testing' : 'success',
-          responseBody: typeof responseData === 'string' 
-            ? { response: responseData } 
-            : responseData as Prisma.JsonObject
-        }
-      });
-
-      // Remove the duplicate credit deduction at the end of the webhook processing
-      if (
-        !scenario?.testMode &&
-        organization.billingPlan === 'at_cost'
-      ) {
-        try {
-          await reportScenarioUsage(organization.id);
-        } catch (error) {
-          log('error', 'Error reporting scenario usage:', {
-            error: error instanceof Error ? error.message : 'Unknown error',
-            organizationId: organization.id,
-            webhookLogId: webhookLog.id
-          });
-        }
-      }
-
-      // Evaluate filters if present
-      if (scenario.filters && Array.isArray(scenario.filters) && scenario.filters.length > 0) {
-        // Cast filters to the correct type with type guards
-        const typedFilters = scenario.filters
-          .filter((f): f is { field: string; operator: string; value: string } => 
-            typeof f === 'object' && f !== null && 
-            'field' in f && 'operator' in f && 'value' in f)
-          .map(f => ({
-            field: String(f.field),
-            operator: String(f.operator),
-            value: String(f.value)
-          })) as Filter[];
-
-        log('info', 'Evaluating scenario filters', {
-          scenarioName: scenario.name,
-          filterCount: typedFilters.length,
-          filters: typedFilters
-        });
-
-        const filterResults = await evaluateFilters(typedFilters, data);
-        
-        // Log filter evaluation results
-        log('info', 'Filter evaluation results', {
-          scenarioName: scenario.name,
-          passed: filterResults.passed,
-          results: filterResults.results.map(r => ({
-            field: r.filter.field,
-            operator: r.filter.operator,
-            value: r.filter.value,
-            passed: r.passed,
-            reason: r.reason
-          }))
-        });
-
-        if (!filterResults.passed) {
-          // Update webhook log with filter results
-          await prisma.webhookLog.update({
-            where: { id: webhookLog.id },
-            data: {
-              status: 'blocked',
-              responseBody: {
-                error: 'Blocked by filters',
-                details: filterResults.results.map(r => ({
-                  field: r.filter.field,
-                  operator: r.filter.operator,
-                  value: r.filter.value,
-                  passed: r.passed,
-                  reason: r.reason
-                }))
-              } as Record<string, any>
-            }
-          });
-
-          return NextResponse.json({
-            error: 'Blocked by filters',
-            details: filterResults.results.map(r => ({
-              field: r.filter.field,
-              operator: r.filter.operator,
-              value: r.filter.value,
-              passed: r.passed,
-              reason: r.reason
-            }))
-          }, { status: 400 });
-        }
-      }
-
-      return NextResponse.json({ 
-        message: 'Webhook processed successfully',
-        fieldsRegistered: true
-      });
     } catch (error) {
       await prisma.webhookLog.update({
         where: { id: webhookLog.id },
