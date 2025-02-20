@@ -58,7 +58,7 @@ export function ScenarioEditForm({ scenario, fields, snippets, attachments }: Sc
     try {
       const requestData = {
         ...formData,
-        filters: typeof formData.filters === 'string' ? formData.filters : JSON.stringify(formData.filters)
+        filters: formData.filters
       };
 
       console.log('Sending PUT request to /api/scenarios with data:', requestData);

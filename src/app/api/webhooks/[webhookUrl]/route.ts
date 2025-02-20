@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic';
 
 // Webhook schema
 const webhookSchema = z.object({
-  'Current Scenario ': z.string().optional(),
+  make_sequence: z.string().optional(),
   contact_id: z.string().optional(),
   first_name: z.string().optional(),
   last_name: z.string().optional(),
@@ -129,7 +129,7 @@ export async function POST(
         accountId: data.contact_id || 'unknown',
         organizationId: organization.id,
         status: 'received',
-        scenarioName: data['Current Scenario '] || 'unknown',
+        scenarioName: data.make_sequence || 'unknown',
         contactEmail: data.email || 'Unknown',
         contactName: `${data.first_name || ''} ${data.last_name || ''}`.trim() || 'Unknown',
         company: data.company_name || 'Unknown',
@@ -289,7 +289,7 @@ export async function POST(
       // Find the scenario to check test mode
       const scenario = await prisma.scenario.findFirst({
         where: { 
-          name: data['Current Scenario '] || '',
+          name: data.make_sequence || '',
           organizationId: organization.id
         },
         include: {

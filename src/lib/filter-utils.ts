@@ -144,24 +144,22 @@ function compareValues(actual: any, expected: any, operator: FilterOperator): { 
 async function evaluateFilter(
   filter: Filter,
   data: Record<string, any>
-): Promise<{ passed: boolean; reason: string }> {
+): Promise<{ passed: boolean; reason: string; details?: any }> {
   // Log filter evaluation start
-  log('info', 'Evaluating filter', { filter });
+  log('info', 'Evaluating filter', { 
+    filter,
+    availableFields: Object.keys(data.contactData || {})
+  });
 
-  // Get the actual value, checking contactData first
-  const actualValue = data.contactData?.[filter.field] ?? data[filter.field];
-  
-  // Special handling for PMS field
-  const fieldValue = filter.field === 'PMS' 
-    ? (data.contactData?.PMS || data.contactData?.propertyManagementSoftware || data.propertyManagementSoftware)
-    : actualValue;
+  // Get the actual value from contactData
+  const fieldValue = data.contactData?.[filter.field];
 
   // Log the value lookup
   log('info', 'Field value lookup', {
     field: filter.field,
-    contactDataValue: data.contactData?.[filter.field],
-    rootValue: data[filter.field],
-    resolvedValue: fieldValue
+    resolvedValue: fieldValue,
+    filterValue: filter.value,
+    operator: filter.operator
   });
 
   // Special handling for exists/not exists
@@ -169,7 +167,12 @@ async function evaluateFilter(
     const passed = fieldValue !== undefined && fieldValue !== null;
     return {
       passed,
-      reason: `${filter.field} ${passed ? 'exists' : 'does not exist'}`
+      reason: `${filter.field} ${passed ? 'exists' : 'does not exist'}`,
+      details: {
+        field: filter.field,
+        value: fieldValue,
+        operator: filter.operator
+      }
     };
   }
 
@@ -177,7 +180,12 @@ async function evaluateFilter(
     const passed = fieldValue === undefined || fieldValue === null;
     return {
       passed,
-      reason: `${filter.field} ${passed ? 'does not exist' : 'exists'}`
+      reason: `${filter.field} ${passed ? 'does not exist' : 'exists'}`,
+      details: {
+        field: filter.field,
+        value: fieldValue,
+        operator: filter.operator
+      }
     };
   }
 
@@ -185,7 +193,13 @@ async function evaluateFilter(
   if (fieldValue === undefined || fieldValue === null) {
     return {
       passed: false,
-      reason: `${filter.field} is undefined or null`
+      reason: `${filter.field} is undefined or null`,
+      details: {
+        field: filter.field,
+        value: fieldValue,
+        operator: filter.operator,
+        expectedValue: filter.value
+      }
     };
   }
 
@@ -195,45 +209,62 @@ async function evaluateFilter(
 
   // Log normalized values
   log('info', 'Normalized values for comparison', {
-    original: fieldValue,
-    normalized: normalizedActual,
-    expected: {
-      original: filter.value,
-      normalized: normalizedExpected
+    field: filter.field,
+    original: {
+      actual: fieldValue,
+      expected: filter.value
+    },
+    normalized: {
+      actual: normalizedActual,
+      expected: normalizedExpected
     }
   });
 
   // Evaluate based on operator
+  const evaluationResult = {
+    field: filter.field,
+    originalValue: fieldValue,
+    normalizedValue: normalizedActual,
+    expectedValue: filter.value,
+    normalizedExpected: normalizedExpected,
+    operator: filter.operator
+  };
+
   switch (filter.operator) {
     case 'equals':
       return {
         passed: normalizedActual === normalizedExpected,
-        reason: `${filter.field} ${normalizedActual === normalizedExpected ? 'equals' : 'does not equal'} ${filter.value}`
+        reason: `${filter.field} ${normalizedActual === normalizedExpected ? 'equals' : 'does not equal'} ${filter.value}`,
+        details: evaluationResult
       };
 
     case 'not equals':
       return {
         passed: normalizedActual !== normalizedExpected,
-        reason: `${filter.field} ${normalizedActual !== normalizedExpected ? 'does not equal' : 'equals'} ${filter.value}`
+        reason: `${filter.field} ${normalizedActual !== normalizedExpected ? 'does not equal' : 'equals'} ${filter.value}`,
+        details: evaluationResult
       };
 
     case 'contains':
       return {
         passed: normalizedActual.includes(normalizedExpected),
-        reason: `${filter.field} ${normalizedActual.includes(normalizedExpected) ? 'contains' : 'does not contain'} ${filter.value}`
+        reason: `${filter.field} ${normalizedActual.includes(normalizedExpected) ? 'contains' : 'does not contain'} ${filter.value}`,
+        details: evaluationResult
       };
 
     case 'not contains':
       return {
         passed: !normalizedActual.includes(normalizedExpected),
-        reason: `${filter.field} ${!normalizedActual.includes(normalizedExpected) ? 'does not contain' : 'contains'} ${filter.value}`
+        reason: `${filter.field} ${!normalizedActual.includes(normalizedExpected) ? 'does not contain' : 'contains'} ${filter.value}`,
+        details: evaluationResult
       };
 
     default:
       log('warn', 'Unknown operator', { operator: filter.operator });
       return {
         passed: false,
-        reason: `Unknown operator: ${filter.operator}`
+        reason: `Unknown operator: ${filter.operator}`,
+        details: evaluationResult
       };
   }
 }
@@ -306,8 +337,8 @@ const FilterPipeline = {
       if (!webhookField) {
         log('error', 'No field mapping found', { 
           systemField: normalized.field,
-          availableFields: await prisma.fieldMapping.findMany().then((mappings: { systemField: string }[]) => 
-            mappings.map((m: { systemField: string }) => m.systemField)
+          availableFields: await prisma.fieldMapping.findMany().then(mappings => 
+            mappings.map(m => m.name)
           )
         });
         return { passed: false, reason: `No mapping found for field ${normalized.field}` };

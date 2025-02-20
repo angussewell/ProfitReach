@@ -62,7 +62,7 @@ export function CreateScenarioForm({ onSubmit }: CreateScenarioFormProps) {
     e.preventDefault();
     onSubmit({
       ...formData,
-      filters: JSON.stringify(filters)
+      filters: filters
     });
   };
 

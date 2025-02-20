@@ -97,14 +97,16 @@ export async function createCreditsSubscription(organizationId: string) {
   });
 
   if (existingSubscription) {
-    const stripeSubscription = await stripe.subscriptions.retrieve(existingSubscription.stripeSubscriptionId);
+    const stripeClient = getStripeClient(false);
+    const stripeSubscription = await stripeClient.subscriptions.retrieve(existingSubscription.stripeSubscriptionId);
     if (stripeSubscription.status === 'active') {
       return stripeSubscription;
     }
   }
 
   // Create a new subscription with proper billing thresholds
-  const subscription = await stripe.subscriptions.create({
+  const stripeClient = getStripeClient(false);
+  const subscription = await stripeClient.subscriptions.create({
     customer: customer.id,
     items: [
       {
@@ -174,7 +176,7 @@ export async function createCreditsSubscription(organizationId: string) {
   });
 
   // Report initial usage
-  await stripe.subscriptionItems.createUsageRecord(
+  await stripeClient.subscriptionItems.createUsageRecord(
     subscriptionItem.id,
     {
       quantity: 0,
@@ -192,8 +194,9 @@ export async function createAccountSubscription(
   accountId: string
 ) {
   const customer = await createOrUpdateCustomer(organizationId);
+  const stripeClient = getStripeClient(false);
 
-  const subscription = await stripe.subscriptions.create({
+  const subscription = await stripeClient.subscriptions.create({
     customer: customer.id,
     items: [
       {
@@ -307,10 +310,11 @@ export async function reportScenarioUsage(organizationId: string) {
     throw new Error('No active subscription found');
   }
 
-  const stripeSubscription = await stripe.subscriptions.retrieve(subscription.stripeSubscriptionId);
+  const stripeClient = getStripeClient(false);
+  const stripeSubscription = await stripeClient.subscriptions.retrieve(subscription.stripeSubscriptionId);
   const subscriptionItem = stripeSubscription.items.data[0];
 
-  await stripe.subscriptionItems.createUsageRecord(
+  await stripeClient.subscriptionItems.createUsageRecord(
     subscriptionItem.id,
     {
       quantity: 1,
@@ -335,46 +339,36 @@ export async function hasValidPaymentMethod(organizationId: string, isTestMode: 
     return false;
   }
 
-  // If they have credits, don't require a payment method
+  // If they have credits, always return true
   if (organization.creditBalance > 0) {
-    console.log('Organization has credits, skipping payment method check:', {
+    console.log('Organization has credits, allowing operation:', {
       organizationId,
       creditBalance: organization.creditBalance
     });
     return true;
   }
 
+  // Only check payment method if they have no credits
   const customerId = isTestMode ? organization.stripeTestCustomerId : organization.stripeCustomerId;
   
   if (!customerId) {
-    console.log('No Stripe customer ID found:', {
+    console.log('No credits and no Stripe customer ID found:', {
       organizationId,
-      isTestMode,
-      hasLiveCustomer: !!organization.stripeCustomerId,
-      hasTestCustomer: !!organization.stripeTestCustomerId
+      isTestMode
     });
     return false;
   }
 
   try {
-    const stripe = getStripeClient(isTestMode);
-    const customer = await stripe.customers.retrieve(customerId);
-    
-    if (customer.deleted) {
-      console.log('Stripe customer is deleted:', { organizationId, customerId });
-      return false;
-    }
-
-    const paymentMethods = await stripe.paymentMethods.list({
+    const stripeClient = getStripeClient(isTestMode);
+    const paymentMethods = await stripeClient.paymentMethods.list({
       customer: customerId,
       type: 'card',
     });
 
     const hasPaymentMethod = paymentMethods.data.length > 0;
-    console.log('Payment method check result:', {
+    console.log('No credits, checking payment method:', {
       organizationId,
-      customerId,
-      isTestMode,
       hasPaymentMethod,
       methodCount: paymentMethods.data.length
     });
@@ -421,7 +415,8 @@ export async function updateAccountSubscriptionQuantity(organizationId: string) 
   // If there's an active subscription, update its quantity
   const subscription = organization.subscriptions[0];
   if (subscription) {
-    await stripe.subscriptions.update(subscription.stripeSubscriptionId, {
+    const stripeClient = getStripeClient(false);
+    await stripeClient.subscriptions.update(subscription.stripeSubscriptionId, {
       items: [{
         id: subscription.subscriptionItemId!,
         quantity: activeAccountsCount || 1 // Minimum of 1 to avoid Stripe errors

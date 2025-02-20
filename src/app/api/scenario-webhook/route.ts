@@ -402,17 +402,20 @@ export async function POST(req: NextRequest) {
             type: typeof scenario.filters 
           });
 
-          const filtersData = typeof scenario.filters === 'string' 
-            ? JSON.parse(scenario.filters)
-            : scenario.filters;
-          
-          log('info', 'Parsed filters data', { filtersData });
-
-          if (Array.isArray(filtersData)) {
-            parsedFilters = filtersData;
-            log('info', 'Successfully parsed filters', { parsedFilters });
+          // Since filters are stored as JSON in the database, we need to properly cast them
+          const filtersArray = scenario.filters as unknown as Filter[];
+          if (Array.isArray(filtersArray)) {
+            parsedFilters = filtersArray;
+            log('info', 'Successfully parsed filters', { 
+              parsedFilters,
+              filterCount: parsedFilters.length,
+              filterFields: parsedFilters.map(f => f.field)
+            });
           } else {
-            log('warn', 'Filters data is not an array', { filtersData });
+            log('warn', 'Filters data is not an array', { 
+              filters: scenario.filters,
+              type: typeof scenario.filters
+            });
           }
         } else {
           log('info', 'No filters found in scenario');
@@ -426,17 +429,26 @@ export async function POST(req: NextRequest) {
           where: { id: webhookLog.id },
           data: { 
             status: 'error',
-            responseBody: { error: 'Failed to parse filters' } as Record<string, any>
+            responseBody: { 
+              error: 'Failed to parse filters',
+              details: String(e),
+              rawFilters: scenario.filters
+            } as Record<string, any>
           }
         });
-        return Response.json({ error: 'Failed to parse filters' }, { status: 500 });
+        return Response.json({ 
+          error: 'Failed to parse filters',
+          details: String(e),
+          rawFilters: scenario.filters
+        }, { status: 500 });
       }
 
       // Normalize webhook data
       const normalizedData = normalizeWebhookData(contactData);
       log('info', 'Normalized webhook data', { 
         original: contactData,
-        normalized: normalizedData 
+        normalized: normalizedData,
+        availableFields: Object.keys(normalizedData.contactData)
       });
 
       // Evaluate filters
@@ -447,11 +459,13 @@ export async function POST(req: NextRequest) {
         availableFields: Object.keys(normalizedData.contactData)
       });
 
-      const result = await evaluateFilters([{ logic: 'AND', filters: parsedFilters }], normalizedData.contactData);
+      const result = await evaluateFilters([{ logic: 'AND', filters: parsedFilters }], normalizedData);
 
       log('info', 'Filter evaluation result', { 
         passed: result.passed,
-        reason: result.reason
+        reason: result.reason,
+        filters: parsedFilters,
+        evaluationDetails: result
       });
 
       // If filters didn't pass, update log and return
@@ -461,15 +475,18 @@ export async function POST(req: NextRequest) {
           data: { 
             status: 'blocked',
             responseBody: { 
+              status: 'blocked',
               reason: result.reason,
-              filters: parsedFilters
+              filters: parsedFilters,
+              evaluationDetails: result
             } as Record<string, any>
           }
         });
         return Response.json({
           status: 'blocked',
           reason: result.reason,
-          filters: parsedFilters
+          filters: parsedFilters,
+          evaluationDetails: result
         });
       }
 
