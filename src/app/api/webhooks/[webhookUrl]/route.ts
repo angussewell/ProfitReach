@@ -117,38 +117,60 @@ async function processWebhookAsync(
       scenarioName
     });
 
-    // Update status to processing using transaction to ensure atomicity
-    await prisma.$transaction(async (tx) => {
-      await tx.webhookLog.update({
-        where: { id: webhookLog.id },
-        data: { status: 'processing' }
+    // Try to acquire processing lock
+    const processingWebhook = await prisma.webhookLog.findFirst({
+      where: {
+        organizationId: organization.id,
+        status: 'processing',
+        NOT: {
+          id: webhookLog.id
+        }
+      }
+    });
+
+    if (processingWebhook) {
+      log('info', 'Another webhook is currently processing', {
+        organizationId: organization.id,
+        processingWebhookId: processingWebhook.id,
+        currentWebhookId: webhookLog.id
       });
+      
+      // Another webhook is processing, we'll try again later
+      setTimeout(() => {
+        processWebhookAsync(webhookLog, data, organization, outboundWebhookUrl, validatedWebhookUrl)
+          .catch(error => {
+            log('error', 'Retry processing failed', {
+              error: error instanceof Error ? error.message : String(error),
+              webhookLogId: webhookLog.id
+            });
+          });
+      }, 1000); // Retry after 1 second
+      return;
+    }
+
+    // Update status to processing
+    await prisma.webhookLog.update({
+      where: { id: webhookLog.id },
+      data: { status: 'processing' }
     });
 
     let scenario;
     try {
-      // Use transaction for related operations
-      const result = await prisma.$transaction(async (tx) => {
-        const scenario = await tx.scenario.findFirst({
-          where: {
-            organizationId: organization.id,
-            name: scenarioName
-          },
-          include: {
-            attachment: true,
-            snippet: true,
-            signature: true
-          }
-        });
-
-        if (!scenario) {
-          throw new Error(`Scenario "${scenarioName}" not found`);
+      scenario = await prisma.scenario.findFirst({
+        where: {
+          organizationId: organization.id,
+          name: scenarioName
+        },
+        include: {
+          attachment: true,
+          snippet: true,
+          signature: true
         }
-
-        return { scenario };
       });
 
-      scenario = result.scenario;
+      if (!scenario) {
+        throw new Error(`Scenario "${scenarioName}" not found`);
+      }
 
       // Evaluate filters early if present
       let filterEvaluation = null;
