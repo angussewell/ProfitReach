@@ -170,34 +170,60 @@ async function evaluateFilter(
 
   // Special handling for exists/not exists
   if (filter.operator === 'exists') {
-    const passed = fieldValue !== undefined && fieldValue !== null && fieldValue !== '';
+    const exists = fieldValue !== undefined && fieldValue !== null && fieldValue !== '';
+    log('info', 'Evaluating exists operator', {
+      field: filter.field,
+      value: fieldValue,
+      exists,
+      details: {
+        isUndefined: fieldValue === undefined,
+        isNull: fieldValue === null,
+        isEmpty: fieldValue === '',
+        type: typeof fieldValue
+      }
+    });
     return {
-      passed,
-      reason: `${filter.field} ${passed ? 'exists' : 'does not exist'}`,
+      passed: exists,
+      reason: `${filter.field} ${exists ? 'exists' : 'does not exist'}`,
       details: {
         field: filter.field,
         value: fieldValue,
         operator: filter.operator,
         dataStructure: {
           hasDirectField: filter.field in data,
-          hasContactDataField: data.contactData && filter.field in data.contactData
+          hasContactDataField: data.contactData && filter.field in data.contactData,
+          fieldValue,
+          exists
         }
       }
     };
   }
 
   if (filter.operator === 'not exists') {
-    const passed = fieldValue === undefined || fieldValue === null || fieldValue === '';
+    const exists = fieldValue !== undefined && fieldValue !== null && fieldValue !== '';
+    log('info', 'Evaluating not exists operator', {
+      field: filter.field,
+      value: fieldValue,
+      exists,
+      details: {
+        isUndefined: fieldValue === undefined,
+        isNull: fieldValue === null,
+        isEmpty: fieldValue === '',
+        type: typeof fieldValue
+      }
+    });
     return {
-      passed,
-      reason: `${filter.field} ${passed ? 'does not exist' : 'exists'}`,
+      passed: !exists,
+      reason: `${filter.field} ${!exists ? 'does not exist' : 'exists'}`,
       details: {
         field: filter.field,
         value: fieldValue,
         operator: filter.operator,
         dataStructure: {
           hasDirectField: filter.field in data,
-          hasContactDataField: data.contactData && filter.field in data.contactData
+          hasContactDataField: data.contactData && filter.field in data.contactData,
+          fieldValue,
+          exists
         }
       }
     };

@@ -329,66 +329,89 @@ export async function POST(
 
         // Evaluate filters early if present
         let filterEvaluation = null;
-        if (scenario.filters && Array.isArray(scenario.filters) && scenario.filters.length > 0) {
-          // Cast filters to the correct type with type guards
-          const typedFilters = scenario.filters
-            .filter((f): f is { field: string; operator: string; value: string } => 
-              typeof f === 'object' && f !== null && 
-              'field' in f && 'operator' in f && 'value' in f)
-            .map(f => ({
-              field: String(f.field),
-              operator: String(f.operator),
-              value: String(f.value)
-            })) as Filter[];
+        if (scenario.filters) {
+          // Parse filters if they're stored as a string
+          let parsedFilters;
+          try {
+            parsedFilters = typeof scenario.filters === 'string' 
+              ? JSON.parse(scenario.filters)
+              : scenario.filters;
 
-          log('info', 'Evaluating scenario filters', {
-            scenarioName: scenario.name,
-            filterCount: typedFilters.length,
-            filters: typedFilters
-          });
-
-          // Normalize webhook data
-          const normalizedData = normalizeWebhookData(data);
-          filterEvaluation = await evaluateFilters(typedFilters, normalizedData);
-          
-          // Log filter evaluation results
-          log('info', 'Filter evaluation results', {
-            scenarioName: scenario.name,
-            passed: filterEvaluation.passed,
-            summary: filterEvaluation.summary,
-            results: filterEvaluation.results
-          });
-
-          // If filters didn't pass, update log and return
-          if (!filterEvaluation.passed) {
-            await prisma.webhookLog.update({
-              where: { id: webhookLog.id },
-              data: {
-                status: 'blocked',
-                responseBody: {
-                  error: 'Blocked by filters',
-                  filterEvaluation: {
-                    results: filterEvaluation.results,
-                    summary: filterEvaluation.summary
-                  },
-                  scenario: {
-                    name: scenario.name,
-                    filters: typedFilters
-                  }
-                } as Record<string, any>
-              }
+            log('info', 'Parsed scenario filters', {
+              original: scenario.filters,
+              parsed: parsedFilters,
+              type: typeof parsedFilters
             });
-            return NextResponse.json({
-              error: 'Blocked by filters',
-              filterEvaluation: {
-                results: filterEvaluation.results,
-                summary: filterEvaluation.summary
-              },
-              scenario: {
-                name: scenario.name,
-                filters: typedFilters
-              }
-            }, { status: 400 });
+          } catch (e) {
+            log('error', 'Failed to parse filters', { 
+              filters: scenario.filters,
+              error: String(e)
+            });
+            parsedFilters = [];
+          }
+
+          if (Array.isArray(parsedFilters) && parsedFilters.length > 0) {
+            // Cast filters to the correct type with type guards
+            const typedFilters = parsedFilters
+              .filter((f): f is { field: string; operator: string; value?: string } => 
+                typeof f === 'object' && f !== null && 
+                'field' in f && 'operator' in f)
+              .map(f => ({
+                field: String(f.field),
+                operator: String(f.operator),
+                value: f.value ? String(f.value) : undefined
+              })) as Filter[];
+
+            log('info', 'Processing filters', {
+              scenarioName: scenario.name,
+              filterCount: typedFilters.length,
+              filters: typedFilters
+            });
+
+            // Normalize webhook data
+            const normalizedData = normalizeWebhookData(data);
+            filterEvaluation = await evaluateFilters(typedFilters, normalizedData);
+            
+            // Log filter evaluation results
+            log('info', 'Filter evaluation results', {
+              scenarioName: scenario.name,
+              passed: filterEvaluation.passed,
+              summary: filterEvaluation.summary,
+              results: filterEvaluation.results,
+              data: normalizedData
+            });
+
+            // If filters didn't pass, update log and return
+            if (!filterEvaluation.passed) {
+              await prisma.webhookLog.update({
+                where: { id: webhookLog.id },
+                data: {
+                  status: 'blocked',
+                  responseBody: {
+                    error: 'Blocked by filters',
+                    filterEvaluation: {
+                      results: filterEvaluation.results,
+                      summary: filterEvaluation.summary
+                    },
+                    scenario: {
+                      name: scenario.name,
+                      filters: typedFilters
+                    }
+                  } as Record<string, any>
+                }
+              });
+              return NextResponse.json({
+                error: 'Blocked by filters',
+                filterEvaluation: {
+                  results: filterEvaluation.results,
+                  summary: filterEvaluation.summary
+                },
+                scenario: {
+                  name: scenario.name,
+                  filters: typedFilters
+                }
+              }, { status: 400 });
+            }
           }
         }
 
