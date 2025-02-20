@@ -1,6 +1,6 @@
-# ProfitReach
+# Profit Reach
 
-Production URL: https://profit-reach.vercel.app
+Production URL: https://app.messagelm.com
 
 A Next.js application for managing cold outreach campaigns through GoHighLevel integration.
 

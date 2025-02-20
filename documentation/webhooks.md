@@ -4,7 +4,7 @@ Each organization in Profit Reach has a unique webhook URL that can be used to r
 
 ## Webhook URL Format
 ```
-https://profit-reach.vercel.app/api/webhooks/[webhook-url]
+https://app.messagelm.com/api/webhooks/[webhook-url]
 ```
 
 ## Request Format
@@ -71,7 +71,7 @@ You can test your webhook integration using curl:
 
 ```bash
 curl -X POST \
-  https://profit-reach.vercel.app/api/webhooks/YOUR_WEBHOOK_URL \
+  https://app.messagelm.com/api/webhooks/YOUR_WEBHOOK_URL \
   -H 'Content-Type: application/json' \
   -d '{
     "accountId": "test-account",
