@@ -15,6 +15,7 @@ export const dynamic = 'force-dynamic';
 // Webhook schema
 const webhookSchema = z.object({
   make_sequence: z.string().optional(),
+  'Current Scenario ': z.string().optional(),
   contact_id: z.string().optional(),
   first_name: z.string().optional(),
   last_name: z.string().optional(),
@@ -129,7 +130,7 @@ export async function POST(
         accountId: data.contact_id || 'unknown',
         organizationId: organization.id,
         status: 'received',
-        scenarioName: data.make_sequence || 'unknown',
+        scenarioName: data['Current Scenario '] || data.make_sequence || 'unknown',
         contactEmail: data.email || 'Unknown',
         contactName: `${data.first_name || ''} ${data.last_name || ''}`.trim() || 'Unknown',
         company: data.company_name || 'Unknown',
@@ -287,9 +288,18 @@ export async function POST(
     // Process webhook
     try {
       // Find the scenario to check test mode
+      const scenarioName = data['Current Scenario '] || data.make_sequence;
+      
+      log('info', 'Looking up scenario', { 
+        currentScenario: data['Current Scenario '],
+        makeSequence: data.make_sequence,
+        resolvedName: scenarioName,
+        organizationId: organization.id
+      });
+
       const scenario = await prisma.scenario.findFirst({
         where: { 
-          name: data.make_sequence || '',
+          name: scenarioName || '',
           organizationId: organization.id
         },
         include: {
@@ -299,8 +309,20 @@ export async function POST(
       });
 
       if (!scenario) {
+        log('error', 'Scenario not found', { 
+          scenarioName,
+          currentScenario: data['Current Scenario '],
+          makeSequence: data.make_sequence,
+          organizationId: organization.id
+        });
         throw new Error('Scenario not found');
       }
+
+      log('info', 'Found scenario', { 
+        scenarioId: scenario.id,
+        scenarioName: scenario.name,
+        touchpointType: scenario.touchpointType
+      });
 
       // Handle email account logic based on email sender
       let emailAccounts = null;

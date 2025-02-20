@@ -111,9 +111,6 @@ export async function POST(req: NextRequest) {
     try {
       body = await req.json();
       log('info', 'Received webhook request', { body });
-      
-      // Remove automatic field syncing for performance
-      
     } catch (e) {
       log('error', 'Failed to parse request body', { error: String(e) });
       return Response.json({ 
@@ -123,13 +120,25 @@ export async function POST(req: NextRequest) {
     }
 
     const { contactData, userWebhookUrl } = body;
-    const scenarioName = contactData?.make_sequence;
+    const scenarioName = contactData?.['Current Scenario '] || contactData?.make_sequence;
+
+    // Log scenario name resolution
+    log('info', 'Resolved scenario name', {
+      currentScenario: contactData?.['Current Scenario '],
+      makeSequence: contactData?.make_sequence,
+      resolvedName: scenarioName
+    });
 
     // Validate required fields
     if (!scenarioName) {
-      log('error', 'Missing scenario name', { body });
+      log('error', 'Missing scenario name', { 
+        body,
+        currentScenario: contactData?.['Current Scenario '],
+        makeSequence: contactData?.make_sequence
+      });
       return Response.json({ 
-        error: "Missing make_sequence in contactData"
+        error: "Missing scenario name in contactData",
+        details: "Either 'Current Scenario ' or make_sequence must be provided"
       }, { status: 400 });
     }
 
@@ -165,11 +174,9 @@ export async function POST(req: NextRequest) {
       }, { status: 404 });
     }
 
-    log('info', 'Extracted scenario name', { 
-      scenarioName,
-      contactData,
-      userWebhookUrl,
-      organizationId: organization.id
+    log('info', 'Found organization and looking up scenario', { 
+      organizationId: organization.id,
+      scenarioName
     });
 
     // Create initial webhook log
