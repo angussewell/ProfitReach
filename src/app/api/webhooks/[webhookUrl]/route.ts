@@ -87,7 +87,6 @@ async function processWebhookAsync(
       data: { status: 'processing' }
     });
 
-    // Rest of your existing processing logic here
     let scenario;
     try {
       scenario = await prisma.scenario.findFirst({
@@ -97,7 +96,8 @@ async function processWebhookAsync(
         },
         include: {
           attachment: true,
-          snippet: true
+          snippet: true,
+          signature: true
         }
       });
 
@@ -105,11 +105,91 @@ async function processWebhookAsync(
         throw new Error(`Scenario "${scenarioName}" not found`);
       }
 
+      // Evaluate filters early if present
+      let filterEvaluation = null;
+      if (scenario.filters) {
+        // Parse filters if they're stored as a string
+        let parsedFilters;
+        try {
+          parsedFilters = typeof scenario.filters === 'string' 
+            ? JSON.parse(scenario.filters)
+            : scenario.filters;
+
+          log('info', 'Parsed scenario filters', {
+            original: scenario.filters,
+            parsed: parsedFilters,
+            type: typeof parsedFilters
+          });
+        } catch (e) {
+          log('error', 'Failed to parse filters', { 
+            filters: scenario.filters,
+            error: String(e)
+          });
+          parsedFilters = [];
+        }
+
+        if (Array.isArray(parsedFilters) && parsedFilters.length > 0) {
+          // Cast filters to the correct type with type guards
+          const typedFilters = parsedFilters
+            .filter((f): f is { field: string; operator: string; value?: string } => 
+              typeof f === 'object' && f !== null && 
+              'field' in f && 'operator' in f)
+            .map(f => ({
+              field: String(f.field),
+              operator: String(f.operator),
+              value: f.value ? String(f.value) : undefined
+            })) as Filter[];
+
+          log('info', 'Processing filters', {
+            scenarioName: scenario.name,
+            filterCount: typedFilters.length,
+            filters: typedFilters
+          });
+
+          // Normalize webhook data
+          const normalizedData = normalizeWebhookData(data);
+          filterEvaluation = await evaluateFilters(typedFilters, normalizedData);
+          
+          // Log filter evaluation results
+          log('info', 'Filter evaluation results', {
+            scenarioName: scenario.name,
+            passed: filterEvaluation.passed,
+            summary: filterEvaluation.summary,
+            results: filterEvaluation.results,
+            data: normalizedData
+          });
+
+          // If filters didn't pass, update log and return
+          if (!filterEvaluation.passed) {
+            await prisma.webhookLog.update({
+              where: { id: webhookLog.id },
+              data: {
+                status: 'blocked',
+                responseBody: {
+                  error: 'Blocked by filters',
+                  filterEvaluation: {
+                    results: filterEvaluation.results,
+                    summary: filterEvaluation.summary
+                  },
+                  scenario: {
+                    name: scenario.name,
+                    filters: typedFilters
+                  }
+                } as Record<string, any>
+              }
+            });
+            throw new Error('Blocked by filters');
+          }
+        }
+      }
+
       // Process webhook variables in scenario fields
       const processedScenario = {
         id: scenario.id,
         name: scenario.name,
         touchpointType: scenario.touchpointType,
+        filters: scenario.filters,
+        filterEvaluation,
         customizationPrompt: scenario.customizationPrompt ? processWebhookVariables(scenario.customizationPrompt, data) : null,
         emailExamplesPrompt: scenario.emailExamplesPrompt ? processWebhookVariables(scenario.emailExamplesPrompt, data) : null,
         subjectLine: scenario.subjectLine ? processWebhookVariables(scenario.subjectLine, data) : null,
@@ -119,14 +199,83 @@ async function processWebhookAsync(
         snippet: scenario.snippet?.content || null
       };
 
-      // Prepare outbound data
+      // Fetch and process prompts
+      const prompts = await prisma.prompt.findMany({
+        where: { organizationId: organization.id }
+      });
+      const processedPrompts = prompts.reduce((acc, prompt) => {
+        acc[prompt.name] = processWebhookVariables(prompt.content, data);
+        return acc;
+      }, {} as Record<string, string>);
+
+      // Process email accounts based on email sender
+      const emailInfo: OutboundData['emailInfo'] = {};
+      if (data['Email Sender']) {
+        const matchedAccount = await prisma.emailAccount.findFirst({
+          where: {
+            organizationId: organization.id,
+            email: data['Email Sender'],
+            isActive: true
+          }
+        });
+        
+        if (!matchedAccount) {
+          const error = `No active email account found matching sender: ${data['Email Sender']}`;
+          await prisma.webhookLog.update({
+            where: { id: webhookLog.id },
+            data: { 
+              status: 'error',
+              responseBody: { error } as Prisma.JsonObject
+            }
+          });
+          throw new Error(error);
+        }
+        
+        emailInfo.matchedAccount = {
+          email: matchedAccount.email,
+          name: matchedAccount.name,
+          unipileAccountId: matchedAccount.unipileAccountId || ''
+        };
+      } else {
+        emailInfo.allAccounts = (await prisma.emailAccount.findMany({
+          where: {
+            organizationId: organization.id,
+            isActive: true
+          }
+        }))
+          .map(account => ({
+            email: account.email,
+            name: account.name,
+            unipileAccountId: account.unipileAccountId || ''
+          }));
+      }
+
+      // Get all active social accounts
+      const socialAccounts = organization.socialAccounts.map((account: { name: string; username: string; provider: string }) => ({
+        name: account.name,
+        accountId: account.username,
+        provider: account.provider
+      }));
+
+      // Prepare outbound data with all required information
       const outboundData = {
-        contactData: data,
+        contactData: {
+          ...data,
+          ...(scenario.testMode && scenario.testEmail && {
+            email: scenario.testEmail,
+            contact_id: ''
+          })
+        },
         scenarioData: processedScenario,
-        prompts: {},  // You'll need to add your prompts processing logic here
-        emailInfo: {},
-        socialAccounts: organization.socialAccounts || [],
-        crmData: {}
+        filterInfo: filterEvaluation ? {
+          passed: filterEvaluation.passed,
+          summary: filterEvaluation.summary,
+          results: filterEvaluation.results
+        } : null,
+        prompts: processedPrompts,
+        emailInfo,
+        socialAccounts,
+        crmData: {} // Placeholder for future CRM data
       };
 
       // Send outbound webhook
@@ -140,18 +289,70 @@ async function processWebhookAsync(
         body: JSON.stringify(outboundData)
       });
 
+      // Log response headers for debugging
+      const responseHeaders: Record<string, string> = {};
+      outboundResponse.headers.forEach((value, key) => {
+        responseHeaders[key] = value;
+      });
+      
+      // Get response text first for better error logging
+      const responseText = await outboundResponse.text();
+      log('info', 'Outbound webhook response', { 
+        status: outboundResponse.status,
+        headers: responseHeaders,
+        response: responseText,
+        url: validatedWebhookUrl
+      });
+
       if (!outboundResponse.ok) {
         throw new Error(`Outbound webhook failed with status ${outboundResponse.status}`);
+      }
+
+      // Try to parse as JSON only if it looks like JSON
+      let responseData: any = responseText;
+      if (responseText.trim().startsWith('{') || responseText.trim().startsWith('[')) {
+        try {
+          responseData = JSON.parse(responseText);
+        } catch (e) {
+          log('warn', 'Failed to parse response as JSON, using raw text', { error: String(e) });
+        }
       }
 
       // Update webhook log with success
       await prisma.webhookLog.update({
         where: { id: webhookLog.id },
         data: { 
-          status: 'success',
-          responseBody: { success: true } as Prisma.JsonObject
+          status: scenario.testMode ? 'testing' : 'success',
+          responseBody: {
+            ...responseData,
+            filterInfo: filterEvaluation ? {
+              passed: filterEvaluation.passed,
+              summary: filterEvaluation.summary,
+              results: filterEvaluation.results
+            } : null,
+            scenario: {
+              name: scenario.name,
+              filters: scenario.filters
+            }
+          } as Record<string, any>
         }
       });
+
+      // Handle credit usage for non-test mode
+      if (
+        !scenario.testMode &&
+        organization.billingPlan === 'at_cost'
+      ) {
+        try {
+          await reportScenarioUsage(organization.id);
+        } catch (error) {
+          log('error', 'Error reporting scenario usage:', {
+            error: error instanceof Error ? error.message : 'Unknown error',
+            organizationId: organization.id,
+            webhookLogId: webhookLog.id
+          });
+        }
+      }
 
     } catch (error) {
       // Update webhook log with error
