@@ -117,42 +117,78 @@ async function processWebhookAsync(
       scenarioName
     });
 
-    // Try to acquire processing lock
-    const processingWebhook = await prisma.webhookLog.findFirst({
-      where: {
-        organizationId: organization.id,
-        status: 'processing',
-        NOT: {
-          id: webhookLog.id
+    // Calculate the cutoff time for stalled webhooks (5 minutes ago)
+    const stalledCutoff = new Date();
+    stalledCutoff.setMinutes(stalledCutoff.getMinutes() - 5);
+
+    // Try to acquire processing lock with atomic operation
+    const canProcess = await prisma.$transaction(async (tx) => {
+      // Check for any currently processing webhooks, excluding stalled ones
+      const processingWebhook = await tx.webhookLog.findFirst({
+        where: {
+          organizationId: organization.id,
+          status: 'processing',
+          createdAt: {
+            gt: stalledCutoff // Only consider webhooks updated in the last 5 minutes
+          },
+          NOT: {
+            id: webhookLog.id
+          }
         }
+      });
+
+      if (processingWebhook) {
+        // Another webhook is actively processing
+        log('info', 'Another webhook is currently processing', {
+          organizationId: organization.id,
+          processingWebhookId: processingWebhook.id,
+          currentWebhookId: webhookLog.id,
+          processingWebhookCreatedAt: processingWebhook.createdAt
+        });
+        return false;
       }
+
+      // Check for any stalled webhooks that should be processed before this one
+      const earlierWebhook = await tx.webhookLog.findFirst({
+        where: {
+          organizationId: organization.id,
+          status: 'received',
+          createdAt: {
+            lt: webhookLog.createdAt // Only consider webhooks created before this one
+          }
+        },
+        orderBy: {
+          createdAt: 'asc'
+        }
+      });
+
+      if (earlierWebhook) {
+        // There's an earlier webhook that should be processed first
+        log('info', 'Earlier webhook needs processing first', {
+          organizationId: organization.id,
+          earlierWebhookId: earlierWebhook.id,
+          currentWebhookId: webhookLog.id,
+          earlierWebhookCreatedAt: earlierWebhook.createdAt
+        });
+        return false;
+      }
+
+      // No active processing and no earlier webhooks, we can proceed
+      await tx.webhookLog.update({
+        where: { id: webhookLog.id },
+        data: { 
+          status: 'processing'
+        }
+      });
+
+      return true;
     });
 
-    if (processingWebhook) {
-      log('info', 'Another webhook is currently processing', {
-        organizationId: organization.id,
-        processingWebhookId: processingWebhook.id,
-        currentWebhookId: webhookLog.id
-      });
-      
-      // Another webhook is processing, we'll try again later
-      setTimeout(() => {
-        processWebhookAsync(webhookLog, data, organization, outboundWebhookUrl, validatedWebhookUrl)
-          .catch(error => {
-            log('error', 'Retry processing failed', {
-              error: error instanceof Error ? error.message : String(error),
-              webhookLogId: webhookLog.id
-            });
-          });
-      }, 1000); // Retry after 1 second
+    if (!canProcess) {
+      // Another webhook is processing or there are earlier webhooks to process
+      // We'll exit and let the next invocation try again
       return;
     }
-
-    // Update status to processing
-    await prisma.webhookLog.update({
-      where: { id: webhookLog.id },
-      data: { status: 'processing' }
-    });
 
     let scenario;
     try {
