@@ -120,11 +120,12 @@ export async function POST(req: NextRequest) {
     }
 
     const { contactData, userWebhookUrl } = body;
-    const scenarioName = contactData?.['Current Scenario '] || contactData?.make_sequence;
+    const scenarioName = contactData?.['Current Scenario '] || contactData?.['Current Scenario'] || contactData?.make_sequence;
 
     // Log scenario name resolution
     log('info', 'Resolved scenario name', {
-      currentScenario: contactData?.['Current Scenario '],
+      currentScenarioWithSpace: contactData?.['Current Scenario '],
+      currentScenarioNoSpace: contactData?.['Current Scenario'],
       makeSequence: contactData?.make_sequence,
       resolvedName: scenarioName
     });
@@ -133,12 +134,13 @@ export async function POST(req: NextRequest) {
     if (!scenarioName) {
       log('error', 'Missing scenario name', { 
         body,
-        currentScenario: contactData?.['Current Scenario '],
+        currentScenarioWithSpace: contactData?.['Current Scenario '],
+        currentScenarioNoSpace: contactData?.['Current Scenario'],
         makeSequence: contactData?.make_sequence
       });
       return Response.json({ 
         error: "Missing scenario name in contactData",
-        details: "Either 'Current Scenario ' or make_sequence must be provided"
+        details: "Either 'Current Scenario', 'Current Scenario ' or make_sequence must be provided"
       }, { status: 400 });
     }
 

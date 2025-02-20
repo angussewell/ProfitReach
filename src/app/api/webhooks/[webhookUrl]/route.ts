@@ -130,7 +130,7 @@ export async function POST(
         accountId: data.contact_id || 'unknown',
         organizationId: organization.id,
         status: 'received',
-        scenarioName: data['Current Scenario '] || data.make_sequence || 'unknown',
+        scenarioName: data['Current Scenario '] || data['Current Scenario'] || data.make_sequence || 'unknown',
         contactEmail: data.email || 'Unknown',
         contactName: `${data.first_name || ''} ${data.last_name || ''}`.trim() || 'Unknown',
         company: data.company_name || 'Unknown',
@@ -138,6 +138,14 @@ export async function POST(
         responseBody: { status: 'received' } as Prisma.JsonObject,
         ...(ghlIntegration && { ghlIntegrationId: ghlIntegration.id })
       }
+    });
+
+    // Add detailed logging for scenario name resolution
+    log('info', 'Scenario name resolution', {
+      currentScenarioWithSpace: data['Current Scenario '],
+      currentScenarioNoSpace: data['Current Scenario'],
+      makeSequence: data.make_sequence,
+      resolvedScenarioName: data['Current Scenario '] || data['Current Scenario'] || data.make_sequence || 'unknown'
     });
 
     // Add detailed billing plan logging
@@ -288,10 +296,11 @@ export async function POST(
     // Process webhook
     try {
       // Find the scenario to check test mode
-      const scenarioName = data['Current Scenario '] || data.make_sequence;
+      const scenarioName = data['Current Scenario '] || data['Current Scenario'] || data.make_sequence;
       
       log('info', 'Looking up scenario', { 
-        currentScenario: data['Current Scenario '],
+        currentScenarioWithSpace: data['Current Scenario '],
+        currentScenarioNoSpace: data['Current Scenario'],
         makeSequence: data.make_sequence,
         resolvedName: scenarioName,
         organizationId: organization.id
