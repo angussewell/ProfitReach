@@ -654,46 +654,65 @@ export async function PATCH(
       );
     }
 
-    // Attempt update
-    const updated = await prisma.webhookLog.update({
-      where: { id: params.webhookUrl },
-      data: {
-        status,
-        responseBody: responseBody as Prisma.JsonObject
-      },
-      select: {
-        id: true,
-        status: true
-      }
+    log('info', 'Attempting to update webhook status', {
+      webhookLogId: params.webhookUrl,
+      status,
+      responseBody
     });
 
-    // Verify update
-    if (!updated || updated.status !== status) {
-      log('error', 'Failed to update webhook status', { 
-        webhookId: params.webhookUrl,
-        requestedStatus: status,
-        actualStatus: updated?.status 
+    // Attempt update with explicit table name and field
+    const updated = await prisma.$executeRaw`
+      UPDATE "WebhookLog"
+      SET status = ${status}, 
+          "responseBody" = ${responseBody}::jsonb,
+          "updatedAt" = NOW()
+      WHERE id = ${params.webhookUrl}
+      RETURNING id, status;
+    `;
+
+    if (!updated) {
+      log('error', 'Failed to update webhook status - no rows updated', { 
+        webhookLogId: params.webhookUrl,
+        status 
       });
       return NextResponse.json(
-        { error: 'Failed to update status' },
+        { error: 'Failed to update status - webhook log not found' },
+        { status: 404 }
+      );
+    }
+
+    // Verify the update by fetching the current status
+    const verifyUpdate = await prisma.webhookLog.findUnique({
+      where: { id: params.webhookUrl },
+      select: { status: true }
+    });
+
+    if (!verifyUpdate || verifyUpdate.status !== status) {
+      log('error', 'Failed to verify webhook status update', { 
+        webhookLogId: params.webhookUrl,
+        requestedStatus: status,
+        actualStatus: verifyUpdate?.status 
+      });
+      return NextResponse.json(
+        { error: 'Failed to verify status update' },
         { status: 500 }
       );
     }
 
     log('info', 'Successfully updated webhook status', {
-      webhookId: params.webhookUrl,
-      status: updated.status
+      webhookLogId: params.webhookUrl,
+      status: verifyUpdate.status
     });
 
     return NextResponse.json({ 
       success: true,
-      status: updated.status 
+      status: verifyUpdate.status 
     });
 
   } catch (error) {
     log('error', 'Failed to update webhook status', { 
       error: String(error),
-      webhookId: params.webhookUrl 
+      webhookLogId: params.webhookUrl 
     });
     return NextResponse.json(
       { error: 'Failed to update status' },
