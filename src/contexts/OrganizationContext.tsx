@@ -20,57 +20,50 @@ interface OrganizationContextType {
   handleLogout: () => Promise<void>;
 }
 
-const OrganizationContext = createContext<OrganizationContextType | undefined>(undefined);
+export const OrganizationContext = createContext<OrganizationContextType | null>(null);
 
 export function OrganizationProvider({ children }: { children: React.ReactNode }) {
   const { data: session, update: updateSession } = useSession();
+  const [organization, setOrganization] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [switching, setSwitching] = useState(false);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
-  const [currentOrganization, setCurrentOrganization] = useState<Organization | null>(null);
 
-  // Fetch organizations and current organization
   useEffect(() => {
-    const fetchData = async () => {
-      if (!session?.user) return;
-      
-      try {
-        setLoading(true);
-        setError(null);
-        
-        // Fetch all organizations
-        const orgRes = await fetch('/api/organizations');
-        if (!orgRes.ok) {
-          const errorData = await orgRes.json();
-          throw new Error(errorData.error || 'Failed to fetch organizations');
-        }
-        const orgs = await orgRes.json();
-        setOrganizations(orgs);
+    const fetchOrganization = async () => {
+      if (!session?.user?.organizationId) {
+        setLoading(false);
+        return;
+      }
 
-        // If we have an organizationId, fetch the current organization
-        if (session.user.organizationId) {
-          const currentOrgRes = await fetch(`/api/organizations/${session.user.organizationId}`);
-          if (!currentOrgRes.ok) {
-            const errorData = await currentOrgRes.json();
-            console.error('Failed to fetch current organization:', errorData);
-            // Don't throw here, just log the error and continue
-          } else {
-            const currentOrg = await currentOrgRes.json();
-            setCurrentOrganization(currentOrg);
+      try {
+        // Use the new route structure with organizationId
+        const currentOrgRes = await fetch(`/api/organizations/${session.user.organizationId}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
           }
+        });
+
+        if (!currentOrgRes.ok) {
+          throw new Error('Failed to fetch organization');
         }
+
+        const orgData = await currentOrgRes.json();
+        setOrganization(orgData);
+        setError(null);
       } catch (err) {
         console.error('Failed to fetch organization data:', err);
-        setError(err instanceof Error ? err.message : 'Failed to fetch organization data');
-        toast.error(err instanceof Error ? err.message : 'Failed to fetch organization data');
+        setError(err instanceof Error ? err.message : 'Failed to fetch organization');
+        setOrganization(null);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchData();
-  }, [session?.user?.id, session?.user?.organizationId]);
+    fetchOrganization();
+  }, [session?.user?.organizationId]);
 
   const switchOrganization = async (orgId: string) => {
     if (!orgId || switching) return;
@@ -152,7 +145,7 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
       toast.info('Logging out...');
       
       // Clear organization state
-      setCurrentOrganization(null);
+      setOrganization(null);
       setOrganizations([]);
       
       // Sign out using NextAuth
@@ -167,7 +160,7 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
     <OrganizationContext.Provider
       value={{
         organizations,
-        currentOrganization,
+        currentOrganization: organization,
         loading,
         switching,
         error,
