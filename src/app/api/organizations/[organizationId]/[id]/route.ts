@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: { organizationId: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -16,7 +16,7 @@ export async function GET(
     }
 
     const organization = await prisma.organization.findUnique({
-      where: { id: params.id },
+      where: { id: params.organizationId },
       select: {
         id: true,
         name: true,
@@ -33,7 +33,7 @@ export async function GET(
       const userOrg = await prisma.user.findFirst({
         where: {
           id: session.user.id,
-          organizationId: params.id,
+          organizationId: params.organizationId,
         },
       });
 
@@ -50,4 +50,18 @@ export async function GET(
       details: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
     }, { status: 500 });
   }
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: { organizationId: string } }
+) {
+  // ... rest of the code ...
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: { organizationId: string } }
+) {
+  // ... rest of the code ...
 } 
