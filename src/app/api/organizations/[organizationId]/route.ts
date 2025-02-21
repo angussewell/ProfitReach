@@ -23,6 +23,24 @@ export async function GET(
         creditBalance: true,
         createdAt: true,
         updatedAt: true,
+        emailAccounts: {
+          where: { isActive: true },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            unipileAccountId: true
+          }
+        },
+        socialAccounts: {
+          where: { isActive: true },
+          select: {
+            id: true,
+            username: true,
+            name: true,
+            provider: true
+          }
+        }
       },
     });
 
