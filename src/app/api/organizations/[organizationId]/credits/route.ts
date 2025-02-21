@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { log } from '@/lib/logging';
 
 // TODO: Add authentication before production use
 // This endpoint is temporarily open for n8n testing
@@ -9,6 +10,8 @@ export async function GET(
 ) {
   try {
     const { organizationId } = params;
+
+    log('info', 'Checking credits for organization', { organizationId });
 
     const organization = await prisma.organization.findUnique({
       where: { id: organizationId },
@@ -20,18 +23,28 @@ export async function GET(
     });
 
     if (!organization) {
+      log('error', 'Organization not found when checking credits', { organizationId });
       return NextResponse.json(
         { error: 'Organization not found' },
         { status: 404 }
       );
     }
 
+    log('info', 'Found organization credits', {
+      organizationId,
+      creditBalance: organization.creditBalance,
+      billingPlan: organization.billingPlan
+    });
+
     return NextResponse.json({
       creditBalance: organization.creditBalance,
       billingPlan: organization.billingPlan
     });
   } catch (error) {
-    console.error('Error checking credits:', error);
+    log('error', 'Error checking credits:', { 
+      error: error instanceof Error ? error.message : String(error),
+      organizationId: params.organizationId 
+    });
     return NextResponse.json(
       { error: 'Failed to check credits' },
       { status: 500 }
