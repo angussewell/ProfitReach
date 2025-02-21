@@ -5,6 +5,9 @@ import { log } from '@/lib/logging';
 import { Prisma } from '@prisma/client';
 import process from 'process';
 
+// Production N8N webhook URL should be: https://messagelm.app.n8n.cloud/webhook/webhook-process
+const EXPECTED_N8N_WEBHOOK_URL = 'https://messagelm.app.n8n.cloud/webhook/webhook-process';
+
 export const dynamic = 'force-dynamic';
 
 // Simplified webhook schema - only validate essential fields
@@ -90,14 +93,25 @@ export async function POST(
     try {
       const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
       if (!n8nWebhookUrl) {
-        throw new Error('N8N webhook URL not configured');
+        log('error', 'N8N webhook URL not configured', { 
+          expected: EXPECTED_N8N_WEBHOOK_URL 
+        });
+        throw new Error('N8N webhook URL not configured - should be set to production URL');
+      }
+
+      if (n8nWebhookUrl !== EXPECTED_N8N_WEBHOOK_URL) {
+        log('warn', 'N8N webhook URL does not match expected production URL', {
+          current: n8nWebhookUrl,
+          expected: EXPECTED_N8N_WEBHOOK_URL
+        });
       }
 
       // Send to N8N queue with minimal required data
       const queueResponse = await fetch(n8nWebhookUrl, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'User-Agent': 'MessageLM-API'
         },
         body: JSON.stringify({
           webhookLogId: webhookLog.id,
