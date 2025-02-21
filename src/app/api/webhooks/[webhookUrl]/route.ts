@@ -10,6 +10,7 @@ import { evaluateFilters, normalizeWebhookData } from '@/lib/filter-utils';
 import { decrypt } from '@/lib/encryption';
 import { hasValidPaymentMethod, updateCreditBalance, reportScenarioUsage } from '@/lib/stripe';
 import { cache } from 'react';
+import process from 'process';
 
 export const dynamic = 'force-dynamic';
 
@@ -114,7 +115,8 @@ async function processWebhookAsync(
     
     log('info', 'Processing webhook asynchronously', { 
       webhookLogId: webhookLog.id,
-      scenarioName
+      scenarioName,
+      currentStatus: webhookLog.status
     });
 
     // Calculate the cutoff time for stalled webhooks (5 minutes ago)
@@ -123,26 +125,14 @@ async function processWebhookAsync(
 
     // Try to acquire processing lock with atomic operation
     const canProcess = await prisma.$transaction(async (tx) => {
-      // Single query to check for any blocking webhooks
-      const blockingWebhook = await tx.webhookLog.findFirst({
+      // Check for any currently processing webhooks
+      const processingWebhook = await tx.webhookLog.findFirst({
         where: {
           organizationId: organization.id,
-          OR: [
-            // Check for active processing webhooks
-            {
-              status: 'processing',
-              updatedAt: {
-                gt: stalledCutoff // Only consider non-stalled webhooks
-              }
-            },
-            // Check for earlier webhooks that should be processed first
-            {
-              status: 'received',
-              createdAt: {
-                lt: webhookLog.createdAt
-              }
-            }
-          ],
+          status: 'processing',
+          createdAt: {
+            gt: stalledCutoff // Only consider recent webhooks
+          },
           NOT: {
             id: webhookLog.id
           }
@@ -150,30 +140,65 @@ async function processWebhookAsync(
         select: {
           id: true,
           status: true,
-          createdAt: true,
-          updatedAt: true
+          createdAt: true
         }
       });
 
-      if (blockingWebhook) {
-        // Log why we can't process this webhook
-        log('info', 'Webhook blocked from processing', {
+      if (processingWebhook) {
+        // Log detailed information about the blocking webhook
+        log('info', 'Webhook blocked by another processing webhook', {
           organizationId: organization.id,
           currentWebhookId: webhookLog.id,
-          blockingWebhookId: blockingWebhook.id,
-          blockingStatus: blockingWebhook.status,
-          blockingCreatedAt: blockingWebhook.createdAt,
-          blockingUpdatedAt: blockingWebhook.updatedAt
+          blockingWebhookId: processingWebhook.id,
+          blockingCreatedAt: processingWebhook.createdAt,
+          currentCreatedAt: webhookLog.createdAt
         });
         return false;
       }
+
+      // Check for earlier webhooks that should be processed first
+      const earlierWebhook = await tx.webhookLog.findFirst({
+        where: {
+          organizationId: organization.id,
+          status: 'received',
+          createdAt: {
+            lt: webhookLog.createdAt
+          }
+        },
+        orderBy: {
+          createdAt: 'asc'
+        },
+        select: {
+          id: true,
+          createdAt: true
+        }
+      });
+
+      if (earlierWebhook) {
+        // Log information about the earlier webhook
+        log('info', 'Earlier webhook needs processing first', {
+          organizationId: organization.id,
+          currentWebhookId: webhookLog.id,
+          earlierWebhookId: earlierWebhook.id,
+          earlierCreatedAt: earlierWebhook.createdAt,
+          currentCreatedAt: webhookLog.createdAt
+        });
+        return false;
+      }
+
+      // Log the status change
+      log('info', 'Updating webhook status to processing', {
+        webhookId: webhookLog.id,
+        oldStatus: webhookLog.status,
+        newStatus: 'processing',
+        timestamp: new Date()
+      });
 
       // No blocking webhooks found, we can proceed
       await tx.webhookLog.update({
         where: { id: webhookLog.id },
         data: { 
-          status: 'processing',
-          updatedAt: new Date() // Explicitly update the timestamp
+          status: 'processing'
         }
       });
 
@@ -181,8 +206,11 @@ async function processWebhookAsync(
     });
 
     if (!canProcess) {
-      // Another webhook is blocking or there are earlier webhooks to process
-      // We'll exit and let the next invocation try again
+      log('info', 'Webhook queued for later processing', {
+        webhookId: webhookLog.id,
+        status: webhookLog.status,
+        createdAt: webhookLog.createdAt
+      });
       return;
     }
 
@@ -461,6 +489,16 @@ async function processWebhookAsync(
   }
 }
 
+// Webhook processing states
+const WEBHOOK_STATES = {
+  RECEIVED: 'received',
+  QUEUED: 'queued',
+  PROCESSING: 'processing',
+  SUCCESS: 'success',
+  ERROR: 'error',
+  BLOCKED: 'blocked'
+} as const;
+
 export async function POST(
   request: Request,
   { params }: { params: { webhookUrl: string } }
@@ -492,197 +530,136 @@ export async function POST(
 
     // Get the most recent GHL integration
     const ghlIntegration = organization.ghlIntegrations[0];
-    if (!ghlIntegration) {
-      log('warn', 'No GHL integration found', { organizationId: organization.id });
-    }
 
     // Create initial webhook log
     const webhookLog = await prisma.webhookLog.create({
       data: {
         accountId: data.contact_id || 'unknown',
         organizationId: organization.id,
-        status: 'received',
+        status: WEBHOOK_STATES.RECEIVED,
         scenarioName: data['Current Scenario '] || data['Current Scenario'] || data.make_sequence || 'unknown',
         contactEmail: data.email || 'Unknown',
         contactName: `${data.first_name || ''} ${data.last_name || ''}`.trim() || 'Unknown',
         company: data.company_name || 'Unknown',
         requestBody: data as unknown as Prisma.JsonObject,
-        responseBody: { status: 'received' } as Prisma.JsonObject,
+        responseBody: { status: WEBHOOK_STATES.RECEIVED } as Prisma.JsonObject,
         ...(ghlIntegration && { ghlIntegrationId: ghlIntegration.id })
       }
     });
 
-    // Add detailed logging for scenario name resolution
-    log('info', 'Scenario name resolution', {
-      currentScenarioWithSpace: data['Current Scenario '],
-      currentScenarioNoSpace: data['Current Scenario'],
-      makeSequence: data.make_sequence,
-      resolvedScenarioName: data['Current Scenario '] || data['Current Scenario'] || data.make_sequence || 'unknown'
-    });
-
-    // Add detailed billing plan logging
-    log('info', 'Organization billing details', {
+    // Log webhook receipt
+    log('info', 'Webhook received', {
+      webhookId: webhookLog.id,
       organizationId: organization.id,
-      billingPlan: organization.billingPlan,
-      billingPlanType: typeof organization.billingPlan,
-      creditBalance: organization.creditBalance,
-      rawBillingPlan: JSON.stringify(organization.billingPlan)
+      scenarioName: webhookLog.scenarioName
     });
 
-    // Check payment method for at-cost plan
-    if (organization.billingPlan?.toLowerCase().trim() === 'at_cost') {
-      // Skip payment method check if they have credits
-      if (organization.creditBalance <= 0) {
-        const hasPaymentMethod = await hasValidPaymentMethod(organization.id);
-        if (!hasPaymentMethod) {
-          // Update webhook log to blocked status
-          await prisma.webhookLog.update({
-            where: { id: webhookLog.id },
-            data: {
-              status: 'blocked',
-              responseBody: {
-                error: 'No valid payment method found',
-                details: 'Please add a payment method in billing settings to use the at-cost plan'
-              } as Prisma.JsonObject
-            }
-          });
-
-          return NextResponse.json({ 
-            error: 'No valid payment method found',
-            details: 'Please add a payment method in billing settings to use the at-cost plan'
-          }, { status: 402 });
-        }
+    // Queue webhook to N8N for processing
+    try {
+      const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
+      if (!n8nWebhookUrl) {
+        throw new Error('N8N webhook URL not configured');
       }
 
-      // Check and reserve credit in a transaction
-      try {
-        await prisma.$transaction(async (tx) => {
-          const org = await tx.organization.findUnique({
-            where: { id: organization.id },
-            select: { creditBalance: true }
-          });
+      // Send to N8N queue
+      const queueResponse = await fetch(n8nWebhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          webhookLogId: webhookLog.id,
+          organizationId: organization.id,
+          data: data,
+          outboundWebhookUrl: organization.outboundWebhookUrl
+        })
+      });
 
-          if (!org || org.creditBalance < 1) {
-            throw new Error('Insufficient credits');
-          }
-
-          // Reserve the credit by updating the balance
-          await tx.organization.update({
-            where: { id: organization.id },
-            data: { creditBalance: org.creditBalance - 1 }
-          });
-
-          // Log credit usage
-          await tx.creditUsage.create({
-            data: {
-              organizationId: organization.id,
-              amount: -1,
-              description: 'Webhook processed',
-              webhookLogId: webhookLog.id
-            }
-          });
-        });
-      } catch (error) {
-        // Update webhook log to blocked status
-        await prisma.webhookLog.update({
-          where: { id: webhookLog.id },
-          data: {
-            status: 'blocked',
-            responseBody: { 
-              error: 'Insufficient credits',
-              details: 'Please purchase more credits to continue sending messages'
-            } as Prisma.JsonObject
-          }
-        });
-
-        return NextResponse.json({ 
-          error: 'Insufficient credits',
-          details: 'Please purchase more credits to continue sending messages'
-        }, { status: 402 });
+      if (!queueResponse.ok) {
+        throw new Error(`Failed to queue webhook: ${queueResponse.statusText}`);
       }
-    }
 
-    // Validate webhook data
-    if (!validationResult.success) {
+      // Update status to queued
       await prisma.webhookLog.update({
         where: { id: webhookLog.id },
         data: {
-          status: 'error',
-          responseBody: { 
-            error: 'Invalid webhook data',
-            details: JSON.stringify(validationResult.error.errors)
-          } as Prisma.JsonObject
+          status: WEBHOOK_STATES.QUEUED,
+          responseBody: { status: WEBHOOK_STATES.QUEUED } as Prisma.JsonObject
         }
       });
 
-      log('error', 'Invalid webhook data', { errors: validationResult.error.errors });
-      return NextResponse.json(
-        { error: 'Invalid webhook data', details: validationResult.error.errors },
-        { status: 400 }
-      );
-    }
+      // Return immediate success response
+      return NextResponse.json({ 
+        status: 'success',
+        message: 'Webhook received and queued for processing',
+        webhookId: webhookLog.id
+      });
 
-    // Register webhook fields
-    await registerWebhookFields(validationResult.data);
+    } catch (error) {
+      // Log queueing error but don't fail the request
+      log('error', 'Failed to queue webhook', {
+        error: error instanceof Error ? error.message : String(error),
+        webhookId: webhookLog.id
+      });
 
-    // Use organization's outbound webhook URL
-    const outboundWebhookUrl = organization.outboundWebhookUrl;
-    
-    if (!outboundWebhookUrl) {
+      // Update webhook log with error
       await prisma.webhookLog.update({
         where: { id: webhookLog.id },
-        data: { 
-          status: 'error',
+        data: {
+          status: WEBHOOK_STATES.ERROR,
           responseBody: { 
-            error: 'No outbound webhook URL configured. Please configure it in the settings page.' 
+            error: 'Failed to queue webhook',
+            details: error instanceof Error ? error.message : 'Unknown error'
           } as Prisma.JsonObject
         }
       });
+
+      // Still return success to the client
       return NextResponse.json({ 
-        message: 'Fields registered but no outbound webhook URL configured',
-        fieldsRegistered: true,
-        error: 'Please configure the outbound webhook URL in the settings page'
+        status: 'success',
+        message: 'Webhook received but queueing delayed',
+        webhookId: webhookLog.id
       });
     }
 
-    // Validate and fix webhook URL
-    let validatedWebhookUrl = outboundWebhookUrl;
-    try {
-      // Try to parse the URL to see if it's valid
-      const urlObj = new URL(outboundWebhookUrl);
-      log('info', 'Parsed webhook URL', { 
-        original: outboundWebhookUrl,
-        protocol: urlObj.protocol,
-        hostname: urlObj.hostname,
-        pathname: urlObj.pathname
-      });
-    } catch (e) {
-      // If URL parsing fails, assume it's a relative URL and prepend base URL
-      validatedWebhookUrl = `https://app.messagelm.com${outboundWebhookUrl.startsWith('/') ? '' : '/'}${outboundWebhookUrl}`;
-      log('info', 'Fixed relative webhook URL', { 
-        original: outboundWebhookUrl,
-        fixed: validatedWebhookUrl
-      });
-    }
-
-    // Process webhook asynchronously
-    processWebhookAsync(webhookLog, data, organization, outboundWebhookUrl, validatedWebhookUrl).catch(error => {
-      log('error', 'Async processing error:', {
-        error: error instanceof Error ? error.message : String(error),
-        webhookLogId: webhookLog.id
-      });
-    });
-
-    // Return immediate success response
-    return NextResponse.json({ 
-      status: 'success',
-      message: 'Webhook received and queued for processing',
-      webhookId: webhookLog.id
-    });
   } catch (error) {
     log('error', 'Error processing webhook', { error: String(error) });
     return NextResponse.json(
       { error: 'Failed to process webhook' },
+      { status: 500 }
+    );
+  }
+}
+
+// Add this new endpoint
+export async function PATCH(
+  request: Request,
+  { params }: { params: { webhookUrl: string } }
+) {
+  try {
+    const data = await request.json();
+    const { status, responseBody } = data;
+
+    if (!status) {
+      return NextResponse.json(
+        { error: 'Status is required' },
+        { status: 400 }
+      );
+    }
+
+    await prisma.webhookLog.update({
+      where: { id: params.webhookUrl }, // webhookUrl here is actually the webhookLogId
+      data: {
+        status,
+        responseBody: responseBody as Prisma.JsonObject
+      }
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    log('error', 'Failed to update webhook status', { error: String(error) });
+    return NextResponse.json(
+      { error: 'Failed to update status' },
       { status: 500 }
     );
   }
