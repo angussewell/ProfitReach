@@ -34,9 +34,16 @@ const getOrganizationData = cache(async (webhookUrl: string) => {
           locationName: true
         }
       },
-      socialAccounts: true,
-      // Pre-fetch related data to reduce queries
-      prompts: true,
+      socialAccounts: {
+        where: { isActive: true },
+        select: {
+          id: true,
+          username: true,
+          name: true,
+          provider: true,
+          unipileAccountId: true
+        }
+      },
       emailAccounts: {
         where: { isActive: true },
         select: {
@@ -45,7 +52,8 @@ const getOrganizationData = cache(async (webhookUrl: string) => {
           name: true,
           unipileAccountId: true
         }
-      }
+      },
+      prompts: true
     }
   });
 });
@@ -332,23 +340,15 @@ async function processWebhookAsync(
         return acc;
       }, {} as Record<string, string>);
 
-      // Use pre-fetched email accounts
-      const emailInfo: OutboundData['emailInfo'] = {};
+      // Process email accounts based on Email Sender
+      let emailInfo: any = {};
       if (data['Email Sender']) {
         const matchedAccount = organization.emailAccounts.find(
           (account: { email: string }) => account.email === data['Email Sender']
         );
         
         if (!matchedAccount) {
-          const error = `No active email account found matching sender: ${data['Email Sender']}`;
-          await prisma.webhookLog.update({
-            where: { id: webhookLog.id },
-            data: { 
-              status: 'error',
-              responseBody: { error } as Prisma.JsonObject
-            }
-          });
-          throw new Error(error);
+          throw new Error(`No active email account found matching sender: ${data['Email Sender']}`);
         }
         
         emailInfo.matchedAccount = {
@@ -357,19 +357,23 @@ async function processWebhookAsync(
           unipileAccountId: matchedAccount.unipileAccountId || ''
         };
       } else {
-        emailInfo.allAccounts = organization.emailAccounts.map((account: { email: string; name: string; unipileAccountId: string | null }) => ({
-          email: account.email,
-          name: account.name,
-          unipileAccountId: account.unipileAccountId || ''
-        }));
+        emailInfo.allAccounts = organization.emailAccounts.map(
+          (account: { email: string; name: string; unipileAccountId: string | null }) => ({
+            email: account.email,
+            name: account.name,
+            unipileAccountId: account.unipileAccountId || ''
+          })
+        );
       }
 
-      // Get all active social accounts
-      const socialAccounts = organization.socialAccounts.map((account: { name: string; username: string; provider: string }) => ({
-        name: account.name,
-        accountId: account.username,
-        provider: account.provider
-      }));
+      // Process social accounts (always include, even if empty)
+      const socialAccounts = (organization.socialAccounts || []).map(
+        (account: { name: string; username: string; provider: string }) => ({
+          name: account.name,
+          accountId: account.username,
+          provider: account.provider
+        })
+      );
 
       // Prepare outbound data with all required information
       const outboundData = {
@@ -389,7 +393,7 @@ async function processWebhookAsync(
         prompts: processedPrompts,
         emailInfo,
         socialAccounts,
-        crmData: {} // Placeholder for future CRM data
+        crmData: {}
       };
 
       // Send outbound webhook
