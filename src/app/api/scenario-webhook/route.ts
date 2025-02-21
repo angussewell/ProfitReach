@@ -405,52 +405,39 @@ export async function POST(req: NextRequest) {
 
       // Parse and evaluate filters
       let parsedFilters: Filter[] = [];
-      try {
-        if (scenario.filters) {
-          log('info', 'Raw filters from scenario', { 
-            filters: scenario.filters,
-            type: typeof scenario.filters 
-          });
+      if (scenario.filters) {
+        log('info', 'Raw filters from scenario', { 
+          filters: scenario.filters,
+          type: typeof scenario.filters 
+        });
 
-          // Since filters are stored as JSON in the database, we need to properly cast them
-          const filtersArray = scenario.filters as unknown as Filter[];
-          if (Array.isArray(filtersArray)) {
-            parsedFilters = filtersArray;
+        try {
+          // Parse filters if they're stored as a string
+          const filtersData = typeof scenario.filters === 'string' 
+            ? JSON.parse(scenario.filters)
+            : scenario.filters;
+
+          if (Array.isArray(filtersData)) {
+            parsedFilters = filtersData;
             log('info', 'Successfully parsed filters', { 
               parsedFilters,
               filterCount: parsedFilters.length,
-              filterFields: parsedFilters.map(f => f.field)
-            });
-          } else {
-            log('warn', 'Filters data is not an array', { 
-              filters: scenario.filters,
-              type: typeof scenario.filters
+              filterGroups: parsedFilters.reduce((acc, f) => {
+                if (!acc[f.group || 'default']) acc[f.group || 'default'] = [];
+                acc[f.group || 'default'].push(f);
+                return acc;
+              }, {} as Record<string, any[]>)
             });
           }
-        } else {
-          log('info', 'No filters found in scenario');
+        } catch (e) {
+          log('error', 'Failed to parse filters', { 
+            error: String(e),
+            filters: scenario.filters 
+          });
+          throw new Error('Failed to parse filters');
         }
-      } catch (e) {
-        log('error', 'Failed to parse filters', { 
-          error: String(e),
-          filters: scenario.filters 
-        });
-        await prisma.webhookLog.update({
-          where: { id: webhookLog.id },
-          data: { 
-            status: 'error',
-            responseBody: { 
-              error: 'Failed to parse filters',
-              details: String(e),
-              rawFilters: scenario.filters
-            } as Record<string, any>
-          }
-        });
-        return Response.json({ 
-          error: 'Failed to parse filters',
-          details: String(e),
-          rawFilters: scenario.filters
-        }, { status: 500 });
+      } else {
+        log('info', 'No filters found in scenario');
       }
 
       // Normalize webhook data
@@ -461,21 +448,19 @@ export async function POST(req: NextRequest) {
         availableFields: Object.keys(normalizedData.contactData)
       });
 
-      // Evaluate filters
-      log('info', 'Starting filter evaluation', { 
-        filterCount: parsedFilters.length,
-        filters: parsedFilters,
-        evaluationData: normalizedData.contactData,
-        availableFields: Object.keys(normalizedData.contactData)
-      });
-
-      const result = await evaluateFilters([{ logic: 'AND', filters: parsedFilters }], normalizedData);
-
+      // Evaluate filters with group logic
+      const result = await evaluateFilters(parsedFilters, normalizedData);
+      
       log('info', 'Filter evaluation result', { 
         passed: result.passed,
-        reason: result.reason,
-        filters: parsedFilters,
-        evaluationDetails: result
+        summary: result.summary,
+        groupResults: result.results.reduce((acc, r) => {
+          const group = r.filter.group || 'default';
+          if (!acc[group]) acc[group] = { passed: true, filters: [] };
+          acc[group].filters.push(r);
+          acc[group].passed = acc[group].passed && r.passed;
+          return acc;
+        }, {} as Record<string, { passed: boolean; filters: any[] }>)
       });
 
       // If filters didn't pass, update log and return
@@ -486,17 +471,15 @@ export async function POST(req: NextRequest) {
             status: 'blocked',
             responseBody: { 
               status: 'blocked',
-              reason: result.reason,
-              filters: parsedFilters,
-              evaluationDetails: result
+              reason: 'Failed to meet filter criteria',
+              filterResults: result
             } as Record<string, any>
           }
         });
         return Response.json({
           status: 'blocked',
-          reason: result.reason,
-          filters: parsedFilters,
-          evaluationDetails: result
+          reason: 'Failed to meet filter criteria',
+          filterResults: result
         });
       }
 

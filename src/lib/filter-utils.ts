@@ -411,18 +411,7 @@ export async function evaluateFilters(
     filter: Filter;
     passed: boolean;
     reason: string;
-    details: {
-      originalValue: any;
-      normalizedValue: string;
-      expectedValue: string;
-      normalizedExpected: string;
-      fieldPath: string;
-      dataStructure: {
-        hasDirectField: boolean;
-        hasContactDataField: boolean;
-        availableFields: string[];
-      };
-    };
+    details: any;
   }>;
   summary: {
     totalFilters: number;
@@ -433,68 +422,58 @@ export async function evaluateFilters(
 }> {
   const startTime = Date.now();
 
-  // Log start of filter evaluation
-  log('info', 'Starting filter evaluation', {
-    filterCount: filters.length,
-    dataFields: Object.keys(data)
-  });
+  // Group filters by their group property
+  const groups = filters.reduce((acc, filter) => {
+    const groupId = filter.group || 'default';
+    if (!acc[groupId]) acc[groupId] = [];
+    acc[groupId].push(filter);
+    return acc;
+  }, {} as Record<string, Filter[]>);
 
-  // Evaluate each filter
-  const results = await Promise.all(
-    filters.map(async (filter) => {
-      const result = await evaluateFilter(filter, data);
+  // Evaluate each group (OR logic between groups)
+  const groupResults = await Promise.all(
+    Object.values(groups).map(async (groupFilters) => {
+      // Evaluate filters within group (AND logic within group)
+      const filterResults = await Promise.all(
+        groupFilters.map(filter => evaluateFilter(filter, data))
+      );
       
-      // Get the actual value - try both direct access and contactData
-      const fieldValue = data[filter.field] || data.contactData?.[filter.field];
+      // Group passes if all filters in the group pass (AND logic)
+      const groupPassed = filterResults.every(r => r.passed);
       
       return {
-        filter,
-        passed: result.passed,
-        reason: result.reason,
-        details: {
-          originalValue: fieldValue,
-          normalizedValue: normalizeValue(fieldValue),
-          expectedValue: filter.value,
-          normalizedExpected: normalizeValue(filter.value),
-          fieldPath: filter.field,
-          dataStructure: {
-            hasDirectField: filter.field in data,
-            hasContactDataField: data.contactData && filter.field in data.contactData,
-            availableFields: Object.keys(data).concat(Object.keys(data.contactData || {}))
-          }
-        }
+        passed: groupPassed,
+        filters: groupFilters,
+        results: filterResults
       };
     })
   );
 
-  const allPassed = results.every((r) => r.passed);
-  const endTime = Date.now();
+  // Overall evaluation passes if any group passes (OR logic)
+  const passed = groupResults.some(g => g.passed);
+  
+  // Flatten results for consistent return format
+  const flatResults = groupResults.flatMap((group, groupIndex) => 
+    group.results.map((result, filterIndex) => ({
+      filter: group.filters[filterIndex],
+      passed: result.passed,
+      reason: result.reason,
+      details: result.details
+    }))
+  );
 
-  // Create summary
+  const endTime = Date.now();
+  
   const summary = {
     totalFilters: filters.length,
-    passedFilters: results.filter(r => r.passed).length,
-    failedFilters: results.filter(r => !r.passed).length,
+    passedFilters: flatResults.filter(r => r.passed).length,
+    failedFilters: flatResults.filter(r => !r.passed).length,
     evaluationTime: `${endTime - startTime}ms`
   };
 
-  // Log evaluation results
-  log('info', 'Filter evaluation complete', {
-    passed: allPassed,
-    summary,
-    results: results.map(r => ({
-      field: r.filter.field,
-      operator: r.filter.operator,
-      value: r.filter.value,
-      passed: r.passed,
-      reason: r.reason,
-      details: r.details
-    }))
-  });
-
   return {
-    passed: allPassed,
-    results,
+    passed,
+    results: flatResults,
     summary
   };
 } 

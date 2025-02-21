@@ -137,16 +137,28 @@ interface FilterBuilderProps {
 
 export function FilterBuilder({ initialFilters = [], fields, onChange }: FilterBuilderProps) {
   const [groups, setGroups] = useState<Filter[][]>(() => {
-    // Convert flat filter list to groups
+    // Convert flat filter list to groups based on group property
     if (initialFilters.length === 0) return [[]];
-    return [initialFilters]; // Start with all filters in one group
+    
+    // Group filters by their group property
+    const groupedFilters = initialFilters.reduce((acc, filter) => {
+      const groupId = filter.group || 'default';
+      if (!acc[groupId]) acc[groupId] = [];
+      acc[groupId].push(filter);
+      return acc;
+    }, {} as Record<string, Filter[]>);
+    
+    return Object.values(groupedFilters);
   });
 
   const updateGroup = (index: number, filters: Filter[]) => {
     const newGroups = [...groups];
-    newGroups[index] = filters;
+    // Assign group IDs to filters in this group
+    const groupId = Math.random().toString(36).substr(2, 9);
+    const filtersWithGroup = filters.map(f => ({ ...f, group: groupId }));
+    newGroups[index] = filtersWithGroup;
     setGroups(newGroups);
-    // Flatten groups and notify parent
+    // Flatten groups but preserve group information
     onChange(newGroups.flat());
   };
 
