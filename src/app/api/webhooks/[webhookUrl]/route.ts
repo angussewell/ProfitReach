@@ -644,24 +644,57 @@ export async function PATCH(
     const data = await request.json();
     const { status, responseBody } = data;
 
-    if (!status) {
+    // Validate status
+    const allowedStatuses = ['received', 'queued', 'processing', 'success', 'error', 'blocked'];
+    if (!status || !allowedStatuses.includes(status)) {
+      log('error', 'Invalid status provided', { status });
       return NextResponse.json(
-        { error: 'Status is required' },
+        { error: 'Invalid status. Allowed values: ' + allowedStatuses.join(', ') },
         { status: 400 }
       );
     }
 
-    await prisma.webhookLog.update({
-      where: { id: params.webhookUrl }, // webhookUrl here is actually the webhookLogId
+    // Attempt update
+    const updated = await prisma.webhookLog.update({
+      where: { id: params.webhookUrl },
       data: {
         status,
         responseBody: responseBody as Prisma.JsonObject
+      },
+      select: {
+        id: true,
+        status: true
       }
     });
 
-    return NextResponse.json({ success: true });
+    // Verify update
+    if (!updated || updated.status !== status) {
+      log('error', 'Failed to update webhook status', { 
+        webhookId: params.webhookUrl,
+        requestedStatus: status,
+        actualStatus: updated?.status 
+      });
+      return NextResponse.json(
+        { error: 'Failed to update status' },
+        { status: 500 }
+      );
+    }
+
+    log('info', 'Successfully updated webhook status', {
+      webhookId: params.webhookUrl,
+      status: updated.status
+    });
+
+    return NextResponse.json({ 
+      success: true,
+      status: updated.status 
+    });
+
   } catch (error) {
-    log('error', 'Failed to update webhook status', { error: String(error) });
+    log('error', 'Failed to update webhook status', { 
+      error: String(error),
+      webhookId: params.webhookUrl 
+    });
     return NextResponse.json(
       { error: 'Failed to update status' },
       { status: 500 }
