@@ -3,24 +3,21 @@
 import { useEffect, useState, ChangeEvent } from 'react';
 import { Card as CardComponent } from '@/components/ui/card';
 import { Input as InputComponent } from '@/components/ui/input';
-import { Button as ButtonComponent } from '@/components/ui/button';
 import { Label as LabelComponent } from '@/components/ui/label';
 import { toast } from 'sonner';
 
 // Component type aliases
 const Card = CardComponent as any;
 const Input = InputComponent as any;
-const Button = ButtonComponent as any;
 const Label = LabelComponent as any;
 
 interface Organization {
   id: string;
   name: string;
-  webhookUrl: string;
-  outboundWebhookUrl: string | null;
+  locationId: string | null;
 }
 
-export default function WebhooksPage() {
+export default function CRMSettingsPage() {
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -50,57 +47,42 @@ export default function WebhooksPage() {
 
   return (
     <div className="container mx-auto py-10">
-      <h1 className="text-2xl font-bold mb-8">Webhook Settings</h1>
+      <h1 className="text-2xl font-bold mb-8">CRM Settings</h1>
       
       <div className="space-y-6">
         <Card className="p-6">
-          <h2 className="text-lg font-semibold mb-4">Webhook URLs</h2>
+          <h2 className="text-lg font-semibold mb-4">GoHighLevel Integration</h2>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="inboundUrl">Inbound Webhook URL</Label>
+              <Label htmlFor="locationId">Location ID</Label>
               <div className="flex gap-2 mt-1">
                 <Input
-                  id="inboundUrl"
-                  value={organization.webhookUrl}
-                  readOnly
-                />
-                <Button
-                  onClick={() => {
-                    navigator.clipboard.writeText(organization.webhookUrl);
-                    toast.success('Copied to clipboard');
-                  }}
-                >
-                  Copy
-                </Button>
-              </div>
-              <p className="text-sm text-gray-500 mt-1">
-                Use this URL in GoHighLevel to send webhooks to ProfitReach
-              </p>
-            </div>
-
-            <div>
-              <Label htmlFor="outboundUrl">Outbound Webhook URL</Label>
-              <div className="flex gap-2 mt-1">
-                <Input
-                  id="outboundUrl"
-                  defaultValue={organization.outboundWebhookUrl || ''}
-                  placeholder="Enter your outbound webhook URL"
+                  id="locationId"
+                  defaultValue={organization.locationId || ''}
+                  placeholder="Enter your GHL Location ID"
                   onChange={async (e: ChangeEvent<HTMLInputElement>) => {
-                    const response = await fetch(`/api/organizations/current`, {
+                    const response = await fetch(`/api/organizations/${organization.id}/ghl-integration`, {
                       method: 'PATCH',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ outboundWebhookUrl: e.target.value })
+                      body: JSON.stringify({ locationId: e.target.value })
                     });
+                    
                     if (!response.ok) {
-                      toast.error('Failed to update outbound webhook URL');
+                      const data = await response.json();
+                      toast.error(data.error || 'Failed to update location ID');
                     } else {
-                      toast.success('Outbound webhook URL updated');
+                      toast.success('Location ID updated successfully');
+                      // Update local state
+                      setOrganization(prev => prev ? {
+                        ...prev,
+                        locationId: e.target.value
+                      } : null);
                     }
                   }}
                 />
               </div>
               <p className="text-sm text-gray-500 mt-1">
-                ProfitReach will send processed webhooks to this URL
+                Your GoHighLevel Location ID is required for CRM integration
               </p>
             </div>
           </div>

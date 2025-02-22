@@ -10,7 +10,8 @@ interface Organization {
   id: string;
   name: string;
   webhookUrl: string;
-  outboundWebhookUrl?: string;
+  outboundWebhookUrl: string | null;
+  location_id: string | null;
   billingPlan: string;
   creditBalance: number;
   creditUsage: Array<{
@@ -184,20 +185,27 @@ const WebhookSettings = ({ organization, isWaitingForData, setIsWaitingForData, 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('webhooks');
   const [organization, setOrganization] = useState<Organization | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [isWaitingForData, setIsWaitingForData] = useState(false);
   const [isSavingWebhookUrl, setIsSavingWebhookUrl] = useState(false);
   const [outboundWebhookUrl, setOutboundWebhookUrl] = useState('');
   const [urlError, setUrlError] = useState('');
 
   const fetchOrganization = async () => {
+    setIsLoading(true);
     try {
       const res = await fetch('/api/organizations/current');
+      if (!res.ok) {
+        throw new Error('Failed to fetch organization data');
+      }
       const data = await res.json();
       setOrganization(data);
       setOutboundWebhookUrl(data.outboundWebhookUrl || '');
     } catch (err) {
       console.error('Error fetching organization:', err);
       toast.error('Failed to fetch organization data');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -205,13 +213,9 @@ export default function SettingsPage() {
     // Set initial tab from URL parameter
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get('tab');
-    if (tabParam && ['webhooks', 'users', 'billing'].includes(tabParam)) {
+    if (tabParam && ['webhooks', 'users', 'billing', 'crm'].includes(tabParam)) {
       setActiveTab(tabParam);
     }
-  }, []);
-
-  // Fetch organization data on mount
-  useEffect(() => {
     fetchOrganization();
   }, []);
 
@@ -261,39 +265,13 @@ export default function SettingsPage() {
 
   return (
     <PageContainer>
-      <div className="max-w-5xl mx-auto space-y-6">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="h-10 w-10 rounded-xl bg-red-100 flex items-center justify-center">
-            <svg
-              className="h-5 w-5 text-red-600"
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-              <circle cx="12" cy="12" r="3" />
-            </svg>
-          </div>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-[-0.2px] text-gray-900">
-              Settings
-            </h1>
-            <p className="text-sm text-gray-500">
-              Manage your organization settings and preferences
-            </p>
-          </div>
-        </div>
-
-        <div className="flex gap-2 border-b border-gray-200">
+      <div className="space-y-6">
+        <div className="flex space-x-4 border-b border-gray-200">
           <button
             onClick={() => setActiveTab('webhooks')}
-            className={`px-4 py-2 text-sm font-medium ${
+            className={`px-4 py-2 ${
               activeTab === 'webhooks'
-                ? 'text-red-600 border-b-2 border-red-600'
+                ? 'border-b-2 border-red-500 text-red-600'
                 : 'text-gray-500 hover:text-gray-700'
             }`}
           >
@@ -301,9 +279,9 @@ export default function SettingsPage() {
           </button>
           <button
             onClick={() => setActiveTab('users')}
-            className={`px-4 py-2 text-sm font-medium ${
+            className={`px-4 py-2 ${
               activeTab === 'users'
-                ? 'text-red-600 border-b-2 border-red-600'
+                ? 'border-b-2 border-red-500 text-red-600'
                 : 'text-gray-500 hover:text-gray-700'
             }`}
           >
@@ -311,33 +289,101 @@ export default function SettingsPage() {
           </button>
           <button
             onClick={() => setActiveTab('billing')}
-            className={`px-4 py-2 text-sm font-medium ${
+            className={`px-4 py-2 ${
               activeTab === 'billing'
-                ? 'text-red-600 border-b-2 border-red-600'
+                ? 'border-b-2 border-red-500 text-red-600'
                 : 'text-gray-500 hover:text-gray-700'
             }`}
           >
             Billing
           </button>
+          <button
+            onClick={() => setActiveTab('crm')}
+            className={`px-4 py-2 ${
+              activeTab === 'crm'
+                ? 'border-b-2 border-red-500 text-red-600'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            CRM
+          </button>
         </div>
 
-        {activeTab === 'webhooks' ? (
-          <WebhookSettings
-            organization={organization}
-            isWaitingForData={isWaitingForData}
-            setIsWaitingForData={setIsWaitingForData}
-            outboundWebhookUrl={outboundWebhookUrl}
-            setOutboundWebhookUrl={setOutboundWebhookUrl}
-            urlError={urlError}
-            setUrlError={setUrlError}
-            isSavingWebhookUrl={isSavingWebhookUrl}
-            handleOutboundWebhookUrlChange={handleOutboundWebhookUrlChange}
-            handleSaveWebhookUrl={handleSaveWebhookUrl}
-          />
-        ) : activeTab === 'users' ? (
-          <UserManagement />
+        {isLoading ? (
+          <div className="flex justify-center items-center p-8">
+            <div className="animate-spin text-red-500">⟳</div>
+          </div>
         ) : (
-          organization && <BillingForm organization={organization} onPlanChange={handlePlanChange} />
+          <>
+            {activeTab === 'webhooks' && organization && (
+              <WebhookSettings
+                organization={organization}
+                isWaitingForData={isWaitingForData}
+                setIsWaitingForData={setIsWaitingForData}
+                outboundWebhookUrl={outboundWebhookUrl}
+                setOutboundWebhookUrl={setOutboundWebhookUrl}
+                urlError={urlError}
+                setUrlError={setUrlError}
+                isSavingWebhookUrl={isSavingWebhookUrl}
+                handleOutboundWebhookUrlChange={handleOutboundWebhookUrlChange}
+                handleSaveWebhookUrl={handleSaveWebhookUrl}
+              />
+            )}
+            {activeTab === 'users' && <UserManagement />}
+            {activeTab === 'billing' && organization && (
+              <BillingForm organization={organization} onPlanChange={handlePlanChange} />
+            )}
+            {activeTab === 'crm' && organization && (
+              <div className="space-y-6">
+                <div className="bg-white rounded-xl shadow-sm ring-1 ring-gray-950/5 p-6">
+                  <h2 className="text-lg font-semibold mb-4">CRM Settings</h2>
+                  <div className="space-y-4">
+                    <div>
+                      <label htmlFor="location_id" className="block text-sm font-medium text-gray-700 mb-1">
+                        Location ID
+                      </label>
+                      <input
+                        type="text"
+                        id="location_id"
+                        value={organization.location_id || ''}
+                        onChange={async (e) => {
+                          const newLocationId = e.target.value;
+                          try {
+                            const response = await fetch('/api/organizations/current', {
+                              method: 'PATCH',
+                              headers: {
+                                'Content-Type': 'application/json',
+                              },
+                              body: JSON.stringify({ location_id: newLocationId }),
+                            });
+                            
+                            const data = await response.json();
+                            
+                            if (!response.ok) {
+                              throw new Error(data.error || 'Failed to update location ID');
+                            }
+                            
+                            // Update organization state with the returned data
+                            setOrganization(prev => prev ? {
+                              ...prev,
+                              location_id: data.location_id
+                            } : null);
+                            
+                            toast.success('Location ID updated successfully');
+                          } catch (error) {
+                            console.error('Error updating location ID:', error);
+                            toast.error(error instanceof Error ? error.message : 'Failed to update location ID');
+                          }
+                        }}
+                        className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+                        placeholder="Enter your location ID"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </PageContainer>

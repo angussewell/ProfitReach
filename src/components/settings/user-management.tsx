@@ -18,6 +18,7 @@ export function UserManagement() {
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [newUser, setNewUser] = useState({
     name: '',
     email: '',
@@ -32,13 +33,22 @@ export function UserManagement() {
   }, [session?.user?.organizationId]);
 
   const fetchUsers = async () => {
+    setError(null);
+    setIsLoading(true);
     try {
-      const response = await fetch(`/api/organizations/${session?.user?.organizationId}/users`);
-      if (!response.ok) throw new Error('Failed to fetch users');
+      const response = await fetch(`/api/organizations/${session?.user?.organizationId}/${session?.user?.organizationId}/users`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || 'Failed to fetch users');
+      }
       const data = await response.json();
+      if (!Array.isArray(data)) {
+        throw new Error('Invalid response format');
+      }
       setUsers(data);
     } catch (error) {
       console.error('Error fetching users:', error);
+      setError(error instanceof Error ? error.message : 'Failed to fetch users');
       toast.error('Failed to fetch users');
     } finally {
       setIsLoading(false);
@@ -51,7 +61,7 @@ export function UserManagement() {
 
     setIsCreating(true);
     try {
-      const response = await fetch(`/api/organizations/${session.user.organizationId}/users`, {
+      const response = await fetch(`/api/organizations/${session.user.organizationId}/${session.user.organizationId}/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newUser)
@@ -80,7 +90,7 @@ export function UserManagement() {
     setIsDeleting(true);
     try {
       const response = await fetch(
-        `/api/organizations/${session.user.organizationId}/users?userId=${userId}`,
+        `/api/organizations/${session.user.organizationId}/${session.user.organizationId}/users?userId=${userId}`,
         { method: 'DELETE' }
       );
 
@@ -103,6 +113,14 @@ export function UserManagement() {
     return (
       <div className="flex justify-center items-center p-8">
         <Loader2 className="w-8 h-8 animate-spin text-red-500" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex justify-center items-center p-8 text-red-500">
+        {error}
       </div>
     );
   }
@@ -217,41 +235,39 @@ export function UserManagement() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {users.map(user => (
-                <tr key={user.id}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {user.name}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {user.email}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {user.role}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(user.createdAt).toLocaleDateString()}
-                  </td>
-                  {session?.user?.role === 'admin' && (
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      {user.id !== session.user.id && (
-                        <button
-                          onClick={() => handleDeleteUser(user.id)}
-                          disabled={isDeleting}
-                          className="text-red-600 hover:text-red-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
+              {Array.isArray(users) && users.length > 0 ? (
+                users.map(user => (
+                  <tr key={user.id}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {user.name}
                     </td>
-                  )}
-                </tr>
-              ))}
-              {users.length === 0 && (
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {user.email}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {user.role}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {new Date(user.createdAt).toLocaleDateString()}
+                    </td>
+                    {session?.user?.role === 'admin' && (
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        {user.id !== session.user.id && (
+                          <button
+                            onClick={() => handleDeleteUser(user.id)}
+                            disabled={isDeleting}
+                            className="text-red-600 hover:text-red-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                ))
+              ) : (
                 <tr>
-                  <td
-                    colSpan={session?.user?.role === 'admin' ? 5 : 4}
-                    className="px-6 py-4 text-sm text-gray-500 text-center"
-                  >
+                  <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
                     No users found
                   </td>
                 </tr>

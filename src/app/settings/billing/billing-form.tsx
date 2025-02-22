@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { useStripe } from '@/components/providers/StripeProvider';
+import { Loader2 } from 'lucide-react';
 
 interface BillingFormProps {
   organization: {
@@ -29,9 +30,18 @@ const CREDIT_PACKS = [
 export function BillingForm({ organization, onPlanChange }: BillingFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [currentPlan, setCurrentPlan] = useState(organization.billingPlan);
+  const [currentPlan, setCurrentPlan] = useState(organization?.billingPlan || 'unlimited');
   const [selectedPack, setSelectedPack] = useState(CREDIT_PACKS[0]);
   const { stripe, isTestMode, setIsTestMode } = useStripe();
+
+  // If organization is not available, show loading state
+  if (!organization) {
+    return (
+      <div className="flex justify-center items-center p-8">
+        <Loader2 className="w-8 h-8 animate-spin text-red-500" />
+      </div>
+    );
+  }
 
   const handlePlanChange = async (plan: string) => {
     setLoading(true);
@@ -145,8 +155,10 @@ export function BillingForm({ organization, onPlanChange }: BillingFormProps) {
           <p className="text-sm text-gray-500">Your current credit balance and usage history</p>
         </div>
         <div>
-          <p className="text-2xl font-bold">{organization.creditBalance.toLocaleString()} credits</p>
-          {organization.billingPlan === 'at_cost' && (
+          <p className="text-2xl font-bold">
+            {(organization?.creditBalance || 0).toLocaleString()} credits
+          </p>
+          {organization?.billingPlan === 'at_cost' && (
             <button
               onClick={handlePurchaseCredits}
               disabled={loading}
@@ -158,7 +170,7 @@ export function BillingForm({ organization, onPlanChange }: BillingFormProps) {
         </div>
       </div>
 
-      {organization.billingPlan === 'at_cost' && (
+      {organization?.billingPlan === 'at_cost' && (
         <div className="bg-white rounded-xl shadow-sm p-6">
           <div className="mb-4">
             <h2 className="text-xl font-semibold">Purchase Credits</h2>

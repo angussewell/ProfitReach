@@ -46,7 +46,7 @@ model Organization {
   creditBalance      Int                       @default(0)
   lastBillingSync    DateTime?
   nextBillingDate    DateTime?
-  locationId         String?                   @unique
+  location_id        String?                   @unique
   attachments        Attachment[]
   billingEvents      BillingEvent[]
   connectedAccounts  ConnectedAccountBilling[]

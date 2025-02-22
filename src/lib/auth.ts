@@ -1,9 +1,8 @@
-import { NextAuthOptions } from 'next-auth';
-import { PrismaAdapter } from '@auth/prisma-adapter';
+import { NextAuthOptions, getServerSession } from 'next-auth';
+import { PrismaAdapter } from '@next-auth/prisma-adapter';
 import { prisma } from '@/lib/prisma';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { randomUUID } from 'crypto';
-import { auth } from '@clerk/nextjs';
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
@@ -89,18 +88,15 @@ export const authOptions: NextAuthOptions = {
 };
 
 export async function getOrganization() {
-  const { userId } = auth();
+  const session = await getServerSession(authOptions);
   
-  if (!userId) {
+  if (!session?.user?.organizationId) {
     return null;
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      organization: true
-    }
+  const organization = await prisma.organization.findUnique({
+    where: { id: session.user.organizationId }
   });
 
-  return user?.organization;
+  return organization;
 } 
