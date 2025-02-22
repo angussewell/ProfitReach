@@ -3,6 +3,7 @@ import { PrismaAdapter } from '@auth/prisma-adapter';
 import { prisma } from '@/lib/prisma';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { randomUUID } from 'crypto';
+import { auth } from '@clerk/nextjs';
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
@@ -85,4 +86,21 @@ export const authOptions: NextAuthOptions = {
   pages: {
     signIn: '/auth/login',
   }
-}; 
+};
+
+export async function getOrganization() {
+  const { userId } = auth();
+  
+  if (!userId) {
+    return null;
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      organization: true
+    }
+  });
+
+  return user?.organization;
+} 

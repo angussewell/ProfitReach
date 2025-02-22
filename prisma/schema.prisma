@@ -46,13 +46,13 @@ model Organization {
   creditBalance      Int                       @default(0)
   lastBillingSync    DateTime?
   nextBillingDate    DateTime?
+  locationId         String?                   @unique
   attachments        Attachment[]
   billingEvents      BillingEvent[]
   connectedAccounts  ConnectedAccountBilling[]
   creditUsage        CreditUsage[]
   emailAccounts      EmailAccount[]
   emailMessages      EmailMessage[]
-  ghlIntegrations    GHLIntegration[]
   metrics            Metric[]
   prompts            Prompt[]
   researchResults    ResearchResult[]
@@ -200,14 +200,11 @@ model WebhookLog {
   company          String          @default("Unknown")
   requestBody      Json
   responseBody     Json            @default("{}")
-  ghlIntegrationId String?
-  creditUsages     CreditUsage[]
-  GHLIntegration   GHLIntegration? @relation(fields: [ghlIntegrationId], references: [id])
   organization     Organization    @relation(fields: [organizationId], references: [id])
+  creditUsages     CreditUsage[]
 
   @@index([accountId])
   @@index([createdAt])
-  @@index([ghlIntegrationId])
   @@index([scenarioName])
 }
 
@@ -215,23 +212,6 @@ model PlayingWithNeon {
   id    Int    @id @default(autoincrement())
   name  String
   value Float? @db.Real
-}
-
-model GHLIntegration {
-  id             String       @id @default(cuid())
-  locationId     String
-  locationName   String?
-  accessToken    String
-  refreshToken   String
-  expiresAt      DateTime
-  organizationId String
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  WebhookLog     WebhookLog[]
-
-  @@unique([organizationId, locationId])
-  @@index([locationId])
 }
 
 model ResearchResult {
