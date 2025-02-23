@@ -32,8 +32,8 @@ export async function POST(request: Request) {
         contactName,
         company,
         requestBody,
-        status: 'received',
-        responseBody: { status: 'received' }
+        status: 'success',
+        responseBody: { status: 'success' }
       }
     });
 
