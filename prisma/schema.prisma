@@ -34,34 +34,36 @@ model Session {
 }
 
 model Organization {
-  id                 String                    @id @default(cuid())
-  name               String                    @unique
-  createdAt          DateTime                  @default(now())
-  updatedAt          DateTime                  @updatedAt
-  webhookUrl         String                    @unique @default(uuid())
-  outboundWebhookUrl String?
-  stripeCustomerId   String?
+  id                   String                    @id @default(cuid())
+  name                 String                    @unique
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
+  webhookUrl           String                    @unique @default(uuid())
+  outboundWebhookUrl   String?
+  stripeCustomerId     String?
+  billingPlan          String?                   @default("unlimited")
+  creditBalance        Int?                      @default(0)
+  lastBillingSync      DateTime?
+  nextBillingDate      DateTime?
   stripeTestCustomerId String?
-  billingPlan        String?                   @default("unlimited")
-  creditBalance      Int                       @default(0)
-  lastBillingSync    DateTime?
-  nextBillingDate    DateTime?
-  location_id        String?                   @unique
-  attachments        Attachment[]
-  billingEvents      BillingEvent[]
-  connectedAccounts  ConnectedAccountBilling[]
-  creditUsage        CreditUsage[]
-  emailAccounts      EmailAccount[]
-  emailMessages      EmailMessage[]
-  metrics            Metric[]
-  prompts            Prompt[]
-  researchResults    ResearchResult[]
-  scenarios          Scenario[]
-  snippets           Snippet[]
-  socialAccounts     SocialAccount[]
-  subscriptions      Subscription[]
-  users              User[]
-  webhookLogs        WebhookLog[]
+  location_id          String?                   @unique
+  attachments          Attachment[]
+  billingEvents        BillingEvent[]
+  connectedAccounts    ConnectedAccountBilling[]
+  creditUsage          CreditUsage[]
+  emailAccounts        EmailAccount[]
+  emailMessages        EmailMessage[]
+  metrics              Metric[]
+  prompts              Prompt[]
+  researchResults      ResearchResult[]
+  scenarios            Scenario[]
+  snippets             Snippet[]
+  socialAccounts       SocialAccount[]
+  subscriptions        Subscription[]
+  users                User[]
+  webhookLogs          WebhookLog[]
+
+  @@index([stripeTestCustomerId], map: "organization_stripe_test_customer_idx")
 }
 
 model User {
@@ -189,23 +191,28 @@ model WebhookField {
 }
 
 model WebhookLog {
-  id               String          @id @default(cuid())
+  id               String        @id @default(cuid())
   accountId        String
   organizationId   String
-  createdAt        DateTime        @default(now())
-  status           String          @default("error")
-  scenarioName     String          @default("Unknown")
-  contactEmail     String          @default("Unknown")
-  contactName      String          @default("Unknown")
-  company          String          @default("Unknown")
+  createdAt        DateTime      @default(now())
+  status           String        @default("received")
+  scenarioName     String        @default("Unknown")
+  contactEmail     String        @default("Unknown")
+  contactName      String        @default("Unknown")
+  company          String        @default("Unknown")
   requestBody      Json
-  responseBody     Json            @default("{}")
-  organization     Organization    @relation(fields: [organizationId], references: [id])
+  responseBody     Json          @default("{}")
+  ghlIntegrationId String?
+  updatedAt        DateTime      @default(now())
   creditUsages     CreditUsage[]
+  organization     Organization  @relation(fields: [organizationId], references: [id])
 
   @@index([accountId])
   @@index([createdAt])
   @@index([scenarioName])
+  @@index([ghlIntegrationId])
+  @@index([organizationId, status], map: "webhook_log_org_status_idx")
+  @@index([status, createdAt], map: "webhook_log_status_created_at_idx")
 }
 
 model PlayingWithNeon {
@@ -242,13 +249,13 @@ model Snippet {
 
 model EmailAccount {
   id               String         @id @default(cuid())
-  email            String
+  email            String         @unique
   name             String
   organizationId   String
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
   isActive         Boolean        @default(true)
-  unipileAccountId String?        @unique
+  unipileAccountId String?
   organization     Organization   @relation(fields: [organizationId], references: [id])
   emailMessages    EmailMessage[]
 
@@ -339,11 +346,13 @@ model Subscription {
   subscriptionItemId   String?
   priceId              String?
   quantity             Int?         @default(1)
+  isTestMode           Boolean      @default(false)
   organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([organizationId], map: "subscription_org_id_idx")
   @@index([status], map: "subscription_status_idx")
   @@index([stripeSubscriptionId], map: "subscription_stripe_id_idx")
+  @@index([isTestMode], map: "subscription_test_mode_idx")
 }
 
 model BillingEvent {
@@ -356,11 +365,13 @@ model BillingEvent {
   metadata       Json?        @default("{}")
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+  isTestMode     Boolean      @default(false)
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([createdAt], map: "billing_event_created_at_idx")
   @@index([organizationId], map: "billing_event_org_id_idx")
   @@index([type], map: "billing_event_type_idx")
+  @@index([isTestMode], map: "billing_event_test_mode_idx")
 }
 
 model ConnectedAccountBilling {

@@ -12,8 +12,7 @@ export async function POST(request: Request) {
       contactEmail = 'unknown',
       contactName = 'unknown',
       company = 'unknown',
-      requestBody,
-      ghlLocationId
+      requestBody
     } = data;
 
     if (!organizationId || !requestBody) {
@@ -21,21 +20,6 @@ export async function POST(request: Request) {
         { error: 'organizationId and requestBody are required' },
         { status: 400 }
       );
-    }
-
-    // Find GHL integration if locationId provided
-    let ghlIntegrationId = null;
-    if (ghlLocationId) {
-      const ghlIntegration = await prisma.gHLIntegration.findFirst({
-        where: { 
-          organizationId,
-          locationId: ghlLocationId
-        },
-        select: { id: true }
-      });
-      if (ghlIntegration) {
-        ghlIntegrationId = ghlIntegration.id;
-      }
     }
 
     // Create webhook log
@@ -49,8 +33,7 @@ export async function POST(request: Request) {
         company,
         requestBody,
         status: 'received',
-        responseBody: { status: 'received' },
-        ...(ghlIntegrationId && { ghlIntegrationId })
+        responseBody: { status: 'received' }
       }
     });
 
