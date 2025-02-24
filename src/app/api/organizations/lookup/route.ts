@@ -49,7 +49,7 @@ export async function GET(request: Request) {
         (
           SELECT json_agg(json_build_object(
             'name', p.name,
-            'content', p.name
+            'content', p.content
           ))
           FROM "Prompt" p
           WHERE p."organizationId" = o.id
@@ -72,7 +72,15 @@ export async function GET(request: Request) {
     // Ensure arrays are never null
     organization.emailAccounts = organization.emailAccounts || [];
     organization.socialAccounts = organization.socialAccounts || [];
-    organization.prompts = organization.prompts || [];
+    
+    // Transform prompts array into key-value object
+    const promptsArray = organization.prompts || [];
+    organization.prompts = promptsArray.reduce((acc: Record<string, string>, prompt: any) => {
+      if (prompt && prompt.name && prompt.content) {
+        acc[prompt.name] = prompt.content;
+      }
+      return acc;
+    }, {});
 
     log('info', 'Found organization by location_id', {
       location_id,
