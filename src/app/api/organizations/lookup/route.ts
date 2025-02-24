@@ -49,7 +49,7 @@ export async function GET(request: Request) {
         (
           SELECT json_agg(json_build_object(
             'name', p.name,
-            'content', p.content
+            'content', p.name
           ))
           FROM "Prompt" p
           WHERE p."organizationId" = o.id
