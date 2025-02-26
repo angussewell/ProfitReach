@@ -25,7 +25,7 @@ export function PromptInput({
     onChange(value + variable);
   };
 
-  const height = isSubjectLine ? 40 : Math.max(rows * 32, 400);
+  const height = isSubjectLine ? 100 : Math.max(rows * 32, 400);
 
   const subjectLineOptions = isSubjectLine ? {
     lineNumbers: 'off' as const,
@@ -50,7 +50,7 @@ export function PromptInput({
     lineNumbersMinChars: 0,
     folding: false,
     fixedOverflowWidgets: true,
-    padding: { top: 8, bottom: 8, left: 32, right: 16 },
+    padding: { top: 12, bottom: 12, left: 32, right: 16 },
     renderValidationDecorations: 'off' as const,
     matchBrackets: 'never' as const,
     occurrencesHighlight: 'off' as const,
@@ -72,14 +72,14 @@ export function PromptInput({
       <div className="mb-2">
         <VariableSelector onSelect={handleVariableSelect} />
       </div>
-      <div className={isSubjectLine ? "overflow-hidden relative h-[40px]" : ""}>
+      <div className={isSubjectLine ? "overflow-hidden relative h-[100px] rounded-md bg-gray-50" : ""}>
         <CodeEditor
           value={value}
           onChange={onChange}
           language="markdown"
           height={`${height}px`}
           className={`
-            ${isSubjectLine ? "min-h-[40px] max-h-[40px] !overflow-hidden subject-line-editor" : rows === 1 ? "min-h-[40px]" : "min-h-[400px]"}
+            ${isSubjectLine ? "min-h-[100px] max-h-[100px] !overflow-hidden subject-line-editor rounded-md border-gray-200" : rows === 1 ? "min-h-[40px]" : "min-h-[400px]"}
           `}
           maxLength={8000}
           editorOptions={subjectLineOptions}
