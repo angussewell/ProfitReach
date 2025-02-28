@@ -1,20 +1,15 @@
 'use client';
 
-import { useEffect, useState, ChangeEvent } from 'react';
-import { Card as CardComponent } from '@/components/ui/card';
-import { Input as InputComponent } from '@/components/ui/input';
-import { Label as LabelComponent } from '@/components/ui/label';
+import { useState, useEffect } from 'react';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-
-// Component type aliases
-const Card = CardComponent as any;
-const Input = InputComponent as any;
-const Label = LabelComponent as any;
 
 interface Organization {
   id: string;
   name: string;
-  locationId: string | null;
+  location_id: string | null;
 }
 
 interface CrmInfo {
@@ -40,6 +35,11 @@ interface CrmInfo {
   linkedin_user_provider_id: string | null;
 }
 
+interface CrmSettingsProps {
+  organization: Organization;
+  onLocationIdChange: (newLocationId: string) => Promise<void>;
+}
+
 // Define a type for field entries with optional section property
 type FieldEntry = {
   key: keyof CrmInfo;
@@ -47,8 +47,7 @@ type FieldEntry = {
   section?: string;
 };
 
-export default function CRMSettingsPage() {
-  const [organization, setOrganization] = useState<Organization | null>(null);
+export function CrmSettings({ organization, onLocationIdChange }: CrmSettingsProps) {
   const [crmInfo, setCrmInfo] = useState<CrmInfo | null>(null);
   const [editedCrmInfo, setEditedCrmInfo] = useState<CrmInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -56,23 +55,14 @@ export default function CRMSettingsPage() {
   const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
-    async function fetchData() {
+    async function fetchCrmInfo() {
       try {
-        // Fetch organization
-        const orgResponse = await fetch('/api/organizations/current');
-        if (!orgResponse.ok) {
-          throw new Error('Failed to fetch organization');
-        }
-        const orgData = await orgResponse.json();
-        setOrganization(orgData);
-
-        // Fetch CRM info
-        const crmResponse = await fetch(`/api/organizations/${orgData.id}/crm-info`);
-        if (!crmResponse.ok) {
+        const response = await fetch(`/api/organizations/${organization.id}/crm-info`);
+        if (!response.ok) {
           throw new Error('Failed to fetch CRM info');
         }
-        const crmData = await crmResponse.json();
-        const initialData = crmData || {
+        const data = await response.json();
+        const initialData = data || {
           organizationId: '',
           private_integration_token: null,
           prospect_research: null,
@@ -97,15 +87,15 @@ export default function CRMSettingsPage() {
         setCrmInfo(initialData);
         setEditedCrmInfo(initialData);
       } catch (error) {
-        console.error('Error fetching data:', error);
-        toast.error('Failed to load data');
+        console.error('Error fetching CRM info:', error);
+        toast.error('Failed to load CRM info');
       } finally {
         setLoading(false);
       }
     }
 
-    fetchData();
-  }, []);
+    fetchCrmInfo();
+  }, [organization.id]);
 
   const handleFieldChange = (field: keyof CrmInfo, value: string) => {
     setEditedCrmInfo(prev => {
@@ -123,7 +113,7 @@ export default function CRMSettingsPage() {
   };
 
   const saveAllChanges = async () => {
-    if (!organization || !editedCrmInfo) return;
+    if (!editedCrmInfo) return;
     
     setIsSaving(true);
     try {
@@ -152,10 +142,6 @@ export default function CRMSettingsPage() {
     }
   };
 
-  if (loading || !organization || !editedCrmInfo) {
-    return <div>Loading...</div>;
-  }
-
   const fields: FieldEntry[] = [
     { key: 'private_integration_token', label: 'Private Integration Token' },
     { key: 'prospect_research', label: 'Prospect Research Field ID' },
@@ -178,100 +164,85 @@ export default function CRMSettingsPage() {
     { key: 'linkedin_user_provider_id', label: 'LinkedIn User Provider ID', section: 'LinkedIn Provider Settings' }
   ];
 
-  return (
-    <div className="container mx-auto py-10">
-      <h1 className="text-2xl font-bold mb-8">CRM Settings</h1>
-      
-      <div className="space-y-6">
-        <Card className="p-6">
-          <h2 className="text-lg font-semibold mb-4">GoHighLevel Integration</h2>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="locationId">Location ID</Label>
-              <div className="flex gap-2 mt-1">
-                <Input
-                  id="locationId"
-                  defaultValue={organization.locationId || ''}
-                  placeholder="Enter your GHL Location ID"
-                  onChange={async (e: ChangeEvent<HTMLInputElement>) => {
-                    const response = await fetch(`/api/organizations/${organization.id}/ghl-integration`, {
-                      method: 'PATCH',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ locationId: e.target.value })
-                    });
-                    
-                    if (!response.ok) {
-                      const data = await response.json();
-                      toast.error(data.error || 'Failed to update location ID');
-                    } else {
-                      toast.success('Location ID updated successfully');
-                      setOrganization(prev => prev ? {
-                        ...prev,
-                        locationId: e.target.value
-                      } : null);
-                    }
-                  }}
-                />
-              </div>
-              <p className="text-sm text-gray-500 mt-1">
-                Your GoHighLevel Location ID is required for CRM integration
-              </p>
-            </div>
-          </div>
-        </Card>
+  if (loading || !editedCrmInfo) {
+    return <div>Loading...</div>;
+  }
 
-        <Card className="p-6">
-          <h2 className="text-lg font-semibold mb-4">CRM Field Mappings</h2>
-          <p className="text-sm text-gray-500 mb-4">
-            Enter the custom field IDs from your CRM that correspond to each field below
-          </p>
-          <div className="space-y-4">
-            {fields.map(({ key, label, section }) => (
-              <div key={key}>
-                {section && (
-                  <div className="mt-6 mb-4">
-                    <div className="border-t border-gray-200 my-2"></div>
-                    <h3 className="font-medium text-gray-700">{section}</h3>
-                  </div>
-                )}
-                <Label htmlFor={key}>{label}</Label>
-                <div className="flex gap-2 mt-1">
-                  <Input
-                    id={key}
-                    value={editedCrmInfo[key] || ''}
-                    placeholder={`Enter ${label}`}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => handleFieldChange(key, e.target.value)}
-                    className={key === 'linkedin_user_provider_id' ? 'bg-blue-50' : ''}
-                  />
-                </div>
-                {key === 'linkedin_user_provider_id' && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    This is not a field ID. Enter the actual LinkedIn provider ID value.
-                  </p>
-                )}
-              </div>
-            ))}
-            
-            <div className="mt-6 flex justify-end">
-              <button
-                onClick={saveAllChanges}
-                disabled={isSaving || !hasChanges}
-                className={`bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors ${
-                  (isSaving || !hasChanges) ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-              >
-                {isSaving ? (
-                  <div className="flex items-center gap-2">
-                    <div className="animate-spin">⟳</div>
-                    <span>Saving...</span>
-                  </div>
-                ) : (
-                  'Save Changes'
-                )}
-              </button>
-            </div>
+  return (
+    <div className="space-y-6">
+      <div className="bg-white rounded-xl shadow-sm ring-1 ring-gray-950/5 p-6">
+        <h2 className="text-lg font-semibold mb-4">GoHighLevel Integration</h2>
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="location_id" className="block text-sm font-medium text-gray-700 mb-1">
+              Location ID
+            </label>
+            <input
+              type="text"
+              id="location_id"
+              value={organization.location_id || ''}
+              onChange={(e) => onLocationIdChange(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+              placeholder="Enter your location ID"
+            />
           </div>
-        </Card>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm ring-1 ring-gray-950/5 p-6">
+        <h2 className="text-lg font-semibold mb-4">CRM Field Mappings</h2>
+        <p className="text-sm text-gray-500 mb-4">
+          Enter the custom field IDs from your CRM that correspond to each field below
+        </p>
+        <div className="space-y-4">
+          {fields.map(({ key, label, section }) => (
+            <div key={key}>
+              {section && (
+                <div className="mt-6 mb-4">
+                  <div className="border-t border-gray-200 my-2"></div>
+                  <h3 className="font-medium text-gray-700">{section}</h3>
+                </div>
+              )}
+              <label htmlFor={key} className="block text-sm font-medium text-gray-700 mb-1">
+                {label}
+              </label>
+              <input
+                type="text"
+                id={key}
+                value={editedCrmInfo[key] || ''}
+                onChange={(e) => handleFieldChange(key, e.target.value)}
+                className={`w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 ${
+                  key === 'linkedin_user_provider_id' ? 'bg-blue-50' : ''
+                }`}
+                placeholder={`Enter ${label}`}
+              />
+              {key === 'linkedin_user_provider_id' && (
+                <p className="mt-1 text-xs text-gray-500">
+                  This is not a field ID. Enter the actual LinkedIn provider ID value.
+                </p>
+              )}
+            </div>
+          ))}
+          
+          <div className="mt-6 flex justify-end">
+            <button
+              onClick={saveAllChanges}
+              disabled={isSaving || !hasChanges}
+              className={`bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors ${
+                (isSaving || !hasChanges) ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
+            >
+              {isSaving ? (
+                <div className="flex items-center gap-2">
+                  <div className="animate-spin">⟳</div>
+                  <span>Saving...</span>
+                </div>
+              ) : (
+                'Save Changes'
+              )}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
