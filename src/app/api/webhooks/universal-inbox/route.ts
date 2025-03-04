@@ -184,7 +184,8 @@ export async function POST(request: Request) {
           recipientEmail: data.to_attendees[0]?.identifier || '',
           content: data.body_plain,
           receivedAt: new Date(data.date),
-          messageType: messageType
+          messageType: messageType,
+          status: 'FOLLOW_UP_NEEDED'
         }
       });
       

@@ -266,9 +266,24 @@ model EmailAccount {
   @@index([organizationId])
 }
 
+enum MessageType {
+  REAL_REPLY
+  BOUNCE
+  AUTO_REPLY
+  OUT_OF_OFFICE
+  OTHER
+}
+
+enum ConversationStatus {
+  MEETING_BOOKED
+  NOT_INTERESTED
+  FOLLOW_UP_NEEDED
+  NO_ACTION_NEEDED
+}
+
 model EmailMessage {
-  id                   String       @id @default(cuid())
-  messageId            String       @unique
+  id                   String              @id @default(cuid())
+  messageId            String              @unique
   threadId             String
   organizationId       String
   emailAccountId       String
@@ -278,11 +293,12 @@ model EmailMessage {
   content              String
   receivedAt           DateTime
   messageType          MessageType
-  isRead               Boolean      @default(false)
+  isRead               Boolean             @default(false)
+  status               ConversationStatus  @default(FOLLOW_UP_NEEDED)
   classificationScores Json?
-  unipileEmailId       String?      @unique
-  emailAccount         EmailAccount @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
-  organization         Organization @relation(fields: [organizationId], references: [id])
+  unipileEmailId       String?             @unique
+  emailAccount         EmailAccount        @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
+  organization         Organization        @relation(fields: [organizationId], references: [id])
 
   @@index([organizationId])
   @@index([emailAccountId])
@@ -401,14 +417,6 @@ model ScenarioResponse {
 
   @@index([scenarioId])
   @@index([source])
-}
-
-enum MessageType {
-  REAL_REPLY
-  BOUNCE
-  AUTO_REPLY
-  OUT_OF_OFFICE
-  OTHER
 }
 
 model Appointment {

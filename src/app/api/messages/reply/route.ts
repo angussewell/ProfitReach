@@ -192,6 +192,20 @@ export async function POST(request: Request) {
         throw new Error('All webhook attempts failed');
       }
 
+      // Get the latest message in the thread to check its status
+      const latestThreadMessage = await prisma.emailMessage.findFirst({
+        where: {
+          threadId: originalMessage.threadId,
+          organizationId: session.user.organizationId
+        },
+        orderBy: {
+          receivedAt: 'desc'
+        },
+        select: {
+          status: true
+        }
+      });
+
       // Generate a unique message ID for our database
       const newMessageId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -209,6 +223,8 @@ export async function POST(request: Request) {
           messageType: 'REAL_REPLY',
           receivedAt: new Date(),
           isRead: true,
+          // Maintain the existing status if it exists, otherwise default to FOLLOW_UP_NEEDED
+          status: latestThreadMessage?.status || 'FOLLOW_UP_NEEDED'
         },
       });
 
