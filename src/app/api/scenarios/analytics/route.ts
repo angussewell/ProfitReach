@@ -8,7 +8,16 @@ export const dynamic = 'force-dynamic';
 
 interface WebhookLog {
   id: string;
+  scenarioName: string;
   status: string;
+  createdAt: Date;
+}
+
+interface ScenarioResponse {
+  id: string;
+  scenarioId: string;
+  source: string;
+  threadId?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -49,7 +58,7 @@ export async function GET(request: Request) {
     const webhookLogs = await prisma.webhookLog.findMany({
       where: {
         organizationId: session.user.organizationId,
-        status: 'success', // Only get successful webhooks
+        status: 'success',
         NOT: {
           scenarioName: {
             contains: 'research',
@@ -65,21 +74,56 @@ export async function GET(request: Request) {
       },
     });
 
+    // Get responses from the ScenarioResponse table
+    const scenarioResponses = await prisma.scenarioResponse.findMany({
+      where: {
+        scenario: {
+          organizationId: session.user.organizationId
+        },
+        ...(from && to ? {
+          createdAt: {
+            gte: new Date(from),
+            lte: new Date(to),
+          },
+        } : {})
+      }
+    });
+
+    // Get appointments count for the date range
+    const appointments = await prisma.appointment.findMany({
+      where: {
+        organizationId: session.user.organizationId,
+        ...(from && to ? {
+          createdAt: {
+            gte: new Date(from),
+            lte: new Date(to),
+          },
+        } : {}),
+      },
+    });
+
     // Calculate analytics for each scenario
     const analytics = scenarios.map((scenario) => {
       const logs = webhookLogs.filter(log => log.scenarioName === scenario.name);
+      const responses = scenarioResponses.filter((r: ScenarioResponse) => r.scenarioId === scenario.id);
+      const manualResponses = responses.filter((r: ScenarioResponse) => r.source === 'manual');
+      
       return {
         id: scenario.id,
         name: scenario.name,
-        totalContacts: logs.length, // This now only includes successful contacts
+        totalContacts: logs.length,
         activeContacts: logs.filter(log => log.status === 'active').length,
-        responseCount: logs.filter(log => log.status === 'responded').length,
+        responseCount: responses.length,
+        manualRepliesCount: manualResponses.length,
         createdAt: scenario.createdAt,
         updatedAt: scenario.updatedAt,
       };
     });
 
-    return NextResponse.json(analytics);
+    return NextResponse.json({
+      scenarios: analytics,
+      appointmentsCount: appointments.length,
+    });
   } catch (error) {
     console.error('Error fetching scenario analytics:', error);
     return new NextResponse('Internal Server Error', { status: 500 });

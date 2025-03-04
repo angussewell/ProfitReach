@@ -9,7 +9,7 @@ const UniversalInboxWebhookV2 = z.object({
   message_id: z.string(),
   thread_id: z.string(),
   unipile_email_id: z.string(),
-  organization_id: z.string(),
+  organizationId: z.string(),
   email_account_id: z.string().describe('The Unipile account ID'), // Clarify this is Unipile's ID
   subject: z.string(),
   sender: z.string(),
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
       console.log('Parsed webhook data:', {
         message_id: data.message_id,
         thread_id: data.thread_id,
-        organization_id: data.organization_id,
+        organizationId: data.organizationId,
         unipile_account_id: data.email_account_id // Log the Unipile account ID
       });
 
@@ -58,12 +58,12 @@ export async function POST(request: Request) {
 
     // First verify the organization exists
     const organization = await prisma.organization.findUnique({
-      where: { id: data.organization_id }
+      where: { id: data.organizationId }
     });
 
     if (!organization) {
       console.error('Organization not found:', {
-        organization_id: data.organization_id
+        organizationId: data.organizationId
       });
       return NextResponse.json(
         { error: 'Organization not found' },
@@ -75,14 +75,14 @@ export async function POST(request: Request) {
     const emailAccount = await prisma.emailAccount.findFirst({
       where: {
         unipileAccountId: data.email_account_id,
-        organizationId: data.organization_id
+        organizationId: data.organizationId
       }
     });
 
     console.log('Email account lookup result:', {
       found: !!emailAccount,
       unipileAccountId: data.email_account_id,
-      organizationId: data.organization_id
+      organizationId: data.organizationId
     });
 
     if (!emailAccount) {
@@ -94,7 +94,7 @@ export async function POST(request: Request) {
       if (accountExists) {
         console.error('Email account belongs to different organization:', {
           unipileAccountId: data.email_account_id,
-          requestedOrg: data.organization_id,
+          requestedOrg: data.organizationId,
           actualOrg: accountExists.organizationId
         });
         return NextResponse.json(
@@ -118,7 +118,7 @@ export async function POST(request: Request) {
         data: {
           messageId: data.message_id,
           threadId: data.thread_id,
-          organizationId: data.organization_id,
+          organizationId: data.organizationId,
           emailAccountId: emailAccount.id,
           subject: data.subject,
           sender: data.sender,

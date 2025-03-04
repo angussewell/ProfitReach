@@ -48,6 +48,7 @@ model Organization {
   stripeTestCustomerId String?
   location_id          String?                   @unique
   attachments          Attachment[]
+  appointments         Appointment[]
   billingEvents        BillingEvent[]
   connectedAccounts    ConnectedAccountBilling[]
   creditUsage          CreditUsage[]
@@ -80,6 +81,7 @@ model User {
   accounts       Account[]
   sessions       Session[]
   organization   Organization? @relation(fields: [organizationId], references: [id])
+  appointments   Appointment[]
 }
 
 model VerificationToken {
@@ -138,6 +140,7 @@ model Scenario {
   signature           Signature?        @relation(fields: [signatureId], references: [id])
   snippet             Snippet?          @relation(fields: [snippetId], references: [id])
   messages            ScenarioMessage[]
+  responses           ScenarioResponse[]
 
   @@unique([name, organizationId])
   @@index([organizationId])
@@ -387,10 +390,36 @@ model ConnectedAccountBilling {
   @@unique([organizationId, accountType, accountId], map: "connected_account_billing_unique")
 }
 
+model ScenarioResponse {
+  id          String   @id @default(cuid())
+  scenarioId  String
+  scenario    Scenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  source      String   // 'manual' or future sources like 'email', 'linkedin', etc.
+  threadId    String?  // Optional, for channel-specific tracking
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([scenarioId])
+  @@index([source])
+}
+
 enum MessageType {
   REAL_REPLY
   BOUNCE
   AUTO_REPLY
   OUT_OF_OFFICE
   OTHER
+}
+
+model Appointment {
+  id             String       @id @default(uuid())
+  organizationId String
+  createdAt      DateTime     @default(now())
+  createdBy      String
+  notes          String?
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [createdBy], references: [id])
+
+  @@index([organizationId])
+  @@index([createdAt])
 }

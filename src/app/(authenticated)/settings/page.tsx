@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { UserManagement } from '@/components/settings/user-management';
 import { BillingForm } from '@/app/settings/billing/billing-form';
+import { CrmSettings } from '@/components/settings/crm-settings';
 
 interface Organization {
   id: string;
@@ -334,54 +335,36 @@ export default function SettingsPage() {
               <BillingForm organization={organization} onPlanChange={handlePlanChange} />
             )}
             {activeTab === 'crm' && organization && (
-              <div className="space-y-6">
-                <div className="bg-white rounded-xl shadow-sm ring-1 ring-gray-950/5 p-6">
-                  <h2 className="text-lg font-semibold mb-4">CRM Settings</h2>
-                  <div className="space-y-4">
-                    <div>
-                      <label htmlFor="location_id" className="block text-sm font-medium text-gray-700 mb-1">
-                        Location ID
-                      </label>
-                      <input
-                        type="text"
-                        id="location_id"
-                        value={organization.location_id || ''}
-                        onChange={async (e) => {
-                          const newLocationId = e.target.value;
-                          try {
-                            const response = await fetch('/api/organizations/current', {
-                              method: 'PATCH',
-                              headers: {
-                                'Content-Type': 'application/json',
-                              },
-                              body: JSON.stringify({ location_id: newLocationId }),
-                            });
-                            
-                            const data = await response.json();
-                            
-                            if (!response.ok) {
-                              throw new Error(data.error || 'Failed to update location ID');
-                            }
-                            
-                            // Update organization state with the returned data
-                            setOrganization(prev => prev ? {
-                              ...prev,
-                              location_id: data.location_id
-                            } : null);
-                            
-                            toast.success('Location ID updated successfully');
-                          } catch (error) {
-                            console.error('Error updating location ID:', error);
-                            toast.error(error instanceof Error ? error.message : 'Failed to update location ID');
-                          }
-                        }}
-                        className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
-                        placeholder="Enter your location ID"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <CrmSettings
+                organization={organization}
+                onLocationIdChange={async (newLocationId) => {
+                  try {
+                    const response = await fetch('/api/organizations/current', {
+                      method: 'PATCH',
+                      headers: {
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({ location_id: newLocationId }),
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (!response.ok) {
+                      throw new Error(data.error || 'Failed to update location ID');
+                    }
+                    
+                    setOrganization(prev => prev ? {
+                      ...prev,
+                      location_id: data.location_id
+                    } : null);
+                    
+                    toast.success('Location ID updated successfully');
+                  } catch (error) {
+                    console.error('Error updating location ID:', error);
+                    toast.error(error instanceof Error ? error.message : 'Failed to update location ID');
+                  }
+                }}
+              />
             )}
           </>
         )}
