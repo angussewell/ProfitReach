@@ -148,12 +148,24 @@ export async function POST(request: Request) {
     }
 
     // Create payload matching Unipile's schema exactly
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
+    if (!baseUrl) {
+      console.error(`❌ [${requestId}] Missing NEXT_PUBLIC_APP_URL`);
+      return NextResponse.json({ 
+        error: 'Configuration error',
+        details: 'Application URL not configured'
+      }, { status: 500 });
+    }
+
     const payload = {
       type: "create",
       providers: PROVIDER_MAP[accountType as keyof typeof PROVIDER_MAP],
       api_url: UNIPILE_API_URL,
       expiresOn: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      name: `org_${session.user.organizationId}_${accountType}_${Date.now()}`
+      name: `org_${session.user.organizationId}_${accountType}_${Date.now()}`,
+      success_redirect_url: `${baseUrl}/accounts?success=true`,
+      failure_redirect_url: `${baseUrl}/accounts?error=true`,
+      notify_url: `${baseUrl}/api/webhooks/unipile`
     };
 
     console.log(`🔗 [${requestId}] Creating connection link:`, {
