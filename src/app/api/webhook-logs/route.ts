@@ -2,19 +2,9 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { Prisma } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
-
-interface WhereClause {
-  organizationId: string;
-  status?: string;
-  scenarioName?: string;
-  OR?: Array<{
-    contactEmail?: { contains: string; mode: 'insensitive' };
-    contactName?: { contains: string; mode: 'insensitive' };
-    scenarioName?: { contains: string; mode: 'insensitive' };
-  }>;
-}
 
 export async function GET(request: Request) {
   try {
@@ -30,24 +20,65 @@ export async function GET(request: Request) {
     const status = searchParams.get('status');
     const search = searchParams.get('search');
     const scenario = searchParams.get('scenario');
+    // Support both hasEmail and hasMessage parameters for backward compatibility
+    const hasMessage = searchParams.get('hasMessage') === 'true' || searchParams.get('hasEmail') === 'true';
 
     // Calculate offset
     const skip = (page - 1) * limit;
 
     // Build where clause
-    const where: WhereClause = {
-      organizationId: session.user.organizationId
-    };
+    let whereConditions: any[] = [
+      { organizationId: session.user.organizationId }
+    ];
     
-    if (status) where.status = status;
-    if (scenario) where.scenarioName = scenario;
-    if (search) {
-      where.OR = [
-        { contactEmail: { contains: search, mode: 'insensitive' } },
-        { contactName: { contains: search, mode: 'insensitive' } },
-        { scenarioName: { contains: search, mode: 'insensitive' } }
-      ];
+    if (status) {
+      whereConditions.push({ status });
     }
+    
+    if (scenario) {
+      whereConditions.push({ scenarioName: scenario });
+    }
+    
+    if (hasMessage) {
+      whereConditions.push({ 
+        OR: [
+          // Check for non-empty emailSubject
+          { 
+            emailSubject: { 
+              not: null 
+            },
+            AND: {
+              emailSubject: { 
+                not: "" 
+              }
+            }
+          },
+          // Check for non-empty emailHtmlBody
+          { 
+            emailHtmlBody: { 
+              not: null 
+            },
+            AND: {
+              emailHtmlBody: { 
+                not: "" 
+              }
+            }
+          }
+        ]
+      });
+    }
+    
+    if (search) {
+      whereConditions.push({
+        OR: [
+          { contactEmail: { contains: search, mode: 'insensitive' } },
+          { contactName: { contains: search, mode: 'insensitive' } },
+          { scenarioName: { contains: search, mode: 'insensitive' } }
+        ]
+      });
+    }
+
+    const where = { AND: whereConditions };
 
     // Fetch logs with pagination
     const [logs, total] = await Promise.all([

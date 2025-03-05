@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
-import { Search, RefreshCw } from 'lucide-react';
+import { Search, RefreshCw, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
 
 interface WebhookLog {
@@ -16,6 +16,8 @@ interface WebhookLog {
   contactEmail: string;
   contactName: string;
   createdAt: string;
+  emailSubject?: string;
+  emailHtmlBody?: string;
 }
 
 interface WebhookLogsResponse {
@@ -33,6 +35,7 @@ export default function WebhookLogsPage() {
   const [currentPage, setCurrentPage] = React.useState(1);
   const [selectedStatus, setSelectedStatus] = React.useState('');
   const [selectedScenario, setSelectedScenario] = React.useState('');
+  const [showMessageOnly, setShowMessageOnly] = React.useState(false);
   const isClient = React.useRef(false);
   const { toast } = useToast();
 
@@ -48,7 +51,8 @@ export default function WebhookLogsPage() {
         limit: '10',
         ...(searchQuery && { search: searchQuery }),
         ...(selectedStatus && selectedStatus !== 'all' && { status: selectedStatus }),
-        ...(selectedScenario && selectedScenario !== 'all' && { scenario: selectedScenario })
+        ...(selectedScenario && selectedScenario !== 'all' && { scenario: selectedScenario }),
+        ...(showMessageOnly && { hasMessage: 'true' })
       });
 
       const response = await fetch(`/api/webhook-logs?${params}`);
@@ -69,7 +73,7 @@ export default function WebhookLogsPage() {
 
   React.useEffect(() => {
     fetchLogs();
-  }, [currentPage, searchQuery, selectedStatus, selectedScenario]);
+  }, [currentPage, searchQuery, selectedStatus, selectedScenario, showMessageOnly]);
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
@@ -85,12 +89,16 @@ export default function WebhookLogsPage() {
     return new Date(date).toLocaleString();
   };
 
+  const hasMessageContent = (log: WebhookLog) => {
+    return Boolean(log.emailSubject?.trim()) || Boolean(log.emailHtmlBody?.trim());
+  };
+
   return (
     <div className="container mx-auto px-6 py-8 max-w-7xl">
       <div className="space-y-8">
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 mx-0 px-8 py-8 rounded-xl shadow-lg">
-          <h1 className="text-3xl font-bold text-white mb-2">Logs</h1>
-          <p className="text-slate-300">Monitor and debug activity</p>
+          <h1 className="text-3xl font-bold text-white mb-2">Message Logs</h1>
+          <p className="text-slate-300">Monitor and debug message activity</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-4">
@@ -117,6 +125,18 @@ export default function WebhookLogsPage() {
           >
             <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Refresh
+          </Button>
+
+          <Button
+            onClick={() => {
+              setShowMessageOnly(!showMessageOnly);
+              setCurrentPage(1);
+            }}
+            variant={showMessageOnly ? "default" : "outline"}
+            className={showMessageOnly ? "bg-blue-500 hover:bg-blue-600" : ""}
+          >
+            <MessageSquare className="w-4 h-4 mr-2" />
+            {showMessageOnly ? "All Logs" : "Message Only"}
           </Button>
 
           <Select
@@ -169,6 +189,7 @@ export default function WebhookLogsPage() {
                     <th className="px-6 py-4 text-left text-sm font-medium text-gray-500">Status</th>
                     <th className="px-6 py-4 text-left text-sm font-medium text-gray-500">Scenario</th>
                     <th className="px-6 py-4 text-left text-sm font-medium text-gray-500">Contact</th>
+                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-500">Message</th>
                     <th className="px-6 py-4 text-left text-sm font-medium text-gray-500">Actions</th>
                   </tr>
                 </thead>
@@ -181,10 +202,11 @@ export default function WebhookLogsPage() {
                         <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-32" /></td>
                         <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-40" /></td>
                         <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-20" /></td>
+                        <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-20" /></td>
                       </tr>
                     ))
                   ) : data?.logs.map((log) => (
-                    <tr key={log.id} className="hover:bg-gray-50">
+                    <tr key={log.id} className={`hover:bg-gray-50 ${hasMessageContent(log) ? 'bg-blue-50' : ''}`}>
                       <td className="px-6 py-4 text-sm text-gray-600">
                         {formatDate(log.createdAt)}
                       </td>
@@ -197,6 +219,16 @@ export default function WebhookLogsPage() {
                       <td className="px-6 py-4">
                         <div className="text-sm text-gray-600">{log.contactName}</div>
                         <div className="text-sm text-gray-400">{log.contactEmail}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        {hasMessageContent(log) ? (
+                          <div className="flex items-center text-blue-500">
+                            <MessageSquare className="h-4 w-4 mr-1" />
+                            <span className="text-sm font-medium">Yes</span>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-gray-400">No</span>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         <Link

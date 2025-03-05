@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, Mail, MessageSquare } from 'lucide-react';
 
 interface WebhookLogDetailProps {
   log: {
@@ -24,8 +24,20 @@ interface WebhookLogDetailProps {
 }
 
 export default function WebhookLogDetail({ log }: WebhookLogDetailProps) {
-  const [isRawDataExpanded, setIsRawDataExpanded] = React.useState(false);
   const requestData = log.requestBody as any;
+  
+  // Debug logging
+  console.log("Webhook log data in detail component:", log);
+  console.log("Message fields available:", { 
+    hasSubject: Boolean(log.emailSubject?.trim()), 
+    hasBody: Boolean(log.emailHtmlBody?.trim()),
+    subject: log.emailSubject,
+    bodyLength: log.emailHtmlBody ? log.emailHtmlBody.length : 0
+  });
+  
+  // Strengthen content detection logic to handle empty strings
+  const hasMessageContent = Boolean(log.emailSubject?.trim()) || Boolean(log.emailHtmlBody?.trim());
+  console.log("Has message content:", hasMessageContent);
   
   // Parse response body
   const responseData = React.useMemo(() => {
@@ -138,11 +150,12 @@ export default function WebhookLogDetail({ log }: WebhookLogDetailProps) {
           </Card>
         )}
 
-        {/* Email Content Card */}
-        {(log.emailSubject || log.emailHtmlBody) && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Email Content</CardTitle>
+        {/* Message Content Card */}
+        {hasMessageContent ? (
+          <Card className="bg-blue-50 border-2 border-blue-200">
+            <CardHeader className="flex flex-row items-center">
+              <MessageSquare className="h-5 w-5 mr-2 text-blue-600" />
+              <CardTitle className="text-blue-600">Message Content</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {log.emailSubject && (
@@ -154,7 +167,7 @@ export default function WebhookLogDetail({ log }: WebhookLogDetailProps) {
               
               {log.emailHtmlBody && (
                 <div className="space-y-2">
-                  <Label className="text-sm text-muted-foreground">Email Body</Label>
+                  <Label className="text-sm text-muted-foreground">Message Body</Label>
                   <div className="border p-4 rounded-md bg-white">
                     <div 
                       className="prose max-w-none" 
@@ -165,38 +178,21 @@ export default function WebhookLogDetail({ log }: WebhookLogDetailProps) {
               )}
             </CardContent>
           </Card>
-        )}
-
-        {/* Raw Data Card */}
-        {Object.keys(log.requestBody || {}).length > 0 && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Raw Data</CardTitle>
-              <Button 
-                variant="ghost" 
-                size="sm"
-                onClick={() => setIsRawDataExpanded(!isRawDataExpanded)}
-              >
-                {isRawDataExpanded ? (
-                  <ChevronUp className="h-4 w-4" />
-                ) : (
-                  <ChevronDown className="h-4 w-4" />
-                )}
-              </Button>
+        ) : (
+          <Card className="bg-yellow-50 border-2 border-yellow-200">
+            <CardHeader className="flex flex-row items-center">
+              <MessageSquare className="h-5 w-5 mr-2 text-yellow-600" />
+              <CardTitle className="text-yellow-600">No Message Content</CardTitle>
             </CardHeader>
             <CardContent>
-              {isRawDataExpanded ? (
-                <pre className="mt-2 p-4 bg-muted rounded-md text-sm whitespace-pre-wrap">
-                  {JSON.stringify(log.requestBody, null, 2)}
-                </pre>
-              ) : (
-                <pre className="mt-2 p-4 bg-muted rounded-md text-sm whitespace-pre-wrap max-h-20 overflow-hidden">
-                  {JSON.stringify(log.requestBody, null, 2).slice(0, 200)}...
-                </pre>
-              )}
+              <p className="text-sm text-yellow-700">
+                This webhook log does not contain any message content. Visit the webhook logs list and find a log with message data.
+              </p>
             </CardContent>
           </Card>
         )}
+
+        {/* Raw Data Card has been removed */}
       </div>
     </div>
   );
