@@ -189,7 +189,6 @@ export default function WebhookLogsPage() {
                     <th className="px-6 py-4 text-left text-sm font-medium text-gray-500">Status</th>
                     <th className="px-6 py-4 text-left text-sm font-medium text-gray-500">Scenario</th>
                     <th className="px-6 py-4 text-left text-sm font-medium text-gray-500">Contact</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-500">Message</th>
                     <th className="px-6 py-4 text-left text-sm font-medium text-gray-500">Actions</th>
                   </tr>
                 </thead>
@@ -201,7 +200,6 @@ export default function WebhookLogsPage() {
                         <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-16" /></td>
                         <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-32" /></td>
                         <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-40" /></td>
-                        <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-20" /></td>
                         <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-20" /></td>
                       </tr>
                     ))
@@ -219,16 +217,6 @@ export default function WebhookLogsPage() {
                       <td className="px-6 py-4">
                         <div className="text-sm text-gray-600">{log.contactName}</div>
                         <div className="text-sm text-gray-400">{log.contactEmail}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        {hasMessageContent(log) ? (
-                          <div className="flex items-center text-blue-500">
-                            <MessageSquare className="h-4 w-4 mr-1" />
-                            <span className="text-sm font-medium">Yes</span>
-                          </div>
-                        ) : (
-                          <span className="text-sm text-gray-400">No</span>
-                        )}
                       </td>
                       <td className="px-6 py-4">
                         <Link
