@@ -18,6 +18,8 @@ interface WebhookLogDetailProps {
     createdAt: Date;
     requestBody: Record<string, any>;
     responseBody: string;
+    emailSubject?: string;
+    emailHtmlBody?: string;
   };
 }
 
@@ -136,34 +138,65 @@ export default function WebhookLogDetail({ log }: WebhookLogDetailProps) {
           </Card>
         )}
 
-        {/* Raw Data Card */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Raw Data</CardTitle>
-            <Button 
-              variant="ghost" 
-              size="sm"
-              onClick={() => setIsRawDataExpanded(!isRawDataExpanded)}
-            >
-              {isRawDataExpanded ? (
-                <ChevronUp className="h-4 w-4" />
-              ) : (
-                <ChevronDown className="h-4 w-4" />
+        {/* Email Content Card */}
+        {(log.emailSubject || log.emailHtmlBody) && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Email Content</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {log.emailSubject && (
+                <div className="space-y-2">
+                  <Label className="text-sm text-muted-foreground">Subject</Label>
+                  <div className="text-lg font-semibold">{log.emailSubject}</div>
+                </div>
               )}
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {isRawDataExpanded ? (
-              <pre className="mt-2 p-4 bg-muted rounded-md text-sm whitespace-pre-wrap">
-                {JSON.stringify(log.requestBody, null, 2)}
-              </pre>
-            ) : (
-              <pre className="mt-2 p-4 bg-muted rounded-md text-sm whitespace-pre-wrap max-h-20 overflow-hidden">
-                {JSON.stringify(log.requestBody, null, 2).slice(0, 200)}...
-              </pre>
-            )}
-          </CardContent>
-        </Card>
+              
+              {log.emailHtmlBody && (
+                <div className="space-y-2">
+                  <Label className="text-sm text-muted-foreground">Email Body</Label>
+                  <div className="border p-4 rounded-md bg-white">
+                    <div 
+                      className="prose max-w-none" 
+                      dangerouslySetInnerHTML={{ __html: log.emailHtmlBody }} 
+                    />
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Raw Data Card */}
+        {Object.keys(log.requestBody || {}).length > 0 && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Raw Data</CardTitle>
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => setIsRawDataExpanded(!isRawDataExpanded)}
+              >
+                {isRawDataExpanded ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {isRawDataExpanded ? (
+                <pre className="mt-2 p-4 bg-muted rounded-md text-sm whitespace-pre-wrap">
+                  {JSON.stringify(log.requestBody, null, 2)}
+                </pre>
+              ) : (
+                <pre className="mt-2 p-4 bg-muted rounded-md text-sm whitespace-pre-wrap max-h-20 overflow-hidden">
+                  {JSON.stringify(log.requestBody, null, 2).slice(0, 200)}...
+                </pre>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

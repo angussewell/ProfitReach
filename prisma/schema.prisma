@@ -205,6 +205,8 @@ model WebhookLog {
   company          String        @default("Unknown")
   requestBody      Json
   responseBody     Json          @default("{}")
+  emailSubject     String?
+  emailHtmlBody    String?
   ghlIntegrationId String?
   updatedAt        DateTime      @default(now())
   creditUsages     CreditUsage[]

@@ -12,12 +12,14 @@ export async function POST(request: Request) {
       contactEmail = 'unknown',
       contactName = 'unknown',
       company = 'unknown',
-      requestBody
+      requestBody,
+      emailSubject,
+      emailHtmlBody
     } = data;
 
-    if (!organizationId || !requestBody) {
+    if (!organizationId) {
       return NextResponse.json(
-        { error: 'organizationId and requestBody are required' },
+        { error: 'organizationId is required' },
         { status: 400 }
       );
     }
@@ -31,16 +33,19 @@ export async function POST(request: Request) {
         contactEmail,
         contactName,
         company,
-        requestBody,
+        requestBody: requestBody || {},
         status: 'success',
-        responseBody: { status: 'success' }
+        responseBody: { status: 'success' },
+        ...(emailSubject && { emailSubject }),
+        ...(emailHtmlBody && { emailHtmlBody })
       }
     });
 
     log('info', 'Created webhook log', {
       webhookLogId: webhookLog.id,
       organizationId,
-      scenarioName
+      scenarioName,
+      hasEmailContent: !!emailSubject || !!emailHtmlBody
     });
 
     return NextResponse.json(webhookLog);
