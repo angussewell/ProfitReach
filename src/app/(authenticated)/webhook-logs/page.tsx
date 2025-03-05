@@ -218,29 +218,84 @@ export default function WebhookLogsPage() {
           <div className="flex justify-center mt-6 gap-2">
             <Button
               variant="outline"
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+              title="First Page"
+            >
+              First
+            </Button>
+            <Button
+              variant="outline"
               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
               disabled={currentPage === 1}
+              title="Previous Page"
             >
               Previous
             </Button>
             <div className="flex items-center gap-2">
-              {Array.from({ length: data.totalPages }, (_, i) => i + 1).map((page) => (
-                <Button
-                  key={page}
-                  variant={currentPage === page ? "default" : "outline"}
-                  onClick={() => setCurrentPage(page)}
-                  className={currentPage === page ? "bg-red-500 hover:bg-red-600" : ""}
-                >
-                  {page}
-                </Button>
-              ))}
+              {(() => {
+                // Calculate which page numbers to display
+                const maxVisiblePages = 5; // Max number of page buttons to show
+                let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+                let endPage = Math.min(data.totalPages, startPage + maxVisiblePages - 1);
+                
+                // Adjust if we're near the end
+                if (endPage - startPage + 1 < maxVisiblePages) {
+                  startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                }
+                
+                // Create array of pages to display
+                const visiblePages = [];
+                for (let i = startPage; i <= endPage; i++) {
+                  visiblePages.push(i);
+                }
+                
+                // Add ellipsis indicators if needed
+                const result = [];
+                
+                if (startPage > 1) {
+                  result.push(
+                    <span key="ellipsis-start" className="px-2">...</span>
+                  );
+                }
+                
+                visiblePages.forEach(page => {
+                  result.push(
+                    <Button
+                      key={page}
+                      variant={currentPage === page ? "default" : "outline"}
+                      onClick={() => setCurrentPage(page)}
+                      className={currentPage === page ? "bg-red-500 hover:bg-red-600" : ""}
+                    >
+                      {page}
+                    </Button>
+                  );
+                });
+                
+                if (endPage < data.totalPages) {
+                  result.push(
+                    <span key="ellipsis-end" className="px-2">...</span>
+                  );
+                }
+                
+                return result;
+              })()}
             </div>
             <Button
               variant="outline"
               onClick={() => setCurrentPage(prev => Math.min(data.totalPages, prev + 1))}
               disabled={currentPage === data.totalPages}
+              title="Next Page"
             >
               Next
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setCurrentPage(data.totalPages)}
+              disabled={currentPage === data.totalPages}
+              title="Last Page"
+            >
+              Last
             </Button>
           </div>
         )}
