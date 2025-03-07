@@ -13,6 +13,7 @@ import { updateMessageStatus } from '@/lib/server-actions';
 
 type MessageType = 'REAL_REPLY' | 'BOUNCE' | 'AUTO_REPLY' | 'OUT_OF_OFFICE' | 'OTHER';
 type ConversationStatus = 'MEETING_BOOKED' | 'NOT_INTERESTED' | 'FOLLOW_UP_NEEDED' | 'NO_ACTION_NEEDED';
+type MessageSource = 'EMAIL' | 'LINKEDIN';
 
 interface EmailMessage {
   id: string;
@@ -26,6 +27,8 @@ interface EmailMessage {
   messageType: MessageType;
   isRead: boolean;
   status?: ConversationStatus;
+  messageSource?: MessageSource;
+  socialAccountId?: string;
 }
 
 // Define email account interface
@@ -137,6 +140,36 @@ const getStatusLabel = (status: ConversationStatus, date?: Date, isFromUs?: bool
     default:
       return 'Unknown Status';
   }
+};
+
+// Helper for displaying message icons based on source
+const getMessageIcon = (message: EmailMessage) => {
+  if (message.messageSource === 'LINKEDIN') {
+    return <LinkedInIcon className="h-5 w-5 text-blue-600" />;
+  }
+  return <MessageIcon className="h-5 w-5 text-slate-500" />;
+};
+
+// Add LinkedIn icon component
+const LinkedInIcon: React.FC<LucideProps> = (props) => {
+  return (
+    <svg 
+      xmlns="http://www.w3.org/2000/svg" 
+      width="24" 
+      height="24" 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2" 
+      strokeLinecap="round" 
+      strokeLinejoin="round" 
+      {...props}
+    >
+      <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path>
+      <rect x="2" y="9" width="4" height="12"></rect>
+      <circle cx="4" cy="4" r="2"></circle>
+    </svg>
+  );
 };
 
 export function UniversalInboxClient() {
@@ -444,6 +477,7 @@ export function UniversalInboxClient() {
                   
                   const isLatestFromUs = isOurEmail(latestMessage.sender);
                   const needsResponse = !isLatestFromUs && !latestMessage.isRead;
+                  const isLinkedIn = latestMessage.messageSource === 'LINKEDIN';
 
                   // More robust status determination
                   let status: ConversationStatus;
@@ -472,7 +506,8 @@ export function UniversalInboxClient() {
                       <div className="grid grid-cols-12 gap-4">
                         {/* Sender & Date */}
                         <div className="col-span-3">
-                          <div className="font-medium text-slate-900 truncate">
+                          <div className="font-medium text-slate-900 truncate flex items-center gap-1">
+                            {isLinkedIn && <LinkedInIcon className="h-4 w-4 text-blue-600" />}
                             {findOtherParticipant(messages)}
                           </div>
                           <div className="text-xs text-slate-500 mt-1">
@@ -488,7 +523,7 @@ export function UniversalInboxClient() {
                         {/* Subject & Preview */}
                         <div className="col-span-7">
                           <div className="font-medium text-slate-800 truncate">
-                            {latestMessage.subject}
+                            {isLinkedIn ? 'LinkedIn Message' : latestMessage.subject}
                           </div>
                           <div className="text-sm text-slate-600 truncate mt-1">
                             {latestMessage.content.replace(/<[^>]*>/g, '').slice(0, 100)}
@@ -630,43 +665,41 @@ export function UniversalInboxClient() {
             {selectedThread ? (
               <div className="p-6 space-y-6 overflow-y-auto flex-1">
                 {threadGroups[selectedThread]
-                  ?.sort((a, b) => new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime())
+                  .sort((a, b) => new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime())
                   .map((message, index, array) => {
                     const isFromUs = isOurEmail(message.sender);
+                    const isLastMessage = index === array.length - 1;
                     const isLatestMessage = index === array.length - 1;
+                    const isLinkedIn = message.messageSource === 'LINKEDIN';
                     
-                    // More robust status determination for the detail view
-                    let status: ConversationStatus | undefined = undefined;
-                    
-                    if (isLatestMessage) {
-                      if (message.status === 'MEETING_BOOKED' || message.status === 'NOT_INTERESTED' || message.status === 'NO_ACTION_NEEDED') {
-                        // Always respect these manually set statuses
-                        status = message.status;
-                      } else {
-                        // Default to FOLLOW_UP_NEEDED if no status or it's already FOLLOW_UP_NEEDED
-                        status = 'FOLLOW_UP_NEEDED';
-                      }
-                    }
+                    // Determine message status for the thread
+                    const latestMessage = array[array.length - 1];
+                    let status: ConversationStatus = latestMessage.status || 'FOLLOW_UP_NEEDED';
                     
                     return (
-                      <div 
-                        key={message.id} 
+                      <div
+                        key={message.id}
                         className={cn(
-                          "rounded-xl border shadow-sm p-6 transition-all hover:shadow-md",
-                          isFromUs ? "bg-blue-50/30 border-blue-200/60" : "bg-white border-slate-200/60",
-                          isLatestMessage && status === 'MEETING_BOOKED' && "border-l-4 border-l-green-500 bg-green-50/30",
-                          isLatestMessage && status === 'NOT_INTERESTED' && "border-l-4 border-l-gray-500 bg-gray-50/30",
-                          isLatestMessage && status === 'NO_ACTION_NEEDED' && "border-l-4 border-l-blue-500 bg-blue-50/30",
-                          isLatestMessage && status === 'FOLLOW_UP_NEEDED' && isFromUs && daysSince(new Date(message.receivedAt)) < 3 && "border-l-4 border-l-blue-300 bg-blue-50/30",
-                          isLatestMessage && status === 'FOLLOW_UP_NEEDED' && (!isFromUs || daysSince(new Date(message.receivedAt)) >= 3) && "border-l-4 border-l-red-600 bg-red-50/60"
+                          "py-5 px-6 rounded-lg",
+                          isFromUs ? "bg-blue-50/80 border border-blue-100/50" : "bg-white border border-slate-200/60"
                         )}
                       >
                         <div className="flex justify-between items-start mb-4">
                           <div>
-                            <p className="font-medium text-slate-900">{message.sender}</p>
-                            <p className="text-xs text-slate-500 mt-0.5">
-                              to {message.recipientEmail}
+                            <p className="font-medium text-slate-900 flex items-center gap-1">
+                              {isLinkedIn && <LinkedInIcon className="h-4 w-4 text-blue-600" />}
+                              {message.sender}
                             </p>
+                            {!isLinkedIn && message.recipientEmail && (
+                              <p className="text-xs text-slate-500 mt-0.5">
+                                to {message.recipientEmail}
+                              </p>
+                            )}
+                            {isLinkedIn && (
+                              <p className="text-xs text-slate-500 mt-0.5">
+                                via LinkedIn
+                              </p>
+                            )}
                           </div>
                           <div className="flex items-center">
                             <span className="text-sm text-slate-500">

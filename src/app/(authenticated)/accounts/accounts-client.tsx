@@ -15,6 +15,11 @@ import {
   ClientTabsContent,
   ClientPencilIcon,
   ClientTrashIcon,
+  ClientSelect,
+  ClientSelectTrigger,
+  ClientSelectValue,
+  ClientSelectContent,
+  ClientSelectItem
 } from '@/components/ui/client-components';
 
 interface EmailAccount {
@@ -36,6 +41,7 @@ interface SocialAccount {
   createdAt: string;
   updatedAt: string;
   isActive: boolean;
+  emailAccountId: string | null;
 }
 
 export function AccountsClient() {
@@ -47,6 +53,7 @@ export function AccountsClient() {
   const [accountName, setAccountName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('email');
+  const [updatingAssociation, setUpdatingAssociation] = useState(false);
 
   // Filter accounts based on search query
   const filteredEmailAccounts = emailAccounts.filter(account => 
@@ -58,6 +65,50 @@ export function AccountsClient() {
     account.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     account.username.toLowerCase().includes(searchQuery.toLowerCase())
   );
+  
+  // Get available email accounts for a social account
+  const getAvailableEmailAccounts = (socialAccountId: string) => {
+    // Find which email accounts are already associated with other social accounts
+    const associatedEmailIds = socialAccounts
+      .filter(account => account.id !== socialAccountId && account.emailAccountId)
+      .map(account => account.emailAccountId);
+    
+    // Return only email accounts that are not associated with any other social account
+    return emailAccounts.filter(email => !associatedEmailIds.includes(email.id));
+  };
+  
+  // Handle associating/dissociating an email account with a social account
+  const handleAssociateEmail = async (socialAccountId: string, emailAccountId: string | null) => {
+    try {
+      setUpdatingAssociation(true);
+      const baseUrl = window.location.origin;
+      const response = await fetch(`${baseUrl}/api/social-accounts/${socialAccountId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ 
+          emailAccountId: emailAccountId,
+          // We need to include the name field as it's required by the validation schema
+          name: socialAccounts.find(account => account.id === socialAccountId)?.name || ''
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update email association');
+      }
+
+      toast.success(emailAccountId ? 'Email account associated successfully' : 'Email account association removed');
+      fetchAccounts();
+    } catch (error) {
+      console.error('Error updating email association:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to update email association');
+    } finally {
+      setUpdatingAssociation(false);
+    }
+  };
 
   useEffect(() => {
     fetchAccounts();
@@ -293,59 +344,101 @@ export function AccountsClient() {
 
   const renderAccount = (account: EmailAccount | SocialAccount, type: 'email' | 'social') => (
     <ClientCard key={account.id} className="p-4">
-      <div className="flex items-center justify-between">
-        <div className="flex-1">
-          {editingAccountId === account.id ? (
-            <ClientInput
-              value={accountName}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAccountName(e.target.value)}
-              onBlur={() => handleNameInputBlur(account, type)}
-              onKeyDown={(e) => handleNameInputKeyPress(e, account, type)}
-              className="max-w-[300px]"
-              autoFocus
-            />
-          ) : (
-            <div className="flex items-center gap-2">
-              <span className="font-medium">{account.name}</span>
-              <ClientButton
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setEditingAccountId(account.id);
-                  setAccountName(account.name);
-                }}
-              >
-                <ClientPencilIcon className="h-4 w-4" />
-              </ClientButton>
-            </div>
-          )}
-          <div className="text-sm text-gray-500 mt-1">
-            {type === 'email' 
-              ? (account as EmailAccount).email
-              : `${(account as SocialAccount).provider} - ${(account as SocialAccount).username}`
-            }
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col space-y-3">
+        {/* Header with name and actions */}
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-500">
-              {account.isActive ? 'Active' : 'Inactive'}
-            </span>
-            <ClientSwitch
-              checked={account.isActive}
-              onCheckedChange={() => handleToggleActive(account, type)}
-              className="data-[state=checked]:bg-green-500"
-            />
+            {editingAccountId === account.id ? (
+              <ClientInput
+                value={accountName}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAccountName(e.target.value)}
+                onBlur={() => handleNameInputBlur(account, type)}
+                onKeyDown={(e) => handleNameInputKeyPress(e, account, type)}
+                className="max-w-[300px]"
+                autoFocus
+              />
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-lg">{account.name}</span>
+                <ClientButton
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setEditingAccountId(account.id);
+                    setAccountName(account.name);
+                  }}
+                >
+                  <ClientPencilIcon className="h-3.5 w-3.5" />
+                </ClientButton>
+              </div>
+            )}
           </div>
-          <ClientButton
-            variant="ghost"
-            size="sm"
-            onClick={() => handleDelete(account, type)}
-            className="text-gray-400 hover:text-red-500"
-          >
-            <ClientTrashIcon className="h-4 w-4" />
-          </ClientButton>
+
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-500">
+                {account.isActive ? 'Active' : 'Inactive'}
+              </span>
+              <ClientSwitch
+                checked={account.isActive}
+                onCheckedChange={() => handleToggleActive(account, type)}
+                className="data-[state=checked]:bg-green-500"
+              />
+            </div>
+            <ClientButton
+              variant="ghost"
+              size="sm"
+              onClick={() => handleDelete(account, type)}
+              className="text-gray-400 hover:text-red-500"
+            >
+              <ClientTrashIcon className="h-4 w-4" />
+            </ClientButton>
+          </div>
         </div>
+
+        {/* Account details */}
+        <div className="text-sm text-gray-500">
+          {type === 'email' 
+            ? (account as EmailAccount).email
+            : <div className="flex flex-col space-y-1">
+              </div>
+          }
+        </div>
+          
+        {/* Email account association dropdown for social accounts */}
+        {type === 'social' && (
+          <div className="mt-1">
+            <ClientSelect
+              value={(account as SocialAccount).emailAccountId || "none"}
+              onValueChange={(value) => handleAssociateEmail(account.id, value === "none" ? null : value)}
+              disabled={updatingAssociation}
+            >
+              <ClientSelectTrigger className="w-full h-9 text-sm">
+                <ClientSelectValue placeholder="Select an email account" />
+              </ClientSelectTrigger>
+              <ClientSelectContent>
+                <ClientSelectItem value="none">
+                  No association
+                </ClientSelectItem>
+                {getAvailableEmailAccounts(account.id).map((email) => (
+                  <ClientSelectItem key={email.id} value={email.id}>
+                    {email.name} ({email.email})
+                  </ClientSelectItem>
+                ))}
+                {/* If this social account already has an associated email that wouldn't be in the available list */}
+                {(account as SocialAccount).emailAccountId && 
+                  !getAvailableEmailAccounts(account.id).some(email => email.id === (account as SocialAccount).emailAccountId) && 
+                  emailAccounts.find(email => email.id === (account as SocialAccount).emailAccountId) && (
+                    <ClientSelectItem key={(account as SocialAccount).emailAccountId} value={(account as SocialAccount).emailAccountId}>
+                      {emailAccounts.find(email => email.id === (account as SocialAccount).emailAccountId)?.name} 
+                      ({emailAccounts.find(email => email.id === (account as SocialAccount).emailAccountId)?.email})
+                    </ClientSelectItem>
+                  )
+                }
+              </ClientSelectContent>
+            </ClientSelect>
+          </div>
+        )}
       </div>
     </ClientCard>
   );
@@ -357,7 +450,7 @@ export function AccountsClient() {
           <div className="space-y-1">
             <h2 className="text-2xl font-semibold tracking-tight">Connected Accounts</h2>
             <p className="text-sm text-muted-foreground">
-              Manage your connected email and social media accounts
+              Manage your connected email and LinkedIn accounts
             </p>
           </div>
           <ClientButton onClick={handleConnect}>Connect Account</ClientButton>
@@ -374,7 +467,7 @@ export function AccountsClient() {
           <ClientTabsRoot value={activeTab} onValueChange={setActiveTab}>
             <ClientTabsList>
               <ClientTabsTrigger value="email">Email Accounts</ClientTabsTrigger>
-              <ClientTabsTrigger value="social">Social Accounts</ClientTabsTrigger>
+              <ClientTabsTrigger value="social">LinkedIn Accounts</ClientTabsTrigger>
             </ClientTabsList>
 
             <ClientTabsContent value="email" className="space-y-4">
@@ -396,7 +489,7 @@ export function AccountsClient() {
                 filteredSocialAccounts.map((account) => renderAccount(account, 'social'))
               ) : (
                 <div className="text-center py-8 text-gray-500">
-                  No social accounts found
+                  No LinkedIn accounts found
                 </div>
               )}
             </ClientTabsContent>

@@ -3,19 +3,27 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { MessageType } from '@prisma/client';
 
-// Define webhook data schema - only the fields we need
+// Define webhook data schema - supporting both email and LinkedIn messages
 const UniversalInboxWebhookV2 = z.object({
-  // Required fields from n8n
+  // Common required fields
   message_id: z.string(),
   thread_id: z.string(),
-  unipile_email_id: z.string(),
   organizationId: z.string(),
-  email_account_id: z.string().describe('The Unipile account ID'), // Clarify this is Unipile's ID
-  subject: z.string(),
   sender: z.string(),
-  recipient_email: z.string(),
   content: z.string(),
-  // removed message_type and received_at as they're no longer needed
+  
+  // Source type - determines which other fields are required
+  message_source: z.enum(['EMAIL', 'LINKEDIN']).default('EMAIL'),
+  
+  // Email-specific fields - required if message_source is EMAIL
+  unipile_email_id: z.string().optional(),
+  email_account_id: z.string().optional(),
+  subject: z.string().optional().default(""),
+  recipient_email: z.string().optional().default(""),
+  
+  // LinkedIn-specific fields - required if message_source is LINKEDIN
+  unipile_linkedin_id: z.string().optional(),
+  social_account_id: z.string().optional(),
 });
 
 type UniversalInboxDataV2 = z.infer<typeof UniversalInboxWebhookV2>;
@@ -37,7 +45,8 @@ export async function POST(request: Request) {
         message_id: data.message_id,
         thread_id: data.thread_id,
         organizationId: data.organizationId,
-        unipile_account_id: data.email_account_id // Log the Unipile account ID
+        message_source: data.message_source,
+        account_id: data.message_source === 'EMAIL' ? data.email_account_id : data.social_account_id
       });
 
     } catch (parseError) {
@@ -71,108 +80,15 @@ export async function POST(request: Request) {
       );
     }
 
-    // Look up email account by Unipile account ID
-    const emailAccount = await prisma.emailAccount.findFirst({
-      where: {
-        unipileAccountId: data.email_account_id,
-        organizationId: data.organizationId
-      }
-    });
-
-    console.log('Email account lookup result:', {
-      found: !!emailAccount,
-      unipileAccountId: data.email_account_id,
-      organizationId: data.organizationId
-    });
-
-    if (!emailAccount) {
-      // Check if account exists but belongs to different organization
-      const accountExists = await prisma.emailAccount.findFirst({
-        where: { unipileAccountId: data.email_account_id }
-      });
-
-      if (accountExists) {
-        console.error('Email account belongs to different organization:', {
-          unipileAccountId: data.email_account_id,
-          requestedOrg: data.organizationId,
-          actualOrg: accountExists.organizationId
-        });
-        return NextResponse.json(
-          { error: 'Email account belongs to a different organization' },
-          { status: 403 }
-        );
-      }
-
-      console.error('Email account not found:', {
-        unipileAccountId: data.email_account_id
-      });
+    // Handle different message sources
+    if (data.message_source === 'EMAIL') {
+      return await handleEmailMessage(data);
+    } else if (data.message_source === 'LINKEDIN') {
+      return await handleLinkedInMessage(data);
+    } else {
       return NextResponse.json(
-        { error: 'Email account not found' },
-        { status: 404 }
-      );
-    }
-
-    // Store message in database
-    try {
-      const message = await prisma.emailMessage.create({
-        data: {
-          messageId: data.message_id,
-          threadId: data.thread_id,
-          organizationId: data.organizationId,
-          emailAccountId: emailAccount.id,
-          subject: data.subject,
-          sender: data.sender,
-          recipientEmail: data.recipient_email,
-          content: data.content,
-          receivedAt: new Date(),
-          messageType: MessageType.REAL_REPLY,
-          unipileEmailId: data.unipile_email_id
-        }
-      });
-
-      console.log('Successfully stored message:', {
-        messageId: message.messageId,
-        threadId: message.threadId,
-        organizationId: message.organizationId
-      });
-
-      return NextResponse.json({
-        success: true,
-        messageId: message.messageId,
-        threadId: message.threadId
-      });
-
-    } catch (error) {
-      // Check for unique constraint violation
-      if (error instanceof Error && error.name === 'PrismaClientKnownRequestError' && (error as any).code === 'P2002') {
-        console.log('Duplicate message received:', {
-          messageId: data.message_id,
-          error: error.message
-        });
-        return NextResponse.json({
-          success: true,
-          messageId: data.message_id,
-          note: 'Message already processed'
-        });
-      }
-      
-      // Log other errors
-      console.error('Failed to store message:', {
-        error: error instanceof Error ? {
-          message: error.message,
-          stack: error.stack,
-          name: error.name
-        } : error,
-        type: typeof error
-      });
-      
-      return NextResponse.json(
-        { 
-          error: 'Failed to process webhook',
-          details: error instanceof Error ? error.message : String(error),
-          help: 'Please check the request format and try again'
-        },
-        { status: 500 }
+        { error: 'Unsupported message source' },
+        { status: 400 }
       );
     }
     
@@ -196,4 +112,233 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
+}
+
+// Handle Email Messages
+async function handleEmailMessage(data: UniversalInboxDataV2) {
+  // Validate email-specific required fields
+  if (!data.email_account_id) {
+    return NextResponse.json(
+      { error: 'Missing email_account_id for email message' },
+      { status: 400 }
+    );
+  }
+
+  // Look up email account by Unipile account ID
+  const emailAccount = await prisma.emailAccount.findFirst({
+    where: {
+      unipileAccountId: data.email_account_id,
+      organizationId: data.organizationId
+    }
+  });
+
+  console.log('Email account lookup result:', {
+    found: !!emailAccount,
+    unipileAccountId: data.email_account_id,
+    organizationId: data.organizationId
+  });
+
+  if (!emailAccount) {
+    // Check if account exists but belongs to different organization
+    const accountExists = await prisma.emailAccount.findFirst({
+      where: { unipileAccountId: data.email_account_id }
+    });
+
+    if (accountExists) {
+      console.error('Email account belongs to different organization:', {
+        unipileAccountId: data.email_account_id,
+        requestedOrg: data.organizationId,
+        actualOrg: accountExists.organizationId
+      });
+      return NextResponse.json(
+        { error: 'Email account belongs to a different organization' },
+        { status: 403 }
+      );
+    }
+
+    console.error('Email account not found:', {
+      unipileAccountId: data.email_account_id
+    });
+    return NextResponse.json(
+      { error: 'Email account not found' },
+      { status: 404 }
+    );
+  }
+
+  // Store message in database
+  try {
+    const message = await prisma.emailMessage.create({
+      data: {
+        messageId: data.message_id,
+        threadId: data.thread_id,
+        organizationId: data.organizationId,
+        emailAccountId: emailAccount.id,
+        subject: data.subject || '',
+        sender: data.sender,
+        recipientEmail: data.recipient_email || '',
+        content: data.content,
+        receivedAt: new Date(),
+        messageType: MessageType.REAL_REPLY,
+        unipileEmailId: data.unipile_email_id,
+        messageSource: 'EMAIL'
+      }
+    });
+
+    console.log('Successfully stored email message:', {
+      messageId: message.messageId,
+      threadId: message.threadId,
+      organizationId: message.organizationId
+    });
+
+    return NextResponse.json({
+      success: true,
+      messageId: message.messageId,
+      threadId: message.threadId
+    });
+
+  } catch (error) {
+    // Handle database errors
+    return handleDatabaseError(error, data);
+  }
+}
+
+// Handle LinkedIn Messages
+async function handleLinkedInMessage(data: UniversalInboxDataV2) {
+  // Validate LinkedIn-specific required fields
+  if (!data.social_account_id) {
+    return NextResponse.json(
+      { error: 'Missing social_account_id for LinkedIn message' },
+      { status: 400 }
+    );
+  }
+
+  // Look up social account by Unipile account ID
+  const socialAccount = await prisma.socialAccount.findFirst({
+    where: {
+      unipileAccountId: data.social_account_id,
+      organizationId: data.organizationId,
+      provider: 'LINKEDIN'
+    }
+  });
+
+  console.log('LinkedIn account lookup result:', {
+    found: !!socialAccount,
+    unipileAccountId: data.social_account_id,
+    organizationId: data.organizationId
+  });
+
+  if (!socialAccount) {
+    // Check if account exists but belongs to different organization
+    const accountExists = await prisma.socialAccount.findFirst({
+      where: { unipileAccountId: data.social_account_id }
+    });
+
+    if (accountExists) {
+      console.error('LinkedIn account belongs to different organization:', {
+        unipileAccountId: data.social_account_id,
+        requestedOrg: data.organizationId,
+        actualOrg: accountExists.organizationId
+      });
+      return NextResponse.json(
+        { error: 'LinkedIn account belongs to a different organization' },
+        { status: 403 }
+      );
+    }
+
+    console.error('LinkedIn account not found:', {
+      unipileAccountId: data.social_account_id
+    });
+    return NextResponse.json(
+      { error: 'LinkedIn account not found' },
+      { status: 404 }
+    );
+  }
+
+  // Get a default email account
+  const defaultEmailAccount = await prisma.emailAccount.findFirst({
+    where: {
+      organizationId: data.organizationId,
+      isActive: true
+    }
+  });
+  
+  if (!defaultEmailAccount) {
+    console.error('No email account found for LinkedIn message handling');
+    return NextResponse.json(
+      { error: 'No email account available' },
+      { status: 400 }
+    );
+  }
+
+  // Store message in database
+  try {
+    const message = await prisma.emailMessage.create({
+      data: {
+        messageId: data.message_id,
+        threadId: data.thread_id,
+        organizationId: data.organizationId,
+        emailAccountId: defaultEmailAccount.id,
+        subject: 'LinkedIn Message', // Default subject for LinkedIn messages
+        sender: data.sender,
+        recipientEmail: '', // Empty for LinkedIn messages
+        content: data.content,
+        receivedAt: new Date(),
+        messageType: MessageType.REAL_REPLY,
+        socialAccountId: socialAccount.id,
+        unipileEmailId: data.unipile_linkedin_id, // Store LinkedIn ID here for now
+        messageSource: 'LINKEDIN'
+      }
+    });
+
+    console.log('Successfully stored LinkedIn message:', {
+      messageId: message.messageId,
+      threadId: message.threadId,
+      organizationId: message.organizationId
+    });
+
+    return NextResponse.json({
+      success: true,
+      messageId: message.messageId,
+      threadId: message.threadId
+    });
+
+  } catch (error) {
+    // Handle database errors
+    return handleDatabaseError(error, data);
+  }
+}
+
+// Common error handling for database operations
+function handleDatabaseError(error: any, data: UniversalInboxDataV2) {
+  // Check for unique constraint violation
+  if (error instanceof Error && error.name === 'PrismaClientKnownRequestError' && (error as any).code === 'P2002') {
+    console.log('Duplicate message received:', {
+      messageId: data.message_id,
+      error: error.message
+    });
+    return NextResponse.json({
+      success: true,
+      messageId: data.message_id,
+      note: 'Message already processed'
+    });
+  }
+  
+  // Log other errors
+  console.error('Failed to store message:', {
+    error: error instanceof Error ? {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    } : error,
+    type: typeof error
+  });
+  
+  return NextResponse.json(
+    { 
+      error: 'Failed to process webhook',
+      details: error instanceof Error ? error.message : String(error),
+      help: 'Please check the request format and try again'
+    },
+    { status: 500 }
+  );
 } 

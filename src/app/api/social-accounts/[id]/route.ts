@@ -8,7 +8,8 @@ import { updateAccountSubscriptionQuantity } from '@/lib/stripe';
 // Schema for account updates
 const accountUpdateSchema = z.object({
   name: z.string().min(1),
-  isActive: z.boolean().optional()
+  isActive: z.boolean().optional(),
+  emailAccountId: z.string().nullable().optional()
 });
 
 // Webhook URLs
@@ -61,6 +62,7 @@ export async function PUT(
       data: {
         name: data.name,
         ...(data.isActive !== undefined && { isActive: data.isActive }),
+        ...(data.emailAccountId !== undefined && { emailAccountId: data.emailAccountId }),
         updatedAt: new Date()
       },
     });
