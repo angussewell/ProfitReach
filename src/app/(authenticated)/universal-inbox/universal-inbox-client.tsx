@@ -71,15 +71,19 @@ const getStatusRowStyle = (status: ConversationStatus, latestMessageDate: Date, 
     return style + 'border-blue-500 bg-blue-50/50';
   }
   
-  // For FOLLOW_UP_NEEDED, color depends on days passed
-  if (isFromUs) {
-    const days = daysSince(latestMessageDate);
-    if (days >= 3) {
-      return style + 'border-red-600 bg-red-50/60'; // More pronounced red for ≥3 days
+  // For FOLLOW_UP_NEEDED
+  if (status === 'FOLLOW_UP_NEEDED') {
+    // "Waiting for Reply" condition: it's from us and less than 3 days old
+    if (isFromUs) {
+      const days = daysSince(latestMessageDate);
+      if (days < 3) {
+        return style + 'border-blue-300 bg-blue-50/30'; // Blue for "Waiting for Reply"
+      }
     }
+    return style + 'border-red-600 bg-red-50/60'; // Red for "Follow Up Needed"
   }
   
-  return style + 'border-blue-300 bg-blue-50/30'; // Blue for <3 days or not from us
+  return style + 'border-blue-300 bg-blue-50/30'; // Default fallback
 };
 
 // Helper function to get status color for the badge
@@ -96,15 +100,19 @@ const getStatusColor = (status: ConversationStatus, latestMessageDate: Date, isF
     return 'bg-blue-100 text-blue-800';
   }
   
-  // For FOLLOW_UP_NEEDED, color depends on days passed
-  if (isFromUs) {
-    const days = daysSince(latestMessageDate);
-    if (days >= 3) {
-      return 'bg-red-200 text-red-900'; // More pronounced red for ≥3 days
+  // For FOLLOW_UP_NEEDED
+  if (status === 'FOLLOW_UP_NEEDED') {
+    // "Waiting for Reply" condition: it's from us and less than 3 days old
+    if (isFromUs) {
+      const days = daysSince(latestMessageDate);
+      if (days < 3) {
+        return 'bg-blue-100 text-blue-800'; // Blue for "Waiting for Reply"
+      }
     }
+    return 'bg-red-200 text-red-900'; // Red for "Follow Up Needed"
   }
   
-  return 'bg-blue-100 text-blue-800'; // Blue for <3 days or not from us
+  return 'bg-blue-100 text-blue-800'; // Default fallback
 };
 
 // Helper function to get a human-readable status label
@@ -500,8 +508,7 @@ export function UniversalInboxClient() {
                           {status === 'FOLLOW_UP_NEEDED' && isLatestFromUs && daysSince(new Date(latestMessage.receivedAt)) > 0 && (
                             <span className={cn(
                               "px-1.5 py-0.5 rounded text-xs font-medium",
-                              daysSince(new Date(latestMessage.receivedAt)) >= 3 ? "bg-red-200 text-red-900" : 
-                              "bg-blue-100 text-blue-800"
+                              daysSince(new Date(latestMessage.receivedAt)) < 3 ? "bg-blue-100 text-blue-800" : "bg-red-200 text-red-900"
                             )}>
                               {daysSince(new Date(latestMessage.receivedAt))}d
                             </span>
@@ -650,8 +657,8 @@ export function UniversalInboxClient() {
                           isLatestMessage && status === 'MEETING_BOOKED' && "border-l-4 border-l-green-500 bg-green-50/30",
                           isLatestMessage && status === 'NOT_INTERESTED' && "border-l-4 border-l-gray-500 bg-gray-50/30",
                           isLatestMessage && status === 'NO_ACTION_NEEDED' && "border-l-4 border-l-blue-500 bg-blue-50/30",
-                          isLatestMessage && status === 'FOLLOW_UP_NEEDED' && isFromUs && daysSince(new Date(message.receivedAt)) >= 3 && "border-l-4 border-l-red-600 bg-red-50/60",
-                          isLatestMessage && status === 'FOLLOW_UP_NEEDED' && "border-l-4 border-l-blue-300 bg-blue-50/20"
+                          isLatestMessage && status === 'FOLLOW_UP_NEEDED' && isFromUs && daysSince(new Date(message.receivedAt)) < 3 && "border-l-4 border-l-blue-300 bg-blue-50/30",
+                          isLatestMessage && status === 'FOLLOW_UP_NEEDED' && (!isFromUs || daysSince(new Date(message.receivedAt)) >= 3) && "border-l-4 border-l-red-600 bg-red-50/60"
                         )}
                       >
                         <div className="flex justify-between items-start mb-4">
@@ -675,8 +682,7 @@ export function UniversalInboxClient() {
                             {isLatestMessage && status === 'FOLLOW_UP_NEEDED' && isFromUs && daysSince(new Date(message.receivedAt)) > 0 && (
                               <span className={cn(
                                 "ml-2 px-1.5 py-0.5 rounded text-xs font-medium",
-                                daysSince(new Date(message.receivedAt)) >= 3 ? "bg-red-200 text-red-900" : 
-                                "bg-blue-100 text-blue-800"
+                                daysSince(new Date(message.receivedAt)) < 3 ? "bg-blue-100 text-blue-800" : "bg-red-200 text-red-900"
                               )}>
                                 {daysSince(new Date(message.receivedAt))}d
                               </span>
