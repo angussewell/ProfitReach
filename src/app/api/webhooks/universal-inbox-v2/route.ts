@@ -202,6 +202,48 @@ async function handleEmailMessage(data: UniversalInboxDataV2) {
   }
 }
 
+/**
+ * Get or create a special LinkedIn integration email account for the organization
+ */
+async function getOrCreateLinkedInEmailAccount(organizationId: string) {
+  // First, look for an existing LinkedIn integration account
+  const linkedInAccount = await prisma.emailAccount.findFirst({
+    where: {
+      organizationId: organizationId,
+      name: 'LinkedIn Integration',
+      isActive: true
+    }
+  });
+
+  // If an account exists, return it
+  if (linkedInAccount) {
+    console.log('Found existing LinkedIn integration account:', {
+      id: linkedInAccount.id,
+      organizationId: organizationId
+    });
+    return linkedInAccount;
+  }
+
+  // Otherwise, create a new account
+  const emailDomain = process.env.NEXT_PUBLIC_APP_URL?.replace(/https?:\/\//, '') || 'messagelm.com';
+  const newAccount = await prisma.emailAccount.create({
+    data: {
+      email: `linkedin-integration-${organizationId}@${emailDomain}`,
+      name: 'LinkedIn Integration',
+      organizationId: organizationId,
+      isActive: true
+    }
+  });
+
+  console.log('Created new LinkedIn integration account:', {
+    id: newAccount.id,
+    email: newAccount.email,
+    organizationId: organizationId
+  });
+
+  return newAccount;
+}
+
 // Handle LinkedIn Messages
 async function handleLinkedInMessage(data: UniversalInboxDataV2) {
   // Validate LinkedIn-specific required fields
@@ -254,20 +296,31 @@ async function handleLinkedInMessage(data: UniversalInboxDataV2) {
     );
   }
 
-  // Get a default email account
-  const defaultEmailAccount = await prisma.emailAccount.findFirst({
-    where: {
-      organizationId: data.organizationId,
-      isActive: true
-    }
-  });
+  // Try to get an associated email account for this organization
+  let emailAccount;
   
-  if (!defaultEmailAccount) {
-    console.error('No email account found for LinkedIn message handling');
-    return NextResponse.json(
-      { error: 'No email account available' },
-      { status: 400 }
-    );
+  // First, check if this social account has an associated email account
+  if (socialAccount.emailAccountId) {
+    emailAccount = await prisma.emailAccount.findUnique({
+      where: {
+        id: socialAccount.emailAccountId,
+        organizationId: data.organizationId
+      }
+    });
+  }
+  
+  // If no associated account, get or create a LinkedIn integration account
+  if (!emailAccount) {
+    console.log('No associated email account found for LinkedIn account, using integration account');
+    try {
+      emailAccount = await getOrCreateLinkedInEmailAccount(data.organizationId);
+    } catch (error) {
+      console.error('Failed to create LinkedIn integration account:', error);
+      return NextResponse.json(
+        { error: 'Failed to create LinkedIn integration account' },
+        { status: 500 }
+      );
+    }
   }
 
   // Store message in database
@@ -277,7 +330,7 @@ async function handleLinkedInMessage(data: UniversalInboxDataV2) {
         messageId: data.message_id,
         threadId: data.thread_id,
         organizationId: data.organizationId,
-        emailAccountId: defaultEmailAccount.id,
+        emailAccountId: emailAccount.id,
         subject: 'LinkedIn Message', // Default subject for LinkedIn messages
         sender: data.sender,
         recipientEmail: '', // Empty for LinkedIn messages

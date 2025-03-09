@@ -79,6 +79,7 @@ interface SocialAccount {
   isActive: boolean;
   unipileAccountId: string | null;
   organizationId: string;
+  emailAccountId?: string | null;
 }
 
 interface Prompt {
