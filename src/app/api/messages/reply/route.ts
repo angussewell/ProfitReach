@@ -17,10 +17,13 @@ const replyRequestSchema = z.object({
 });
 
 // Webhook URLs
-const WEBHOOK_URLS = [
+const EMAIL_WEBHOOK_URLS = [
   'https://messagelm.app.n8n.cloud/webhook-test/sending-replies',
   'https://messagelm.app.n8n.cloud/webhook/sending-replies'
 ];
+
+// LinkedIn webhook URL
+const LINKEDIN_WEBHOOK_URL = 'https://messagelm.app.n8n.cloud/webhook-test/linkedin-replies';
 
 export async function POST(request: Request) {
   try {
@@ -52,7 +55,7 @@ export async function POST(request: Request) {
       include: {  // Use include instead of select to get all fields
         emailAccount: true
       }
-    }) as any; // Type assertion to handle unipileEmailId
+    });
 
     if (!originalMessage) {
       console.error('Original message not found:', validatedData.messageId);
@@ -74,7 +77,43 @@ export async function POST(request: Request) {
       );
     }
 
+    // Determine if this is a LinkedIn message or an email message
+    const isLinkedInMessage = originalMessage.messageSource === 'LINKEDIN';
+    
+    // Log the message type for debugging
+    console.log('Message type:', {
+      messageId: originalMessage.messageId,
+      messageSource: originalMessage.messageSource,
+      isLinkedInMessage
+    });
+
+    // For LinkedIn messages, get the social account
+    let socialAccount = null;
+    if (isLinkedInMessage && originalMessage.socialAccountId) {
+      socialAccount = await prisma.socialAccount.findUnique({
+        where: { id: originalMessage.socialAccountId },
+      });
+      
+      if (!socialAccount) {
+        console.error('Social account not found for LinkedIn message:', {
+          socialAccountId: originalMessage.socialAccountId,
+          messageId: originalMessage.messageId
+        });
+        return NextResponse.json(
+          { error: 'Social account not found for this LinkedIn message' },
+          { status: 404 }
+        );
+      }
+      
+      console.log('Found social account for LinkedIn message:', {
+        socialAccountId: socialAccount.id,
+        provider: socialAccount.provider,
+        username: socialAccount.username
+      });
+    }
+
     // Get the email account to send from (either specified or original recipient)
+    // This is still needed even for LinkedIn messages (for storing in our database)
     const fromEmail = validatedData.fromEmail || originalMessage.recipientEmail;
     const emailAccount = await prisma.emailAccount.findFirst({
       where: {
@@ -105,20 +144,15 @@ export async function POST(request: Request) {
     }
 
     try {
-      // Prepare webhook payload with ALL available information
-      const webhookPayload = {
+      // Prepare base webhook payload with common fields
+      const basePayload = {
         internalEmailId: originalMessage.id,
         messageId: originalMessage.messageId,
         threadId: originalMessage.threadId,
-        unipileEmailId: originalMessage.unipileEmailId,
-        internalAccountId: emailAccount.id,
-        unipileAccountId: emailAccount.unipileAccountId,
         organizationId: session.user.organizationId,
         subject: originalMessage.subject || 'No Subject',
         content: formatEmailContent(validatedData.content, originalMessage),
         plainContent: validatedData.content,
-        fromEmail: emailAccount.email,
-        fromName: emailAccount.name,
         to: validatedData.toAddress || originalMessage.sender,
         cc: validatedData.ccAddress,
         bcc: validatedData.bccAddress,
@@ -136,17 +170,68 @@ export async function POST(request: Request) {
           classificationScores: originalMessage.classificationScores,
           unipileEmailId: originalMessage.unipileEmailId,
           organizationId: originalMessage.organizationId,
-          emailAccountId: originalMessage.emailAccountId
+          emailAccountId: originalMessage.emailAccountId,
+          messageSource: originalMessage.messageSource,
+          socialAccountId: originalMessage.socialAccountId
         },
         timestamp: new Date().toISOString(),
         replyType: validatedData.action,
         isHtml: true
       };
 
-      console.log('Sending webhook payload:', webhookPayload);
+      // Prepare source-specific payload
+      let webhookPayload;
+      let webhookUrls;
+      
+      if (isLinkedInMessage && socialAccount) {
+        // LinkedIn-specific payload
+        webhookPayload = {
+          ...basePayload,
+          messageSource: 'LINKEDIN',
+          socialAccountId: socialAccount.id,
+          unipileAccountId: socialAccount.unipileAccountId,
+          linkedInUsername: socialAccount.username,
+          fromName: socialAccount.name,
+          // Include email account info for compatibility
+          internalAccountId: emailAccount.id,
+          fromEmail: emailAccount.email,
+        };
+        
+        // Use LinkedIn webhook
+        webhookUrls = [LINKEDIN_WEBHOOK_URL];
+        
+        console.log('Sending LinkedIn reply to webhook:', { 
+          webhook: LINKEDIN_WEBHOOK_URL,
+          messageId: originalMessage.messageId
+        });
+      } else {
+        // Email-specific payload (original behavior)
+        webhookPayload = {
+          ...basePayload,
+          messageSource: 'EMAIL',
+          unipileEmailId: originalMessage.unipileEmailId,
+          internalAccountId: emailAccount.id,
+          unipileAccountId: emailAccount.unipileAccountId,
+          fromEmail: emailAccount.email,
+          fromName: emailAccount.name,
+        };
+        
+        // Use email webhooks
+        webhookUrls = EMAIL_WEBHOOK_URLS;
+        
+        console.log('Sending email reply to webhooks:', { 
+          webhooks: EMAIL_WEBHOOK_URLS,
+          messageId: originalMessage.messageId
+        });
+      }
 
-      // Send to both webhooks and collect results
-      const webhookResults = await Promise.allSettled(WEBHOOK_URLS.map(async (url) => {
+      console.log('Sending webhook payload:', {
+        ...webhookPayload,
+        content: webhookPayload.content.slice(0, 100) + '...' // Truncate content for log
+      });
+
+      // Send to webhook(s) and collect results
+      const webhookResults = await Promise.allSettled(webhookUrls.map(async (url) => {
         try {
           const response = await fetch(url, {
             method: 'POST',
@@ -217,20 +302,25 @@ export async function POST(request: Request) {
           organizationId: session.user.organizationId,
           emailAccountId: emailAccount.id,
           subject: originalMessage.subject || 'No Subject', // Remove Re: prefix logic
-          sender: emailAccount.email,
+          sender: isLinkedInMessage ? (socialAccount?.username || emailAccount.email) : emailAccount.email,
           recipientEmail: validatedData.toAddress || originalMessage.sender,
           content: validatedData.content,
           messageType: 'REAL_REPLY',
           receivedAt: new Date(),
           isRead: true,
           // Maintain the existing status if it exists, otherwise default to FOLLOW_UP_NEEDED
-          status: latestThreadMessage?.status || 'FOLLOW_UP_NEEDED'
+          status: latestThreadMessage?.status || 'FOLLOW_UP_NEEDED',
+          // Keep the same message source for replies
+          messageSource: originalMessage.messageSource,
+          // If LinkedIn message, keep the same socialAccountId
+          socialAccountId: isLinkedInMessage ? originalMessage.socialAccountId : null
         },
       });
 
       console.log('Stored reply in database:', {
         messageId: storedReply.messageId,
-        threadId: storedReply.threadId
+        threadId: storedReply.threadId,
+        messageSource: storedReply.messageSource
       });
 
       // Prepare webhook responses for successful attempts only
@@ -245,60 +335,31 @@ export async function POST(request: Request) {
       return NextResponse.json({
         message: 'Reply sent successfully',
         messageId: storedReply.messageId,
-        webhookResponses: Object.keys(webhookResponses).length > 0 ? webhookResponses : undefined
+        webhookResponses: Object.keys(webhookResponses).length > 0 ? webhookResponses : undefined,
+        messageSource: isLinkedInMessage ? 'LINKEDIN' : 'EMAIL'
       });
 
-    } catch (webhookError) {
-      console.error('Webhook error:', {
-        error: webhookError instanceof Error ? {
-          message: webhookError.message,
-          stack: webhookError.stack,
-          name: webhookError.name
-        } : webhookError
-      });
-
+    } catch (error) {
+      console.error('Error sending reply:', error);
       return NextResponse.json(
         { 
-          error: 'Failed to send reply via webhooks',
-          details: webhookError instanceof Error ? webhookError.message : String(webhookError)
+          error: 'Failed to send reply',
+          details: error instanceof Error ? error.message : String(error)
         },
         { status: 500 }
       );
     }
-
   } catch (error) {
-    console.error('Error sending reply:', {
-      error: error instanceof Error ? {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
-      } : error,
-      type: typeof error
-    });
-
+    console.error('Unexpected error in reply endpoint:', error);
     return NextResponse.json(
-      { 
-        error: 'Failed to send reply',
-        details: error instanceof Error ? error.message : String(error)
-      },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }
 }
 
 function formatEmailContent(content: string, originalMessage: any): string {
-  const timestamp = new Date(originalMessage.receivedAt).toLocaleString();
-  
-  return `
-    <div style="font-family: Arial, sans-serif;">
-      ${content.replace(/\n/g, '<br>')}
-      <br><br>
-      <div style="padding: 10px 0; border-top: 1px solid #ddd; color: #666;">
-        <p style="margin: 10px 0;">On ${timestamp}, ${originalMessage.sender} wrote:</p>
-        <blockquote style="margin: 0 0 0 10px; padding-left: 10px; border-left: 2px solid #ddd;">
-          ${originalMessage.content}
-        </blockquote>
-      </div>
-    </div>
-  `;
+  // Process message content
+  // Simple implementation - wrap in a div
+  return `<div>${content.replace(/\n/g, '<br/>')}</div>`;
 } 

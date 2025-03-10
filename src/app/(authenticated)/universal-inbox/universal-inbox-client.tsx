@@ -305,6 +305,9 @@ export function UniversalInboxClient() {
         new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime()
       )[0];
 
+      // Determine if this is a LinkedIn message
+      const isLinkedInMessage = latestMessage.messageSource === 'LINKEDIN';
+      
       // Find the selected email account
       const selectedAccount = emailAccounts.find(account => account.email === selectedFromEmail);
       if (!selectedAccount) {
@@ -333,7 +336,8 @@ export function UniversalInboxClient() {
         throw new Error(errorData.error || 'Failed to send reply');
       }
 
-      toast.success('Reply sent successfully');
+      // Show different success message based on message source
+      toast.success(isLinkedInMessage ? 'LinkedIn reply sent successfully' : 'Email reply sent successfully');
       setShowReplyModal(false);
       setReplyContent('');
       setViewMode('list');
@@ -750,10 +754,20 @@ export function UniversalInboxClient() {
           <div className="bg-white rounded-xl w-[800px] max-h-[80vh] flex flex-col shadow-xl border border-slate-200/60">
             <div className="px-6 py-4 border-b border-slate-200/60 flex justify-between items-center bg-white/95">
               <h2 className="text-lg font-semibold flex items-center gap-2 text-slate-900">
-                <ReplyIcon className="h-5 w-5 text-slate-500" />
-                <span>Reply</span>
+                {selectedThread && threadGroups[selectedThread] && 
+                 threadGroups[selectedThread].some(msg => msg.messageSource === 'LINKEDIN') ? (
+                  <>
+                    <LinkedInIcon className="h-5 w-5 text-blue-600" />
+                    <span>Reply to LinkedIn Message</span>
+                  </>
+                ) : (
+                  <>
+                    <ReplyIcon className="h-5 w-5 text-slate-500" />
+                    <span>Reply</span>
+                  </>
+                )}
               </h2>
-              <button
+              <button 
                 onClick={() => {
                   setShowReplyModal(false);
                   setReplyContent('');
