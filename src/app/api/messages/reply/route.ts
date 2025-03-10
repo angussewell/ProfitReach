@@ -23,8 +23,33 @@ const EMAIL_WEBHOOK_URLS = [
   'https://messagelm.app.n8n.cloud/webhook/sending-replies'
 ];
 
-// LinkedIn webhook URL
-const LINKEDIN_WEBHOOK_URL = 'https://messagelm.app.n8n.cloud/webhook-test/linkedin-replies';
+// LinkedIn webhook URL - Update to the correct URL
+const LINKEDIN_WEBHOOK_URL = 'https://messagelm.app.n8n.cloud/webhook/linkedin-replies';
+
+// Add more detailed logging to help diagnose issues
+function logDebug(message: string, data: any) {
+  console.log(`[DEBUG] ${message}:`, 
+    typeof data === 'object' 
+      ? JSON.stringify(data, null, 2).substring(0, 1000) 
+      : data
+  );
+}
+
+// Define types for the success and error result to fix TypeScript issues
+type WebhookSuccessResult = {
+  url: string;
+  success: true;
+  status: number;
+  data: any;
+};
+
+type WebhookErrorResult = {
+  url: string;
+  success: false;
+  error: string;
+};
+
+type WebhookResult = WebhookSuccessResult | WebhookErrorResult;
 
 export async function POST(request: Request) {
   try {
@@ -33,29 +58,33 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Parse request body
     const body = await request.json();
-    console.log('Received reply request:', {
-      ...body,
-      content: body.content?.slice(0, 100) + '...' // Log first 100 chars of content
-    });
 
-    let validatedData;
-    try {
-      validatedData = replyRequestSchema.parse(body);
-    } catch (validationError) {
-      console.error('Validation error:', validationError);
+    // Validate using zod schema
+    const validationResult = replyRequestSchema.safeParse(body);
+    if (!validationResult.success) {
+      const errorMessage = validationResult.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
+      console.error('Validation error:', errorMessage);
       return NextResponse.json(
-        { error: 'Invalid request data', details: validationError instanceof Error ? validationError.message : String(validationError) },
+        { error: 'Invalid request data', details: errorMessage },
         { status: 400 }
       );
     }
 
-    // Get the original message to get the account info
-    const originalMessage = await prisma.emailMessage.findUnique({
-      where: { messageId: validatedData.messageId },
-      include: {  // Use include instead of select to get all fields
-        emailAccount: true
-      }
+    const validatedData = validationResult.data;
+    logDebug('Validated reply request', {
+      messageId: validatedData.messageId,
+      action: validatedData.action,
+      hasSocialAccountId: !!validatedData.socialAccountId
+    });
+
+    // Get the original message
+    const originalMessage = await prisma.emailMessage.findFirst({
+      where: {
+        messageId: validatedData.messageId,
+        organizationId: session.user.organizationId,
+      },
     });
 
     if (!originalMessage) {
@@ -66,50 +95,52 @@ export async function POST(request: Request) {
       );
     }
 
-    // Verify organization access
-    if (originalMessage.organizationId !== session.user.organizationId) {
-      console.error('Organization mismatch:', {
-        messageOrg: originalMessage.organizationId,
-        userOrg: session.user.organizationId
-      });
-      return NextResponse.json(
-        { error: 'Access denied to this message' },
-        { status: 403 }
-      );
-    }
-
-    // Determine if this is a LinkedIn message or an email message
+    // Check if this is a LinkedIn message
     const isLinkedInMessage = originalMessage.messageSource === 'LINKEDIN';
-    
-    // Log the message type for debugging
-    console.log('Message type:', {
-      messageId: originalMessage.messageId,
+    logDebug('Message source identified', { 
+      isLinkedInMessage, 
       messageSource: originalMessage.messageSource,
-      isLinkedInMessage
+      hasSocialAccountId: isLinkedInMessage && !!originalMessage.socialAccountId,
+      providedSocialAccountId: validatedData.socialAccountId || 'none'
     });
 
-    // For LinkedIn messages, get the social account
+    // For LinkedIn messages, we need the social account
     let socialAccount = null;
-    if (isLinkedInMessage && originalMessage.socialAccountId) {
-      socialAccount = await prisma.socialAccount.findUnique({
-        where: { id: originalMessage.socialAccountId },
-      });
+    if (isLinkedInMessage) {
+      // Prefer the provided socialAccountId (from the frontend) over the one in the original message
+      const socialAccountId = validatedData.socialAccountId || originalMessage.socialAccountId;
       
+      if (!socialAccountId) {
+        console.error('No socialAccountId provided for LinkedIn message');
+        return NextResponse.json(
+          { error: 'Social account ID is required for LinkedIn messages' },
+          { status: 400 }
+        );
+      }
+
+      // Look up the social account
+      socialAccount = await prisma.socialAccount.findFirst({
+        where: {
+          id: socialAccountId,
+          organizationId: session.user.organizationId,
+        },
+      });
+
       if (!socialAccount) {
-        console.error('Social account not found for LinkedIn message:', {
-          socialAccountId: originalMessage.socialAccountId,
-          messageId: originalMessage.messageId
+        console.error('Social account not found:', {
+          socialAccountId,
+          organizationId: session.user.organizationId
         });
         return NextResponse.json(
-          { error: 'Social account not found for this LinkedIn message' },
+          { error: 'Social account not found' },
           { status: 404 }
         );
       }
       
-      console.log('Found social account for LinkedIn message:', {
+      logDebug('Found social account for LinkedIn message', {
         socialAccountId: socialAccount.id,
-        provider: socialAccount.provider,
-        username: socialAccount.username
+        socialAccountName: socialAccount.name,
+        provider: socialAccount.provider
       });
     }
 
@@ -185,7 +216,7 @@ export async function POST(request: Request) {
       let webhookUrls;
       
       if (isLinkedInMessage && socialAccount) {
-        // LinkedIn-specific payload
+        // LinkedIn-specific payload with detailed information
         webhookPayload = {
           ...basePayload,
           messageSource: 'LINKEDIN',
@@ -193,7 +224,10 @@ export async function POST(request: Request) {
           unipileAccountId: socialAccount.unipileAccountId,
           linkedInUsername: socialAccount.username,
           fromName: socialAccount.name,
-          // Include email account info for compatibility
+          // Extra LinkedIn-specific fields that might be needed by the workflow
+          provider: socialAccount.provider,
+          isActive: socialAccount.isActive,
+          // Include email account info for compatibility with existing processes
           internalAccountId: emailAccount.id,
           fromEmail: emailAccount.email,
         };
@@ -201,9 +235,11 @@ export async function POST(request: Request) {
         // Use LinkedIn webhook
         webhookUrls = [LINKEDIN_WEBHOOK_URL];
         
-        console.log('Sending LinkedIn reply to webhook:', { 
+        logDebug('Sending LinkedIn reply to webhook', {
           webhook: LINKEDIN_WEBHOOK_URL,
-          messageId: originalMessage.messageId
+          messageId: originalMessage.messageId,
+          socialAccountId: socialAccount.id,
+          socialAccountName: socialAccount.name
         });
       } else {
         // Email-specific payload (original behavior)
@@ -220,20 +256,29 @@ export async function POST(request: Request) {
         // Use email webhooks
         webhookUrls = EMAIL_WEBHOOK_URLS;
         
-        console.log('Sending email reply to webhooks:', { 
+        logDebug('Sending email reply to webhooks', {
           webhooks: EMAIL_WEBHOOK_URLS,
           messageId: originalMessage.messageId
         });
       }
 
-      console.log('Sending webhook payload:', {
-        ...webhookPayload,
-        content: webhookPayload.content.slice(0, 100) + '...' // Truncate content for log
+      logDebug('Webhook payload', {
+        messageSource: webhookPayload.messageSource,
+        socialAccountId: isLinkedInMessage && 'socialAccountId' in webhookPayload ? webhookPayload.socialAccountId : null,
+        messageId: webhookPayload.messageId,
+        threadId: webhookPayload.threadId,
+        // Truncate content for logs
+        plainContent: webhookPayload.plainContent?.substring(0, 100) + '...'
       });
 
-      // Send to webhook(s) and collect results
+      // Send to webhook(s) and collect results with better error handling
       const webhookResults = await Promise.allSettled(webhookUrls.map(async (url) => {
         try {
+          logDebug(`Sending to webhook ${url}`, { 
+            method: 'POST',
+            payloadSize: JSON.stringify(webhookPayload).length
+          });
+          
           const response = await fetch(url, {
             method: 'POST',
             headers: {
@@ -251,31 +296,75 @@ export async function POST(request: Request) {
             responseData = { text: responseText };
           }
 
-          return {
+          const result: WebhookSuccessResult = {
             url,
-            success: response.ok,
+            success: true,
             status: response.status,
             data: responseData
           };
+          
+          logDebug(`Webhook response for ${url}`, {
+            status: response.status,
+            success: response.ok,
+            dataType: typeof responseData,
+            data: JSON.stringify(responseData).substring(0, 200)
+          });
+          
+          return result;
         } catch (error) {
-          return {
+          const errorResult: WebhookErrorResult = {
             url,
             success: false,
             error: error instanceof Error ? error.message : String(error)
           };
+          console.error(`Error sending to webhook ${url}:`, errorResult);
+          return errorResult;
         }
       }));
 
-      // Log webhook results
-      console.log('Webhook results:', webhookResults);
+      // Log webhook results in detail
+      logDebug('All webhook results', {
+        count: webhookResults.length,
+        fulfilled: webhookResults.filter((r: PromiseSettledResult<any>) => r.status === 'fulfilled').length,
+        rejected: webhookResults.filter((r: PromiseSettledResult<any>) => r.status === 'rejected').length,
+        successful: webhookResults.filter((r: PromiseSettledResult<any>) => r.status === 'fulfilled' && (r as PromiseFulfilledResult<WebhookResult>).value.success).length
+      });
 
       // Check if at least one webhook succeeded
       const anyWebhookSucceeded = webhookResults.some(
-        result => result.status === 'fulfilled' && result.value.success
+        (result: PromiseSettledResult<WebhookResult>) => result.status === 'fulfilled' && (result as PromiseFulfilledResult<WebhookResult>).value.success
       );
 
       if (!anyWebhookSucceeded) {
-        throw new Error('All webhook attempts failed');
+        // If all webhooks failed, return an error with details
+        const webhookErrors = webhookResults
+          .filter((result: PromiseSettledResult<WebhookResult>) => result.status === 'fulfilled')
+          .map((result: PromiseSettledResult<WebhookResult>) => {
+            if (result.status === 'fulfilled') {
+              const value = (result as PromiseFulfilledResult<WebhookResult>).value;
+              return {
+                url: value.url,
+                error: !value.success ? value.error : 'Unknown error',
+                status: 'status' in value ? value.status : undefined
+              };
+            } else {
+              return {
+                error: 'Promise rejected',
+                reason: String((result as PromiseRejectedResult).reason)
+              };
+            }
+          });
+
+        console.error('All webhook attempts failed:', webhookErrors);
+        
+        return NextResponse.json(
+          { 
+            error: 'Failed to send reply via webhooks',
+            details: 'All webhook attempts failed',
+            webhookErrors
+          },
+          { status: 502 } // Bad Gateway - upstream server error
+        );
       }
 
       // Get the latest message in the thread to check its status
@@ -326,13 +415,27 @@ export async function POST(request: Request) {
       });
 
       // Prepare webhook responses for successful attempts only
-      const webhookResponses = webhookResults.reduce((acc, result) => {
-        if (result.status === 'fulfilled' && result.value.success) {
-          const urlKey = result.value.url.includes('webhook-test') ? 'test' : 'main';
-          acc[urlKey] = result.value.data;
+      const webhookResponses = webhookResults.reduce((acc: Record<string, any>, result: PromiseSettledResult<WebhookResult>) => {
+        if (result.status === 'fulfilled' && (result as PromiseFulfilledResult<WebhookResult>).value.success) {
+          // Get a descriptive key based on the URL
+          let urlKey = 'unknown';
+          const url = (result as PromiseFulfilledResult<WebhookResult>).value.url;
+          
+          if (url.includes('linkedin-replies')) {
+            urlKey = 'linkedin';
+          } else if (url.includes('sending-replies')) {
+            urlKey = url.includes('webhook-test') ? 'emailTest' : 'email';
+          }
+          
+          acc[urlKey] = (result as PromiseFulfilledResult<WebhookSuccessResult>).value.data;
         }
         return acc;
       }, {} as Record<string, any>);
+
+      logDebug('Reply process completed successfully', {
+        messageId: storedReply.messageId,
+        webhookResponseKeys: Object.keys(webhookResponses)
+      });
 
       return NextResponse.json({
         message: 'Reply sent successfully',
