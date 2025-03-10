@@ -38,6 +38,16 @@ interface EmailAccount {
   name: string;
 }
 
+// Add just after the EmailAccount interface, around line 37
+interface SocialAccount {
+  id: string;
+  name: string;
+  username: string;
+  provider: string;
+  unipileAccountId: string;
+  isActive: boolean;
+}
+
 const LoaderIcon: React.FC<LucideProps> = Loader2;
 const InboxIcon: React.FC<LucideProps> = Inbox;
 const MessageIcon: React.FC<LucideProps> = MessageSquare;
@@ -172,6 +182,11 @@ const LinkedInIcon: React.FC<LucideProps> = (props) => {
   );
 };
 
+// First, add a helper function to determine if a thread is a LinkedIn thread
+const isLinkedInThread = (messages: EmailMessage[]): boolean => {
+  return messages.some(msg => msg.messageSource === 'LINKEDIN');
+};
+
 export function UniversalInboxClient() {
   const [selectedThread, setSelectedThread] = useState<string | null>(null);
   const [messages, setMessages] = useState<EmailMessage[]>([]);
@@ -183,9 +198,22 @@ export function UniversalInboxClient() {
   const [messageToDelete, setMessageToDelete] = useState<EmailMessage | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [emailAccounts, setEmailAccounts] = useState<EmailAccount[]>([]);
+  const [socialAccounts, setSocialAccounts] = useState<SocialAccount[]>([]);
   const [selectedFromEmail, setSelectedFromEmail] = useState<string>('');
+  const [selectedSocialAccount, setSelectedSocialAccount] = useState<string>('');
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'detail'>('list');
+
+  // Group messages by thread - move this up before the useEffect
+  const threadGroups = messages.reduce((groups, message) => {
+    if (!groups[message.threadId]) {
+      groups[message.threadId] = [];
+    }
+    groups[message.threadId].push(message);
+    return groups;
+  }, {} as Record<string, EmailMessage[]>);
+
+  const hasMessages = Object.keys(threadGroups).length > 0;
 
   // Navigate to thread detail view
   const openThread = (threadId: string) => {
@@ -203,17 +231,19 @@ export function UniversalInboxClient() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [messagesResponse, accountsResponse] = await Promise.all([
+        const [messagesResponse, emailAccountsResponse, socialAccountsResponse] = await Promise.all([
           fetch('/api/messages'),
-          fetch('/api/email-accounts')
+          fetch('/api/email-accounts'),
+          fetch('/api/social-accounts')
         ]);
         
-        if (!messagesResponse.ok || !accountsResponse.ok) 
+        if (!messagesResponse.ok || !emailAccountsResponse.ok || !socialAccountsResponse.ok) 
           throw new Error('Failed to fetch data');
         
-        const [messages, accounts] = await Promise.all([
+        const [messages, emailAccounts, socialAccounts] = await Promise.all([
           messagesResponse.json(),
-          accountsResponse.json()
+          emailAccountsResponse.json(),
+          socialAccountsResponse.json()
         ]);
         
         // Debug log to check status values
@@ -221,11 +251,16 @@ export function UniversalInboxClient() {
           id: m.id, 
           threadId: m.threadId, 
           status: m.status,
-          receivedAt: m.receivedAt
+          receivedAt: m.receivedAt,
+          messageSource: m.messageSource,
+          socialAccountId: m.socialAccountId
         })));
         
+        console.log('Social accounts:', socialAccounts);
+        
         setMessages(messages);
-        setEmailAccounts(accounts);
+        setEmailAccounts(emailAccounts);
+        setSocialAccounts(socialAccounts);
       } catch (error) {
         console.error('Error fetching data:', error);
       } finally {
@@ -266,69 +301,138 @@ export function UniversalInboxClient() {
     return firstMessage.recipientEmail;
   };
 
-  // Reset selected email when opening reply modal
+  // Update the useEffect that handles pre-selection
   useEffect(() => {
-    if (showReplyModal && selectedThread && emailAccounts.length > 0) {
+    if (showReplyModal && selectedThread && threadGroups[selectedThread]) {
       const messages = threadGroups[selectedThread];
+      const latestMessage = messages.sort((a, b) => 
+        new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime()
+      )[0];
       
-      // Find our email account that was involved in the conversation
-      const ourEmail = emailAccounts.find(account => 
-        messages.some(msg => 
-          msg.sender === account.email || msg.recipientEmail === account.email
-        )
-      );
+      const isLinkedInMessage = latestMessage.messageSource === 'LINKEDIN';
+      
+      if (isLinkedInMessage && latestMessage.socialAccountId) {
+        // For LinkedIn messages, find the social account
+        const socialAccount = socialAccounts.find(account => 
+          account.id === latestMessage.socialAccountId
+        );
+        
+        if (socialAccount) {
+          setSelectedSocialAccount(socialAccount.id);
+          console.log('Pre-selected LinkedIn account:', socialAccount.name);
+        } else {
+          console.log('Could not find matching social account for ID:', latestMessage.socialAccountId);
+          setSelectedSocialAccount('');
+        }
+      } else {
+        // For email messages, find our email account that was involved in the conversation
+        const ourEmail = emailAccounts.find(account => 
+          messages.some(msg => 
+            msg.sender === account.email || msg.recipientEmail === account.email
+          )
+        );
 
-      if (ourEmail) {
-        setSelectedFromEmail(ourEmail.email);
+        if (ourEmail) {
+          setSelectedFromEmail(ourEmail.email);
+          console.log('Pre-selected email account:', ourEmail.email);
+        } else {
+          setSelectedFromEmail('');
+        }
       }
     }
-  }, [showReplyModal, selectedThread, emailAccounts]);
-
-  // Group messages by thread
-  const threadGroups = messages.reduce((groups, message) => {
-    if (!groups[message.threadId]) {
-      groups[message.threadId] = [];
-    }
-    groups[message.threadId].push(message);
-    return groups;
-  }, {} as Record<string, EmailMessage[]>);
-
-  const hasMessages = Object.keys(threadGroups).length > 0;
+  }, [showReplyModal, selectedThread, emailAccounts, socialAccounts, threadGroups]);
 
   const handleReply = async () => {
-    if (!selectedThread || !replyContent.trim() || !selectedFromEmail) return;
+    if (!selectedThread) return;
+    
+    const threadMessages = threadGroups[selectedThread];
+    const isLinkedIn = isLinkedInThread(threadMessages);
+    
+    // Check required fields based on message type
+    if (!replyContent.trim()) return;
+    if (isLinkedIn && !selectedSocialAccount) return;
+    if (!isLinkedIn && !selectedFromEmail) return;
     
     setReplying(true);
     try {
-      const threadMessages = threadGroups[selectedThread];
       const latestMessage = threadMessages.sort((a, b) => 
         new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime()
       )[0];
 
-      // Determine if this is a LinkedIn message
-      const isLinkedInMessage = latestMessage.messageSource === 'LINKEDIN';
-      
-      // Find the selected email account
-      const selectedAccount = emailAccounts.find(account => account.email === selectedFromEmail);
-      if (!selectedAccount) {
-        throw new Error('Please select a valid email account to send from');
+      // Prepare account information based on message type
+      let accountInfo = {
+        id: '',
+        email: '',
+        name: ''
+      };
+
+      if (isLinkedIn) {
+        // For LinkedIn messages, find the associated social account
+        const socialAccount = socialAccounts.find(account => account.id === selectedSocialAccount);
+        if (!socialAccount) {
+          throw new Error('Please select a valid LinkedIn account to send from');
+        }
+        
+        console.log('Using LinkedIn account for reply:', socialAccount.name);
+        
+        // For the backend, we need to use an email account - let's use the LinkedIn integration account
+        // Find that special account by name pattern
+        const integrationAccount = emailAccounts.find(account => 
+          account.email.includes('linkedin-integration') || account.name === 'LinkedIn Integration'
+        );
+        
+        if (!integrationAccount) {
+          throw new Error('LinkedIn integration account not found. Please reload the page and try again.');
+        }
+        
+        accountInfo = {
+          id: integrationAccount.id,
+          email: integrationAccount.email,
+          name: socialAccount.name // Use the social account name for display
+        };
+      } else {
+        // For regular email messages, use the selected email account
+        const emailAccount = emailAccounts.find(account => account.email === selectedFromEmail);
+        if (!emailAccount) {
+          throw new Error('Please select a valid email account to send from');
+        }
+        
+        console.log('Using email account for reply:', emailAccount.email);
+        
+        accountInfo = {
+          id: emailAccount.id,
+          email: emailAccount.email,
+          name: emailAccount.name
+        };
       }
 
-      // Get the correct recipient email (the other participant in the thread)
+      // Get the correct recipient (the other participant in the thread)
       const toAddress = findOtherParticipant(threadMessages);
+
+      // Construct request body - use the email address for both email and LinkedIn messages
+      // The backend will know it's a LinkedIn message based on the original message
+      const requestBody = {
+        messageId: latestMessage.messageId,
+        content: replyContent,
+        action: 'reply',
+        fromEmail: accountInfo.email,
+        toAddress,
+        // Include the selected socialAccountId for LinkedIn messages
+        ...(isLinkedIn && selectedSocialAccount ? { socialAccountId: selectedSocialAccount } : {})
+      };
+
+      console.log('Sending reply with payload:', {
+        ...requestBody,
+        accountType: isLinkedIn ? 'LinkedIn' : 'Email',
+        content: requestBody.content.slice(0, 50) + '...' // Truncate content for logging
+      });
 
       const response = await fetch('/api/messages/reply', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          messageId: latestMessage.messageId,
-          content: replyContent,
-          action: 'reply',
-          fromEmail: selectedFromEmail,
-          toAddress
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
@@ -336,11 +440,22 @@ export function UniversalInboxClient() {
         throw new Error(errorData.error || 'Failed to send reply');
       }
 
-      // Show different success message based on message source
-      toast.success(isLinkedInMessage ? 'LinkedIn reply sent successfully' : 'Email reply sent successfully');
+      const responseData = await response.json();
+      console.log('Reply sent successfully:', responseData);
+
+      // Show appropriate success message based on message type
+      toast.success(isLinkedIn ? 'LinkedIn reply sent successfully' : 'Email reply sent successfully');
+      
       setShowReplyModal(false);
       setReplyContent('');
       setViewMode('list');
+      
+      // Reset selected accounts
+      if (isLinkedIn) {
+        setSelectedSocialAccount('');
+      } else {
+        setSelectedFromEmail('');
+      }
       
       // Refresh messages
       const messagesResponse = await fetch('/api/messages');
@@ -755,7 +870,7 @@ export function UniversalInboxClient() {
             <div className="px-6 py-4 border-b border-slate-200/60 flex justify-between items-center bg-white/95">
               <h2 className="text-lg font-semibold flex items-center gap-2 text-slate-900">
                 {selectedThread && threadGroups[selectedThread] && 
-                 threadGroups[selectedThread].some(msg => msg.messageSource === 'LINKEDIN') ? (
+                 isLinkedInThread(threadGroups[selectedThread]) ? (
                   <>
                     <LinkedInIcon className="h-5 w-5 text-blue-600" />
                     <span>Reply to LinkedIn Message</span>
@@ -782,21 +897,42 @@ export function UniversalInboxClient() {
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   From
                 </label>
-                <select
-                  value={selectedFromEmail}
-                  onChange={(e) => setSelectedFromEmail(e.target.value)}
-                  className="w-full p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select an email account</option>
-                  {emailAccounts.map(account => (
-                    <option 
-                      key={account.id} 
-                      value={account.email}
-                    >
-                      {account.email}
-                    </option>
-                  ))}
-                </select>
+                {selectedThread && threadGroups[selectedThread] && 
+                 isLinkedInThread(threadGroups[selectedThread]) ? (
+                  <select
+                    value={selectedSocialAccount}
+                    onChange={(e) => setSelectedSocialAccount(e.target.value)}
+                    className="w-full p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select a LinkedIn account</option>
+                    {socialAccounts
+                      .filter(account => account.provider === 'LINKEDIN')
+                      .map(account => (
+                      <option 
+                        key={account.id} 
+                        value={account.id}
+                      >
+                        {account.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <select
+                    value={selectedFromEmail}
+                    onChange={(e) => setSelectedFromEmail(e.target.value)}
+                    className="w-full p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select an email account</option>
+                    {emailAccounts.map(account => (
+                      <option 
+                        key={account.id} 
+                        value={account.email}
+                      >
+                        {account.email}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
               <textarea
                 value={replyContent}
@@ -817,7 +953,11 @@ export function UniversalInboxClient() {
               </ClientButton>
               <ClientButton
                 onClick={handleReply}
-                disabled={!replyContent.trim() || replying || !selectedFromEmail}
+                disabled={
+                  !replyContent.trim() || 
+                  replying || 
+                  (isLinkedInThread(threadGroups[selectedThread || '']) ? !selectedSocialAccount : !selectedFromEmail)
+                }
                 className="flex items-center gap-2"
               >
                 {replying ? (

@@ -14,6 +14,7 @@ const replyRequestSchema = z.object({
   ccAddress: z.string().optional(),
   bccAddress: z.string().optional(),
   fromEmail: z.string().optional(),
+  socialAccountId: z.string().optional(),
 });
 
 // Webhook URLs
@@ -312,8 +313,9 @@ export async function POST(request: Request) {
           status: latestThreadMessage?.status || 'FOLLOW_UP_NEEDED',
           // Keep the same message source for replies
           messageSource: originalMessage.messageSource,
-          // If LinkedIn message, keep the same socialAccountId
-          socialAccountId: isLinkedInMessage ? originalMessage.socialAccountId : null
+          // If socialAccountId is provided and it's a LinkedIn message, use the provided ID
+          // Otherwise, use the original message's socialAccountId for LinkedIn messages
+          socialAccountId: validatedData.socialAccountId || (isLinkedInMessage ? originalMessage.socialAccountId : null)
         },
       });
 
