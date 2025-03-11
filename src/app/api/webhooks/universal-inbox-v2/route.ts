@@ -26,6 +26,19 @@ const UniversalInboxWebhookV2 = z.object({
   social_account_id: z.string().optional(),
 });
 
+type WebhookResponse = {
+  success: boolean;
+  messageId: string;
+  error?: string;
+  note?: string;
+};
+
+// Support both single object and array of objects
+const UniversalInboxPayloadV2 = z.union([
+  UniversalInboxWebhookV2,
+  z.array(UniversalInboxWebhookV2)
+]);
+
 type UniversalInboxDataV2 = z.infer<typeof UniversalInboxWebhookV2>;
 
 export async function POST(request: Request) {
@@ -33,21 +46,101 @@ export async function POST(request: Request) {
     console.log('Received Universal Inbox V2 webhook request');
     
     // Parse and validate webhook data
-    let data: UniversalInboxDataV2;
     const rawBody = await request.text();
-    
     console.log('Raw webhook body:', rawBody);
     
     try {
       const parsedData = JSON.parse(rawBody);
-      data = UniversalInboxWebhookV2.parse(parsedData);
-      console.log('Parsed webhook data:', {
-        message_id: data.message_id,
-        thread_id: data.thread_id,
-        organizationId: data.organizationId,
-        message_source: data.message_source,
-        account_id: data.message_source === 'EMAIL' ? data.email_account_id : data.social_account_id
+      // Parse the payload which could be an array or single object
+      const validatedData = UniversalInboxPayloadV2.parse(parsedData);
+      
+      // Convert to array if single object
+      const dataArray = Array.isArray(validatedData) ? validatedData : [validatedData];
+      
+      console.log('Processing webhook data:', {
+        itemCount: dataArray.length,
+        firstItem: {
+          message_id: dataArray[0].message_id,
+          thread_id: dataArray[0].thread_id,
+          organizationId: dataArray[0].organizationId,
+          message_source: dataArray[0].message_source
+        }
       });
+
+      // Process each item in the array
+      const results = await Promise.all(dataArray.map(async (data) => {
+        // First verify the organization exists
+        const organization = await prisma.organization.findUnique({
+          where: { id: data.organizationId }
+        });
+
+        if (!organization) {
+          console.error('Organization not found:', {
+            organizationId: data.organizationId
+          });
+          return {
+            success: false,
+            error: 'Organization not found',
+            messageId: data.message_id
+          } as WebhookResponse;
+        }
+
+        // Check if message already exists
+        const existingMessage = await prisma.emailMessage.findFirst({
+          where: { messageId: data.message_id }
+        });
+
+        if (existingMessage) {
+          console.log('Message already exists:', {
+            messageId: data.message_id,
+            threadId: data.thread_id
+          });
+          return {
+            success: true,
+            messageId: data.message_id,
+            note: 'Message already processed'
+          } as WebhookResponse;
+        }
+
+        // Handle different message sources
+        try {
+          if (data.message_source === 'EMAIL') {
+            const response = await handleEmailMessage(data);
+            return response.json() as Promise<WebhookResponse>;
+          } else if (data.message_source === 'LINKEDIN') {
+            const response = await handleLinkedInMessage(data);
+            return response.json() as Promise<WebhookResponse>;
+          } else {
+            return {
+              success: false,
+              error: 'Unsupported message source',
+              messageId: data.message_id
+            } as WebhookResponse;
+          }
+        } catch (error) {
+          console.error('Error processing message:', {
+            messageId: data.message_id,
+            error: error instanceof Error ? error.message : String(error)
+          });
+          return {
+            success: false,
+            error: 'Failed to process message',
+            messageId: data.message_id
+          } as WebhookResponse;
+        }
+      }));
+
+      // If we only received one message, return its result directly
+      if (results.length === 1) {
+        const result = results[0];
+        if (!result.success && result.error) {
+          return NextResponse.json({ error: result.error }, { status: 400 });
+        }
+        return NextResponse.json(result);
+      }
+
+      // If we received multiple messages, return array of results
+      return NextResponse.json(results);
 
     } catch (parseError) {
       console.error('Failed to parse webhook data:', {
@@ -61,33 +154,6 @@ export async function POST(request: Request) {
           details: parseError instanceof Error ? parseError.message : String(parseError),
           help: 'Please ensure the request body is valid JSON and contains the required fields'
         },
-        { status: 400 }
-      );
-    }
-
-    // First verify the organization exists
-    const organization = await prisma.organization.findUnique({
-      where: { id: data.organizationId }
-    });
-
-    if (!organization) {
-      console.error('Organization not found:', {
-        organizationId: data.organizationId
-      });
-      return NextResponse.json(
-        { error: 'Organization not found' },
-        { status: 404 }
-      );
-    }
-
-    // Handle different message sources
-    if (data.message_source === 'EMAIL') {
-      return await handleEmailMessage(data);
-    } else if (data.message_source === 'LINKEDIN') {
-      return await handleLinkedInMessage(data);
-    } else {
-      return NextResponse.json(
-        { error: 'Unsupported message source' },
         { status: 400 }
       );
     }
@@ -246,8 +312,18 @@ async function getOrCreateLinkedInEmailAccount(organizationId: string) {
 
 // Handle LinkedIn Messages
 async function handleLinkedInMessage(data: UniversalInboxDataV2) {
+  console.log('Processing LinkedIn message:', {
+    messageId: data.message_id,
+    threadId: data.thread_id,
+    sender: data.sender,
+    socialAccountId: data.social_account_id
+  });
+
   // Validate LinkedIn-specific required fields
   if (!data.social_account_id) {
+    console.error('Missing social_account_id for LinkedIn message:', {
+      messageId: data.message_id
+    });
     return NextResponse.json(
       { error: 'Missing social_account_id for LinkedIn message' },
       { status: 400 }
@@ -260,13 +336,17 @@ async function handleLinkedInMessage(data: UniversalInboxDataV2) {
       unipileAccountId: data.social_account_id,
       organizationId: data.organizationId,
       provider: 'LINKEDIN'
+    },
+    include: {
+      emailAccount: true // Include the associated email account
     }
   });
 
   console.log('LinkedIn account lookup result:', {
     found: !!socialAccount,
     unipileAccountId: data.social_account_id,
-    organizationId: data.organizationId
+    organizationId: data.organizationId,
+    hasEmailAccount: !!socialAccount?.emailAccount
   });
 
   if (!socialAccount) {
@@ -296,68 +376,85 @@ async function handleLinkedInMessage(data: UniversalInboxDataV2) {
     );
   }
 
-  // Try to get an associated email account for this organization
-  let emailAccount;
-  
-  // First, check if this social account has an associated email account
-  if (socialAccount.emailAccountId) {
-    emailAccount = await prisma.emailAccount.findUnique({
-      where: {
-        id: socialAccount.emailAccountId,
-        organizationId: data.organizationId
-      }
-    });
-  }
-  
-  // If no associated account, get or create a LinkedIn integration account
-  if (!emailAccount) {
-    console.log('No associated email account found for LinkedIn account, using integration account');
-    try {
-      emailAccount = await getOrCreateLinkedInEmailAccount(data.organizationId);
-    } catch (error) {
-      console.error('Failed to create LinkedIn integration account:', error);
-      return NextResponse.json(
-        { error: 'Failed to create LinkedIn integration account' },
-        { status: 500 }
-      );
-    }
-  }
-
   // Store message in database
   try {
+    // Check if the message is from us by comparing the sender with our social account name
+    const isFromUs = data.sender === socialAccount.name;
+
+    console.log('Message sender check:', {
+      sender: data.sender,
+      ourAccountName: socialAccount.name,
+      isFromUs
+    });
+
+    // First check if message already exists
+    const existingMessage = await prisma.emailMessage.findFirst({
+      where: { messageId: data.message_id }
+    });
+
+    if (existingMessage) {
+      console.log('LinkedIn message already exists:', {
+        messageId: data.message_id,
+        threadId: data.thread_id
+      });
+      return NextResponse.json({
+        success: true,
+        messageId: data.message_id,
+        note: 'Message already processed'
+      });
+    }
+
     const message = await prisma.emailMessage.create({
       data: {
         messageId: data.message_id,
-        threadId: data.thread_id,
+        threadId: data.thread_id || data.message_id,
         organizationId: data.organizationId,
-        emailAccountId: emailAccount.id,
-        subject: 'LinkedIn Message', // Default subject for LinkedIn messages
+        socialAccountId: socialAccount.id,
+        emailAccountId: socialAccount.emailAccount?.id || '', // Use associated email account if available
+        subject: 'LinkedIn Message',
         sender: data.sender,
-        recipientEmail: '', // Empty for LinkedIn messages
         content: data.content,
+        recipientEmail: '',
         receivedAt: new Date(),
         messageType: MessageType.REAL_REPLY,
-        socialAccountId: socialAccount.id,
-        unipileEmailId: data.unipile_linkedin_id, // Store LinkedIn ID here for now
+        status: isFromUs ? 'NO_ACTION_NEEDED' : 'FOLLOW_UP_NEEDED',
+        unipileEmailId: data.unipile_linkedin_id,
         messageSource: 'LINKEDIN'
       }
     });
 
     console.log('Successfully stored LinkedIn message:', {
-      messageId: message.messageId,
-      threadId: message.threadId,
-      organizationId: message.organizationId
+      messageId: message.id,
+      socialAccountId: socialAccount.id,
+      organizationId: data.organizationId,
+      isFromUs,
+      status: isFromUs ? 'NO_ACTION_NEEDED' : 'FOLLOW_UP_NEEDED'
     });
 
     return NextResponse.json({
       success: true,
-      messageId: message.messageId,
-      threadId: message.threadId
+      messageId: message.id
+    });
+  } catch (error) {
+    console.error('Failed to store LinkedIn message:', {
+      error: error instanceof Error ? {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      } : error,
+      messageId: data.message_id,
+      socialAccountId: socialAccount.id
     });
 
-  } catch (error) {
-    // Handle database errors
-    return handleDatabaseError(error, data);
+    if (error instanceof Error && error.name === 'PrismaClientKnownRequestError' && (error as any).code === 'P2002') {
+      return NextResponse.json({
+        success: true,
+        messageId: data.message_id,
+        note: 'Message already processed'
+      });
+    }
+
+    throw error; // Let the parent handler deal with other errors
   }
 }
 
