@@ -196,42 +196,9 @@ const isLinkedInThread = (messages: EmailMessage[]): boolean => {
 
 // Helper function to get LinkedIn sender name from ID
 const getLinkedInSenderName = (senderId: string, message: EmailMessage, socialAccounts: SocialAccount[]): string => {
-  // First check if this is from one of our social accounts by comparing unipileAccountId
-  const matchingSocialAccount = socialAccounts.find(account => 
-    senderId.includes(account.unipileAccountId) || 
-    account.unipileAccountId.includes(senderId) ||
-    account.username === senderId
-  );
-  
-  if (matchingSocialAccount) {
-    return matchingSocialAccount.name;
-  }
-  
-  // Next check if this sender ID matches the socialAccountId of the message
-  if (message.socialAccountId) {
-    const accountForMessage = socialAccounts.find(account => account.id === message.socialAccountId);
-    if (accountForMessage) {
-      return accountForMessage.name;
-    }
-  }
-  
-  // If sender doesn't start with the LinkedIn ID pattern (ACoAA...), just return it
-  if (!senderId.startsWith('ACoAA')) {
-    return senderId;
-  }
-  
-  // For LinkedIn IDs with no match, try to find any name from context
-  // Fallback to using the user's own name for outgoing messages
-  if (message.isRead === false && message.messageSource === 'LINKEDIN') {
-    // This is likely an outgoing message - use the first LinkedIn account name
-    const firstLinkedInAccount = socialAccounts.find(account => account.provider === 'LINKEDIN');
-    if (firstLinkedInAccount) {
-      return firstLinkedInAccount.name;
-    }
-  }
-  
-  // Last fallback - more descriptive than just "LinkedIn User"
-  return 'LinkedIn Contact';
+  // Simply return the sender name directly from the database
+  // This is the value set when the message was created/received
+  return message.sender;
 };
 
 export function UniversalInboxClient() {
@@ -832,17 +799,9 @@ export function UniversalInboxClient() {
             
             {selectedThread && (
               <div className="flex h-full flex-col">
-                <div className="flex items-center justify-between border-b border-gray-200 p-4">
-                  <button
-                    onClick={backToList}
-                    className="flex items-center text-sm text-gray-600 hover:text-gray-900"
-                  >
-                    <X className="mr-1 h-4 w-4" />
-                    Back to Inbox
-                  </button>
-                  
-                  {selectedThread && threadGroups[selectedThread] && 
-                   isLinkedInThread(threadGroups[selectedThread]) && (
+                {selectedThread && threadGroups[selectedThread] && 
+                 isLinkedInThread(threadGroups[selectedThread]) && (
+                  <div className="flex items-center justify-end border-b border-gray-200 p-4">
                     <button
                       className="flex items-center space-x-1 rounded bg-blue-500 px-3 py-1.5 text-sm text-white hover:bg-blue-600"
                       onClick={() => {
@@ -896,8 +855,8 @@ export function UniversalInboxClient() {
                       <RefreshCw className="h-4 w-4" />
                       <span>Get Full Chat</span>
                     </button>
-                  )}
-                </div>
+                  </div>
+                )}
                 
                 <div className="p-6 space-y-6 overflow-y-auto flex-1">
                   {threadGroups[selectedThread]
