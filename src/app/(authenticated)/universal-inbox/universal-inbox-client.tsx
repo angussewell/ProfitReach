@@ -907,6 +907,8 @@ export function UniversalInboxClient() {
                         </div>
                       );
                     })}
+                  {/* Add padding div at the bottom to ensure last message is fully visible */}
+                  <div className="h-10"></div>
                 </div>
               </div>
             )}
