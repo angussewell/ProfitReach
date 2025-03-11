@@ -191,6 +191,49 @@ const isLinkedInThread = (messages: EmailMessage[]): boolean => {
   return messages.some(msg => msg.messageSource === 'LINKEDIN');
 };
 
+// First, add a helper function to get LinkedIn sender names
+// Add this near other helper functions at the top of the file
+
+// Helper function to get LinkedIn sender name from ID
+const getLinkedInSenderName = (senderId: string, message: EmailMessage, socialAccounts: SocialAccount[]): string => {
+  // First check if this is from one of our social accounts by comparing unipileAccountId
+  const matchingSocialAccount = socialAccounts.find(account => 
+    senderId.includes(account.unipileAccountId) || 
+    account.unipileAccountId.includes(senderId) ||
+    account.username === senderId
+  );
+  
+  if (matchingSocialAccount) {
+    return matchingSocialAccount.name;
+  }
+  
+  // Next check if this sender ID matches the socialAccountId of the message
+  if (message.socialAccountId) {
+    const accountForMessage = socialAccounts.find(account => account.id === message.socialAccountId);
+    if (accountForMessage) {
+      return accountForMessage.name;
+    }
+  }
+  
+  // If sender doesn't start with the LinkedIn ID pattern (ACoAA...), just return it
+  if (!senderId.startsWith('ACoAA')) {
+    return senderId;
+  }
+  
+  // For LinkedIn IDs with no match, try to find any name from context
+  // Fallback to using the user's own name for outgoing messages
+  if (message.isRead === false && message.messageSource === 'LINKEDIN') {
+    // This is likely an outgoing message - use the first LinkedIn account name
+    const firstLinkedInAccount = socialAccounts.find(account => account.provider === 'LINKEDIN');
+    if (firstLinkedInAccount) {
+      return firstLinkedInAccount.name;
+    }
+  }
+  
+  // Last fallback - more descriptive than just "LinkedIn User"
+  return 'LinkedIn Contact';
+};
+
 export function UniversalInboxClient() {
   const [selectedThread, setSelectedThread] = useState<string | null>(null);
   const [messages, setMessages] = useState<EmailMessage[]>([]);
@@ -631,7 +674,9 @@ export function UniversalInboxClient() {
                         <div className="col-span-3">
                           <div className="font-medium text-slate-900 truncate flex items-center gap-1">
                             {isLinkedIn && <LinkedInIcon className="h-4 w-4 text-blue-600" />}
-                            {findOtherParticipant(messages)}
+                            {isLinkedIn 
+                              ? getLinkedInSenderName(latestMessage.sender, latestMessage, socialAccounts)
+                              : findOtherParticipant(messages)}
                           </div>
                           <div className="text-xs text-slate-500 mt-1">
                             {new Date(latestMessage.receivedAt).toLocaleString(undefined, {
@@ -879,7 +924,9 @@ export function UniversalInboxClient() {
                             <div>
                               <p className="font-medium text-slate-900 flex items-center gap-1">
                                 {isLinkedIn && <LinkedInIcon className="h-4 w-4 text-blue-600" />}
-                                {message.sender}
+                                {isLinkedIn 
+                                  ? getLinkedInSenderName(message.sender, message, socialAccounts)
+                                  : message.sender}
                               </p>
                               {!isLinkedIn && message.recipientEmail && (
                                 <p className="text-xs text-slate-500 mt-0.5">
