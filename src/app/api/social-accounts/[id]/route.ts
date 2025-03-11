@@ -12,6 +12,11 @@ const accountUpdateSchema = z.object({
   emailAccountId: z.string().nullable().optional()
 });
 
+// Unipile configuration from environment variables
+const UNIPILE_FULL_DSN = process.env.UNIPILE_DSN || 'api4.unipile.com:13465';
+const UNIPILE_API_KEY = process.env.UNIPILE_API_KEY;
+const UNIPILE_API_URL = `https://${UNIPILE_FULL_DSN}`;
+
 // Webhook URLs
 const WEBHOOK_URLS = [
   'https://messagelm.app.n8n.cloud/webhook-test/sending-replies',
@@ -117,6 +122,51 @@ export async function DELETE(
         { error: 'Access denied to this social account' },
         { status: 403 }
       );
+    }
+
+    // Delete account from Unipile if unipileAccountId exists
+    if (socialAccount.unipileAccountId && UNIPILE_API_KEY) {
+      try {
+        console.log(`🗑️ Deleting social account from Unipile:`, {
+          unipileAccountId: socialAccount.unipileAccountId,
+          timestamp: new Date().toISOString()
+        });
+
+        const unipileUrl = `${UNIPILE_API_URL}/api/v1/accounts/${socialAccount.unipileAccountId}`;
+        const response = await fetch(unipileUrl, {
+          method: 'DELETE',
+          headers: {
+            'X-API-KEY': UNIPILE_API_KEY,
+            'Accept': 'application/json'
+          }
+        });
+        
+        const responseStatus = response.status;
+        const responseBody = await response.text();
+        
+        if (response.ok) {
+          console.log(`✅ Successfully deleted account from Unipile:`, {
+            unipileAccountId: socialAccount.unipileAccountId,
+            status: responseStatus,
+            response: responseBody,
+            timestamp: new Date().toISOString()
+          });
+        } else {
+          console.error(`❌ Failed to delete account from Unipile:`, {
+            unipileAccountId: socialAccount.unipileAccountId,
+            status: responseStatus,
+            error: responseBody,
+            timestamp: new Date().toISOString()
+          });
+        }
+      } catch (error) {
+        console.error(`❌ Error calling Unipile delete API:`, {
+          unipileAccountId: socialAccount.unipileAccountId,
+          error: error instanceof Error ? error.message : String(error),
+          timestamp: new Date().toISOString()
+        });
+        // Continue with local deletion even if Unipile API call fails
+      }
     }
 
     // Notify webhook endpoints about account deletion
