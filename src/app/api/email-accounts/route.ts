@@ -37,12 +37,18 @@ export async function GET(request: Request) {
         }
       });
 
+      // Add isHidden flag for UI purposes
+      const accountsWithVisibility = emailAccounts.map(account => ({
+        ...account,
+        isHidden: account.name === 'LinkedIn Integration'
+      }));
+
       console.log('Successfully fetched accounts:', {
         count: emailAccounts.length,
         organizationId: session.user.organizationId
       });
 
-      return NextResponse.json(emailAccounts);
+      return NextResponse.json(accountsWithVisibility);
     } catch (dbError) {
       console.error('Database error while fetching accounts:', {
         error: dbError instanceof Error ? {

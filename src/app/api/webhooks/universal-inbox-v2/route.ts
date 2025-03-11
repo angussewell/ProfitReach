@@ -24,6 +24,7 @@ const UniversalInboxWebhookV2 = z.object({
   // LinkedIn-specific fields - required if message_source is LINKEDIN
   unipile_linkedin_id: z.string().optional(),
   social_account_id: z.string().optional(),
+  received_at: z.string().optional(),
 });
 
 type WebhookResponse = {
@@ -39,7 +40,45 @@ const UniversalInboxPayloadV2 = z.union([
   z.array(UniversalInboxWebhookV2)
 ]);
 
-type UniversalInboxDataV2 = z.infer<typeof UniversalInboxWebhookV2>;
+interface UniversalInboxDataV2 {
+  message_id: string;
+  thread_id: string;
+  organizationId: string;
+  sender: string;
+  content: string;
+  message_source: 'EMAIL' | 'LINKEDIN';
+  subject?: string;
+  recipient_email?: string;
+  unipile_email_id?: string;
+  email_account_id?: string;
+  unipile_linkedin_id?: string;
+  social_account_id?: string;
+  received_at?: string;
+}
+
+// Add this helper function at the top of the file
+function parseTimestampWithTimezone(timestamp: string | undefined): string {
+  if (!timestamp) {
+    // Create a new date in Central Time
+    const now = new Date();
+    return now.toLocaleString('en-US', { timeZone: 'America/Chicago' });
+  }
+
+  try {
+    // Parse the ISO timestamp
+    const date = new Date(timestamp);
+    if (isNaN(date.getTime())) {
+      throw new Error('Invalid date');
+    }
+    // Return the parsed date in ISO format to preserve timezone
+    return date.toISOString();
+  } catch (error) {
+    console.error('Error parsing timestamp:', error);
+    // Fallback to current time in Central Time
+    const now = new Date();
+    return now.toLocaleString('en-US', { timeZone: 'America/Chicago' });
+  }
+}
 
 export async function POST(request: Request) {
   try {
@@ -243,7 +282,7 @@ async function handleEmailMessage(data: UniversalInboxDataV2) {
         sender: data.sender,
         recipientEmail: data.recipient_email || '',
         content: data.content,
-        receivedAt: new Date(),
+        receivedAt: data.received_at || new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' }),
         messageType: MessageType.REAL_REPLY,
         unipileEmailId: data.unipile_email_id,
         messageSource: 'EMAIL'
@@ -253,7 +292,8 @@ async function handleEmailMessage(data: UniversalInboxDataV2) {
     console.log('Successfully stored email message:', {
       messageId: message.messageId,
       threadId: message.threadId,
-      organizationId: message.organizationId
+      organizationId: message.organizationId,
+      receivedAt: message.receivedAt
     });
 
     return NextResponse.json({
@@ -316,64 +356,39 @@ async function handleLinkedInMessage(data: UniversalInboxDataV2) {
     messageId: data.message_id,
     threadId: data.thread_id,
     sender: data.sender,
-    socialAccountId: data.social_account_id
+    content: data.content?.substring(0, 100) + '...'
   });
 
   // Validate LinkedIn-specific required fields
-  if (!data.social_account_id) {
-    console.error('Missing social_account_id for LinkedIn message:', {
-      messageId: data.message_id
+  if (!data.message_id || !data.sender || !data.content) {
+    console.error('Missing required fields for LinkedIn message:', {
+      messageId: data.message_id,
+      sender: data.sender,
+      hasContent: !!data.content
     });
-    return NextResponse.json(
-      { error: 'Missing social_account_id for LinkedIn message' },
-      { status: 400 }
-    );
+    return NextResponse.json({
+      success: false,
+      error: 'Missing required fields for LinkedIn message'
+    }, { status: 400 });
   }
 
-  // Look up social account by Unipile account ID
+  // Find the social account this message belongs to
   const socialAccount = await prisma.socialAccount.findFirst({
     where: {
-      unipileAccountId: data.social_account_id,
       organizationId: data.organizationId,
       provider: 'LINKEDIN'
     },
     include: {
-      emailAccount: true // Include the associated email account
+      emailAccount: true
     }
-  });
-
-  console.log('LinkedIn account lookup result:', {
-    found: !!socialAccount,
-    unipileAccountId: data.social_account_id,
-    organizationId: data.organizationId,
-    hasEmailAccount: !!socialAccount?.emailAccount
   });
 
   if (!socialAccount) {
-    // Check if account exists but belongs to different organization
-    const accountExists = await prisma.socialAccount.findFirst({
-      where: { unipileAccountId: data.social_account_id }
-    });
-
-    if (accountExists) {
-      console.error('LinkedIn account belongs to different organization:', {
-        unipileAccountId: data.social_account_id,
-        requestedOrg: data.organizationId,
-        actualOrg: accountExists.organizationId
-      });
-      return NextResponse.json(
-        { error: 'LinkedIn account belongs to a different organization' },
-        { status: 403 }
-      );
-    }
-
-    console.error('LinkedIn account not found:', {
-      unipileAccountId: data.social_account_id
-    });
-    return NextResponse.json(
-      { error: 'LinkedIn account not found' },
-      { status: 404 }
-    );
+    console.error('No LinkedIn account found for organization:', data.organizationId);
+    return NextResponse.json({
+      success: false,
+      error: 'No LinkedIn account found for this organization'
+    }, { status: 404 });
   }
 
   // Store message in database
@@ -387,19 +402,43 @@ async function handleLinkedInMessage(data: UniversalInboxDataV2) {
       isFromUs
     });
 
-    // First check if message already exists
+    // First check if message already exists - use both messageId and threadId
     const existingMessage = await prisma.emailMessage.findFirst({
-      where: { messageId: data.message_id }
+      where: { 
+        AND: [
+          { messageId: data.message_id },
+          { threadId: data.thread_id || data.message_id }
+        ]
+      }
     });
 
     if (existingMessage) {
       console.log('LinkedIn message already exists:', {
         messageId: data.message_id,
-        threadId: data.thread_id
+        threadId: data.thread_id,
+        existingId: existingMessage.id
       });
+      
+      // Update the message if needed (e.g., if content or status has changed)
+      if (existingMessage.content !== data.content || existingMessage.status !== (isFromUs ? 'NO_ACTION_NEEDED' : 'FOLLOW_UP_NEEDED')) {
+        const updatedMessage = await prisma.emailMessage.update({
+          where: { id: existingMessage.id },
+          data: {
+            content: data.content,
+            status: isFromUs ? 'NO_ACTION_NEEDED' : 'FOLLOW_UP_NEEDED'
+          }
+        });
+        
+        return NextResponse.json({
+          success: true,
+          messageId: updatedMessage.id,
+          note: 'Message updated'
+        });
+      }
+      
       return NextResponse.json({
         success: true,
-        messageId: data.message_id,
+        messageId: existingMessage.id,
         note: 'Message already processed'
       });
     }
@@ -410,12 +449,12 @@ async function handleLinkedInMessage(data: UniversalInboxDataV2) {
         threadId: data.thread_id || data.message_id,
         organizationId: data.organizationId,
         socialAccountId: socialAccount.id,
-        emailAccountId: socialAccount.emailAccount?.id || '', // Use associated email account if available
+        emailAccountId: socialAccount.emailAccount?.id || '',
         subject: 'LinkedIn Message',
         sender: data.sender,
         content: data.content,
         recipientEmail: '',
-        receivedAt: new Date(),
+        receivedAt: parseTimestampWithTimezone(data.received_at),
         messageType: MessageType.REAL_REPLY,
         status: isFromUs ? 'NO_ACTION_NEEDED' : 'FOLLOW_UP_NEEDED',
         unipileEmailId: data.unipile_linkedin_id,
@@ -428,7 +467,8 @@ async function handleLinkedInMessage(data: UniversalInboxDataV2) {
       socialAccountId: socialAccount.id,
       organizationId: data.organizationId,
       isFromUs,
-      status: isFromUs ? 'NO_ACTION_NEEDED' : 'FOLLOW_UP_NEEDED'
+      status: isFromUs ? 'NO_ACTION_NEEDED' : 'FOLLOW_UP_NEEDED',
+      receivedAt: message.receivedAt
     });
 
     return NextResponse.json({
@@ -436,25 +476,8 @@ async function handleLinkedInMessage(data: UniversalInboxDataV2) {
       messageId: message.id
     });
   } catch (error) {
-    console.error('Failed to store LinkedIn message:', {
-      error: error instanceof Error ? {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
-      } : error,
-      messageId: data.message_id,
-      socialAccountId: socialAccount.id
-    });
-
-    if (error instanceof Error && error.name === 'PrismaClientKnownRequestError' && (error as any).code === 'P2002') {
-      return NextResponse.json({
-        success: true,
-        messageId: data.message_id,
-        note: 'Message already processed'
-      });
-    }
-
-    throw error; // Let the parent handler deal with other errors
+    // Handle database errors
+    return handleDatabaseError(error, data);
   }
 }
 

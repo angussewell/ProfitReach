@@ -322,50 +322,23 @@ export async function POST(request: Request) {
         }
       }));
 
-      // Log webhook results in detail
-      logDebug('All webhook results', {
-        count: webhookResults.length,
-        fulfilled: webhookResults.filter((r: PromiseSettledResult<any>) => r.status === 'fulfilled').length,
-        rejected: webhookResults.filter((r: PromiseSettledResult<any>) => r.status === 'rejected').length,
-        successful: webhookResults.filter((r: PromiseSettledResult<any>) => r.status === 'fulfilled' && (r as PromiseFulfilledResult<WebhookResult>).value.success).length
-      });
-
-      // Check if at least one webhook succeeded
-      const anyWebhookSucceeded = webhookResults.some(
-        (result: PromiseSettledResult<WebhookResult>) => result.status === 'fulfilled' && (result as PromiseFulfilledResult<WebhookResult>).value.success
-      );
-
-      if (!anyWebhookSucceeded) {
-        // If all webhooks failed, return an error with details
-        const webhookErrors = webhookResults
-          .filter((result: PromiseSettledResult<WebhookResult>) => result.status === 'fulfilled')
-          .map((result: PromiseSettledResult<WebhookResult>) => {
-            if (result.status === 'fulfilled') {
-              const value = (result as PromiseFulfilledResult<WebhookResult>).value;
-              return {
-                url: value.url,
-                error: !value.success ? value.error : 'Unknown error',
-                status: 'status' in value ? value.status : undefined
-              };
-            } else {
-              return {
-                error: 'Promise rejected',
-                reason: String((result as PromiseRejectedResult).reason)
-              };
-            }
-          });
-
-        console.error('All webhook attempts failed:', webhookErrors);
-        
-        return NextResponse.json(
-          { 
-            error: 'Failed to send reply via webhooks',
-            details: 'All webhook attempts failed',
-            webhookErrors
-          },
-          { status: 502 } // Bad Gateway - upstream server error
-        );
-      }
+      // Prepare webhook responses for successful attempts only
+      const webhookResponses = webhookResults.reduce((acc: Record<string, any>, result: PromiseSettledResult<WebhookResult>) => {
+        if (result.status === 'fulfilled' && (result as PromiseFulfilledResult<WebhookResult>).value.success) {
+          // Get a descriptive key based on the URL
+          let urlKey = 'unknown';
+          const url = (result as PromiseFulfilledResult<WebhookResult>).value.url;
+          
+          if (url.includes('linkedin-replies')) {
+            urlKey = 'linkedin';
+          } else if (url.includes('sending-replies')) {
+            urlKey = url.includes('webhook-test') ? 'emailTest' : 'email';
+          }
+          
+          acc[urlKey] = (result as PromiseFulfilledResult<WebhookSuccessResult>).value.data;
+        }
+        return acc;
+      }, {} as Record<string, any>);
 
       // Get the latest message in the thread to check its status
       const latestThreadMessage = await prisma.emailMessage.findFirst({
@@ -385,64 +358,59 @@ export async function POST(request: Request) {
       const newMessageId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
       // Store the reply in our database
-      const storedReply = await prisma.emailMessage.create({
-        data: {
+      try {
+        const receivedAt = getCurrentCentralTime();
+        
+        logDebug('Attempting to store reply in database', {
           messageId: newMessageId,
           threadId: originalMessage.threadId,
-          organizationId: session.user.organizationId,
-          emailAccountId: emailAccount.id,
-          subject: originalMessage.subject || 'No Subject', // Remove Re: prefix logic
-          sender: isLinkedInMessage ? (socialAccount?.name || emailAccount.name) : emailAccount.email,
-          recipientEmail: validatedData.toAddress || originalMessage.sender,
-          content: validatedData.content,
-          messageType: 'REAL_REPLY',
-          receivedAt: new Date(),
-          isRead: true,
-          // Maintain the existing status if it exists, otherwise default to FOLLOW_UP_NEEDED
-          status: latestThreadMessage?.status || 'FOLLOW_UP_NEEDED',
-          // Keep the same message source for replies
           messageSource: originalMessage.messageSource,
-          // If socialAccountId is provided and it's a LinkedIn message, use the provided ID
-          // Otherwise, use the original message's socialAccountId for LinkedIn messages
-          socialAccountId: validatedData.socialAccountId || (isLinkedInMessage ? originalMessage.socialAccountId : null)
-        },
-      });
+          receivedAt
+        });
 
-      console.log('Stored reply in database:', {
-        messageId: storedReply.messageId,
-        threadId: storedReply.threadId,
-        messageSource: storedReply.messageSource
-      });
+        const storedReply = await prisma.emailMessage.create({
+          data: {
+            messageId: newMessageId,
+            threadId: originalMessage.threadId,
+            organizationId: session.user.organizationId,
+            emailAccountId: emailAccount.id,
+            subject: originalMessage.subject || 'No Subject',
+            sender: isLinkedInMessage ? (socialAccount?.name || emailAccount.name) : emailAccount.email,
+            recipientEmail: validatedData.toAddress || originalMessage.sender,
+            content: validatedData.content,
+            messageType: 'REAL_REPLY',
+            receivedAt,
+            isRead: true,
+            status: latestThreadMessage?.status || 'FOLLOW_UP_NEEDED',
+            messageSource: originalMessage.messageSource,
+            socialAccountId: validatedData.socialAccountId || (isLinkedInMessage ? originalMessage.socialAccountId : null)
+          },
+        });
 
-      // Prepare webhook responses for successful attempts only
-      const webhookResponses = webhookResults.reduce((acc: Record<string, any>, result: PromiseSettledResult<WebhookResult>) => {
-        if (result.status === 'fulfilled' && (result as PromiseFulfilledResult<WebhookResult>).value.success) {
-          // Get a descriptive key based on the URL
-          let urlKey = 'unknown';
-          const url = (result as PromiseFulfilledResult<WebhookResult>).value.url;
-          
-          if (url.includes('linkedin-replies')) {
-            urlKey = 'linkedin';
-          } else if (url.includes('sending-replies')) {
-            urlKey = url.includes('webhook-test') ? 'emailTest' : 'email';
-          }
-          
-          acc[urlKey] = (result as PromiseFulfilledResult<WebhookSuccessResult>).value.data;
-        }
-        return acc;
-      }, {} as Record<string, any>);
+        // Store the response in a scoped variable
+        const response = {
+          message: 'Reply sent successfully',
+          messageId: storedReply.messageId,
+          webhookResponses: Object.keys(webhookResponses).length > 0 ? webhookResponses : undefined,
+          messageSource: isLinkedInMessage ? 'LINKEDIN' : 'EMAIL'
+        };
 
-      logDebug('Reply process completed successfully', {
-        messageId: storedReply.messageId,
-        webhookResponseKeys: Object.keys(webhookResponses)
-      });
+        logDebug('Reply process completed successfully', {
+          messageId: storedReply.messageId,
+          webhookResponseKeys: Object.keys(webhookResponses)
+        });
 
-      return NextResponse.json({
-        message: 'Reply sent successfully',
-        messageId: storedReply.messageId,
-        webhookResponses: Object.keys(webhookResponses).length > 0 ? webhookResponses : undefined,
-        messageSource: isLinkedInMessage ? 'LINKEDIN' : 'EMAIL'
-      });
+        return NextResponse.json(response);
+
+      } catch (error) {
+        console.error('Error storing reply in database:', {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          messageId: newMessageId,
+          threadId: originalMessage.threadId
+        });
+        throw error;
+      }
 
     } catch (error) {
       console.error('Error sending reply:', error);
@@ -467,4 +435,40 @@ function formatEmailContent(content: string, originalMessage: any): string {
   // Process message content
   // Simple implementation - wrap in a div
   return `<div>${content.replace(/\n/g, '<br/>')}</div>`;
+}
+
+function getCurrentCentralTime(): Date {
+  // Get the current time in Central Time zone
+  const centralTimeString = new Date().toLocaleString('en-US', {
+    timeZone: 'America/Chicago',
+    hour12: false, // Use 24-hour format
+  });
+  
+  // Parse the date string components
+  const [datePart, timePart] = centralTimeString.split(', ');
+  const [month, day, year] = datePart.split('/');
+  const [hours, minutes, seconds] = timePart.split(':');
+  
+  // Create a new Date object using UTC methods to prevent automatic timezone conversion
+  const centralTime = new Date(Date.UTC(
+    parseInt(year),
+    parseInt(month) - 1, // Month is 0-based
+    parseInt(day),
+    parseInt(hours),
+    parseInt(minutes),
+    parseInt(seconds)
+  ));
+  
+  // Log the time components for debugging
+  console.log('Time components:', {
+    original: new Date().toISOString(),
+    centralString: centralTimeString,
+    parsed: centralTime.toISOString(),
+    components: {
+      year, month, day,
+      hours, minutes, seconds
+    }
+  });
+  
+  return centralTime;
 } 

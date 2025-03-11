@@ -30,6 +30,7 @@ interface EmailAccount {
   createdAt: string;
   updatedAt: string;
   isActive: boolean;
+  isHidden?: boolean;
 }
 
 interface SocialAccount {
@@ -55,10 +56,11 @@ export function AccountsClient() {
   const [activeTab, setActiveTab] = useState('email');
   const [updatingAssociation, setUpdatingAssociation] = useState(false);
 
-  // Filter accounts based on search query
+  // Filter accounts based on search query and visibility
   const filteredEmailAccounts = emailAccounts.filter(account => 
-    account.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    account.email.toLowerCase().includes(searchQuery.toLowerCase())
+    !account.isHidden && // Filter out hidden accounts
+    (account.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    account.email.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   const filteredSocialAccounts = socialAccounts.filter(account => 
@@ -73,8 +75,11 @@ export function AccountsClient() {
       .filter(account => account.id !== socialAccountId && account.emailAccountId)
       .map(account => account.emailAccountId);
     
-    // Return only email accounts that are not associated with any other social account
-    return emailAccounts.filter(email => !associatedEmailIds.includes(email.id));
+    // Return only visible email accounts that are not associated with any other social account
+    return emailAccounts.filter(email => 
+      !email.isHidden && // Filter out hidden accounts
+      !associatedEmailIds.includes(email.id)
+    );
   };
   
   // Handle associating/dissociating an email account with a social account

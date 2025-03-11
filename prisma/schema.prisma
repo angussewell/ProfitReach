@@ -275,7 +275,7 @@ model EmailMessage {
   messageId            String             @unique
   threadId             String
   organizationId       String
-  emailAccountId       String
+  emailAccountId       String?
   subject              String
   sender               String
   recipientEmail       String
@@ -289,7 +289,7 @@ model EmailMessage {
   messageSource        MessageSource      @default(EMAIL)
   socialAccountId      String?
   socialAccount        SocialAccount?     @relation(fields: [socialAccountId], references: [id])
-  emailAccount         EmailAccount       @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
+  emailAccount         EmailAccount?      @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
   organization         Organization       @relation(fields: [organizationId], references: [id])
 
   @@index([organizationId])
@@ -321,6 +321,7 @@ model SocialAccount {
   username         String
   name             String
   provider         String
+  providerId       String?
   organizationId   String
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt

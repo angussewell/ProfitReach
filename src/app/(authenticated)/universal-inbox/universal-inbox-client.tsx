@@ -40,6 +40,7 @@ interface EmailAccount {
   id: string;
   email: string;
   name: string;
+  isHidden?: boolean;
 }
 
 // Add just after the EmailAccount interface, around line 37
@@ -201,6 +202,34 @@ const getLinkedInSenderName = (senderId: string, message: EmailMessage, socialAc
   return message.sender;
 };
 
+// Helper function to format date in Central Time
+const formatDateInCentralTime = (dateStr: string) => {
+  try {
+    // Parse the input date string
+    const date = new Date(dateStr);
+    
+    // Create a formatter that explicitly uses Central Time
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Chicago',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
+    
+    return formatter.format(date);
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return dateStr;
+  }
+};
+
+// Replace the old formatStoredDate function
+const formatStoredDate = formatDateInCentralTime;
+
 export function UniversalInboxClient() {
   const [selectedThread, setSelectedThread] = useState<string | null>(null);
   const [messages, setMessages] = useState<EmailMessage[]>([]);
@@ -218,7 +247,7 @@ export function UniversalInboxClient() {
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'detail'>('list');
 
-  // Group messages by thread - move this up before the useEffect
+  // Group messages by thread and sort them
   const threadGroups = messages.reduce((groups, message) => {
     if (!groups[message.threadId]) {
       groups[message.threadId] = [];
@@ -226,6 +255,28 @@ export function UniversalInboxClient() {
     groups[message.threadId].push(message);
     return groups;
   }, {} as Record<string, EmailMessage[]>);
+
+  // Sort threads by latest message date
+  const sortedThreadIds = Object.keys(threadGroups).sort((a, b) => {
+    const aMessages = threadGroups[a];
+    const bMessages = threadGroups[b];
+    
+    // Get latest message from each thread
+    const aLatest = aMessages.reduce((latest, msg) => {
+      const aDate = new Date(msg.receivedAt);
+      const latestDate = new Date(latest.receivedAt);
+      return aDate.getTime() > latestDate.getTime() ? msg : latest;
+    }, aMessages[0]);
+    
+    const bLatest = bMessages.reduce((latest, msg) => {
+      const bDate = new Date(msg.receivedAt);
+      const latestDate = new Date(latest.receivedAt);
+      return bDate.getTime() > latestDate.getTime() ? msg : latest;
+    }, bMessages[0]);
+    
+    // Sort in descending order (newest first)
+    return new Date(bLatest.receivedAt).getTime() - new Date(aLatest.receivedAt).getTime();
+  });
 
   const hasMessages = Object.keys(threadGroups).length > 0;
 
@@ -285,9 +336,14 @@ export function UniversalInboxClient() {
     fetchData();
   }, []);
 
-  // Helper function to check if an email belongs to our accounts
-  const isOurEmail = (email: string) => {
-    return emailAccounts.some(account => account.email === email);
+  // Helper function to check if a message is from us
+  const isOurEmail = (sender: string, message?: EmailMessage) => {
+    // For LinkedIn messages, check against social account names
+    if (message?.messageSource === 'LINKEDIN') {
+      return socialAccounts.some(account => account.name === sender);
+    }
+    // For email messages, check against email accounts
+    return emailAccounts.some(account => account.email === sender);
   };
 
   // Helper function to find the other participant in a thread
@@ -299,13 +355,13 @@ export function UniversalInboxClient() {
 
     // First try to find the original recipient if we started the thread
     const firstMessage = sortedMessages[0];
-    if (isOurEmail(firstMessage.sender)) {
+    if (isOurEmail(firstMessage.sender, firstMessage)) {
       return firstMessage.recipientEmail;
     }
 
     // Otherwise, use the first sender who isn't us
     const externalParticipant = sortedMessages.find(
-      msg => !isOurEmail(msg.sender)
+      msg => !isOurEmail(msg.sender, msg)
     );
     if (externalParticipant) {
       return externalParticipant.sender;
@@ -355,6 +411,9 @@ export function UniversalInboxClient() {
       }
     }
   }, [showReplyModal, selectedThread, emailAccounts, socialAccounts, threadGroups]);
+
+  // Filter visible accounts for UI display
+  const visibleEmailAccounts = emailAccounts.filter(account => !account.isHidden);
 
   const handleReply = async () => {
     if (!selectedThread) return;
@@ -423,10 +482,14 @@ export function UniversalInboxClient() {
       // Get the correct recipient (the other participant in the thread)
       const toAddress = findOtherParticipant(threadMessages);
 
-      // Construct request body - use the email address for both email and LinkedIn messages
-      // The backend will know it's a LinkedIn message based on the original message
+      // Find the original message in the thread (the first message)
+      const originalMessage = threadMessages.sort((a, b) => 
+        new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime()
+      )[0];
+
+      // Construct request body - use the original message ID
       const requestBody = {
-        messageId: latestMessage.messageId,
+        messageId: originalMessage.messageId, // Use the original message's ID
         content: replyContent,
         action: 'reply',
         fromEmail: accountInfo.email,
@@ -435,11 +498,7 @@ export function UniversalInboxClient() {
         ...(isLinkedIn && selectedSocialAccount ? { socialAccountId: selectedSocialAccount } : {})
       };
 
-      console.log('Sending reply with payload:', {
-        ...requestBody,
-        accountType: isLinkedIn ? 'LinkedIn' : 'Email',
-        content: requestBody.content.slice(0, 50) + '...' // Truncate content for logging
-      });
+      console.log('Sending reply with payload:', requestBody);
 
       const response = await fetch('/api/messages/reply', {
         method: 'POST',
@@ -603,12 +662,15 @@ export function UniversalInboxClient() {
             
             {hasMessages ? (
               <div className="divide-y divide-slate-200/60 overflow-y-auto flex-1">
-                {Object.entries(threadGroups).map(([threadId, messages]) => {
-                  const latestMessage = messages.sort((a, b) => 
-                    new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime()
-                  )[0];
+                {sortedThreadIds.map(threadId => {
+                  const messages = threadGroups[threadId];
+                  const latestMessage = messages.reduce((latest, msg) => {
+                    const msgDate = new Date(msg.receivedAt);
+                    const latestDate = new Date(latest.receivedAt);
+                    return msgDate.getTime() > latestDate.getTime() ? msg : latest;
+                  }, messages[0]);
                   
-                  const isLatestFromUs = isOurEmail(latestMessage.sender);
+                  const isLatestFromUs = isOurEmail(latestMessage.sender, latestMessage);
                   const needsResponse = !isLatestFromUs && !latestMessage.isRead;
                   const isLinkedIn = latestMessage.messageSource === 'LINKEDIN';
 
@@ -646,12 +708,7 @@ export function UniversalInboxClient() {
                               : findOtherParticipant(messages)}
                           </div>
                           <div className="text-xs text-slate-500 mt-1">
-                            {new Date(latestMessage.receivedAt).toLocaleString(undefined, {
-                              month: 'short',
-                              day: 'numeric',
-                              hour: 'numeric',
-                              minute: '2-digit'
-                            })}
+                            {formatStoredDate(latestMessage.receivedAt)}
                           </div>
                         </div>
                         
@@ -860,9 +917,13 @@ export function UniversalInboxClient() {
                 
                 <div className="p-6 space-y-6 overflow-y-auto flex-1">
                   {threadGroups[selectedThread]
-                    .sort((a, b) => new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime())
+                    .sort((a, b) => {
+                      const aDate = new Date(a.receivedAt);
+                      const bDate = new Date(b.receivedAt);
+                      return aDate.getTime() - bDate.getTime();
+                    })
                     .map((message, index, array) => {
-                      const isFromUs = isOurEmail(message.sender);
+                      const isFromUs = isOurEmail(message.sender, message);
                       const isLastMessage = index === array.length - 1;
                       const isLatestMessage = index === array.length - 1;
                       const isLinkedIn = message.messageSource === 'LINKEDIN';
@@ -900,7 +961,7 @@ export function UniversalInboxClient() {
                             </div>
                             <div className="flex items-center gap-2">
                               <div className="text-sm text-slate-500">
-                                {new Date(message.receivedAt).toLocaleString()}
+                                {formatStoredDate(message.receivedAt)}
                               </div>
                               {isLinkedIn && isLatestMessage && (
                                 <div></div>
@@ -982,11 +1043,8 @@ export function UniversalInboxClient() {
                     className="w-full p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">Select an email account</option>
-                    {emailAccounts.map(account => (
-                      <option 
-                        key={account.id} 
-                        value={account.email}
-                      >
+                    {visibleEmailAccounts.map((account) => (
+                      <option key={account.id} value={account.email}>
                         {account.email}
                       </option>
                     ))}
