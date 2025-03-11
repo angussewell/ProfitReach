@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { PageHeader } from '@/components/ui/page-header';
 import { ClientCard, ClientButton, ClientInput } from '@/components/ui/client-components';
-import { Inbox, Loader2, MessageSquare, Reply, Send, Trash2, X, Calendar, ThumbsDown, Clock, CheckCircle } from 'lucide-react';
+import { Inbox, Loader2, MessageSquare, Reply, Send, Trash2, X, Calendar, ThumbsDown, Clock, CheckCircle, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { LucideProps } from 'lucide-react';
 import { toast } from 'sonner';
@@ -29,6 +29,10 @@ interface EmailMessage {
   status?: ConversationStatus;
   messageSource?: MessageSource;
   socialAccountId?: string;
+  organizationId?: string;
+  classificationScores?: string[];
+  unipileEmailId?: string;
+  emailAccountId?: string;
 }
 
 // Define email account interface
@@ -781,82 +785,129 @@ export function UniversalInboxClient() {
               </div>
             </div>
             
-            {selectedThread ? (
-              <div className="p-6 space-y-6 overflow-y-auto flex-1">
-                {threadGroups[selectedThread]
-                  .sort((a, b) => new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime())
-                  .map((message, index, array) => {
-                    const isFromUs = isOurEmail(message.sender);
-                    const isLastMessage = index === array.length - 1;
-                    const isLatestMessage = index === array.length - 1;
-                    const isLinkedIn = message.messageSource === 'LINKEDIN';
-                    
-                    // Determine message status for the thread
-                    const latestMessage = array[array.length - 1];
-                    let status: ConversationStatus = latestMessage.status || 'FOLLOW_UP_NEEDED';
-                    
-                    return (
-                      <div
-                        key={message.id}
-                        className={cn(
-                          "py-5 px-6 rounded-lg",
-                          isFromUs ? "bg-blue-50/80 border border-blue-100/50" : "bg-white border border-slate-200/60"
-                        )}
-                      >
-                        <div className="flex justify-between items-start mb-4">
-                          <div>
-                            <p className="font-medium text-slate-900 flex items-center gap-1">
-                              {isLinkedIn && <LinkedInIcon className="h-4 w-4 text-blue-600" />}
-                              {message.sender}
-                            </p>
-                            {!isLinkedIn && message.recipientEmail && (
-                              <p className="text-xs text-slate-500 mt-0.5">
-                                to {message.recipientEmail}
-                              </p>
-                            )}
-                            {isLinkedIn && (
-                              <p className="text-xs text-slate-500 mt-0.5">
-                                via LinkedIn
-                              </p>
-                            )}
-                          </div>
-                          <div className="flex items-center">
-                            <span className="text-sm text-slate-500">
-                              {new Date(message.receivedAt).toLocaleString(undefined, {
-                                weekday: 'short',
-                                month: 'short',
-                                day: 'numeric',
-                                hour: 'numeric',
-                                minute: '2-digit'
-                              })}
-                            </span>
-                            
-                            {isLatestMessage && status === 'FOLLOW_UP_NEEDED' && isFromUs && daysSince(new Date(message.receivedAt)) > 0 && (
-                              <span className={cn(
-                                "ml-2 px-1.5 py-0.5 rounded text-xs font-medium",
-                                daysSince(new Date(message.receivedAt)) < 3 ? "bg-blue-100 text-blue-800" : "bg-red-200 text-red-900"
-                              )}>
-                                {daysSince(new Date(message.receivedAt))}d
-                              </span>
-                            )}
-                          </div>
-                        </div>
+            {selectedThread && (
+              <div className="flex h-full flex-col">
+                <div className="flex items-center justify-between border-b border-gray-200 p-4">
+                  <button
+                    onClick={backToList}
+                    className="flex items-center text-sm text-gray-600 hover:text-gray-900"
+                  >
+                    <X className="mr-1 h-4 w-4" />
+                    Back to Inbox
+                  </button>
+                  
+                  {selectedThread && threadGroups[selectedThread] && 
+                   isLinkedInThread(threadGroups[selectedThread]) && (
+                    <button
+                      className="flex items-center space-x-1 rounded bg-blue-500 px-3 py-1.5 text-sm text-white hover:bg-blue-600"
+                      onClick={() => {
+                        // Get the first message of the thread 
+                        const messages = threadGroups[selectedThread];
+                        const message = messages[0]; // Use the first message in the thread
                         
-                        <div className="mt-3 text-sm text-slate-800 whitespace-pre-wrap" 
-                             dangerouslySetInnerHTML={{ __html: message.content }} />
-                      </div>
-                    );
-                  })}
-              </div>
-            ) : (
-              <div className="h-full flex flex-col items-center justify-center p-8 text-center">
-                <div className="bg-slate-100 rounded-full p-4 mb-4">
-                  <MessageIcon className="h-8 w-8 text-slate-400" />
+                        // Find the correct social account to get the Unipile account ID
+                        const socialAccount = socialAccounts.find(acc => acc.id === message.socialAccountId);
+                        const unipileAccountId = socialAccount?.unipileAccountId || '';
+                        
+                        toast.info("Retrieving full chat history...");
+                        fetch("https://messagelm.app.n8n.cloud/webhook/linkedin-conversation", {
+                          method: "POST",
+                          headers: {
+                            "Content-Type": "application/json",
+                          },
+                          body: JSON.stringify({
+                            // Send all available message data
+                            thread_id: message.threadId,
+                            account_id: message.socialAccountId,
+                            organization_id: message.organizationId,
+                            message_id: message.messageId,
+                            id: message.id,
+                            subject: message.subject,
+                            sender: message.sender,
+                            recipient_email: message.recipientEmail,
+                            content: message.content,
+                            received_at: message.receivedAt,
+                            message_type: message.messageType,
+                            is_read: message.isRead,
+                            status: message.status,
+                            message_source: message.messageSource,
+                            unipile_account_id: unipileAccountId, // Use the correct Unipile account ID from the social account
+                            unipile_email_id: message.unipileEmailId,
+                            email_account_id: message.emailAccountId,
+                            classification_scores: message.classificationScores,
+                          }),
+                        })
+                        .then((response) => response.json())
+                        .then((data) => {
+                          console.log("Success:", data);
+                          toast.success("Chat history retrieved successfully!");
+                        })
+                        .catch((error) => {
+                          console.error("Error:", error);
+                          toast.error("Failed to retrieve chat history");
+                        });
+                      }}
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                      <span>Get Full Chat</span>
+                    </button>
+                  )}
                 </div>
-                <p className="font-medium text-slate-900">Select a conversation</p>
-                <p className="text-sm mt-2 text-slate-600 max-w-[280px]">
-                  Choose a conversation from the list to view the full thread.
-                </p>
+                
+                <div className="p-6 space-y-6 overflow-y-auto flex-1">
+                  {threadGroups[selectedThread]
+                    .sort((a, b) => new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime())
+                    .map((message, index, array) => {
+                      const isFromUs = isOurEmail(message.sender);
+                      const isLastMessage = index === array.length - 1;
+                      const isLatestMessage = index === array.length - 1;
+                      const isLinkedIn = message.messageSource === 'LINKEDIN';
+                      
+                      // Determine message status for the thread
+                      const latestMessage = array[array.length - 1];
+                      let status: ConversationStatus = latestMessage.status || 'FOLLOW_UP_NEEDED';
+                      
+                      return (
+                        <div
+                          key={message.id}
+                          className={cn(
+                            "py-5 px-6 rounded-lg",
+                            isFromUs ? "bg-blue-50/80 border border-blue-100/50" : "bg-white border border-slate-200/60"
+                          )}
+                        >
+                          <div className="flex justify-between items-start mb-4">
+                            <div>
+                              <p className="font-medium text-slate-900 flex items-center gap-1">
+                                {isLinkedIn && <LinkedInIcon className="h-4 w-4 text-blue-600" />}
+                                {message.sender}
+                              </p>
+                              {!isLinkedIn && message.recipientEmail && (
+                                <p className="text-xs text-slate-500 mt-0.5">
+                                  to {message.recipientEmail}
+                                </p>
+                              )}
+                              {isLinkedIn && (
+                                <p className="text-xs text-slate-500 mt-0.5">
+                                  via LinkedIn
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <div className="text-sm text-slate-500">
+                                {new Date(message.receivedAt).toLocaleString()}
+                              </div>
+                              {isLinkedIn && isLatestMessage && (
+                                <div></div>
+                              )}
+                            </div>
+                          </div>
+                          
+                          <div className="mt-3 text-sm text-slate-800 whitespace-pre-wrap" 
+                               dangerouslySetInnerHTML={{ __html: message.content }} />
+                        </div>
+                      );
+                    })}
+                </div>
               </div>
             )}
           </ClientCard>
