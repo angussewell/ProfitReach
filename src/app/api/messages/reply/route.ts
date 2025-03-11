@@ -392,7 +392,7 @@ export async function POST(request: Request) {
           organizationId: session.user.organizationId,
           emailAccountId: emailAccount.id,
           subject: originalMessage.subject || 'No Subject', // Remove Re: prefix logic
-          sender: isLinkedInMessage ? (socialAccount?.username || emailAccount.email) : emailAccount.email,
+          sender: isLinkedInMessage ? (socialAccount?.name || emailAccount.name) : emailAccount.email,
           recipientEmail: validatedData.toAddress || originalMessage.sender,
           content: validatedData.content,
           messageType: 'REAL_REPLY',
