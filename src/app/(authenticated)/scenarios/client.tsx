@@ -209,6 +209,10 @@ export function ScenariosPage() {
     const normalizedName = (name || '').toLowerCase().trim();
     if (normalizedName.includes('research')) {
       return 'research';
+    } else if (normalizedName.includes('linkedin') || 
+               normalizedName.includes('connection') ||
+               normalizedName.includes('network')) {
+      return 'linkedin';
     } else if (normalizedName.includes('email') || 
                normalizedName.includes('outreach') || 
                normalizedName.includes('follow up')) {

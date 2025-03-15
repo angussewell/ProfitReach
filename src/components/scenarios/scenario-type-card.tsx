@@ -1,11 +1,13 @@
 'use client';
 
-import Image from 'next/image';
-import Link from 'next/link';
+import * as React from 'react';
+import { type LucideProps } from 'lucide-react';
+import { Edit, Paperclip, FileText, MessageSquare, Clock } from 'lucide-react';
+import NextImage from 'next/image';
+import NextLink from 'next/link';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Edit, Paperclip, FileText, MessageSquare, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface ScenarioTypeCardProps {
@@ -22,7 +24,21 @@ interface ScenarioTypeCardProps {
   className?: string;
 }
 
-export function ScenarioTypeCard({ 
+const IconWrapper = ({ icon: Icon, ...props }: { icon: React.ComponentType<LucideProps> } & LucideProps) => (
+  <Icon {...props} />
+);
+
+const Image = React.forwardRef<HTMLImageElement, React.ComponentPropsWithoutRef<typeof NextImage>>((props, ref) => (
+  <NextImage {...props} ref={ref} />
+));
+Image.displayName = 'Image';
+
+const Link = React.forwardRef<HTMLAnchorElement, React.ComponentPropsWithoutRef<typeof NextLink>>((props, ref) => (
+  <NextLink {...props} ref={ref} />
+));
+Link.displayName = 'Link';
+
+const ScenarioTypeCard: React.FC<ScenarioTypeCardProps> = ({ 
   id, 
   name, 
   type, 
@@ -34,7 +50,7 @@ export function ScenarioTypeCard({
   snippet,
   attachment,
   className 
-}: ScenarioTypeCardProps) {
+}) => {
   const getTypeConfig = (type: string) => {
     switch (type.toLowerCase()) {
       case 'linkedin':
@@ -85,7 +101,24 @@ export function ScenarioTypeCard({
     }
   };
 
-  const config = getTypeConfig(type);
+  const inferTypeFromName = (name: string): string => {
+    const normalizedName = (name || '').toLowerCase().trim();
+    if (normalizedName.includes('research')) {
+      return 'research';
+    } else if (normalizedName.includes('linkedin') || 
+               normalizedName.includes('connection') ||
+               normalizedName.includes('network')) {
+      return 'linkedin';
+    } else if (normalizedName.includes('email') || 
+               normalizedName.includes('outreach') || 
+               normalizedName.includes('follow up')) {
+      return 'email';
+    }
+    return type.toLowerCase();
+  };
+
+  const effectiveType = inferTypeFromName(name);
+  const config = getTypeConfig(effectiveType);
 
   return (
     <div
@@ -143,7 +176,7 @@ export function ScenarioTypeCard({
               size="sm" 
               className="gap-2 shadow-sm hover:shadow-md transition-shadow"
             >
-              <Edit className="w-4 h-4" />
+              <IconWrapper icon={Edit} className="w-4 h-4" />
               Edit
             </Button>
           </Link>
@@ -152,25 +185,25 @@ export function ScenarioTypeCard({
         <div className="mt-6 flex flex-wrap items-center gap-4 text-sm text-gray-500 border-t pt-4">
           {createdAt && (
             <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4" />
+              <IconWrapper icon={Clock} className="w-4 h-4" />
               <span className="font-medium">Created {format(new Date(createdAt), 'MMM d, yyyy')}</span>
             </div>
           )}
           {signature && (
             <div className="flex items-center gap-2">
-              <MessageSquare className="w-4 h-4" />
+              <IconWrapper icon={MessageSquare} className="w-4 h-4" />
               <span className="font-medium">{signature.name}</span>
             </div>
           )}
           {snippet && (
             <div className="flex items-center gap-2">
-              <FileText className="w-4 h-4" />
+              <IconWrapper icon={FileText} className="w-4 h-4" />
               <span className="font-medium">{snippet.name}</span>
             </div>
           )}
           {attachment && (
             <div className="flex items-center gap-2">
-              <Paperclip className="w-4 h-4" />
+              <IconWrapper icon={Paperclip} className="w-4 h-4" />
               <span className="font-medium">{attachment.name}</span>
             </div>
           )}
@@ -178,4 +211,6 @@ export function ScenarioTypeCard({
       </div>
     </div>
   );
-} 
+};
+
+export { ScenarioTypeCard };
