@@ -59,9 +59,8 @@ interface UniversalInboxDataV2 {
 // Add this helper function at the top of the file
 function parseTimestampWithTimezone(timestamp: string | undefined): string {
   if (!timestamp) {
-    // Create a new date in Central Time
-    const now = new Date();
-    return now.toLocaleString('en-US', { timeZone: 'America/Chicago' });
+    // Create a new date and return as ISO string to ensure UTC
+    return new Date().toISOString();
   }
 
   try {
@@ -70,13 +69,12 @@ function parseTimestampWithTimezone(timestamp: string | undefined): string {
     if (isNaN(date.getTime())) {
       throw new Error('Invalid date');
     }
-    // Return the parsed date in ISO format to preserve timezone
+    // Return as ISO string to ensure UTC
     return date.toISOString();
   } catch (error) {
     console.error('Error parsing timestamp:', error);
-    // Fallback to current time in Central Time
-    const now = new Date();
-    return now.toLocaleString('en-US', { timeZone: 'America/Chicago' });
+    // Fallback to current time in UTC
+    return new Date().toISOString();
   }
 }
 
@@ -282,7 +280,7 @@ async function handleEmailMessage(data: UniversalInboxDataV2) {
         sender: data.sender,
         recipientEmail: data.recipient_email || '',
         content: data.content,
-        receivedAt: data.received_at || new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' }),
+        receivedAt: parseTimestampWithTimezone(data.received_at),
         messageType: MessageType.REAL_REPLY,
         unipileEmailId: data.unipile_email_id,
         messageSource: 'EMAIL'

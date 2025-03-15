@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import type { LucideProps } from 'lucide-react';
 import { toast } from 'sonner';
 import { updateMessageStatus } from '@/lib/server-actions';
+import { formatDateInCentralTime } from '@/lib/date-utils';
 
 type MessageType = 'REAL_REPLY' | 'BOUNCE' | 'AUTO_REPLY' | 'OUT_OF_OFFICE' | 'OTHER';
 type ConversationStatus = 'MEETING_BOOKED' | 'NOT_INTERESTED' | 'FOLLOW_UP_NEEDED' | 'NO_ACTION_NEEDED';
@@ -203,31 +204,6 @@ const getLinkedInSenderName = (senderId: string, message: EmailMessage, socialAc
 };
 
 // Helper function to format date in Central Time
-const formatDateInCentralTime = (dateStr: string) => {
-  try {
-    // Parse the input date string
-    const date = new Date(dateStr);
-    
-    // Create a formatter that explicitly uses Central Time
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/Chicago',
-      year: 'numeric',
-      month: 'numeric',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: true
-    });
-    
-    return formatter.format(date);
-  } catch (error) {
-    console.error('Error formatting date:', error);
-    return dateStr;
-  }
-};
-
-// Replace the old formatStoredDate function
 const formatStoredDate = formatDateInCentralTime;
 
 export function UniversalInboxClient() {

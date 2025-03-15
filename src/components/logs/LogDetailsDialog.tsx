@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollText } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
+import { formatDateInCentralTime } from '@/lib/date-utils';
 
 interface WebhookLog {
   id: string;
@@ -33,7 +34,7 @@ export function LogDetailsDialog({ log }: LogDetailsDialogProps) {
   };
 
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleString();
+    return formatDateInCentralTime(dateStr);
   };
 
   // Extract mapped fields and contact data
@@ -62,7 +63,7 @@ export function LogDetailsDialog({ log }: LogDetailsDialogProps) {
             <div className="space-y-1">
               <Label className="text-sm text-muted-foreground">Time</Label>
               <div className="text-sm font-medium">
-                {new Date(log.createdAt).toLocaleString()}
+                {formatDate(log.createdAt)}
               </div>
             </div>
 

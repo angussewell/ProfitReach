@@ -15,7 +15,7 @@ interface WebhookLogDetailProps {
     contactEmail: string;
     contactName: string;
     company: string;
-    createdAt: Date;
+    createdAt: string;
     requestBody: Record<string, any>;
     responseBody: string;
     emailSubject?: string;
@@ -60,7 +60,7 @@ export default function WebhookLogDetail({ log }: WebhookLogDetailProps) {
               <div className="space-y-1">
                 <Label className="text-sm text-muted-foreground">Time</Label>
                 <div className="text-sm font-medium">
-                  {new Date(log.createdAt).toLocaleString()}
+                  {log.createdAt}
                 </div>
               </div>
 
@@ -69,12 +69,10 @@ export default function WebhookLogDetail({ log }: WebhookLogDetailProps) {
                 <Label className="text-sm text-muted-foreground">Status</Label>
                 <div className={cn(
                   "text-sm font-medium",
-                  log.status === 'success' ? 'text-green-600' :
-                  log.status === 'blocked' ? 'text-yellow-600' :
-                  log.status === 'error' ? 'text-red-600' :
-                  log.status === 'received' ? 'text-blue-600' :
-                  log.status === 'testing' ? 'text-blue-600' :
-                  'text-gray-600'
+                  log.status.toLowerCase() === 'success' && "text-green-600",
+                  log.status.toLowerCase() === 'blocked' && "text-yellow-600",
+                  log.status.toLowerCase() === 'testing' && "text-blue-600",
+                  !['success', 'blocked', 'testing'].includes(log.status.toLowerCase()) && "text-red-600"
                 )}>
                   {log.status.charAt(0).toUpperCase() + log.status.slice(1)}
                 </div>

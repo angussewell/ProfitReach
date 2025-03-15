@@ -2,9 +2,27 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { Prisma } from '@prisma/client';
+import { formatDateInCentralTime } from '@/lib/date-utils';
+import { WebhookLog } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
+
+// Helper function to parse JSON safely
+function safeJsonParse(value: any): any {
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return value;
+    }
+  }
+  return value;
+}
+
+// Type for our formatted response
+interface FormattedWebhookLog extends Omit<WebhookLog, 'createdAt'> {
+  createdAt: string;
+}
 
 export async function GET(request: Request) {
   try {
@@ -20,13 +38,10 @@ export async function GET(request: Request) {
     const status = searchParams.get('status');
     const search = searchParams.get('search');
     const scenario = searchParams.get('scenario');
-    // Support both hasEmail and hasMessage parameters for backward compatibility
     const hasMessage = searchParams.get('hasMessage') === 'true' || searchParams.get('hasEmail') === 'true';
 
-    // Calculate offset
     const skip = (page - 1) * limit;
 
-    // Build where clause
     let whereConditions: any[] = [
       { organizationId: session.user.organizationId }
     ];
@@ -42,7 +57,6 @@ export async function GET(request: Request) {
     if (hasMessage) {
       whereConditions.push({ 
         OR: [
-          // Check for non-empty emailSubject
           { 
             emailSubject: { 
               not: null 
@@ -53,7 +67,6 @@ export async function GET(request: Request) {
               }
             }
           },
-          // Check for non-empty emailHtmlBody
           { 
             emailHtmlBody: { 
               not: null 
@@ -107,8 +120,16 @@ export async function GET(request: Request) {
       }
     });
 
+    // Format logs for frontend display
+    const formattedLogs: FormattedWebhookLog[] = logs.map(log => ({
+      ...log,
+      createdAt: formatDateInCentralTime(log.createdAt.toISOString()),
+      requestBody: safeJsonParse(log.requestBody),
+      responseBody: safeJsonParse(log.responseBody)
+    }));
+
     return NextResponse.json({
-      logs,
+      logs: formattedLogs,
       total,
       page,
       totalPages: Math.ceil(total / limit),
@@ -121,4 +142,4 @@ export async function GET(request: Request) {
       { status: 500 }
     );
   }
-} 
+}
