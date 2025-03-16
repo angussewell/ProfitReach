@@ -20,37 +20,43 @@ import { AppointmentsList } from '@/components/appointments/appointments-list';
 import { CreateAppointmentDialog } from '@/components/appointments/create-appointment-dialog';
 import { formatDateInCentralTime } from '@/lib/date-utils';
 
-// Dynamic imports
-const ClientImage = dynamic(() => import('next/image'), { ssr: false });
+// Dynamic imports with proper error handling
+const ClientImage = dynamic(() => import('next/image').catch(err => {
+  console.error('Error loading Image component:', err);
+  return () => <div>Error loading image</div>;
+}), { 
+  ssr: false,
+  loading: () => <div className="w-8 h-8 bg-gray-200 animate-pulse rounded-lg" />
+});
 
-// Create client-side components
-const ClientCard = Card as unknown as React.ComponentType<HTMLAttributes<HTMLDivElement>>;
-const ClientCardHeader = CardHeader as unknown as React.ComponentType<HTMLAttributes<HTMLDivElement>>;
-const ClientCardTitle = CardTitle as unknown as React.ComponentType<HTMLAttributes<HTMLHeadingElement>>;
-const ClientCardContent = CardContent as unknown as React.ComponentType<HTMLAttributes<HTMLDivElement>>;
-const ClientCardFooter = CardFooter as unknown as React.ComponentType<HTMLAttributes<HTMLDivElement>>;
-const ClientButton = Button as unknown as React.ComponentType<ComponentProps<typeof Button>>;
-const ClientDialog = Dialog as unknown as React.ComponentType<ComponentProps<typeof Dialog>>;
-const ClientDialogContent = DialogContent as unknown as React.ComponentType<ComponentProps<typeof DialogContent>>;
-const ClientDialogHeader = DialogHeader as unknown as React.ComponentType<HTMLAttributes<HTMLDivElement>>;
-const ClientDialogTitle = DialogTitle as unknown as React.ComponentType<ComponentProps<typeof DialogTitle>>;
-const ClientDialogDescription = DialogDescription as unknown as React.ComponentType<ComponentProps<typeof DialogDescription>>;
-const ClientDialogFooter = DialogFooter as unknown as React.ComponentType<HTMLAttributes<HTMLDivElement>>;
-const ClientTextarea = Textarea as unknown as React.ComponentType<ComponentProps<typeof Textarea>>;
-const ClientLabel = Label as unknown as React.ComponentType<ComponentProps<typeof Label>>;
+// Client components with proper types
+const ClientCard = Card;
+const ClientCardHeader = CardHeader;
+const ClientCardTitle = CardTitle;
+const ClientCardContent = CardContent;
+const ClientCardFooter = CardFooter;
+const ClientButton = Button;
+const ClientDialog = Dialog;
+const ClientDialogContent = DialogContent;
+const ClientDialogHeader = DialogHeader;
+const ClientDialogTitle = DialogTitle;
+const ClientDialogDescription = DialogDescription;
+const ClientDialogFooter = DialogFooter;
+const ClientTextarea = Textarea;
+const ClientLabel = Label;
 
-// Create client-side icons
-const ClientUsers = Users as unknown as React.ComponentType<SVGProps<SVGSVGElement>>;
-const ClientMessageSquare = MessageSquare as unknown as React.ComponentType<SVGProps<SVGSVGElement>>;
-const ClientTrendingUp = TrendingUp as unknown as React.ComponentType<SVGProps<SVGSVGElement>>;
-const ClientBarChart = BarChart as unknown as React.ComponentType<SVGProps<SVGSVGElement>>;
-const ClientCalendar = Calendar as unknown as React.ComponentType<SVGProps<SVGSVGElement>>;
-const ClientPlus = Plus as unknown as React.ComponentType<SVGProps<SVGSVGElement>>;
-const ClientMinus = Minus as unknown as React.ComponentType<SVGProps<SVGSVGElement>>;
-const ClientLoader = Loader2 as unknown as React.ComponentType<SVGProps<SVGSVGElement>>;
+// Icons with proper types
+const ClientUsers = Users;
+const ClientMessageSquare = MessageSquare;
+const ClientTrendingUp = TrendingUp;
+const ClientBarChart = BarChart;
+const ClientCalendar = Calendar;
+const ClientPlus = Plus;
+const ClientMinus = Minus;
+const ClientLoader = Loader2;
 
-// Create client-side motion component
-const ClientMotionDiv = motion.div as unknown as React.ComponentType<HTMLAttributes<HTMLDivElement> & { initial?: any; animate?: any; transition?: any }>;
+// Motion component with proper types
+const ClientMotionDiv = motion.div;
 
 interface Scenario {
   id: string;
