@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import * as React from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import type { DateRange as DayPickerDateRange } from 'react-day-picker';
 import dynamic from 'next/dynamic';
-import { Users, MessageSquare, TrendingUp, BarChart, Plus, Minus, Calendar } from 'lucide-react';
+import { Users, MessageSquare, TrendingUp, BarChart, Calendar, Plus, Minus, Loader2 } from 'lucide-react';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,6 +16,9 @@ import { DateRangeFilter } from '@/components/filters/date-range-filter';
 import { HTMLAttributes, SVGProps, ComponentProps } from 'react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { AppointmentsList } from '@/components/appointments/appointments-list';
+import { CreateAppointmentDialog } from '@/components/appointments/create-appointment-dialog';
+import { formatDateInCentralTime } from '@/lib/date-utils';
 
 // Dynamic imports
 const ClientImage = dynamic(() => import('next/image'), { ssr: false });
@@ -39,9 +44,10 @@ const ClientUsers = Users as unknown as React.ComponentType<SVGProps<SVGSVGEleme
 const ClientMessageSquare = MessageSquare as unknown as React.ComponentType<SVGProps<SVGSVGElement>>;
 const ClientTrendingUp = TrendingUp as unknown as React.ComponentType<SVGProps<SVGSVGElement>>;
 const ClientBarChart = BarChart as unknown as React.ComponentType<SVGProps<SVGSVGElement>>;
+const ClientCalendar = Calendar as unknown as React.ComponentType<SVGProps<SVGSVGElement>>;
 const ClientPlus = Plus as unknown as React.ComponentType<SVGProps<SVGSVGElement>>;
 const ClientMinus = Minus as unknown as React.ComponentType<SVGProps<SVGSVGElement>>;
-const ClientCalendar = Calendar as unknown as React.ComponentType<SVGProps<SVGSVGElement>>;
+const ClientLoader = Loader2 as unknown as React.ComponentType<SVGProps<SVGSVGElement>>;
 
 // Create client-side motion component
 const ClientMotionDiv = motion.div as unknown as React.ComponentType<HTMLAttributes<HTMLDivElement> & { initial?: any; animate?: any; transition?: any }>;
@@ -76,6 +82,17 @@ interface AnalyticsResponse {
 interface DateRange {
   from: Date;
   to: Date;
+}
+
+interface Appointment {
+  id: string;
+  clientName: string;
+  appointmentType: string;
+  appointmentDateTime: string;
+  notes: string | null;
+  status: string;
+  organizationId: string;
+  createdAt: string;
 }
 
 const getTypeConfig = (type: string | undefined) => {
@@ -140,8 +157,9 @@ export function ScenariosPage() {
   const [appointmentsCount, setAppointmentsCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
-  const [dateRange, setDateRange] = useState<DateRange | null>(null);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
   const { toast } = useToast();
   const [researchContactsCount, setResearchContactsCount] = useState<number>(0);
 
@@ -151,13 +169,15 @@ export function ScenariosPage() {
       
       // Build URL with date range parameters
       const url = new URL('/api/scenarios/analytics', window.location.origin);
-      if (dateRange) {
+      if (dateRange?.from && dateRange?.to) {
         url.searchParams.set('from', dateRange.from.toISOString());
         url.searchParams.set('to', dateRange.to.toISOString());
       }
       
       // Fetch scenarios from the API
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        credentials: 'include', // Add this to include auth cookies
+      });
       
       if (!response.ok) {
         throw new Error(`Failed to fetch scenarios: ${response.statusText}`);
@@ -169,12 +189,14 @@ export function ScenariosPage() {
       
       // Fetch research contacts count
       try {
-        if (dateRange) {
+        if (dateRange?.from && dateRange?.to) {
           const researchUrl = new URL('/api/webhooks/research-count', window.location.origin);
           researchUrl.searchParams.set('from', dateRange.from.toISOString());
           researchUrl.searchParams.set('to', dateRange.to.toISOString());
           
-          const researchResponse = await fetch(researchUrl);
+          const researchResponse = await fetch(researchUrl, {
+            credentials: 'include', // Add this to include auth cookies
+          });
           
           if (researchResponse.ok) {
             const researchData = await researchResponse.json();
@@ -204,21 +226,82 @@ export function ScenariosPage() {
     fetchData();
   }, [dateRange]);
 
-  // Helper function to infer type from scenario name when touchpointType is undefined
-  const inferTypeFromName = (name: string): string => {
-    const normalizedName = (name || '').toLowerCase().trim();
-    if (normalizedName.includes('research')) {
-      return 'research';
-    } else if (normalizedName.includes('linkedin') || 
-               normalizedName.includes('connection') ||
-               normalizedName.includes('network')) {
+  const fetchAppointments = async () => {
+    const params = new URLSearchParams();
+    if (dateRange?.from && dateRange?.to) {
+      params.append('from', dateRange.from.toISOString());
+      params.append('to', dateRange.to.toISOString());
+    }
+
+    try {
+      const response = await fetch(`/api/appointments?${params.toString()}`, {
+        credentials: 'include',
+      });
+      
+      let errorData;
+      if (!response.ok) {
+        try {
+          errorData = await response.json();
+        } catch {
+          throw new Error('Failed to fetch appointments');
+        }
+        throw new Error(errorData.error || 'Failed to fetch appointments');
+      }
+
+      const data = await response.json();
+      // Format dates with +4 hour offset for display only
+      const formattedAppointments = data.map((appointment: Appointment) => ({
+        ...appointment,
+        appointmentDateTime: appointment.appointmentDateTime ? 
+          formatDateInCentralTime(new Date(appointment.appointmentDateTime)) : 
+          undefined
+      }));
+      setAppointments(formattedAppointments);
+    } catch (error) {
+      console.error('Error fetching appointments:', error instanceof Error ? error.message : error);
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to fetch appointments',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  useEffect(() => {
+    fetchAppointments();
+  }, [dateRange]);
+
+  // Helper function to infer type from scenario name and touchpointType
+  const inferTypeFromName = (name: string, touchpointType?: string): string => {
+    // First check touchpointType if available
+    if (touchpointType) {
+      const normalizedType = touchpointType.toLowerCase().trim();
+      if (normalizedType.includes('linkedin')) return 'linkedin';
+      if (normalizedType.includes('email')) return 'email';
+      if (normalizedType.includes('research')) return 'research';
+    }
+
+    // Fall back to name-based inference
+    const normalizedName = name.toLowerCase().trim();
+    if (normalizedName.includes('linkedin') || 
+        normalizedName.includes('connection') ||
+        normalizedName.includes('network')) {
       return 'linkedin';
     } else if (normalizedName.includes('email') || 
-               normalizedName.includes('outreach') || 
-               normalizedName.includes('follow up')) {
+              normalizedName.includes('outreach') || 
+              normalizedName.includes('follow up')) {
       return 'email';
+    } else if (normalizedName.includes('research')) {
+      return 'research';
     }
     return 'unknown';
+  };
+
+  // Format response rate to avoid NaN
+  const formatResponseRate = (contacts: number, responses: number): string => {
+    if (!contacts || !responses) return '0.0%';
+    const rate = (responses / contacts) * 100;
+    return isNaN(rate) ? '0.0%' : `${rate.toFixed(1)}%`;
   };
 
   // Calculate metrics using useMemo to prevent unnecessary recalculations
@@ -291,10 +374,11 @@ export function ScenariosPage() {
           scenarioId,
           action: 'add'
         }),
+        credentials: 'include', // Add this to include auth cookies
       });
 
       if (!response.ok) {
-        throw new Error('Failed to add reply');
+        throw new Error(`Failed to add reply: ${response.statusText}`);
       }
 
       // Update the local state to reflect the change
@@ -340,6 +424,7 @@ export function ScenariosPage() {
           scenarioId,
           action: 'remove'
         }),
+        credentials: 'include', // Add this to include auth cookies
       });
 
       if (!response.ok) {
@@ -378,14 +463,21 @@ export function ScenariosPage() {
   };
 
   // Add appointment function
-  const addAppointment = async (notes?: string) => {
+  const addAppointment = async (data: {
+    clientName: string;
+    appointmentType: string;
+    appointmentDateTime: string;
+    notes?: string;
+    status: string;
+  }) => {
     try {
       const response = await fetch('/api/appointments', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ notes }),
+        credentials: 'include', // Add this to include auth cookies
+        body: JSON.stringify(data),
       });
 
       if (!response.ok) {
@@ -410,396 +502,342 @@ export function ScenariosPage() {
     }
   };
 
-  // Delete appointment function
-  const deleteAppointment = async (id: string) => {
+  const handleCreateAppointment = async (data: {
+    clientName: string;
+    appointmentType: string;
+    appointmentDateTime: string;
+    notes?: string;
+    status: string;
+  }) => {
     try {
-      const response = await fetch(`/api/appointments/${id}`, {
-        method: 'DELETE',
+      const response = await fetch('/api/appointments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(data),
       });
 
+      const responseData = await response.json();
+
       if (!response.ok) {
-        throw new Error('Failed to delete appointment');
+        let errorMessage = 'Failed to create appointment';
+        if (responseData.errors) {
+          errorMessage = responseData.errors.map((err: any) => err.message).join(', ');
+        } else if (responseData.error) {
+          errorMessage = responseData.error;
+        }
+        throw new Error(errorMessage);
       }
-
-      // Refresh data to update counts
+      
+      // First fetch appointments to update the list
+      await fetchAppointments();
+      
+      // Then fetch analytics to update counts
       await fetchData();
-
+      
+      setShowAppointmentModal(false);
       toast({
         title: 'Success',
-        description: 'Appointment deleted successfully',
+        description: 'Appointment created successfully',
         variant: 'default',
       });
     } catch (error) {
-      console.error('Error deleting appointment:', error);
+      console.error('Error creating appointment:', error instanceof Error ? error.message : error);
       toast({
         title: 'Error',
-        description: 'Failed to delete appointment',
+        description: error instanceof Error ? error.message : 'Failed to create appointment',
         variant: 'destructive',
       });
     }
   };
 
-  const renderScenarioCard = (scenario: ScenarioAnalytics, index: number) => {
-    if (!scenario) return null;
-    
-    // Infer the type if touchpointType is undefined
-    const effectiveType = scenario.touchpointType || inferTypeFromName(scenario.name);
-    const typeConfig = getTypeConfig(effectiveType);
-    const isResearch = effectiveType === 'research';
-    const responseRate = !isResearch && scenario.totalContacts > 0
-      ? ((scenario.responseCount || 0) / scenario.totalContacts) * 100
-      : 0;
-    const isLoading = actionLoading[scenario.id] || false;
-
-    return (
-      <ClientMotionDiv
-        key={scenario.id}
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.2, delay: index * 0.1 }}
-      >
-        <ClientCard 
-          className={cn(
-            "group border border-slate-200/50 bg-white shadow-lg hover:shadow-xl transition-all duration-300 rounded-xl overflow-hidden",
-            typeConfig.bgColor,
-            typeConfig.accentColor,
-            typeConfig.hoverBg
-          )}
-        >
-          <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-[#ff7a59]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-          <ClientCardHeader className="pb-4">
-            <div className="flex items-center gap-3">
-              <div className={cn('rounded-xl p-2', typeConfig.iconBg, 'bg-opacity-10')}>
-                <img
-                  src={typeConfig.icon}
-                  alt={`${typeConfig.label} icon`}
-                  className="w-8 h-8 aspect-square object-contain"
-                  loading="eager"
-                />
-              </div>
-              <div>
-                <ClientCardTitle className="text-lg font-semibold text-slate-800">
-                  {scenario.name || 'Unnamed Scenario'}
-                </ClientCardTitle>
-                <p className="text-sm text-slate-500">{typeConfig.label}</p>
-              </div>
-            </div>
-          </ClientCardHeader>
-          <ClientCardContent>
-            <div className="space-y-6">
-              <div>
-                <div className="text-sm text-slate-500">
-                  {isResearch ? 'Contacts Researched' : 'Total Contacts'}
-                </div>
-                <div className="text-2xl font-bold text-slate-800 [text-shadow:_0_1px_2px_rgb(0_0_0_/_5%)]">
-                  {(scenario.totalContacts || 0).toLocaleString()}
-                </div>
-              </div>
-              {!isResearch && (
-                <>
-                  <div>
-                    <div className="text-sm text-slate-500">Total Responses</div>
-                    <div className="text-2xl font-bold text-green-600 [text-shadow:_0_1px_2px_rgb(0_0_0_/_5%)]">
-                      {(scenario.responseCount || 0).toLocaleString()}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm text-slate-500">Response Rate</div>
-                      <div className="text-sm font-medium text-[#ff7a59]">
-                        {responseRate.toFixed(1)}%
-                      </div>
-                    </div>
-                    <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)]">
-                      <div 
-                        className={cn(
-                          "h-full bg-gradient-to-r rounded-full transition-all duration-500 shadow-sm",
-                          typeConfig.progressColor
-                        )}
-                        style={{ width: `${Math.min(responseRate, 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          </ClientCardContent>
-          {!isResearch && (
-            <ClientCardFooter className="pt-0 pb-4 px-6">
-              <div className="flex justify-end gap-2">
-                <ClientButton
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => removeManualReply(scenario.id)}
-                  disabled={isLoading || (scenario.manualRepliesCount || 0) === 0}
-                  className="h-8 w-8 rounded-full hover:bg-red-50 hover:text-red-500 transition-colors"
-                >
-                  <ClientMinus className="w-4 h-4" />
-                </ClientButton>
-                <ClientButton
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => addManualReply(scenario.id)}
-                  disabled={isLoading}
-                  className="h-8 w-8 rounded-full hover:bg-green-50 hover:text-green-500 transition-colors"
-                >
-                  <ClientPlus className="w-4 h-4" />
-                </ClientButton>
-              </div>
-            </ClientCardFooter>
-          )}
-        </ClientCard>
-      </ClientMotionDiv>
-    );
+  const handleDateRangeChange = (newDateRange: DayPickerDateRange | undefined) => {
+    // Ensure both from and to dates are set
+    if (newDateRange?.from && newDateRange?.to) {
+      setDateRange({
+        from: newDateRange.from,
+        to: newDateRange.to
+      });
+    } else {
+      setDateRange(undefined);
+    }
   };
 
   return (
     <PageContainer>
-      <div className="space-y-8">
-        {/* Enhanced Header Section */}
-        <div className="relative -mx-8 px-8 py-6 bg-gradient-to-br from-[#ff7a59] via-[#ff4d4d] to-[#ff7a59]/90 rounded-3xl shadow-lg">
-          <div className="absolute inset-0 bg-white/5 rounded-3xl backdrop-blur-[1px]" />
-          <div className="relative flex items-center justify-between">
-            <div className="space-y-1">
-              <h1 className="text-3xl font-bold text-white [text-shadow:_0_1px_2px_rgb(0_0_0_/_10%)]">
-                Scenarios Dashboard
-              </h1>
-              <p className="text-white/90">Track your automation performance</p>
-            </div>
-            <DateRangeFilter onRangeChange={setDateRange} />
-          </div>
-        </div>
+      <div className="mb-4 flex justify-between items-center">
+        <h1 className="text-2xl font-semibold">Scenarios</h1>
+        <DateRangeFilter value={dateRange} onChange={handleDateRangeChange} />
+      </div>
 
-        {/* Enhanced Key Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 -mt-12">
-          <ClientMotionDiv
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.3, delay: 0.1 }}
-            className="h-full"
-          >
-            <ClientCard className="relative border border-slate-200/50 bg-white shadow-lg hover:shadow-2xl transition-all duration-300 rounded-2xl overflow-hidden group h-[240px] flex flex-col">
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-50 via-blue-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-              <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-blue-500/20 to-transparent pointer-events-none" />
-              <ClientCardHeader className="pb-2 pt-6">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-blue-100 rounded-xl shadow-sm">
-                    <ClientUsers className="w-5 h-5 text-blue-500" />
-                  </div>
-                  <ClientCardTitle className="text-lg font-semibold text-slate-800">Total Contacts</ClientCardTitle>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
+        <ClientMotionDiv
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.3, delay: 0.1 }}
+          className="h-full"
+        >
+          <ClientCard className="relative border border-slate-200/50 bg-white shadow-lg hover:shadow-2xl transition-all duration-300 rounded-2xl overflow-hidden group h-[240px] flex flex-col">
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-50 via-blue-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+            <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-blue-500/20 to-transparent pointer-events-none" />
+            <ClientCardHeader className="pb-2 pt-6">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-blue-100 rounded-xl shadow-sm">
+                  <ClientUsers className="w-5 h-5 text-blue-500" />
                 </div>
-              </ClientCardHeader>
-              <ClientCardContent className="flex-grow flex flex-col items-center justify-center pb-6">
-                <div className="text-center">
-                  <div className={`text-5xl font-bold ${getMetricColor('contacts', researchContactsCount)} [text-shadow:_0_1px_2px_rgb(0_0_0_/_5%)]`}>
-                    {researchContactsCount.toLocaleString()}
-                  </div>
-                  <div className="text-sm text-slate-500 mt-3">
-                    Total contacts processed
-                  </div>
-                </div>
-              </ClientCardContent>
-            </ClientCard>
-          </ClientMotionDiv>
-
-          <ClientMotionDiv
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.3, delay: 0.2 }}
-            className="h-full"
-          >
-            <ClientCard className="relative border border-slate-200/50 bg-white shadow-lg hover:shadow-2xl transition-all duration-300 rounded-2xl overflow-hidden group h-[240px] flex flex-col">
-              <div className="absolute inset-0 bg-gradient-to-br from-green-50 via-green-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-              <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-green-500/20 to-transparent pointer-events-none" />
-              <ClientCardHeader className="pb-2 pt-6">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-green-100 rounded-xl shadow-sm">
-                    <ClientMessageSquare className="w-5 h-5 text-green-500" />
-                  </div>
-                  <ClientCardTitle className="text-lg font-semibold text-slate-800">Total Responses</ClientCardTitle>
-                </div>
-              </ClientCardHeader>
-              <ClientCardContent className="flex-grow flex flex-col items-center justify-center pb-6">
-                <div className="text-center">
-                  <div className={`text-5xl font-bold ${getMetricColor('responses', totalResponses)} [text-shadow:_0_1px_2px_rgb(0_0_0_/_5%)]`}>
-                    {totalResponses.toLocaleString()}
-                  </div>
-                  <div className="text-sm text-slate-500 mt-3">Positive responses received</div>
-                </div>
-              </ClientCardContent>
-            </ClientCard>
-          </ClientMotionDiv>
-
-          <ClientMotionDiv
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.3, delay: 0.25 }}
-            className="h-full"
-          >
-            <ClientCard className="relative border border-slate-200/50 bg-white shadow-lg hover:shadow-2xl transition-all duration-300 rounded-2xl overflow-hidden group h-[240px] flex flex-col">
-              <div className="absolute inset-0 bg-gradient-to-br from-purple-50 via-purple-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-              <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-purple-500/20 to-transparent pointer-events-none" />
-              <ClientCardHeader className="pb-2 pt-6">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-purple-100 rounded-xl shadow-sm">
-                    <ClientCalendar className="w-5 h-5 text-purple-500" />
-                  </div>
-                  <ClientCardTitle className="text-lg font-semibold text-slate-800">Appointments</ClientCardTitle>
-                </div>
-              </ClientCardHeader>
-              <ClientCardContent className="flex-grow flex flex-col items-center justify-center relative">
-                <div className="text-center">
-                  <div className="text-5xl font-bold text-purple-600 [text-shadow:_0_1px_2px_rgb(0_0_0_/_5%)]">
-                    {appointmentsCount.toLocaleString()}
-                  </div>
-                  <div className="text-sm text-slate-500 mt-3">Total appointments booked</div>
-                </div>
-                <div className="absolute bottom-0 left-0 right-0 flex justify-center gap-3 pt-4">
-                  <ClientButton
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => {
-                      if (appointmentsCount > 0) {
-                        deleteAppointment('latest');
-                      }
-                    }}
-                    disabled={appointmentsCount === 0}
-                    className="h-8 w-8 rounded-full hover:bg-red-50 hover:text-red-500 transition-colors"
-                  >
-                    <ClientMinus className="w-4 h-4" />
-                  </ClientButton>
-                  <ClientButton
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setShowAppointmentModal(true)}
-                    className="h-8 w-8 rounded-full hover:bg-purple-50 hover:text-purple-500 transition-colors"
-                  >
-                    <ClientPlus className="w-4 h-4" />
-                  </ClientButton>
-                </div>
-              </ClientCardContent>
-            </ClientCard>
-          </ClientMotionDiv>
-
-          <ClientMotionDiv
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.3, delay: 0.3 }}
-            className="h-full"
-          >
-            <ClientCard className="relative border border-slate-200/50 bg-white shadow-lg hover:shadow-2xl transition-all duration-300 rounded-2xl overflow-hidden group h-[240px] flex flex-col">
-              <div className="absolute inset-0 bg-gradient-to-br from-yellow-50 via-yellow-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-              <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-yellow-500/20 to-transparent pointer-events-none" />
-              <ClientCardHeader className="pb-2 pt-6">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-yellow-100 rounded-xl shadow-sm">
-                    <ClientTrendingUp className={`w-5 h-5 ${getMetricColor('rate', overallResponseRate)}`} />
-                  </div>
-                  <ClientCardTitle className="text-lg font-semibold text-slate-800">Response Rate</ClientCardTitle>
-                </div>
-              </ClientCardHeader>
-              <ClientCardContent className="flex-grow flex flex-col items-center justify-center pb-6">
-                <div className="text-center">
-                  <div className={`text-5xl font-bold ${getMetricColor('rate', overallResponseRate)} [text-shadow:_0_1px_2px_rgb(0_0_0_/_5%)]`}>
-                    {overallResponseRate.toFixed(1)}%
-                  </div>
-                  <div className="text-sm text-slate-500 mt-3">Overall response rate</div>
-                </div>
-              </ClientCardContent>
-            </ClientCard>
-          </ClientMotionDiv>
-        </div>
-
-        {/* Enhanced Scenario Performance */}
-        <div className="relative bg-gradient-to-b from-slate-50 to-white -mx-8 px-8 py-8 rounded-3xl shadow-inner">
-          <div className="absolute inset-0 bg-white/50 rounded-3xl backdrop-blur-[1px]" />
-          <div className="relative">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-[#ff7a59]/10 rounded-xl shadow-sm">
-                  <ClientBarChart className="w-5 h-5 text-[#ff7a59]" />
-                </div>
-                <h2 className="text-xl font-semibold text-slate-800 [text-shadow:_0_1px_2px_rgb(0_0_0_/_5%)]">
-                  Scenario Performance
-                </h2>
+                <ClientCardTitle className="text-lg font-semibold text-slate-800">Total Contacts</ClientCardTitle>
               </div>
-            </div>
+            </ClientCardHeader>
+            <ClientCardContent className="flex-grow flex flex-col items-center justify-center pb-6">
+              <div className="text-center">
+                <div className={`text-5xl font-bold ${getMetricColor('contacts', researchContactsCount)} [text-shadow:_0_1px_2px_rgb(0_0_0_/_5%)]`}>
+                  {researchContactsCount.toLocaleString()}
+                </div>
+                <div className="text-sm text-slate-500 mt-3">
+                  Total contacts processed
+                </div>
+              </div>
+            </ClientCardContent>
+          </ClientCard>
+        </ClientMotionDiv>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {loading ? (
-                [...Array(3)].map((_, i) => (
-                  <ClientMotionDiv
-                    key={i}
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.2, delay: i * 0.1 }}
-                  >
-                    <ClientCard className="animate-pulse border border-slate-200/50 bg-white shadow-lg hover:shadow-xl transition-all duration-200 rounded-xl overflow-hidden">
-                      <ClientCardHeader className="pb-4">
-                        <div className="h-6 bg-slate-200 rounded w-3/4" />
-                      </ClientCardHeader>
-                      <ClientCardContent>
-                <div className="space-y-4">
-                          <div className="h-4 bg-slate-100 rounded w-1/2" />
-                          <div className="h-4 bg-slate-100 rounded w-2/3" />
-                          <div className="h-4 bg-slate-100 rounded w-1/3" />
-                        </div>
-                      </ClientCardContent>
-                    </ClientCard>
-                  </ClientMotionDiv>
-                ))
-              ) : scenarios.length === 0 ? (
-                <ClientCard className="col-span-3 p-8 text-center border border-slate-200/50 bg-white/50 backdrop-blur-sm rounded-xl">
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="p-3 bg-slate-100 rounded-full shadow-sm">
-                      <ClientBarChart className="w-6 h-6 text-slate-400" />
-                    </div>
-                    <p className="text-slate-500">No scenarios found</p>
-                  </div>
-                </ClientCard>
-              ) : (
-                scenarios.map((scenario, index) => renderScenarioCard(scenario, index))
-              )}
-            </div>
+        <ClientMotionDiv
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.3, delay: 0.2 }}
+          className="h-full"
+        >
+          <ClientCard className="relative border border-slate-200/50 bg-white shadow-lg hover:shadow-2xl transition-all duration-300 rounded-2xl overflow-hidden group h-[240px] flex flex-col">
+            <div className="absolute inset-0 bg-gradient-to-br from-green-50 via-green-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+            <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-green-500/20 to-transparent pointer-events-none" />
+            <ClientCardHeader className="pb-2 pt-6">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-green-100 rounded-xl shadow-sm">
+                  <ClientMessageSquare className="w-5 h-5 text-green-500" />
+                </div>
+                <ClientCardTitle className="text-lg font-semibold text-slate-800">Total Responses</ClientCardTitle>
+              </div>
+            </ClientCardHeader>
+            <ClientCardContent className="flex-grow flex flex-col items-center justify-center pb-6">
+              <div className="text-center">
+                <div className={`text-5xl font-bold ${getMetricColor('responses', totalResponses)} [text-shadow:_0_1px_2px_rgb(0_0_0_/_5%)]`}>
+                  {totalResponses.toLocaleString()}
+                </div>
+                <div className="text-sm text-slate-500 mt-3">Positive responses received</div>
+              </div>
+            </ClientCardContent>
+          </ClientCard>
+        </ClientMotionDiv>
+
+        <ClientMotionDiv
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.3, delay: 0.25 }}
+          className="h-full"
+        >
+          <ClientCard className="relative border border-slate-200/50 bg-white shadow-lg hover:shadow-2xl transition-all duration-300 rounded-2xl overflow-hidden group h-[240px] flex flex-col">
+            <div className="absolute inset-0 bg-gradient-to-br from-purple-50 via-purple-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+            <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-purple-500/20 to-transparent pointer-events-none" />
+            <ClientCardHeader className="pb-2 pt-6">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-purple-100 rounded-xl shadow-sm">
+                  <ClientCalendar className="w-5 h-5 text-purple-500" />
+                </div>
+                <ClientCardTitle className="text-lg font-semibold text-slate-800">Appointments</ClientCardTitle>
+              </div>
+            </ClientCardHeader>
+            <ClientCardContent className="flex-grow flex flex-col items-center justify-center pb-6">
+              <div className="text-center">
+                <div className="text-5xl font-bold text-purple-600 [text-shadow:_0_1px_2px_rgb(0_0_0_/_5%)]">
+                  {appointmentsCount.toLocaleString()}
+                </div>
+                <div className="text-sm text-slate-500 mt-3">
+                  Total appointments booked
+                </div>
+              </div>
+            </ClientCardContent>
+          </ClientCard>
+        </ClientMotionDiv>
+
+        <ClientMotionDiv
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.3, delay: 0.3 }}
+          className="h-full"
+        >
+          <ClientCard className="relative border border-slate-200/50 bg-white shadow-lg hover:shadow-2xl transition-all duration-300 rounded-2xl overflow-hidden group h-[240px] flex flex-col">
+            <div className="absolute inset-0 bg-gradient-to-br from-yellow-50 via-yellow-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+            <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-yellow-500/20 to-transparent pointer-events-none" />
+            <ClientCardHeader className="pb-2 pt-6">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-yellow-100 rounded-xl shadow-sm">
+                  <ClientTrendingUp className={`w-5 h-5 ${getMetricColor('rate', overallResponseRate)}`} />
+                </div>
+                <ClientCardTitle className="text-lg font-semibold text-slate-800">Response Rate</ClientCardTitle>
+              </div>
+            </ClientCardHeader>
+            <ClientCardContent className="flex-grow flex flex-col items-center justify-center pb-6">
+              <div className="text-center">
+                <div className={`text-5xl font-bold ${getMetricColor('rate', overallResponseRate)} [text-shadow:_0_1px_2px_rgb(0_0_0_/_5%)]`}>
+                  {overallResponseRate.toFixed(1)}%
+                </div>
+                <div className="text-sm text-slate-500 mt-3">Overall response rate</div>
+              </div>
+            </ClientCardContent>
+          </ClientCard>
+        </ClientMotionDiv>
+      </div>
+
+      {/* Appointments Section - Full Width */}
+      <div className="mb-8">
+        <div className="flex justify-between items-center mb-4">
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-semibold text-slate-800">Appointments</h2>
+            <div className="text-sm text-slate-500">({appointments.length})</div>
           </div>
+          <ClientButton 
+            onClick={() => setShowAppointmentModal(true)}
+            className="bg-purple-50 text-purple-600 hover:bg-purple-100 hover:text-purple-700"
+          >
+            <ClientCalendar className="w-4 h-4 mr-2" />
+            New Appointment
+          </ClientButton>
+        </div>
+        <AppointmentsList appointments={appointments} />
+      </div>
+
+      {/* Scenarios Section */}
+      <div className="mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {scenarios.map((scenario) => {
+            const type = inferTypeFromName(scenario.name, scenario.touchpointType);
+            const config = getTypeConfig(type);
+            const rate = scenario.totalContacts && scenario.responseCount ? (scenario.responseCount / scenario.totalContacts) * 100 : 0;
+            const responseRate = formatResponseRate(scenario.totalContacts, scenario.responseCount);
+
+            return (
+              <ClientMotionDiv
+                key={scenario.id}
+                className="h-full"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className={cn(
+                  "technical-card technical-card group border shadow-lg hover:shadow-xl transition-all duration-300",
+                  "rounded-xl overflow-hidden",
+                  config.bgColor,
+                  config.accentColor,
+                  config.hoverBg,
+                  "min-h-[250px] flex flex-col"
+                )}>
+                  <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-[#ff7a59]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                  
+                  <div className="flex flex-col space-y-1.5 p-4 pb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={cn("rounded-xl p-2", "bg-gray-100 bg-opacity-10")}>
+                        <ClientImage
+                          src={config.icon}
+                          alt={`${config.label} icon`}
+                          width={32}
+                          height={32}
+                          className="aspect-square object-contain"
+                        />
+                      </div>
+                      <div>
+                        <h3 className="technical-header text-base font-semibold text-slate-800">
+                          {scenario.name}
+                        </h3>
+                        <p className="text-xs text-slate-500">{config.label}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 pt-0">
+                    <div className="space-y-4">
+                      <div>
+                        <div className="text-xs text-slate-500">Total Contacts</div>
+                        <div className={cn(
+                          "text-lg font-bold [text-shadow:_0_1px_2px_rgb(0_0_0_/_5%)]",
+                          getMetricColor('contacts', scenario.totalContacts)
+                        )}>
+                          {scenario.totalContacts}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-xs text-slate-500">Total Responses</div>
+                        <div className={cn(
+                          "text-lg font-bold [text-shadow:_0_1px_2px_rgb(0_0_0_/_5%)]",
+                          getMetricColor('responses', scenario.responseCount)
+                        )}>
+                          {scenario.responseCount}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs text-slate-500">Response Rate</div>
+                          <div className="text-xs font-medium text-[#ff7a59]">
+                            {responseRate}
+                          </div>
+                        </div>
+                        <div className="mt-1 h-1.5 bg-gray-100 rounded-full overflow-hidden shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)]">
+                          <div
+                            className={cn(
+                              "h-full bg-gradient-to-r rounded-full transition-all duration-500 shadow-sm",
+                              config.progressColor
+                            )}
+                            style={{
+                              width: `${rate}%`
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex justify-center gap-2 mt-4">
+                    <ClientButton
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeManualReply(scenario.id)}
+                      disabled={actionLoading[scenario.id] || scenario.responseCount === 0}
+                      className="h-8 w-8 rounded-full hover:bg-red-50 hover:text-red-500 transition-colors"
+                    >
+                      {actionLoading[scenario.id] ? (
+                        <ClientLoader className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <ClientMinus className="w-4 h-4" />
+                      )}
+                    </ClientButton>
+                    <ClientButton
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => addManualReply(scenario.id)}
+                      disabled={actionLoading[scenario.id]}
+                      className="h-8 w-8 rounded-full hover:bg-[#0A66C2]/10 hover:text-[#0A66C2] transition-colors"
+                    >
+                      {actionLoading[scenario.id] ? (
+                        <ClientLoader className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <ClientPlus className="w-4 h-4" />
+                      )}
+                    </ClientButton>
+                  </div>
+                </div>
+              </ClientMotionDiv>
+            );
+          })}
         </div>
       </div>
 
-      {/* Add Appointment Modal */}
-      <ClientDialog open={showAppointmentModal} onOpenChange={setShowAppointmentModal}>
-        <ClientDialogContent>
-          <ClientDialogHeader>
-            <ClientDialogTitle>Add New Appointment</ClientDialogTitle>
-            <ClientDialogDescription>
-              Add a new appointment to track your outreach success.
-            </ClientDialogDescription>
-          </ClientDialogHeader>
-          <form onSubmit={(e) => {
-            e.preventDefault();
-            const formData = new FormData(e.currentTarget);
-            const notes = formData.get('notes') as string;
-            addAppointment(notes);
-            setShowAppointmentModal(false);
-          }}>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <ClientLabel htmlFor="notes">Notes (Optional)</ClientLabel>
-                <ClientTextarea
-                  id="notes"
-                  name="notes"
-                  placeholder="Add any relevant notes about the appointment..."
-                />
-              </div>
-            </div>
-            <ClientDialogFooter>
-              <ClientButton type="button" variant="outline" onClick={() => setShowAppointmentModal(false)}>
-                Cancel
-              </ClientButton>
-              <ClientButton type="submit">Add Appointment</ClientButton>
-            </ClientDialogFooter>
-          </form>
-        </ClientDialogContent>
-      </ClientDialog>
+      <CreateAppointmentDialog
+        open={showAppointmentModal}
+        onOpenChange={setShowAppointmentModal}
+        onSubmit={handleCreateAppointment}
+      />
     </PageContainer>
   );
-} 
+}
