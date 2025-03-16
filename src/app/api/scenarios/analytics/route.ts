@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
+import { subHours } from 'date-fns';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,7 +18,7 @@ interface ScenarioResponse {
   id: string;
   scenarioId: string;
   source: string;
-  threadId?: string;
+  threadId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -95,8 +96,8 @@ export async function GET(request: Request) {
         organizationId: session.user.organizationId,
         ...(from && to ? {
           createdAt: {
-            gte: new Date(from),
-            lte: new Date(to),
+            gte: subHours(new Date(from), 4),
+            lte: subHours(new Date(to), 4)
           },
         } : {}),
       },
