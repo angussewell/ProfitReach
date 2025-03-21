@@ -225,7 +225,7 @@ export function ScenarioWizard() {
                   <div>
                     <ClientLabel htmlFor="snippetId">Snippet</ClientLabel>
                     <SearchableSelect
-                      options={snippets.map(s => ({ value: s.id, label: s.name }))}
+                      options={[{ value: '', label: 'No snippet' }, ...snippets.map(s => ({ value: s.id, label: s.name }))] }
                       value={formData.snippetId}
                       onChange={(value) => updateFormData({ snippetId: value || '' })}
                       placeholder="Select a snippet (optional)"
@@ -244,7 +244,7 @@ export function ScenarioWizard() {
                   <div>
                     <ClientLabel htmlFor="attachmentId">Select Attachment</ClientLabel>
                     <SearchableSelect
-                      options={attachments.map(a => ({ value: a.id, label: a.name }))}
+                      options={[{ value: '', label: 'No attachment' }, ...attachments.map(a => ({ value: a.id, label: a.name }))] }
                       value={formData.attachmentId}
                       onChange={(value) => updateFormData({ attachmentId: value || '' })}
                       placeholder="Select an attachment (optional)"
@@ -302,4 +302,4 @@ export function ScenarioWizard() {
       </div>
     </div>
   );
-} 
+}

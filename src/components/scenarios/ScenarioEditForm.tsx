@@ -266,7 +266,7 @@ export function ScenarioEditForm({ scenario, fields, snippets, attachments }: Sc
             <div>
               <Label htmlFor="snippetId">Snippet</Label>
               <SearchableSelect
-                options={snippets.map(s => ({ value: s.id, label: s.name }))}
+                options={[{ value: '', label: 'No snippet' }, ...snippets.map(s => ({ value: s.id, label: s.name }))] }
                 value={formData.snippetId}
                 onChange={(value) => setFormData({ ...formData, snippetId: value })}
                 placeholder="Select a snippet (optional)"
@@ -277,7 +277,7 @@ export function ScenarioEditForm({ scenario, fields, snippets, attachments }: Sc
               <div>
                 <Label htmlFor="attachmentId">Attachment</Label>
                 <SearchableSelect
-                  options={attachments.map(a => ({ value: a.id, label: a.name }))}
+                  options={[{ value: '', label: 'No attachment' }, ...attachments.map(a => ({ value: a.id, label: a.name }))] }
                   value={formData.attachmentId}
                   onChange={(value) => setFormData({ ...formData, attachmentId: value })}
                   placeholder="Select an attachment (optional)"
