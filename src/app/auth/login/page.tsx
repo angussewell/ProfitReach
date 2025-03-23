@@ -50,8 +50,8 @@ function LoginForm() {
         <div className="flex flex-col items-center space-y-8">
           <div className="relative w-48 h-12">
             <Image
-              src="/MessageLM Hero.png"
-              alt="MessageLM"
+              src="/TempShift Hero Logo Official.png"
+              alt="TempShift"
               fill
               className="object-contain"
               priority

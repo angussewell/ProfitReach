@@ -30,8 +30,8 @@ export function Logo({ className }: LogoProps) {
         )}
       >
         <Image
-          src="/MessageLM Hero.png"
-          alt="MessageLM"
+          src="/TempShift Hero Logo Official.png"
+          alt="TempShift"
           width={280}
           height={50}
           className="h-[50px] w-[280px] object-contain object-left"
@@ -49,8 +49,8 @@ export function Logo({ className }: LogoProps) {
         )}
       >
         <Image
-          src="/messagelm-icon.png"
-          alt="MessageLM"
+          src="/TempShift Icon Logo.png?v=6"
+          alt="TempShift"
           width={36}
           height={36}
           className="h-9 w-9 object-contain"
