@@ -21,38 +21,65 @@ function formatMessageForResponse(message: EmailMessage): FormattedEmailMessage 
 }
 
 export async function GET(request: Request) {
+  console.log('Messages API: Starting request');
+  
   try {
     const session = await getServerSession(authOptions);
+    console.log('Messages API: Session data:', {
+      isAuthenticated: !!session,
+      userId: session?.user?.id,
+      organizationId: session?.user?.organizationId,
+      role: session?.user?.role
+    });
+
     if (!session?.user?.organizationId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      console.log('Messages API: No organization ID in session');
+      return NextResponse.json({ error: 'Unauthorized - No organization ID' }, { status: 401 });
     }
 
     const url = new URL(request.url);
     const includeFiltered = url.searchParams.get('includeFiltered') === 'true';
+    console.log('Query params:', { includeFiltered });
 
-    // Build query based on whether we want filtered messages or real replies
-    const where: Prisma.EmailMessageWhereInput = {
+    // First check if there are any messages at all for this organization
+    const messageCount = await prisma.emailMessage.count({
+      where: {
+        organizationId: session.user.organizationId
+      }
+    });
+
+    console.log('Total messages in database:', {
       organizationId: session.user.organizationId,
-      messageType: includeFiltered 
-        ? { not: 'REAL_REPLY' as MessageType } // Get all non-real replies
-        : 'REAL_REPLY' as MessageType // Get only real replies
-    };
-    
-    // Fetch messages
-    const messages = await prisma.emailMessage.findMany({
-      where,
-      orderBy: { receivedAt: 'desc' },
-      take: 100 // Limit to last 100 messages for performance
+      count: messageCount
+    });
+
+    // Fetch messages using raw SQL to avoid type issues
+    const messages = await prisma.$queryRaw<EmailMessage[]>`
+      SELECT * FROM "EmailMessage"
+      WHERE "organizationId" = ${session.user.organizationId}
+      AND status IN ('WAITING_FOR_REPLY', 'FOLLOW_UP_NEEDED', 'NO_ACTION_NEEDED')
+      ORDER BY "receivedAt" DESC
+      LIMIT 100
+    `;
+
+    console.log('Found messages:', {
+      count: messages.length,
+      sampleMessageId: messages[0]?.id || 'no messages',
+      statuses: messages.map(m => m.status)
     });
 
     // Format messages for frontend display
     const formattedMessages = messages.map(formatMessageForResponse);
     
+    console.log('GET /api/messages - Success');
     return NextResponse.json(formattedMessages);
   } catch (error) {
-    console.error('Error fetching messages:', error);
+    console.error('Messages API Error:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch messages' },
+      { 
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
       { status: 500 }
     );
   }
