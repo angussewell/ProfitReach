@@ -11,9 +11,10 @@ import type { LucideProps } from 'lucide-react';
 import { toast } from 'sonner';
 import { updateMessageStatus } from '@/lib/server-actions';
 import { formatDateInCentralTime } from '@/lib/date-utils';
+import { getSession } from 'next-auth/react';
 
 type MessageType = 'REAL_REPLY' | 'BOUNCE' | 'AUTO_REPLY' | 'OUT_OF_OFFICE' | 'OTHER';
-type ConversationStatus = 'MEETING_BOOKED' | 'NOT_INTERESTED' | 'FOLLOW_UP_NEEDED' | 'NO_ACTION_NEEDED';
+type ConversationStatus = 'MEETING_BOOKED' | 'NOT_INTERESTED' | 'FOLLOW_UP_NEEDED' | 'NO_ACTION_NEEDED' | 'WAITING_FOR_REPLY';
 type MessageSource = 'EMAIL' | 'LINKEDIN';
 
 interface EmailMessage {
@@ -74,64 +75,39 @@ const daysSince = (date: Date): number => {
 };
 
 // Helper function to get status background color for the entire row
-const getStatusRowStyle = (status: ConversationStatus, latestMessageDate: Date, isFromUs: boolean): string => {
-  // Base subtle background and left border styling
-  let style = 'border-l-4 ';
-  
-  if (status === 'MEETING_BOOKED') {
-    return style + 'border-green-500 bg-green-50/50';
+const getStatusRowStyle = (status: ConversationStatus, date?: Date, isFromUs?: boolean): string => {
+  switch (status) {
+    case 'MEETING_BOOKED':
+      return 'border-green-300 bg-green-50/30';
+    case 'NOT_INTERESTED':
+      return 'border-red-300 bg-red-50/30';
+    case 'FOLLOW_UP_NEEDED':
+      return 'border-red-300 bg-red-50/30';
+    case 'NO_ACTION_NEEDED':
+      return 'border-gray-300 bg-gray-50/30';
+    case 'WAITING_FOR_REPLY':
+      return 'border-blue-300 bg-blue-50/30';
+    default:
+      return '';
   }
-  
-  if (status === 'NOT_INTERESTED') {
-    return style + 'border-gray-500 bg-gray-50/50';
-  }
-  
-  if (status === 'NO_ACTION_NEEDED') {
-    return style + 'border-blue-500 bg-blue-50/50';
-  }
-  
-  // For FOLLOW_UP_NEEDED
-  if (status === 'FOLLOW_UP_NEEDED') {
-    // "Waiting for Reply" condition: it's from us and less than 3 days old
-    if (isFromUs) {
-      const days = daysSince(latestMessageDate);
-      if (days < 3) {
-        return style + 'border-blue-300 bg-blue-50/30'; // Blue for "Waiting for Reply"
-      }
-    }
-    return style + 'border-red-600 bg-red-50/60'; // Red for "Follow Up Needed"
-  }
-  
-  return style + 'border-blue-300 bg-blue-50/30'; // Default fallback
 };
 
 // Helper function to get status color for the badge
-const getStatusColor = (status: ConversationStatus, latestMessageDate: Date, isFromUs: boolean): string => {
-  if (status === 'MEETING_BOOKED') {
-    return 'bg-green-100 text-green-800';
+const getStatusColor = (status: ConversationStatus, date?: Date, isFromUs?: boolean): string => {
+  switch (status) {
+    case 'MEETING_BOOKED':
+      return 'bg-green-100 text-green-800';
+    case 'NOT_INTERESTED':
+      return 'bg-red-100 text-red-800';
+    case 'FOLLOW_UP_NEEDED':
+      return 'bg-red-100 text-red-800';
+    case 'NO_ACTION_NEEDED':
+      return 'bg-gray-100 text-gray-800';
+    case 'WAITING_FOR_REPLY':
+      return 'bg-blue-100 text-blue-800';
+    default:
+      return 'bg-gray-100 text-gray-800';
   }
-  
-  if (status === 'NOT_INTERESTED') {
-    return 'bg-gray-100 text-gray-800';
-  }
-  
-  if (status === 'NO_ACTION_NEEDED') {
-    return 'bg-blue-100 text-blue-800';
-  }
-  
-  // For FOLLOW_UP_NEEDED
-  if (status === 'FOLLOW_UP_NEEDED') {
-    // "Waiting for Reply" condition: it's from us and less than 3 days old
-    if (isFromUs) {
-      const days = daysSince(latestMessageDate);
-      if (days < 3) {
-        return 'bg-blue-100 text-blue-800'; // Blue for "Waiting for Reply"
-      }
-    }
-    return 'bg-red-200 text-red-900'; // Red for "Follow Up Needed"
-  }
-  
-  return 'bg-blue-100 text-blue-800'; // Default fallback
 };
 
 // Helper function to get a human-readable status label
@@ -142,17 +118,11 @@ const getStatusLabel = (status: ConversationStatus, date?: Date, isFromUs?: bool
     case 'NOT_INTERESTED':
       return 'Not Interested';
     case 'FOLLOW_UP_NEEDED':
-      // Only apply conditional labeling if we have the date and it's from us
-      if (date && isFromUs) {
-        const days = daysSince(date);
-        if (days < 3) {
-          return 'Waiting for Reply';
-        }
-        return 'Follow Up Needed';
-      }
       return 'Follow Up Needed';
     case 'NO_ACTION_NEEDED':
       return 'No Action Needed';
+    case 'WAITING_FOR_REPLY':
+      return 'Waiting for Reply';
     default:
       return 'Unknown Status';
   }
@@ -327,40 +297,73 @@ export function UniversalInboxClient() {
   // Fetch messages and email accounts
   useEffect(() => {
     const fetchData = async () => {
+      console.log('Universal Inbox: Starting data fetch');
+      const session = await getSession();
+      console.log('Universal Inbox: Session data:', {
+        isAuthenticated: !!session,
+        organizationId: session?.user?.organizationId,
+        role: session?.user?.role
+      });
+
+      if (!session?.user?.organizationId) {
+        console.log('Universal Inbox: No organization ID in session');
+        toast.error('Please select an organization to view messages');
+        return;
+      }
+
       setLoading(true);
       try {
+        console.log('Fetching data...');
+        
+        // Fetch messages and accounts concurrently
         const [messagesResponse, emailAccountsResponse, socialAccountsResponse] = await Promise.all([
           fetch('/api/messages'),
           fetch('/api/email-accounts'),
           fetch('/api/social-accounts')
         ]);
         
-        if (!messagesResponse.ok || !emailAccountsResponse.ok || !socialAccountsResponse.ok) 
-          throw new Error('Failed to fetch data');
+        // Handle messages response
+        if (!messagesResponse.ok) {
+          const errorData = await messagesResponse.json().catch(() => ({ error: 'Failed to parse error response' }));
+          console.error('Messages API error:', errorData);
+          throw new Error(errorData.error || `Failed to fetch messages: ${messagesResponse.status}`);
+        }
         
+        // Handle email accounts response
+        if (!emailAccountsResponse.ok) {
+          const errorData = await emailAccountsResponse.json().catch(() => ({ error: 'Failed to parse error response' }));
+          console.error('Email accounts API error:', errorData);
+          throw new Error(errorData.error || `Failed to fetch email accounts: ${emailAccountsResponse.status}`);
+        }
+
+        // Handle social accounts response
+        if (!socialAccountsResponse.ok) {
+          const errorData = await socialAccountsResponse.json().catch(() => ({ error: 'Failed to parse error response' }));
+          console.error('Social accounts API error:', errorData);
+          throw new Error(errorData.error || `Failed to fetch social accounts: ${socialAccountsResponse.status}`);
+        }
+        
+        // Parse all responses
         const [messages, emailAccounts, socialAccounts] = await Promise.all([
           messagesResponse.json(),
           emailAccountsResponse.json(),
           socialAccountsResponse.json()
         ]);
         
-        // Debug log to check status values
-        console.log('Messages with status:', messages.map((m: EmailMessage) => ({ 
-          id: m.id, 
-          threadId: m.threadId, 
-          status: m.status,
-          receivedAt: m.receivedAt,
-          messageSource: m.messageSource,
-          socialAccountId: m.socialAccountId
-        })));
+        console.log('Fetched data:', {
+          messages: messages.length,
+          emailAccounts: emailAccounts.length,
+          socialAccounts: socialAccounts.length
+        });
         
-        console.log('Social accounts:', socialAccounts);
-        
+        // Update all state
         setMessages(messages);
         setEmailAccounts(emailAccounts);
         setSocialAccounts(socialAccounts);
+        
       } catch (error) {
         console.error('Error fetching data:', error);
+        toast.error(error instanceof Error ? error.message : 'Failed to fetch data');
       } finally {
         setLoading(false);
       }
@@ -555,6 +558,9 @@ export function UniversalInboxClient() {
       const responseData = await response.json();
       console.log('Reply sent successfully:', responseData);
 
+      // Update the thread status to WAITING_FOR_REPLY
+      await updateMessageStatus(selectedThread, 'WAITING_FOR_REPLY');
+
       // Show appropriate success message based on message type
       toast.success(isLinkedIn ? 'LinkedIn reply sent successfully' : 'Email reply sent successfully');
       
@@ -715,7 +721,10 @@ export function UniversalInboxClient() {
 
                   // More robust status determination
                   let status: ConversationStatus;
-                  if (latestMessage.status === 'MEETING_BOOKED' || latestMessage.status === 'NOT_INTERESTED' || latestMessage.status === 'NO_ACTION_NEEDED') {
+                  if (latestMessage.status === 'MEETING_BOOKED' || 
+                      latestMessage.status === 'NOT_INTERESTED' || 
+                      latestMessage.status === 'NO_ACTION_NEEDED' ||
+                      latestMessage.status === 'WAITING_FOR_REPLY') {
                     // Always respect these manually set statuses
                     status = latestMessage.status;
                   } else {
@@ -828,7 +837,7 @@ export function UniversalInboxClient() {
                   <ClientButton 
                     variant="ghost" 
                     size="sm"
-                    className="text-gray-600 hover:text-gray-800 hover:bg-gray-50"
+                    className="text-red-600 hover:text-red-800 hover:bg-red-50"
                     onClick={() => selectedThread && updateConversationStatus(selectedThread, 'NOT_INTERESTED')}
                     disabled={updatingStatus}
                   >
@@ -957,8 +966,26 @@ export function UniversalInboxClient() {
                 <div className="p-6 space-y-6 overflow-y-auto flex-1">
                   {enhancedThreadGroups[selectedThread]
                     .sort((a, b) => {
+                      // Extract timestamp from messageId if it exists (messageIds often contain timestamps)
+                      const aIdTime = a.messageId.match(/^(\d+)/);
+                      const bIdTime = b.messageId.match(/^(\d+)/);
+                      
+                      // If both messages have timestamp-based IDs, use those for primary sorting
+                      if (aIdTime && bIdTime) {
+                        return parseInt(aIdTime[1]) - parseInt(bIdTime[1]);
+                      }
+                      
+                      // If timestamps are very close (within 2 seconds), use messageId as secondary sort
                       const aDate = new Date(a.receivedAt);
                       const bDate = new Date(b.receivedAt);
+                      const timeDiff = Math.abs(aDate.getTime() - bDate.getTime());
+                      
+                      if (timeDiff < 2000) {
+                        // Use message ID as secondary sort key
+                        return a.messageId.localeCompare(b.messageId);
+                      }
+                      
+                      // Default to standard timestamp sort
                       return aDate.getTime() - bDate.getTime();
                     })
                     .map((message, index, array) => {

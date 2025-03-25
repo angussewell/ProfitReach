@@ -65,6 +65,7 @@ model Organization {
   webhookLogs          WebhookLog[]
   appointments         Appointment[]
   chatConversations    ChatConversation[]
+  statusChanges        StatusChangeLog[]
 
   @@index([stripeTestCustomerId], map: "organization_stripe_test_customer_idx")
 }
@@ -280,18 +281,20 @@ model EmailMessage {
   subject              String
   sender               String
   recipientEmail       String
-  content              String
+  content              String          @db.Text
   receivedAt           DateTime
-  messageType          MessageType
-  isRead               Boolean            @default(false)
+  messageType          MessageType     @default(REAL_REPLY)
+  isRead               Boolean         @default(false)
   classificationScores Json?
-  unipileEmailId       String?            @unique
-  status               ConversationStatus @default(FOLLOW_UP_NEEDED)
-  messageSource        MessageSource      @default(EMAIL)
+  unipileEmailId       String?
+  status               MessageStatus   @default(NO_ACTION_NEEDED)
+  messageSource        MessageSource   @default(EMAIL)
   socialAccountId      String?
+  statusChangedAt      DateTime        @default(now())
   socialAccount        SocialAccount?     @relation(fields: [socialAccountId], references: [id])
   emailAccount         EmailAccount?      @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
   organization         Organization       @relation(fields: [organizationId], references: [id])
+  statusChanges        StatusChangeLog[]
 
   @@index([organizationId])
   @@index([emailAccountId])
@@ -477,11 +480,14 @@ enum MessageSource {
   LINKEDIN
 }
 
-enum ConversationStatus {
+enum MessageStatus {
   MEETING_BOOKED
   NOT_INTERESTED
-  FOLLOW_UP_NEEDED
   NO_ACTION_NEEDED
+  FOLLOW_UP_NEEDED
+  WAITING_FOR_REPLY
+  ARCHIVED
+  SPAM
 }
 
 model ChatConversation {
@@ -503,4 +509,32 @@ model ChatMessage {
   createdAt      DateTime         @default(now())
   conversationId String
   conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+enum ConversationStatus {
+  MEETING_BOOKED
+  NOT_INTERESTED
+  FOLLOW_UP_NEEDED
+  NO_ACTION_NEEDED
+  WAITING_FOR_REPLY
+}
+
+model StatusChangeLog {
+  id              String            @id @default(uuid())
+  messageId       String
+  threadId        String
+  organizationId  String
+  oldStatus       ConversationStatus
+  newStatus       ConversationStatus
+  changedAt       DateTime          @default(now())
+  scheduledChange Boolean           @default(false)
+  successful      Boolean
+  errorMessage    String?
+
+  message         EmailMessage @relation(fields: [messageId], references: [messageId])
+  organization    Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([messageId])
+  @@index([organizationId])
+  @@index([changedAt])
 }

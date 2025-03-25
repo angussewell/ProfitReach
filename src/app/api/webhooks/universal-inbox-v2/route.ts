@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { MessageType } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
+
+const prismaClient = new PrismaClient();
 
 // Define webhook data schema - supporting both email and LinkedIn messages
 const UniversalInboxWebhookV2 = z.object({
@@ -56,26 +59,23 @@ interface UniversalInboxDataV2 {
   received_at?: string;
 }
 
-// Add this helper function at the top of the file
-function parseTimestampWithTimezone(timestamp: string | undefined): string {
-  if (!timestamp) {
-    // Create a new date and return as ISO string to ensure UTC
-    return new Date().toISOString();
+// Helper function to standardize timestamp handling
+function getStandardizedTimestamp(inputTimestamp?: string | Date): Date {
+  if (!inputTimestamp) {
+    return new Date();
   }
+  return new Date(inputTimestamp);
+}
 
-  try {
-    // Parse the ISO timestamp
-    const date = new Date(timestamp);
-    if (isNaN(date.getTime())) {
-      throw new Error('Invalid date');
-    }
-    // Return as ISO string to ensure UTC
-    return date.toISOString();
-  } catch (error) {
-    console.error('Error parsing timestamp:', error);
-    // Fallback to current time in UTC
-    return new Date().toISOString();
+// Helper function to process message IDs for consistency
+function processMessageId(messageId: string): string {
+  // If the message ID already starts with a timestamp, keep it as is
+  if (/^\d+/.test(messageId)) {
+    return messageId;
   }
+  
+  // Otherwise, prepend current timestamp for better sorting
+  return `${Date.now()}-${messageId}`;
 }
 
 export async function POST(request: Request) {
@@ -280,7 +280,7 @@ async function handleEmailMessage(data: UniversalInboxDataV2) {
         sender: data.sender,
         recipientEmail: data.recipient_email || '',
         content: data.content,
-        receivedAt: parseTimestampWithTimezone(data.received_at),
+        receivedAt: getStandardizedTimestamp(data.received_at),
         messageType: MessageType.REAL_REPLY,
         unipileEmailId: data.unipile_email_id,
         messageSource: 'EMAIL'
@@ -443,7 +443,7 @@ async function handleLinkedInMessage(data: UniversalInboxDataV2) {
 
     const message = await prisma.emailMessage.create({
       data: {
-        messageId: data.message_id,
+        messageId: processMessageId(data.message_id),
         threadId: data.thread_id || data.message_id,
         organizationId: data.organizationId,
         socialAccountId: socialAccount.id,
@@ -452,7 +452,7 @@ async function handleLinkedInMessage(data: UniversalInboxDataV2) {
         sender: data.sender,
         content: data.content,
         recipientEmail: '',
-        receivedAt: parseTimestampWithTimezone(data.received_at),
+        receivedAt: getStandardizedTimestamp(data.received_at),
         messageType: MessageType.REAL_REPLY,
         status: isFromUs ? 'NO_ACTION_NEEDED' : 'FOLLOW_UP_NEEDED',
         unipileEmailId: data.unipile_linkedin_id,

@@ -32,6 +32,7 @@ export default function ChatPage() {
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [showWebhookTest, setShowWebhookTest] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Redirect if not admin
   useEffect(() => {
@@ -281,12 +282,17 @@ export default function ChatPage() {
     }
   };
 
-  // Handle key press (Enter to send)
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
-    }
+  // Function to resize textarea based on content
+  const resizeTextarea = () => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    
+    // Reset height to auto to get the correct scrollHeight
+    textarea.style.height = 'auto';
+    
+    // Set the height to scrollHeight to expand the textarea
+    const newHeight = Math.min(textarea.scrollHeight, 150);
+    textarea.style.height = `${newHeight}px`;
   };
 
   // Handle form submission
@@ -294,6 +300,53 @@ export default function ChatPage() {
     e.preventDefault();
     handleSendMessage(e);
   };
+
+  // Handle message input change
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInputMessage(e.target.value);
+    // Resize the textarea whenever content changes
+    resizeTextarea();
+  };
+
+  // Handle key press (Enter to send)
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+    // Handle Shift+Enter (add a new line)
+    else if (e.key === 'Enter' && e.shiftKey) {
+      e.preventDefault();
+      // Insert a newline character at the cursor position
+      const cursorPos = e.currentTarget.selectionStart || 0;
+      const textBefore = inputMessage.substring(0, cursorPos);
+      const textAfter = inputMessage.substring(cursorPos);
+      
+      const newValue = textBefore + '\n' + textAfter;
+      setInputMessage(newValue);
+      
+      // Store the target element reference
+      const textarea = e.currentTarget;
+      
+      // Set cursor position after the inserted newline
+      setTimeout(() => {
+        // Check if textarea is still available
+        if (textarea && typeof textarea.selectionStart === 'number') {
+          textarea.selectionStart = textarea.selectionEnd = cursorPos + 1;
+          
+          // Resize the textarea after adding a new line
+          resizeTextarea();
+        }
+      }, 0);
+    }
+  };
+
+  // Reset textarea height when clearing the input
+  useEffect(() => {
+    if (inputMessage === '' && textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
+  }, [inputMessage]);
 
   // Test function for code blocks
   const insertTestCodeMessage = () => {
@@ -462,13 +515,20 @@ End of the complex example.`,
 
           <div className="p-4 border-t border-slate-200 bg-white">
             <form onSubmit={handleSubmit} className="flex items-center gap-3">
-              <input
-                type="text"
-                placeholder={activeConversationId ? "Type your message..." : "Select or create a conversation to start"}
+              <textarea
+                ref={textareaRef}
+                placeholder={activeConversationId ? "Type your message... (Shift+Enter for new line)" : "Select or create a conversation to start"}
                 value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
+                onChange={handleInputChange}
                 onKeyDown={handleKeyPress}
                 disabled={isLoading || !activeConversationId}
+                rows={1}
+                style={{ 
+                  resize: "none", 
+                  overflow: "auto", 
+                  minHeight: "44px",
+                  maxHeight: "150px" 
+                }}
                 className="flex-1 px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent shadow-sm transition-shadow duration-200"
               />
               <button 

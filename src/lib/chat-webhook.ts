@@ -26,8 +26,8 @@ export interface WebhookMessageResponse {
 // Default webhook URL - can be overridden in environment variables or settings
 const DEFAULT_WEBHOOK_URL = 'https://n8n.srv768302.hstgr.cloud/webhook/setter';
 
-// Timeout for webhook requests (45 seconds)
-const WEBHOOK_TIMEOUT_MS = 45000;
+// Timeout for webhook requests (120 seconds)
+const WEBHOOK_TIMEOUT_MS = 120000;
 
 /**
  * Sends a message to the webhook and returns the response

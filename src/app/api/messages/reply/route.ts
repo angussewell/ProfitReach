@@ -254,19 +254,15 @@ export async function POST(request: Request) {
           unipileAccountId: socialAccount.unipileAccountId,
           linkedInUsername: socialAccount.username,
           fromName: socialAccount.name,
-          // Extra LinkedIn-specific fields that might be needed by the workflow
           provider: socialAccount.provider,
           isActive: socialAccount.isActive,
-          // Include email account info for compatibility with existing processes
           internalAccountId: emailAccount.id,
           fromEmail: emailAccount.email,
-          // Add fields needed for N8n to create the message record
-          newMessageId: newMessageId, // Use the generated ID for the outgoing message
-          status: 'NO_ACTION_NEEDED', // This is our message, so no action needed
+          newMessageId: newMessageId,
+          status: 'WAITING_FOR_REPLY',
           isRead: true
         };
         
-        // Use LinkedIn webhook
         webhookUrls = [LINKEDIN_WEBHOOK_URL];
         
         logDebug('Sending LinkedIn reply to webhook with newMessageId', {
@@ -274,10 +270,11 @@ export async function POST(request: Request) {
           messageId: originalMessage.messageId,
           newMessageId: newMessageId,
           socialAccountId: socialAccount.id,
-          socialAccountName: socialAccount.name
+          socialAccountName: socialAccount.name,
+          status: 'WAITING_FOR_REPLY'
         });
       } else {
-        // Email-specific payload (original behavior)
+        // Email-specific payload
         webhookPayload = {
           ...basePayload,
           messageSource: 'EMAIL',
@@ -286,19 +283,18 @@ export async function POST(request: Request) {
           unipileAccountId: emailAccount.unipileAccountId,
           fromEmail: emailAccount.email,
           fromName: emailAccount.name,
-          // Add fields needed for N8n to create the message record
-          newMessageId: newMessageId, // Use the generated ID for the outgoing message
-          status: 'NO_ACTION_NEEDED', // This is our message, so no action needed
+          newMessageId: newMessageId,
+          status: 'WAITING_FOR_REPLY',
           isRead: true
         };
         
-        // Use email webhooks
         webhookUrls = EMAIL_WEBHOOK_URLS;
         
         logDebug('Sending email reply to webhooks with newMessageId', {
           webhooks: EMAIL_WEBHOOK_URLS,
           messageId: originalMessage.messageId,
-          newMessageId: newMessageId
+          newMessageId: newMessageId,
+          status: 'WAITING_FOR_REPLY'
         });
       }
 

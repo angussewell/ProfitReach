@@ -3,20 +3,31 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
-import { Prisma } from '@prisma/client';  // Import for Prisma error types
+import { Prisma, ConversationStatus } from '@prisma/client';
+import { Session } from 'next-auth';
+
+// Extend Session type to include organizationId
+declare module 'next-auth' {
+  interface Session {
+    organizationId?: string;
+  }
+}
 
 // Define the valid conversation statuses
-const ConversationStatus = z.enum([
+const ConversationStatusSchema = z.enum([
   'MEETING_BOOKED',
   'NOT_INTERESTED',
   'FOLLOW_UP_NEEDED',
-  'NO_ACTION_NEEDED'
-]);
+  'NO_ACTION_NEEDED',
+  'WAITING_FOR_REPLY'
+] as const);
+
+type ConversationStatusType = z.infer<typeof ConversationStatusSchema>;
 
 // Schema for status update request validation
 const statusUpdateSchema = z.object({
   threadId: z.string(),
-  status: ConversationStatus
+  status: ConversationStatusSchema
 });
 
 export async function POST(request: Request) {
@@ -109,7 +120,7 @@ export async function POST(request: Request) {
 DO $$ 
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'ConversationStatus') THEN
-        CREATE TYPE "ConversationStatus" AS ENUM ('MEETING_BOOKED', 'NOT_INTERESTED', 'FOLLOW_UP_NEEDED', 'NO_ACTION_NEEDED');
+        CREATE TYPE "ConversationStatus" AS ENUM ('MEETING_BOOKED', 'NOT_INTERESTED', 'FOLLOW_UP_NEEDED', 'NO_ACTION_NEEDED', 'WAITING_FOR_REPLY');
     END IF;
 END
 $$;
@@ -146,5 +157,77 @@ $$;
       },
       { status: 500 }
     );
+  }
+}
+
+export async function PUT(req: Request) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.organizationId) {
+      return new Response('Unauthorized', { status: 401 });
+    }
+
+    const body = await req.json();
+    console.log('Status Update Request:', {
+      threadId: body.threadId,
+      oldStatus: 'Unknown',
+      newStatus: body.status
+    });
+
+    const validatedData = statusUpdateSchema.parse(body);
+
+    // Fetch the current message to log the status change
+    const currentMessage = await prisma.emailMessage.findFirst({
+      where: {
+        threadId: validatedData.threadId,
+        organizationId: session.organizationId
+      }
+    });
+
+    console.log('Status Change:', {
+      threadId: validatedData.threadId,
+      oldStatus: currentMessage?.status || 'Unknown',
+      newStatus: validatedData.status,
+      organizationId: session.organizationId
+    });
+
+    const updatedMessage = await prisma.emailMessage.updateMany({
+      where: {
+        threadId: validatedData.threadId,
+        organizationId: session.organizationId
+      },
+      data: {
+        status: validatedData.status as ConversationStatus,
+        statusChangedAt: new Date()
+      }
+    });
+
+    const message = await prisma.emailMessage.findFirst({
+      where: {
+        threadId: validatedData.threadId,
+        organizationId: session.organizationId
+      }
+    });
+
+    if (!message) {
+      throw new Error('Message not found after update');
+    }
+
+    console.log('Status Update Complete:', {
+      threadId: message.threadId,
+      status: message.status,
+      statusChangedAt: message.statusChangedAt
+    });
+
+    return new Response(JSON.stringify(message), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  } catch (error) {
+    console.error('Status Update Error:', error);
+    return new Response(JSON.stringify({ error: 'Failed to update status' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 } 
