@@ -10,7 +10,9 @@ const ADMIN_ROUTES = [
   '/settings/integrations',
   '/settings/api',
   '/settings/webhooks',
-  '/prompts'
+  '/prompts',
+  '/universal-inbox',
+  '/webhook-logs'
 ];
 
 // Routes that require authentication

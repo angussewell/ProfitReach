@@ -74,7 +74,7 @@ export default function WebhooksPage() {
                 </Button>
               </div>
               <p className="text-sm text-gray-500 mt-1">
-                Use this URL in GoHighLevel to send webhooks to ProfitReach
+                Use this URL in GoHighLevel to send webhooks to TempShift
               </p>
             </div>
 
@@ -100,7 +100,7 @@ export default function WebhooksPage() {
                 />
               </div>
               <p className="text-sm text-gray-500 mt-1">
-                ProfitReach will send processed webhooks to this URL
+                TempShift will send processed webhooks to this URL
               </p>
             </div>
           </div>

@@ -3,10 +3,10 @@ import '@fontsource/jetbrains-mono/400.css';
 import '@fontsource/jetbrains-mono/500.css';
 import '@fontsource/jetbrains-mono/600.css';
 import { Inter } from 'next/font/google';
-import { Toaster } from 'react-hot-toast';
 import { Providers } from '@/components/providers';
-import { Toaster as ShadcnToaster } from '@/components/ui/toaster';
+import { ToasterProvider } from '@/components/providers/toaster-provider';
 import { Metadata, Viewport } from 'next';
+import React from 'react';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -22,17 +22,20 @@ export const fetchCache = 'force-no-store';
 export const runtime = 'nodejs';
 
 export const metadata: Metadata = {
-  title: 'ProfitReach',
+  title: 'TempShift',
   description: 'Automated outbound communication management with AI-enhanced capabilities',
   icons: {
-    icon: '/messagelm-icon.png?v=5',
-    apple: '/messagelm-icon.png?v=5'
+    icon: [
+      { url: '/tempshift_new_favicon_2025.ico', sizes: 'any' }
+    ],
+    apple: '/tempshift_new_favicon_2025.ico',
+    shortcut: '/tempshift_new_favicon_2025.ico'
   },
-  manifest: '/site.webmanifest?v=5',
+  manifest: '/site.webmanifest',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'MessageLM',
+    title: 'TempShift',
   },
   robots: {
     index: true,
@@ -40,7 +43,7 @@ export const metadata: Metadata = {
   },
   other: {
     'msapplication-TileColor': '#ffffff',
-    'msapplication-config': '/browserconfig.xml?v=5'
+    'msapplication-config': '/browserconfig.xml?v=6'
   }
 };
 
@@ -57,13 +60,19 @@ export default function RootLayout({
           rel="stylesheet"
         />
         <meta name="theme-color" content="#ffffff" />
+        <link rel="icon" href="/tempshift_new_favicon_2025.ico" />
+        <link rel="shortcut icon" href="/tempshift_new_favicon_2025.ico" />
+        <link rel="apple-touch-icon" href="/tempshift_new_favicon_2025.ico" />
+        {/* Force no-cache for favicon */}
+        <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+        <meta http-equiv="Pragma" content="no-cache" />
+        <meta http-equiv="Expires" content="0" />
       </head>
       <body className={inter.className} suppressHydrationWarning>
-        <Providers>
-          {children}
-        </Providers>
-        <ShadcnToaster />
-        <Toaster position="top-right" />
+        <React.Fragment>
+          <Providers>{children}</Providers>
+          <ToasterProvider />
+        </React.Fragment>
       </body>
     </html>
   );

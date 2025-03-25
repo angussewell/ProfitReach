@@ -36,10 +36,15 @@ const nextConfig = {
       },
     ];
   },
-  webpack: (config) => {
+  transpilePackages: ['next-auth'],
+  webpack: (config, { isServer }) => {
     config.resolve.alias = {
       ...config.resolve.alias,
       '@': require('path').resolve(__dirname, './src'),
+      'uuid/dist/esm-node/': 'uuid/dist/',
+      'uuid/dist/esm-node': 'uuid/dist',
+      'uuid/dist/esm-browser/': 'uuid/dist/',
+      'uuid/dist/esm-browser': 'uuid/dist'
     };
     return config;
   },

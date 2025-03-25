@@ -19,12 +19,12 @@ const replyRequestSchema = z.object({
 
 // Webhook URLs
 const EMAIL_WEBHOOK_URLS = [
-  'https://messagelm.app.n8n.cloud/webhook-test/sending-replies',
-  'https://messagelm.app.n8n.cloud/webhook/sending-replies'
+  'https://n8n.srv768302.hstgr.cloud/webhook-test/sending-replies',
+  'https://n8n.srv768302.hstgr.cloud/webhook/sending-replies'
 ];
 
 // LinkedIn webhook URL - Update to the correct URL
-const LINKEDIN_WEBHOOK_URL = 'https://messagelm.app.n8n.cloud/webhook/linkedin-replies';
+const LINKEDIN_WEBHOOK_URL = 'https://n8n.srv768302.hstgr.cloud/webhook/linkedin-replies';
 
 // Add more detailed logging to help diagnose issues
 function logDebug(message: string, data: any) {

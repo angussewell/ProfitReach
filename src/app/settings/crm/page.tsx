@@ -38,6 +38,9 @@ interface CrmInfo {
   lead_status: string | null;
   initial_linkedin_message_copy: string | null;
   linkedin_user_provider_id: string | null;
+  title_field_id: string | null;
+  linkedin_profile_photo_field_id: string | null;
+  linkedin_posts_field_id: string | null;
 }
 
 // Define a type for field entries with optional section property
@@ -93,6 +96,9 @@ export default function CRMSettingsPage() {
           lead_status: null,
           initial_linkedin_message_copy: null,
           linkedin_user_provider_id: null,
+          title_field_id: null,
+          linkedin_profile_photo_field_id: null,
+          linkedin_posts_field_id: null,
         };
         setCrmInfo(initialData);
         setEditedCrmInfo(initialData);
@@ -174,7 +180,10 @@ export default function CRMSettingsPage() {
     { key: 'current_scenario', label: 'Current Scenario Field ID' },
     { key: 'outbound_rep_name', label: 'Outbound Rep Name Field ID' },
     { key: 'lead_status', label: 'Lead Status Field ID' },
+    { key: 'title_field_id', label: 'Title Field ID' },
+    { key: 'linkedin_profile_photo_field_id', label: 'LinkedIn Profile Photo Field ID' },
     { key: 'initial_linkedin_message_copy', label: 'Initial LinkedIn Message Copy Field ID' },
+    { key: 'linkedin_posts_field_id', label: 'LinkedIn Posts Field ID' },
     { key: 'linkedin_user_provider_id', label: 'LinkedIn User Provider ID', section: 'LinkedIn Provider Settings' }
   ];
 

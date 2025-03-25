@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { PageHeader } from '@/components/ui/page-header';
 import { ClientCard, ClientButton, ClientInput } from '@/components/ui/client-components';
@@ -222,6 +222,8 @@ export function UniversalInboxClient() {
   const [selectedSocialAccount, setSelectedSocialAccount] = useState<string>('');
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'detail'>('list');
+  // Add a ref to track if the user has manually selected an email
+  const userSelectedEmailRef = useRef<boolean>(false);
 
   // Group messages by thread and sort them
   const threadGroups = messages.reduce((groups, message) => {
@@ -232,10 +234,65 @@ export function UniversalInboxClient() {
     return groups;
   }, {} as Record<string, EmailMessage[]>);
 
+  // Enhance grouping to match by recipient and subject (Gmail-like functionality)
+  // This will merge conversations with the same recipient and similar subject lines
+  const enhancedThreadGroups: Record<string, EmailMessage[]> = { ...threadGroups };
+  
+  // Helper to normalize a subject line (remove Re:, Fwd:, etc.)
+  const normalizeSubject = (subject: string): string => {
+    return subject.replace(/^(Re|Fwd|FW|RE|FWD):\s+/i, '').trim();
+  };
+
+  // Identify threadIds to merge (only for EMAIL messages, not LinkedIn)
+  const threadMappings: Record<string, string> = {};
+  
+  // First, create a map of recipient+subject -> threadId
+  const recipientSubjectMap: Record<string, string> = {};
+  
+  Object.entries(threadGroups).forEach(([threadId, messages]) => {
+    // Skip LinkedIn messages and threads that are already handled
+    if (messages.some(msg => msg.messageSource === 'LINKEDIN') || threadMappings[threadId]) {
+      return;
+    }
+    
+    // Group by normalized subject and recipient
+    messages.forEach(msg => {
+      const normalizedSubject = normalizeSubject(msg.subject);
+      
+      // Create keys for both directions of the conversation
+      const recipientSubjectKey1 = `${msg.sender}|${msg.recipientEmail}|${normalizedSubject}`;
+      const recipientSubjectKey2 = `${msg.recipientEmail}|${msg.sender}|${normalizedSubject}`;
+      
+      // If this combination already exists, we found a match
+      if (recipientSubjectMap[recipientSubjectKey1] && recipientSubjectMap[recipientSubjectKey1] !== threadId) {
+        threadMappings[threadId] = recipientSubjectMap[recipientSubjectKey1];
+      } else if (recipientSubjectMap[recipientSubjectKey2] && recipientSubjectMap[recipientSubjectKey2] !== threadId) {
+        threadMappings[threadId] = recipientSubjectMap[recipientSubjectKey2];
+      } else {
+        // Otherwise, register this thread for potential future matches
+        recipientSubjectMap[recipientSubjectKey1] = threadId;
+        recipientSubjectMap[recipientSubjectKey2] = threadId;
+      }
+    });
+  });
+  
+  // Now merge the threads based on the mappings
+  Object.entries(threadMappings).forEach(([sourceThreadId, targetThreadId]) => {
+    if (enhancedThreadGroups[sourceThreadId]) {
+      // Add messages from source thread to target thread
+      enhancedThreadGroups[targetThreadId] = [
+        ...enhancedThreadGroups[targetThreadId],
+        ...enhancedThreadGroups[sourceThreadId]
+      ];
+      // Remove the source thread as it's now merged
+      delete enhancedThreadGroups[sourceThreadId];
+    }
+  });
+
   // Sort threads by latest message date
-  const sortedThreadIds = Object.keys(threadGroups).sort((a, b) => {
-    const aMessages = threadGroups[a];
-    const bMessages = threadGroups[b];
+  const sortedThreadIds = Object.keys(enhancedThreadGroups).sort((a, b) => {
+    const aMessages = enhancedThreadGroups[a];
+    const bMessages = enhancedThreadGroups[b];
     
     // Get latest message from each thread
     const aLatest = aMessages.reduce((latest, msg) => {
@@ -254,7 +311,7 @@ export function UniversalInboxClient() {
     return new Date(bLatest.receivedAt).getTime() - new Date(aLatest.receivedAt).getTime();
   });
 
-  const hasMessages = Object.keys(threadGroups).length > 0;
+  const hasMessages = Object.keys(enhancedThreadGroups).length > 0;
 
   // Navigate to thread detail view
   const openThread = (threadId: string) => {
@@ -349,8 +406,9 @@ export function UniversalInboxClient() {
 
   // Update the useEffect that handles pre-selection
   useEffect(() => {
-    if (showReplyModal && selectedThread && threadGroups[selectedThread]) {
-      const messages = threadGroups[selectedThread];
+    // Only pre-select if the modal is being opened and the user hasn't manually selected an email
+    if (showReplyModal && selectedThread && enhancedThreadGroups[selectedThread] && !userSelectedEmailRef.current) {
+      const messages = enhancedThreadGroups[selectedThread];
       const latestMessage = messages.sort((a, b) => 
         new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime()
       )[0];
@@ -386,7 +444,12 @@ export function UniversalInboxClient() {
         }
       }
     }
-  }, [showReplyModal, selectedThread, emailAccounts, socialAccounts, threadGroups]);
+    
+    // Reset the user selection flag when the modal closes
+    if (!showReplyModal) {
+      userSelectedEmailRef.current = false;
+    }
+  }, [showReplyModal, selectedThread, emailAccounts, socialAccounts, enhancedThreadGroups]);
 
   // Filter visible accounts for UI display
   const visibleEmailAccounts = emailAccounts.filter(account => !account.isHidden);
@@ -394,7 +457,7 @@ export function UniversalInboxClient() {
   const handleReply = async () => {
     if (!selectedThread) return;
     
-    const threadMessages = threadGroups[selectedThread];
+    const threadMessages = enhancedThreadGroups[selectedThread];
     const isLinkedIn = isLinkedInThread(threadMessages);
     
     // Check required fields based on message type
@@ -406,6 +469,14 @@ export function UniversalInboxClient() {
     try {
       const latestMessage = threadMessages.sort((a, b) => 
         new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime()
+      )[0];
+      
+      // Get the correct recipient (the other participant in the thread)
+      const toAddress = findOtherParticipant(threadMessages);
+
+      // Find the original message in the thread (the first message)
+      const originalMessage = threadMessages.sort((a, b) => 
+        new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime()
       )[0];
 
       // Prepare account information based on message type
@@ -454,14 +525,6 @@ export function UniversalInboxClient() {
           name: emailAccount.name
         };
       }
-
-      // Get the correct recipient (the other participant in the thread)
-      const toAddress = findOtherParticipant(threadMessages);
-
-      // Find the original message in the thread (the first message)
-      const originalMessage = threadMessages.sort((a, b) => 
-        new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime()
-      )[0];
 
       // Construct request body - use the original message ID
       const requestBody = {
@@ -639,7 +702,7 @@ export function UniversalInboxClient() {
             {hasMessages ? (
               <div className="divide-y divide-slate-200/60 overflow-y-auto flex-1">
                 {sortedThreadIds.map(threadId => {
-                  const messages = threadGroups[threadId];
+                  const messages = enhancedThreadGroups[threadId];
                   const latestMessage = messages.reduce((latest, msg) => {
                     const msgDate = new Date(msg.receivedAt);
                     const latestDate = new Date(latest.receivedAt);
@@ -732,11 +795,11 @@ export function UniversalInboxClient() {
           // Detail View (Full Width)
           <ClientCard className="h-[calc(100vh-14rem)] overflow-hidden flex flex-col border-slate-200/60 shadow-lg shadow-slate-200/50">
             <div className="px-6 py-4 border-b border-slate-200/60 flex justify-between items-center bg-white/95">
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 min-w-0 max-w-[60%]">
                 <ClientButton 
                   variant="ghost" 
                   size="sm"
-                  className="text-slate-600 hover:text-slate-800 hover:bg-slate-50"
+                  className="text-slate-600 hover:text-slate-800 hover:bg-slate-50 flex-shrink-0"
                   onClick={backToList}
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 mr-1">
@@ -744,11 +807,11 @@ export function UniversalInboxClient() {
                   </svg>
                   <span>Back</span>
                 </ClientButton>
-                <h2 className="text-lg font-semibold text-slate-900">
-                  {selectedThread ? findOtherParticipant(threadGroups[selectedThread]) : ''}
+                <h2 className="text-lg font-semibold text-slate-900 truncate overflow-hidden text-ellipsis">
+                  {selectedThread ? findOtherParticipant(enhancedThreadGroups[selectedThread]) : ''}
                 </h2>
               </div>
-              <div className="flex gap-2 items-center">
+              <div className="flex gap-2 items-center flex-shrink-0">
                 {/* Status update buttons group */}
                 <div className="flex bg-slate-50 rounded-md p-1 gap-1">
                   <ClientButton 
@@ -817,7 +880,7 @@ export function UniversalInboxClient() {
                     className="text-red-600 border-red-300 hover:text-red-800 hover:bg-red-50"
                     onClick={() => {
                       if (!selectedThread) return;
-                      const latestMessage = threadGroups[selectedThread].sort((a, b) => 
+                      const latestMessage = enhancedThreadGroups[selectedThread].sort((a, b) => 
                         new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime()
                       )[0];
                       handleDelete(latestMessage);
@@ -832,14 +895,14 @@ export function UniversalInboxClient() {
             
             {selectedThread && (
               <div className="flex h-full flex-col">
-                {selectedThread && threadGroups[selectedThread] && 
-                 isLinkedInThread(threadGroups[selectedThread]) && (
+                {selectedThread && enhancedThreadGroups[selectedThread] && 
+                 isLinkedInThread(enhancedThreadGroups[selectedThread]) && (
                   <div className="flex items-center justify-end border-b border-gray-200 p-4">
                     <button
                       className="flex items-center space-x-1 rounded bg-blue-500 px-3 py-1.5 text-sm text-white hover:bg-blue-600"
                       onClick={() => {
                         // Get the first message of the thread 
-                        const messages = threadGroups[selectedThread];
+                        const messages = enhancedThreadGroups[selectedThread];
                         const message = messages[0]; // Use the first message in the thread
                         
                         // Find the correct social account to get the Unipile account ID
@@ -847,7 +910,7 @@ export function UniversalInboxClient() {
                         const unipileAccountId = socialAccount?.unipileAccountId || '';
                         
                         toast.info("Retrieving full chat history...");
-                        fetch("https://messagelm.app.n8n.cloud/webhook/linkedin-conversation", {
+                        fetch("https://n8n.srv768302.hstgr.cloud/webhook/linkedin-conversation", {
                           method: "POST",
                           headers: {
                             "Content-Type": "application/json",
@@ -892,7 +955,7 @@ export function UniversalInboxClient() {
                 )}
                 
                 <div className="p-6 space-y-6 overflow-y-auto flex-1">
-                  {threadGroups[selectedThread]
+                  {enhancedThreadGroups[selectedThread]
                     .sort((a, b) => {
                       const aDate = new Date(a.receivedAt);
                       const bDate = new Date(b.receivedAt);
@@ -917,15 +980,17 @@ export function UniversalInboxClient() {
                           )}
                         >
                           <div className="flex justify-between items-start mb-4">
-                            <div>
-                              <p className="font-medium text-slate-900 flex items-center gap-1">
-                                {isLinkedIn && <LinkedInIcon className="h-4 w-4 text-blue-600" />}
+                            <div className="min-w-0 max-w-[70%]">
+                              <p className="font-medium text-slate-900 flex items-center gap-1 truncate overflow-hidden text-ellipsis">
+                                {isLinkedIn && <LinkedInIcon className="h-4 w-4 text-blue-600 flex-shrink-0" />}
+                                <span className="truncate">
                                 {isLinkedIn 
                                   ? getLinkedInSenderName(message.sender, message, socialAccounts)
                                   : message.sender}
+                                </span>
                               </p>
                               {!isLinkedIn && message.recipientEmail && (
-                                <p className="text-xs text-slate-500 mt-0.5">
+                                <p className="text-xs text-slate-500 mt-0.5 truncate overflow-hidden text-ellipsis">
                                   to {message.recipientEmail}
                                 </p>
                               )}
@@ -935,7 +1000,7 @@ export function UniversalInboxClient() {
                                 </p>
                               )}
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-shrink-0">
                               <div className="text-sm text-slate-500">
                                 {formatStoredDate(message.receivedAt)}
                               </div>
@@ -962,43 +1027,32 @@ export function UniversalInboxClient() {
       {/* Reply Modal */}
       {showReplyModal && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl w-[800px] max-h-[80vh] flex flex-col shadow-xl border border-slate-200/60">
-            <div className="px-6 py-4 border-b border-slate-200/60 flex justify-between items-center bg-white/95">
-              <h2 className="text-lg font-semibold flex items-center gap-2 text-slate-900">
-                {selectedThread && threadGroups[selectedThread] && 
-                 isLinkedInThread(threadGroups[selectedThread]) ? (
-                  <>
-                    <LinkedInIcon className="h-5 w-5 text-blue-600" />
-                    <span>Reply to LinkedIn Message</span>
-                  </>
-                ) : (
-                  <>
-                    <ReplyIcon className="h-5 w-5 text-slate-500" />
-                    <span>Reply</span>
-                  </>
-                )}
-              </h2>
+          <div className="bg-white rounded-xl shadow-xl w-[30rem] max-w-full">
+            <div className="flex justify-between items-center p-4 border-b border-slate-200">
+              <h3 className="text-lg font-semibold text-slate-900">Reply to Conversation</h3>
               <button 
-                onClick={() => {
-                  setShowReplyModal(false);
-                  setReplyContent('');
-                }}
-                className="text-slate-400 hover:text-slate-600 transition-colors"
+                onClick={() => setShowReplyModal(false)}
+                className="text-slate-400 hover:text-slate-500"
               >
-                <CloseIcon className="h-5 w-5" />
+                <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="p-6 flex-1">
-              <div className="mb-4">
+            <div className="p-4 space-y-4">
+              <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   From
                 </label>
-                {selectedThread && threadGroups[selectedThread] && 
-                 isLinkedInThread(threadGroups[selectedThread]) ? (
+                {selectedThread && enhancedThreadGroups[selectedThread] && 
+                 isLinkedInThread(enhancedThreadGroups[selectedThread]) ? (
                   <select
                     value={selectedSocialAccount}
-                    onChange={(e) => setSelectedSocialAccount(e.target.value)}
+                    onChange={(e) => {
+                      setSelectedSocialAccount(e.target.value);
+                      // Set the flag to indicate user has manually selected an account
+                      userSelectedEmailRef.current = true;
+                    }}
                     className="w-full p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    data-component-name="UniversalInboxClient"
                   >
                     <option value="">Select a LinkedIn account</option>
                     {socialAccounts
@@ -1015,7 +1069,11 @@ export function UniversalInboxClient() {
                 ) : (
                   <select
                     value={selectedFromEmail}
-                    onChange={(e) => setSelectedFromEmail(e.target.value)}
+                    onChange={(e) => {
+                      setSelectedFromEmail(e.target.value);
+                      // Set the flag to indicate user has manually selected an email
+                      userSelectedEmailRef.current = true;
+                    }}
                     className="w-full p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">Select an email account</option>
@@ -1026,6 +1084,17 @@ export function UniversalInboxClient() {
                     ))}
                   </select>
                 )}
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  To
+                </label>
+                <div className="text-sm text-slate-800 border border-slate-300 rounded-md p-2 bg-slate-50">
+                  {selectedThread && enhancedThreadGroups[selectedThread] ? 
+                    findOtherParticipant(enhancedThreadGroups[selectedThread]) : 
+                    ''}
+                </div>
               </div>
               <textarea
                 value={replyContent}
@@ -1049,7 +1118,7 @@ export function UniversalInboxClient() {
                 disabled={
                   !replyContent.trim() || 
                   replying || 
-                  (isLinkedInThread(threadGroups[selectedThread || '']) ? !selectedSocialAccount : !selectedFromEmail)
+                  (isLinkedInThread(enhancedThreadGroups[selectedThread || '']) ? !selectedSocialAccount : !selectedFromEmail)
                 }
                 className="flex items-center gap-2"
               >

@@ -11,9 +11,9 @@ interface Props {
 }
 
 // Define an extended type that includes our new fields
-interface ExtendedWebhookLog extends WebhookLog {
-  emailSubject?: string;
-  emailHtmlBody?: string;
+interface ExtendedWebhookLog extends Omit<WebhookLog, 'emailSubject' | 'emailHtmlBody'> {
+  emailSubject?: string | null;
+  emailHtmlBody?: string | null;
 }
 
 export default async function WebhookLogPage({ params }: Props) {
@@ -42,6 +42,7 @@ export default async function WebhookLogPage({ params }: Props) {
   // Cast the log data to match the expected types
   const formattedLog = {
     ...log,
+    createdAt: log.createdAt instanceof Date ? log.createdAt.toISOString() : log.createdAt,
     requestBody: log.requestBody as Record<string, any>,
     responseBody: typeof log.responseBody === 'string' 
       ? log.responseBody 

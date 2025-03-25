@@ -35,6 +35,7 @@ interface CrmInfo {
   linkedin_user_provider_id: string | null;
   title_field_id: string | null;
   linkedin_profile_photo_field_id: string | null;
+  linkedin_posts_field_id: string | null;
 }
 
 interface CrmSettingsProps {
@@ -87,6 +88,7 @@ export function CrmSettings({ organization, onLocationIdChange }: CrmSettingsPro
           linkedin_user_provider_id: null,
           title_field_id: null,
           linkedin_profile_photo_field_id: null,
+          linkedin_posts_field_id: null,
         };
         setCrmInfo(initialData);
         setEditedCrmInfo(initialData);
@@ -167,6 +169,7 @@ export function CrmSettings({ organization, onLocationIdChange }: CrmSettingsPro
     { key: 'title_field_id', label: 'Title Field ID' },
     { key: 'linkedin_profile_photo_field_id', label: 'LinkedIn Profile Photo Field ID' },
     { key: 'initial_linkedin_message_copy', label: 'Initial LinkedIn Message Copy Field ID' },
+    { key: 'linkedin_posts_field_id', label: 'LinkedIn Posts Field ID' },
     { key: 'linkedin_user_provider_id', label: 'LinkedIn User Provider ID', section: 'LinkedIn Provider Settings' }
   ];
 

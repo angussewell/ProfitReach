@@ -134,6 +134,7 @@ export async function PUT(
           "linkedin_user_provider_id" = ${body.linkedin_user_provider_id || null}::text,
           "title_field_id" = ${body.title_field_id || null}::text,
           "linkedin_profile_photo_field_id" = ${body.linkedin_profile_photo_field_id || null}::text,
+          "linkedin_posts_field_id" = ${body.linkedin_posts_field_id || null}::text,
           "updatedAt" = CURRENT_TIMESTAMP
         WHERE "organizationId" = ${organizationId}::text
       `;
@@ -154,7 +155,7 @@ export async function PUT(
          "date_of_research", "all_employees", "provider_id", "mutual_connections", 
          "additional_research", "current_scenario", "outbound_rep_name", "lead_status", 
          "initial_linkedin_message_copy", "linkedin_user_provider_id", "title_field_id",
-         "linkedin_profile_photo_field_id", "updatedAt", "createdAt")
+         "linkedin_profile_photo_field_id", "linkedin_posts_field_id", "updatedAt", "createdAt")
         VALUES 
         ('${uuid}', '${organizationId}', 
          ${escapeSqlString(body.private_integration_token)}, 
@@ -177,7 +178,8 @@ export async function PUT(
          ${escapeSqlString(body.initial_linkedin_message_copy)}, 
          ${escapeSqlString(body.linkedin_user_provider_id)},
          ${escapeSqlString(body.title_field_id)},
-         ${escapeSqlString(body.linkedin_profile_photo_field_id)}, 
+         ${escapeSqlString(body.linkedin_profile_photo_field_id)},
+         ${escapeSqlString(body.linkedin_posts_field_id)}, 
          CURRENT_TIMESTAMP, 
          CURRENT_TIMESTAMP)
       `);

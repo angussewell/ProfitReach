@@ -76,25 +76,28 @@ const predefinedRanges: PredefinedRange[] = [
 ];
 
 interface DateRangeFilterProps {
-  onRangeChange: (range: DateRange) => void;
+  value: DateRange | undefined;
+  onChange: (range: DateRange | undefined) => void;
 }
 
-export function DateRangeFilter({ onRangeChange }: DateRangeFilterProps) {
+export function DateRangeFilter({ value, onChange }: DateRangeFilterProps) {
   const [selectedRange, setSelectedRange] = React.useState<string>('last30days');
 
   const handleRangeChange = (value: string) => {
     setSelectedRange(value);
     const range = predefinedRanges.find(r => r.value === value)?.getRange();
     if (range) {
-      onRangeChange(range);
+      onChange(range);
     }
   };
 
   React.useEffect(() => {
-    // Set initial range
-    const initialRange = predefinedRanges.find(r => r.value === selectedRange)?.getRange();
-    if (initialRange) {
-      onRangeChange(initialRange);
+    // Set initial range if no value is provided
+    if (!value) {
+      const initialRange = predefinedRanges.find(r => r.value === selectedRange)?.getRange();
+      if (initialRange) {
+        onChange(initialRange);
+      }
     }
   }, []);
 
@@ -114,4 +117,4 @@ export function DateRangeFilter({ onRangeChange }: DateRangeFilterProps) {
       </Select>
     </div>
   );
-} 
+}

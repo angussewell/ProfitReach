@@ -5,8 +5,8 @@ import { prisma } from '@/lib/prisma';
 
 // Webhook URLs
 const WEBHOOK_URLS = [
-  'https://messagelm.app.n8n.cloud/webhook-test/sending-replies',
-  'https://messagelm.app.n8n.cloud/webhook/sending-replies'
+  'https://n8n.srv768302.hstgr.cloud/webhook-test/sending-replies',
+  'https://n8n.srv768302.hstgr.cloud/webhook/sending-replies'
 ];
 
 export const dynamic = 'force-dynamic';

@@ -15,16 +15,21 @@ interface WebhookLogDetailProps {
     contactEmail: string;
     contactName: string;
     company: string;
-    createdAt: string;
+    createdAt: string | Date;
     requestBody: Record<string, any>;
     responseBody: string;
-    emailSubject?: string;
-    emailHtmlBody?: string;
+    emailSubject?: string | null;
+    emailHtmlBody?: string | null;
   };
 }
 
 export default function WebhookLogDetail({ log }: WebhookLogDetailProps) {
   const requestData = log.requestBody as any;
+  
+  // Format date if it's a Date object
+  const formattedDate = log.createdAt instanceof Date 
+    ? log.createdAt.toLocaleString() 
+    : log.createdAt;
   
   // Debug logging
   console.log("Webhook log data in detail component:", log);
@@ -60,7 +65,7 @@ export default function WebhookLogDetail({ log }: WebhookLogDetailProps) {
               <div className="space-y-1">
                 <Label className="text-sm text-muted-foreground">Time</Label>
                 <div className="text-sm font-medium">
-                  {log.createdAt}
+                  {formattedDate}
                 </div>
               </div>
 

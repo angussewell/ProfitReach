@@ -38,7 +38,8 @@ export default function Sidebar(): JSX.Element {
     { 
       href: '/universal-inbox', 
       label: 'Universal Inbox', 
-      icon: createIcon(Icons.Inbox, 'universal-inbox-icon')
+      icon: createIcon(Icons.Inbox, 'universal-inbox-icon'),
+      adminOnly: true
     },
     { 
       href: '/scenarios', 
@@ -61,6 +62,12 @@ export default function Sidebar(): JSX.Element {
       icon: createIcon(Icons.FileCode, 'attachments-icon')
     },
     { 
+      href: '/chat', 
+      label: 'Chat', 
+      icon: createIcon(Icons.MessageCircle, 'chat-icon'),
+      adminOnly: true
+    },
+    { 
       href: '/prompts', 
       label: 'Prompts', 
       icon: createIcon(Icons.MessageSquare, 'prompts-icon'),
@@ -69,7 +76,8 @@ export default function Sidebar(): JSX.Element {
     { 
       href: '/webhook-logs', 
       label: 'Logs', 
-      icon: createIcon(Icons.Webhook, 'webhook-logs-icon')
+      icon: createIcon(Icons.Webhook, 'webhook-logs-icon'),
+      adminOnly: true
     },
     { 
       href: '/accounts', 

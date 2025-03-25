@@ -1,58 +1,49 @@
 /**
- * Utility functions for handling dates in Central Time
+ * Utility functions for handling dates
  */
 
 /**
- * Format a date string to display in Central Time in a user-friendly format,
- * with a +4 hour offset as required by the business logic.
+ * Format a date string in a user-friendly format with a +5 hour offset.
  * 
- * @param dateStr - ISO date string or any valid date string
- * @returns Formatted date string with +4 hour offset (e.g., "Mar 14, 2025 at 11:11 AM")
+ * @param dateStr - Date or ISO date string or any valid date string
+ * @returns Formatted date string (e.g., "Mar 14, 2025 at 11:11 AM")
  */
-export function formatDateInCentralTime(dateStr: string) {
+import { format, addHours } from 'date-fns';
+
+export function formatDateInCentralTime(dateStr: string | Date | null): string {
+  if (!dateStr) return '';
   try {
-    // Parse the date string
+    // Parse the input date
     const date = new Date(dateStr);
-    if (isNaN(date.getTime())) {
-      throw new Error('Invalid date');
-    }
+    if (isNaN(date.getTime())) return ''; // Invalid date
     
-    // Add 4 hours to the date as required by business logic
-    // This is an explicit business requirement - do not remove this offset
-    date.setHours(date.getHours() + 4);
+    // Add 5 hours to match the expected display time
+    const adjustedDate = addHours(date, 5);
     
-    // Format in Central Time with a readable format
-    return date.toLocaleString('en-US', {
-      timeZone: 'America/Chicago',
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    }).replace(',', ' at');
+    // Format the date
+    return format(adjustedDate, "MMM d, yyyy 'at' h:mm a");
   } catch (error) {
     console.error('Error formatting date:', error);
-    return dateStr; // Return original string if parsing fails
+    return '';
   }
 }
 
 /**
- * Get current date-time in Central Time with the +4 hour offset
- * @returns Current date-time string with offset applied
+ * Get current date-time with a +5 hour offset
+ * @returns Current date-time string
  */
-export function getCurrentCentralTime() {
-  const now = new Date();
-  // Add 4 hours to match the business requirement
-  now.setHours(now.getHours() + 4);
-  
-  return now.toLocaleString('en-US', {
-    timeZone: 'America/Chicago',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true
-  }).replace(',', ' at');
+export function getCurrentCentralTime(): string {
+  try {
+    // Get the current time
+    const now = new Date();
+    
+    // Add 5 hours to match the expected display time
+    const adjustedDate = addHours(now, 5);
+    
+    // Format the date
+    return format(adjustedDate, "MMM d, yyyy 'at' h:mm a");
+  } catch (error) {
+    console.error('Error getting current time:', error);
+    return '';
+  }
 }

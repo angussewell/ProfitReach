@@ -402,7 +402,7 @@ async function processWebhookAsync(
           headers: { 
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            'User-Agent': 'ProfitReach-API'
+            'User-Agent': 'TempShift-API'
           },
           body: JSON.stringify(outboundData)
         });
