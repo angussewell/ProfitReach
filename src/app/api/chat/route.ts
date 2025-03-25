@@ -19,8 +19,8 @@ export async function POST(req: Request) {
   }
   
   try {
-    // Get the message and conversation ID from the request body
-    const { message, conversationId } = await req.json();
+    // Get the message, conversation ID, and email mode from the request body
+    const { message, conversationId, emailMode = 'new' } = await req.json();
     
     if (!message || typeof message !== 'string') {
       return NextResponse.json({ error: 'Invalid message format' }, { status: 400 });
@@ -103,8 +103,9 @@ export async function POST(req: Request) {
         const aiResponse = await sendMessageToWebhook(
           message,
           formattedPreviousMessages,
-          conversationId,
-          organizationId
+          conversationId, // This will be used as sessionId in the webhook
+          organizationId,
+          emailMode
         );
         
         // Update the message with the real response

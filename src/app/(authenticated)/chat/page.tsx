@@ -31,6 +31,7 @@ export default function ChatPage() {
   const [isPolling, setIsPolling] = useState(false);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [showWebhookTest, setShowWebhookTest] = useState(false);
+  const [emailMode, setEmailMode] = useState<'new' | 'response'>('new');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -129,6 +130,11 @@ export default function ChatPage() {
   // Toggle webhook test panel
   const toggleWebhookTest = () => {
     setShowWebhookTest(!showWebhookTest);
+  };
+
+  // Handle email mode change
+  const handleEmailModeChange = (mode: 'new' | 'response') => {
+    setEmailMode(mode);
   };
 
   // Create a function to poll for message updates
@@ -235,8 +241,10 @@ export default function ChatPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          message: userMessage.content,
-          conversationId: activeConversationId
+          message: inputMessage.trim(),
+          previousMessages: messages,
+          conversationId: activeConversationId,
+          emailMode
         }),
       });
 
@@ -432,13 +440,38 @@ End of the complex example.`,
             <h1 className="text-3xl font-bold tracking-tight mb-2 text-slate-800">Chat</h1>
             <p className="text-muted-foreground text-slate-500">Chat with your AI assistant</p>
           </div>
-          <button 
-            onClick={toggleWebhookTest}
-            className="text-sm text-slate-500 hover:text-slate-700 transition-colors underline-offset-4 hover:underline focus:outline-none"
-            aria-label="Toggle webhook test panel"
-          >
-            {showWebhookTest ? 'Hide developer tools' : 'Developer tools'}
-          </button>
+          <div className="flex items-center gap-4">
+            {/* Email Mode Toggle */}
+            <div className="flex items-center bg-slate-100 rounded-lg p-1">
+              <button
+                onClick={() => handleEmailModeChange('new')}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  emailMode === 'new'
+                    ? 'bg-white text-red-600 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                New Email
+              </button>
+              <button
+                onClick={() => handleEmailModeChange('response')}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  emailMode === 'response'
+                    ? 'bg-white text-red-600 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Response
+              </button>
+            </div>
+            <button 
+              onClick={toggleWebhookTest}
+              className="text-sm text-slate-500 hover:text-slate-700 transition-colors underline-offset-4 hover:underline focus:outline-none"
+              aria-label="Toggle webhook test panel"
+            >
+              {showWebhookTest ? 'Hide developer tools' : 'Developer tools'}
+            </button>
+          </div>
         </div>
       </div>
       

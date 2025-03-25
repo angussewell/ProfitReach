@@ -4,8 +4,8 @@ import { useState, useEffect } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { useSession } from 'next-auth/react';
 
-// Timeout for webhook requests (120 seconds)
-const WEBHOOK_TIMEOUT_MS = 120000;
+// Timeout for webhook requests (150 seconds)
+const WEBHOOK_TIMEOUT_MS = 150000;
 
 export default function WebhookTest() {
   const [webhookUrl, setWebhookUrl] = useState('https://n8n.srv768302.hstgr.cloud/webhook/setter');
@@ -110,11 +110,11 @@ export default function WebhookTest() {
       
       // Check if the error is a timeout
       if (error.name === 'AbortError') {
-        setTestResponse({ error: 'The webhook request timed out after 120 seconds. This may indicate the webhook service is taking too long to respond.' });
+        setTestResponse({ error: 'The webhook request timed out after 150 seconds. This may indicate the webhook service is taking too long to respond.' });
         
         toast({
           title: 'Webhook Test Timed Out',
-          description: 'The request timed out after 120 seconds.',
+          description: 'The request timed out after 150 seconds.',
           variant: 'destructive',
         });
       } else {

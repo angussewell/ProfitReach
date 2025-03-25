@@ -16,18 +16,20 @@ export interface WebhookMessageRequest {
   source: string;
   version: string;
   organizationId: string;
+  emailMode: 'new' | 'response';
 }
 
 export interface WebhookMessageResponse {
   chat_id: string;
   output: string;
+  email_mode: 'new' | 'response';
 }
 
 // Default webhook URL - can be overridden in environment variables or settings
 const DEFAULT_WEBHOOK_URL = 'https://n8n.srv768302.hstgr.cloud/webhook/setter';
 
-// Timeout for webhook requests (120 seconds)
-const WEBHOOK_TIMEOUT_MS = 120000;
+// Timeout for webhook requests (150 seconds)
+const WEBHOOK_TIMEOUT_MS = 150000;
 
 /**
  * Sends a message to the webhook and returns the response
@@ -36,7 +38,8 @@ export async function sendMessageToWebhook(
   message: string,
   previousMessages: { role: 'user' | 'assistant'; content: string }[],
   sessionId: string,
-  organizationId: string
+  organizationId: string,
+  emailMode: 'new' | 'response' = 'new'
 ): Promise<string> {
   // Generate a unique message ID
   const messageId = uuidv4();
@@ -50,7 +53,8 @@ export async function sendMessageToWebhook(
     timestamp: new Date().toISOString(),
     source: "promptlm-app",
     version: "1.0.0",
-    organizationId
+    organizationId,
+    emailMode
   };
 
   // Get the webhook URL from environment variables or use the default
