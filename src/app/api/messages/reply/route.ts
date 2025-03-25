@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { PrismaClient } from '@prisma/client';
 
 // Schema for reply request validation
 const replyRequestSchema = z.object({
@@ -51,6 +52,30 @@ type WebhookErrorResult = {
 
 type WebhookResult = WebhookSuccessResult | WebhookErrorResult;
 
+// Create a shared lib file for timestamp and message ID functions
+// For now, duplicate them here for consistency
+
+// Generate a reliable timestamp-based message ID for our database
+function generateMessageId(): string {
+  // Use Date.now() as the first part to ensure chronological order
+  const timestamp = Date.now();
+  const randomPart = Math.random().toString(36).substring(2, 9);
+  return `${timestamp}-${randomPart}`;
+}
+
+// Function to get current time in a consistent format
+function getStandardizedTimestamp(inputTimestamp?: string | Date): Date {
+  if (!inputTimestamp) {
+    return new Date();
+  }
+  return new Date(inputTimestamp);
+}
+
+// Keep the existing getCurrentCentralTime function but make it use our standardized function
+function getCurrentCentralTime(): Date {
+  return getStandardizedTimestamp();
+}
+
 export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
@@ -73,8 +98,13 @@ export async function POST(request: Request) {
     }
 
     const validatedData = validationResult.data;
+    
+    // Generate a new message ID early to use consistently throughout
+    const newMessageId = generateMessageId();
+    
     logDebug('Validated reply request', {
       messageId: validatedData.messageId,
+      newMessageId: newMessageId,
       action: validatedData.action,
       hasSocialAccountId: !!validatedData.socialAccountId
     });
@@ -230,14 +260,19 @@ export async function POST(request: Request) {
           // Include email account info for compatibility with existing processes
           internalAccountId: emailAccount.id,
           fromEmail: emailAccount.email,
+          // Add fields needed for N8n to create the message record
+          newMessageId: newMessageId, // Use the generated ID for the outgoing message
+          status: 'NO_ACTION_NEEDED', // This is our message, so no action needed
+          isRead: true
         };
         
         // Use LinkedIn webhook
         webhookUrls = [LINKEDIN_WEBHOOK_URL];
         
-        logDebug('Sending LinkedIn reply to webhook', {
+        logDebug('Sending LinkedIn reply to webhook with newMessageId', {
           webhook: LINKEDIN_WEBHOOK_URL,
           messageId: originalMessage.messageId,
+          newMessageId: newMessageId,
           socialAccountId: socialAccount.id,
           socialAccountName: socialAccount.name
         });
@@ -251,14 +286,19 @@ export async function POST(request: Request) {
           unipileAccountId: emailAccount.unipileAccountId,
           fromEmail: emailAccount.email,
           fromName: emailAccount.name,
+          // Add fields needed for N8n to create the message record
+          newMessageId: newMessageId, // Use the generated ID for the outgoing message
+          status: 'NO_ACTION_NEEDED', // This is our message, so no action needed
+          isRead: true
         };
         
         // Use email webhooks
         webhookUrls = EMAIL_WEBHOOK_URLS;
         
-        logDebug('Sending email reply to webhooks', {
+        logDebug('Sending email reply to webhooks with newMessageId', {
           webhooks: EMAIL_WEBHOOK_URLS,
-          messageId: originalMessage.messageId
+          messageId: originalMessage.messageId,
+          newMessageId: newMessageId
         });
       }
 
@@ -354,63 +394,28 @@ export async function POST(request: Request) {
         }
       });
 
-      // Generate a unique message ID for our database
-      const newMessageId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      // We're no longer creating the database entry directly
+      // N8n will handle this when it receives the webhook
+      logDebug('Letting N8n handle message creation in database for consistent timing', {
+        messageId: newMessageId,
+        threadId: originalMessage.threadId,
+        messageSource: originalMessage.messageSource
+      });
 
-      // Store the reply in our database
-      try {
-        const receivedAt = getCurrentCentralTime();
-        
-        logDebug('Attempting to store reply in database', {
-          messageId: newMessageId,
-          threadId: originalMessage.threadId,
-          messageSource: originalMessage.messageSource,
-          receivedAt
-        });
+      // Store the response in a scoped variable
+      const response = {
+        message: 'Reply sent to webhook. N8n will create the message record',
+        messageId: newMessageId,
+        webhookResponses: Object.keys(webhookResponses).length > 0 ? webhookResponses : undefined,
+        messageSource: isLinkedInMessage ? 'LINKEDIN' : 'EMAIL'
+      };
 
-        const storedReply = await prisma.emailMessage.create({
-          data: {
-            messageId: newMessageId,
-            threadId: originalMessage.threadId,
-            organizationId: session.user.organizationId,
-            emailAccountId: emailAccount.id,
-            subject: originalMessage.subject || 'No Subject',
-            sender: isLinkedInMessage ? (socialAccount?.name || emailAccount.name) : emailAccount.email,
-            recipientEmail: validatedData.toAddress || originalMessage.sender,
-            content: validatedData.content,
-            messageType: 'REAL_REPLY',
-            receivedAt,
-            isRead: true,
-            status: latestThreadMessage?.status || 'FOLLOW_UP_NEEDED',
-            messageSource: originalMessage.messageSource,
-            socialAccountId: validatedData.socialAccountId || (isLinkedInMessage ? originalMessage.socialAccountId : null)
-          },
-        });
+      logDebug('Reply process completed successfully', {
+        messageId: newMessageId,
+        webhookResponseKeys: Object.keys(webhookResponses)
+      });
 
-        // Store the response in a scoped variable
-        const response = {
-          message: 'Reply sent successfully',
-          messageId: storedReply.messageId,
-          webhookResponses: Object.keys(webhookResponses).length > 0 ? webhookResponses : undefined,
-          messageSource: isLinkedInMessage ? 'LINKEDIN' : 'EMAIL'
-        };
-
-        logDebug('Reply process completed successfully', {
-          messageId: storedReply.messageId,
-          webhookResponseKeys: Object.keys(webhookResponses)
-        });
-
-        return NextResponse.json(response);
-
-      } catch (error) {
-        console.error('Error storing reply in database:', {
-          error: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined,
-          messageId: newMessageId,
-          threadId: originalMessage.threadId
-        });
-        throw error;
-      }
+      return NextResponse.json(response);
 
     } catch (error) {
       console.error('Error sending reply:', error);
@@ -435,40 +440,4 @@ function formatEmailContent(content: string, originalMessage: any): string {
   // Process message content
   // Simple implementation - wrap in a div
   return `<div>${content.replace(/\n/g, '<br/>')}</div>`;
-}
-
-function getCurrentCentralTime(): Date {
-  // Get the current time in Central Time zone
-  const centralTimeString = new Date().toLocaleString('en-US', {
-    timeZone: 'America/Chicago',
-    hour12: false, // Use 24-hour format
-  });
-  
-  // Parse the date string components
-  const [datePart, timePart] = centralTimeString.split(', ');
-  const [month, day, year] = datePart.split('/');
-  const [hours, minutes, seconds] = timePart.split(':');
-  
-  // Create a new Date object using UTC methods to prevent automatic timezone conversion
-  const centralTime = new Date(Date.UTC(
-    parseInt(year),
-    parseInt(month) - 1, // Month is 0-based
-    parseInt(day),
-    parseInt(hours),
-    parseInt(minutes),
-    parseInt(seconds)
-  ));
-  
-  // Log the time components for debugging
-  console.log('Time components:', {
-    original: new Date().toISOString(),
-    centralString: centralTimeString,
-    parsed: centralTime.toISOString(),
-    components: {
-      year, month, day,
-      hours, minutes, seconds
-    }
-  });
-  
-  return centralTime;
 } 
