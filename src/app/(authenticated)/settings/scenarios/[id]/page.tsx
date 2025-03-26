@@ -6,10 +6,21 @@ import { ScenarioEditForm } from '@/components/scenarios/ScenarioEditForm';
 import { Scenario } from '@prisma/client';
 import { PageContainer } from '@/components/layout/PageContainer';
 
-type ScenarioWithRelations = Omit<Scenario, 'filters'> & {
-  filters: string;
+type ScenarioWithRelations = {
+  id: string;
+  name: string;
+  touchpointType: string;
+  isFollowUp: boolean;
   testMode: boolean;
   testEmail: string | null;
+  customizationPrompt: string | null;
+  emailExamplesPrompt: string | null;
+  subjectLine: string | null;
+  filters: string;
+  isHighPerforming?: boolean;
+  organizationId: string;
+  createdAt: Date;
+  updatedAt: Date;
   signature: {
     id: string;
     name: string;
@@ -44,7 +55,21 @@ export default async function ScenarioEditPage({ params }: Props) {
 
   const scenario = await prisma.scenario.findUnique({
     where: { id: resolvedParams.id },
-    include: {
+    select: {
+      id: true,
+      name: true,
+      touchpointType: true,
+      isFollowUp: true,
+      testMode: true,
+      testEmail: true,
+      customizationPrompt: true,
+      emailExamplesPrompt: true,
+      subjectLine: true,
+      filters: true,
+      organizationId: true,
+      createdAt: true,
+      updatedAt: true,
+      isHighPerforming: true,
       signature: {
         select: {
           id: true,

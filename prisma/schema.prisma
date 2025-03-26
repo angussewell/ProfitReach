@@ -138,6 +138,7 @@ model Scenario {
   filters             Json?              @default("[]")
   testEmail           String?
   testMode            Boolean            @default(false)
+  isHighPerforming    Boolean            @default(false)
   attachment          Attachment?        @relation(fields: [attachmentId], references: [id])
   organization        Organization       @relation(fields: [organizationId], references: [id])
   signature           Signature?         @relation(fields: [signatureId], references: [id])

@@ -57,7 +57,6 @@ export async function GET(request: Request) {
     const messages = await prisma.$queryRaw<EmailMessage[]>`
       SELECT * FROM "EmailMessage"
       WHERE "organizationId" = ${session.user.organizationId}
-      AND status IN ('WAITING_FOR_REPLY', 'FOLLOW_UP_NEEDED', 'NO_ACTION_NEEDED')
       ORDER BY "receivedAt" DESC
       LIMIT 100
     `;

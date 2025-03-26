@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
-import { Prisma } from '@prisma/client';
+import { Prisma, Scenario } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
 
@@ -144,7 +144,7 @@ export async function PUT(req: Request) {
     const data = await req.json();
     log('info', 'Received update data', { data });
     
-    const { id, name, touchpointType, isFollowUp, testMode, testEmail, customizationPrompt, emailExamplesPrompt, subjectLine, filters, snippetId, attachmentId } = data;
+    const { id, name, touchpointType, isFollowUp, testMode, testEmail, customizationPrompt, emailExamplesPrompt, subjectLine, filters, snippetId, attachmentId, isHighPerforming } = data;
 
     // First verify the scenario belongs to this organization
     const existingScenario = await prisma.scenario.findFirst({
@@ -161,25 +161,60 @@ export async function PUT(req: Request) {
 
     log('info', 'Updating scenario in database', { id });
     
-    const scenario = await prisma.scenario.update({
+    // Convert filters to JSON string for PostgreSQL
+    const filtersJson = JSON.stringify(filters);
+    
+    // Use queryRaw to update and return the scenario
+    const [updatedScenario] = await prisma.$queryRaw<Scenario[]>`
+      UPDATE "Scenario"
+      SET 
+        name = ${name},
+        "touchpointType" = ${touchpointType},
+        "isFollowUp" = ${Boolean(isFollowUp)},
+        "testMode" = ${Boolean(testMode)},
+        "testEmail" = ${testEmail || null},
+        "customizationPrompt" = ${customizationPrompt},
+        "emailExamplesPrompt" = ${emailExamplesPrompt},
+        "subjectLine" = ${subjectLine},
+        filters = ${filtersJson}::jsonb,
+        "snippetId" = ${snippetId || null},
+        "attachmentId" = ${attachmentId || null},
+        "isHighPerforming" = ${Boolean(isHighPerforming)},
+        "updatedAt" = NOW()
+      WHERE id = ${id}
+      AND "organizationId" = ${session.user.organizationId}
+      RETURNING *
+    `;
+
+    if (!updatedScenario) {
+      throw new Error('Failed to update scenario');
+    }
+
+    // Fetch relations separately
+    const relations = await prisma.scenario.findUnique({
       where: { id },
-      data: {
-        name,
-        touchpointType,
-        isFollowUp: Boolean(isFollowUp),
-        testMode: Boolean(testMode),
-        testEmail: testEmail || null,
-        customizationPrompt,
-        emailExamplesPrompt,
-        subjectLine,
-        filters,
-        snippetId: snippetId || null,
-        attachmentId: attachmentId || null
+      select: {
+        snippet: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        attachment: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
       }
     });
 
     log('info', 'Successfully updated scenario', { id });
-    return NextResponse.json(scenario);
+    return NextResponse.json({
+      ...updatedScenario,
+      snippet: relations?.snippet || null,
+      attachment: relations?.attachment || null
+    });
   } catch (error) {
     log('error', 'Error updating scenario', { 
       error: error instanceof Error ? error.message : String(error),

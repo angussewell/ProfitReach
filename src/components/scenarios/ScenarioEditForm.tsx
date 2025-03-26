@@ -29,6 +29,7 @@ interface ScenarioEditFormProps {
     snippet?: { id: string; name: string } | null;
     attachment?: { id: string; name: string } | null;
     filters: Filter[];
+    isHighPerforming?: boolean;
   };
   fields: string[];
   snippets: Array<{ id: string; name: string }>;
@@ -49,7 +50,8 @@ export function ScenarioEditForm({ scenario, fields, snippets, attachments }: Sc
     subjectLine: scenario.subjectLine || '',
     snippetId: scenario.snippet?.id || '',
     attachmentId: scenario.attachment?.id || '',
-    filters: typeof scenario.filters === 'string' ? JSON.parse(scenario.filters) : scenario.filters
+    filters: typeof scenario.filters === 'string' ? JSON.parse(scenario.filters) : scenario.filters,
+    isHighPerforming: scenario.isHighPerforming ?? false
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -77,14 +79,26 @@ export function ScenarioEditForm({ scenario, fields, snippets, attachments }: Sc
       // Then check status and handle accordingly
       if (response.ok) {
         console.log('Scenario updated successfully:', responseData);
+        
+        // Update local state with the response data
+        setFormData(prev => ({
+          ...prev,
+          ...responseData,
+          isHighPerforming: responseData.isHighPerforming
+        }));
+        
         toast.success('Scenario updated successfully');
         
-        // Wait for toast to be visible before navigating
+        // Wait for state update and toast
         await new Promise(resolve => setTimeout(resolve, 1000));
         
-        // Use Next.js router for navigation
-        router.push('/settings/scenarios');
-        router.refresh();
+        // Refresh the router first
+        await router.refresh();
+        
+        // Then navigate
+        setTimeout(() => {
+          router.push('/settings/scenarios');
+        }, 500);
       } else {
         console.error('Error response:', responseData);
         throw new Error(responseData.details || responseData.message || responseData.error || 'Failed to update scenario');
@@ -191,6 +205,15 @@ export function ScenarioEditForm({ scenario, fields, snippets, attachments }: Sc
                   onCheckedChange={(checked) => setFormData({ ...formData, testMode: checked ? true : false })}
                 />
                 <Label htmlFor="testMode">Enable Test Mode</Label>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="isHighPerforming"
+                  checked={formData.isHighPerforming}
+                  onCheckedChange={(checked) => setFormData({ ...formData, isHighPerforming: checked ? true : false })}
+                />
+                <Label htmlFor="isHighPerforming">Add to High-Performing Training Pool</Label>
               </div>
 
               <div>
