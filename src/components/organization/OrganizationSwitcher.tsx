@@ -1,10 +1,10 @@
 'use client';
 
-import { Fragment, useState } from 'react';
+import { Fragment, useState, useEffect } from 'react';
 import { Menu, Transition } from '@headlessui/react';
 import { ChevronDownIcon } from '@heroicons/react/20/solid';
 import { cn } from '@/lib/utils';
-import { Building, Plus, LogOut } from 'lucide-react';
+import { Building, Plus, LogOut, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
@@ -24,6 +24,7 @@ const ClientBuilding = Building as unknown as (props: any) => JSX.Element;
 const ClientPlus = Plus as unknown as (props: any) => JSX.Element;
 const ClientLogOut = LogOut as unknown as (props: any) => JSX.Element;
 const ClientChevronDown = ChevronDownIcon as unknown as (props: any) => JSX.Element;
+const ClientSearch = Search as unknown as (props: any) => JSX.Element;
 
 export default function OrganizationSwitcher({ open = true }: OrganizationSwitcherProps): ReactElement {
   const { 
@@ -42,6 +43,26 @@ export default function OrganizationSwitcher({ open = true }: OrganizationSwitch
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newOrgName, setNewOrgName] = useState('');
   const [isOpen, setIsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filteredOrgs, setFilteredOrgs] = useState(organizations || []);
+
+  // Update filtered organizations when search query changes or organizations update
+  useEffect(() => {
+    if (!organizations) {
+      setFilteredOrgs([]);
+      return;
+    }
+    
+    if (!searchQuery || !isAdmin) {
+      setFilteredOrgs(organizations);
+      return;
+    }
+
+    const filtered = organizations.filter(org => 
+      org.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+    setFilteredOrgs(filtered);
+  }, [searchQuery, organizations, isAdmin]);
 
   const handleOrgSwitch = async (orgId: string) => {
     if (switchOrganization) {
@@ -94,7 +115,6 @@ export default function OrganizationSwitcher({ open = true }: OrganizationSwitch
 
             <Transition
               as={Fragment}
-              show={menuOpen}
               enter="transition ease-out duration-100"
               enterFrom="transform opacity-0 scale-95"
               enterTo="transform opacity-100 scale-100"
@@ -103,26 +123,70 @@ export default function OrganizationSwitcher({ open = true }: OrganizationSwitch
               leaveTo="transform opacity-0 scale-95"
             >
               <Menu.Items className="absolute left-0 z-10 mt-2 w-56 origin-top-right rounded-xl bg-white shadow-lg ring-1 ring-black/5 focus:outline-none">
-                <div className="py-1">
-                  {organizations?.map((org) => (
-                    <Menu.Item key={org.id}>
-                      {({ active }: ItemRenderPropArg) => (
-                        <button
-                          onClick={() => handleOrgSwitch(org.id)}
-                          className={cn(
-                            active ? 'bg-gray-50 text-gray-900' : 'text-gray-700',
-                            'block w-full px-4 py-2.5 text-left text-[14px] font-medium tracking-[-0.1px]'
+                {isAdmin && (
+                  <div className="px-3 py-2 border-b border-gray-100">
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 flex items-center pl-2">
+                        <ClientSearch className="h-4 w-4 text-gray-400" aria-hidden="true" />
+                      </div>
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search organization"
+                        className="w-full py-1.5 pl-8 pr-3 text-sm rounded-md border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                  </div>
+                )}
+                
+                <div className="py-1 max-h-60 overflow-y-auto">
+                  {isAdmin ? (
+                    filteredOrgs.length > 0 ? (
+                      filteredOrgs.map((org) => (
+                        <Menu.Item key={org.id}>
+                          {({ active }) => (
+                            <button
+                              onClick={() => handleOrgSwitch(org.id)}
+                              className={cn(
+                                active ? 'bg-gray-50 text-gray-900' : 'text-gray-700',
+                                'block w-full px-4 py-2.5 text-left text-[14px] font-medium tracking-[-0.1px]'
+                              )}
+                            >
+                              {org.name}
+                            </button>
                           )}
-                        >
-                          {org.name}
-                        </button>
-                      )}
-                    </Menu.Item>
-                  ))}
+                        </Menu.Item>
+                      ))
+                    ) : (
+                      <div className="px-4 py-2 text-sm text-gray-500 text-center">
+                        No organizations found
+                      </div>
+                    )
+                  ) : (
+                    organizations?.map((org) => (
+                      <Menu.Item key={org.id}>
+                        {({ active }) => (
+                          <button
+                            onClick={() => handleOrgSwitch(org.id)}
+                            className={cn(
+                              active ? 'bg-gray-50 text-gray-900' : 'text-gray-700',
+                              'block w-full px-4 py-2.5 text-left text-[14px] font-medium tracking-[-0.1px]'
+                            )}
+                          >
+                            {org.name}
+                          </button>
+                        )}
+                      </Menu.Item>
+                    ))
+                  )}
+                </div>
 
+                <div className="py-1 border-t border-gray-100">
                   {isAdmin && (
                     <Menu.Item>
-                      {({ active }: ItemRenderPropArg) => (
+                      {({ active }) => (
                         <button
                           onClick={() => setShowCreateModal(true)}
                           className={cn(
@@ -138,7 +202,7 @@ export default function OrganizationSwitcher({ open = true }: OrganizationSwitch
                   )}
 
                   <Menu.Item>
-                    {({ active }: ItemRenderPropArg) => (
+                    {({ active }) => (
                       <button
                         onClick={handleLogout}
                         className={cn(
