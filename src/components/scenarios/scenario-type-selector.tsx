@@ -38,12 +38,12 @@ const typeConfigs: Record<TouchpointType, ScenarioTypeConfig> = {
     capabilities: ['Smart Follow-ups', 'Smart Attachments']
   },
   googleDrive: {
-    icon: '/google drive logo.webp',
+    icon: '/Gmail_icon_(2020).svg.webp',
     bgColor: 'bg-gradient-to-br from-white to-emerald-50',
     accentColor: 'border-emerald-100',
     iconBg: 'bg-white',
     hoverBg: 'hover:bg-emerald-50/50',
-    label: 'Drive Agent',
+    label: 'Email About LinkedIn Post',
     description: 'Intelligent document sharing with smart access control',
     capabilities: ['Smart Folders', 'Smart Documents']
   },

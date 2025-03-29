@@ -54,6 +54,9 @@ const ScenarioTypeCard: React.FC<ScenarioTypeCardProps> = ({
   const getTypeConfig = (type: string) => {
     switch (type.toLowerCase()) {
       case 'linkedin':
+      case 'linkedin_message':
+      case 'linkedin_connection':
+      case 'linkedin_commenter':
         return {
           icon: '/LinkedIn_icon.svg.png',
           bgColor: 'bg-[#0A66C2]/5',
@@ -82,12 +85,12 @@ const ScenarioTypeCard: React.FC<ScenarioTypeCardProps> = ({
         };
       case 'googledrive':
         return {
-          icon: '/google drive logo.webp',
+          icon: '/Gmail_icon_(2020).svg.webp',
           bgColor: 'bg-[#1FA463]/5',
           accentColor: 'border-[#1FA463]/20',
           iconBg: 'bg-[#1FA463]',
           hoverBg: 'hover:bg-[#1FA463]/10',
-          label: 'Google Drive'
+          label: 'Email About LinkedIn Post'
         };
       default:
         return {
@@ -101,24 +104,7 @@ const ScenarioTypeCard: React.FC<ScenarioTypeCardProps> = ({
     }
   };
 
-  const inferTypeFromName = (name: string): string => {
-    const normalizedName = (name || '').toLowerCase().trim();
-    if (normalizedName.includes('research')) {
-      return 'research';
-    } else if (normalizedName.includes('linkedin') || 
-               normalizedName.includes('connection') ||
-               normalizedName.includes('network')) {
-      return 'linkedin';
-    } else if (normalizedName.includes('email') || 
-               normalizedName.includes('outreach') || 
-               normalizedName.includes('follow up')) {
-      return 'email';
-    }
-    return type.toLowerCase();
-  };
-
-  const effectiveType = inferTypeFromName(name);
-  const config = getTypeConfig(effectiveType);
+  const config = getTypeConfig(type);
 
   return (
     <div

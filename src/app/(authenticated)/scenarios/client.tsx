@@ -106,6 +106,9 @@ const getTypeConfig = (type: string | undefined) => {
   
   switch (normalizedType) {
     case 'linkedin':
+    case 'linkedin_message':
+    case 'linkedin_connection':
+    case 'linkedin_commenter':
       return {
         icon: '/LinkedIn_icon.svg.png',
         bgColor: 'bg-[#0A66C2]/5',
@@ -137,13 +140,13 @@ const getTypeConfig = (type: string | undefined) => {
       };
     case 'googledrive':
       return {
-        icon: '/google drive logo.webp',
+        icon: '/Gmail_icon_(2020).svg.webp',
         bgColor: 'bg-[#1FA463]/5',
         accentColor: 'border-[#1FA463]/20',
         iconBg: 'bg-[#1FA463]',
         hoverBg: 'hover:bg-[#1FA463]/10',
         progressColor: 'from-[#1FA463] to-[#1FA463]/80',
-        label: 'Google Drive'
+        label: 'Email About LinkedIn Post'
       };
     default:
       return {
@@ -276,32 +279,6 @@ export function ScenariosPage() {
   useEffect(() => {
     fetchAppointments();
   }, [dateRange]);
-
-  // Helper function to infer type from scenario name and touchpointType
-  const inferTypeFromName = (name: string, touchpointType?: string): string => {
-    // First check touchpointType if available
-    if (touchpointType) {
-      const normalizedType = touchpointType.toLowerCase().trim();
-      if (normalizedType.includes('linkedin')) return 'linkedin';
-      if (normalizedType.includes('email')) return 'email';
-      if (normalizedType.includes('research')) return 'research';
-    }
-
-    // Fall back to name-based inference
-    const normalizedName = name.toLowerCase().trim();
-    if (normalizedName.includes('linkedin') || 
-        normalizedName.includes('connection') ||
-        normalizedName.includes('network')) {
-      return 'linkedin';
-    } else if (normalizedName.includes('email') || 
-              normalizedName.includes('outreach') || 
-              normalizedName.includes('follow up')) {
-      return 'email';
-    } else if (normalizedName.includes('research')) {
-      return 'research';
-    }
-    return 'unknown';
-  };
 
   // Format response rate to avoid NaN
   const formatResponseRate = (contacts: number, responses: number): string => {
@@ -718,8 +695,7 @@ export function ScenariosPage() {
       <div className="mb-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {scenarios.map((scenario) => {
-            const type = inferTypeFromName(scenario.name, scenario.touchpointType);
-            const config = getTypeConfig(type);
+            const config = getTypeConfig(scenario.touchpointType);
             const rate = scenario.totalContacts && scenario.responseCount ? (scenario.responseCount / scenario.totalContacts) * 100 : 0;
             const responseRate = formatResponseRate(scenario.totalContacts, scenario.responseCount);
 
