@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from 'react';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { PageHeader } from '@/components/ui/page-header';
 import { ClientCard, ClientButton, ClientInput } from '@/components/ui/client-components';
-import { Inbox, Loader2, MessageSquare, Reply, Send, Trash2, X, Calendar, ThumbsDown, Clock, CheckCircle, RefreshCw } from 'lucide-react';
+import { Inbox, Loader2, MessageSquare, Reply, Send, Trash2, X, Calendar, ThumbsDown, Clock, CheckCircle, RefreshCw, Sparkles, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { LucideProps } from 'lucide-react';
 import { toast } from 'sonner';
@@ -35,6 +35,9 @@ interface EmailMessage {
   classificationScores?: string[];
   unipileEmailId?: string;
   emailAccountId?: string;
+  aiSuggestion1?: string;
+  aiSuggestion2?: string;
+  aiSuggestion3?: string;
 }
 
 // Define email account interface
@@ -194,6 +197,11 @@ export function UniversalInboxClient() {
   const [viewMode, setViewMode] = useState<'list' | 'detail'>('list');
   // Add a ref to track if the user has manually selected an email
   const userSelectedEmailRef = useRef<boolean>(false);
+  // Add a new state for managing the AI suggestions request
+  const [gettingSuggestions, setGettingSuggestions] = useState(false);
+  const [suggestionStatus, setSuggestionStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  // Add a new state for status filtering
+  const [statusFilter, setStatusFilter] = useState<ConversationStatus | 'ALL'>('ALL');
 
   // Group messages by thread and sort them
   const threadGroups = messages.reduce((groups, message) => {
@@ -666,6 +674,95 @@ export function UniversalInboxClient() {
     }
   };
 
+  // Add the function to get AI suggestions
+  const getAISuggestions = async () => {
+    if (!selectedThread || !enhancedThreadGroups[selectedThread] || enhancedThreadGroups[selectedThread].length === 0) {
+      return;
+    }
+
+    setGettingSuggestions(true);
+    setSuggestionStatus('idle');
+
+    try {
+      // Get the latest message in the thread
+      const latestMessage = enhancedThreadGroups[selectedThread].sort((a, b) => 
+        new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime()
+      )[0];
+
+      // Make sure latestMessage.content is properly handled to preserve line breaks
+      // JSON.stringify will properly escape line breaks, so we don't need to modify the content
+      // Create payload with the structure shown in the requirements - content should be raw as stored in DB
+      const payload = [
+        {
+          id: latestMessage.id,
+          messageId: latestMessage.messageId,
+          threadId: latestMessage.threadId,
+          organizationId: latestMessage.organizationId,
+          emailAccountId: latestMessage.emailAccountId,
+          subject: latestMessage.subject,
+          sender: latestMessage.sender,
+          recipientEmail: latestMessage.recipientEmail,
+          content: latestMessage.content, // Raw content with line breaks preserved
+          receivedAt: latestMessage.receivedAt,
+          messageType: latestMessage.messageType,
+          isRead: latestMessage.isRead,
+          classificationScores: latestMessage.classificationScores,
+          unipileEmailId: latestMessage.unipileEmailId,
+          status: latestMessage.status,
+          messageSource: latestMessage.messageSource,
+          socialAccountId: latestMessage.socialAccountId
+        }
+      ];
+
+      console.log('Sending payload with content:', payload[0].content); // Log for debugging
+
+      // Send request to our API endpoint instead of directly to the webhook
+      const response = await fetch('/api/aisuggestions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Request failed with status ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('AI Suggestions webhook response:', data);
+      
+      setSuggestionStatus('success');
+    } catch (error) {
+      console.error('Error getting AI suggestions:', error);
+      setSuggestionStatus('error');
+    } finally {
+      setGettingSuggestions(false);
+    }
+  };
+
+  // Helper function to determine a thread's effective status
+  const getThreadStatus = (threadId: string): ConversationStatus => {
+    const messages = enhancedThreadGroups[threadId];
+    const latestMessage = messages.reduce((latest, msg) => {
+      const msgDate = new Date(msg.receivedAt);
+      const latestDate = new Date(latest.receivedAt);
+      return msgDate.getTime() > latestDate.getTime() ? msg : latest;
+    }, messages[0]);
+
+    // More robust status determination
+    if (latestMessage.status === 'MEETING_BOOKED' || 
+        latestMessage.status === 'NOT_INTERESTED' || 
+        latestMessage.status === 'NO_ACTION_NEEDED' ||
+        latestMessage.status === 'WAITING_FOR_REPLY') {
+      // Always respect these manually set statuses
+      return latestMessage.status;
+    } else {
+      // Default to FOLLOW_UP_NEEDED if no status or it's already FOLLOW_UP_NEEDED
+      return 'FOLLOW_UP_NEEDED';
+    }
+  };
+
   if (loading) {
     return (
       <PageContainer>
@@ -699,100 +796,128 @@ export function UniversalInboxClient() {
           // List View (Full Width)
           <ClientCard className="h-[calc(100vh-14rem)] overflow-hidden flex flex-col border-slate-200/60 shadow-lg shadow-slate-200/50">
             <div className="px-6 py-4 border-b border-slate-200/60 flex items-center justify-between bg-white/95">
-              <h2 className="text-lg font-semibold flex items-center gap-2 text-slate-900">
-                <InboxIcon className="h-5 w-5 text-slate-500" />
-                <span>Conversations</span>
-              </h2>
+              <div className="flex items-center gap-4">
+                <h2 className="text-lg font-semibold flex items-center gap-2 text-slate-900">
+                  <InboxIcon className="h-5 w-5 text-slate-500" />
+                  <span>Conversations</span>
+                </h2>
+                <select 
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as ConversationStatus | 'ALL')}
+                  className="px-2 py-1 text-sm border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  aria-label="Filter by status"
+                >
+                  <option value="ALL">All Statuses</option>
+                  <option value="FOLLOW_UP_NEEDED">Follow Up Needed</option>
+                  <option value="WAITING_FOR_REPLY">Waiting for Reply</option>
+                  <option value="MEETING_BOOKED">Meeting Booked</option>
+                  <option value="NOT_INTERESTED">Not Interested</option>
+                  <option value="NO_ACTION_NEEDED">No Action Needed</option>
+                </select>
+              </div>
             </div>
             
             {hasMessages ? (
               <div className="divide-y divide-slate-200/60 overflow-y-auto flex-1">
-                {sortedThreadIds.map(threadId => {
-                  const messages = enhancedThreadGroups[threadId];
-                  const latestMessage = messages.reduce((latest, msg) => {
-                    const msgDate = new Date(msg.receivedAt);
-                    const latestDate = new Date(latest.receivedAt);
-                    return msgDate.getTime() > latestDate.getTime() ? msg : latest;
-                  }, messages[0]);
+                {/* Filter threads based on the selected status */}
+                {(() => {
+                  const filteredThreads = sortedThreadIds.filter(
+                    threadId => statusFilter === 'ALL' || getThreadStatus(threadId) === statusFilter
+                  );
                   
-                  const isLatestFromUs = isOurEmail(latestMessage.sender, latestMessage);
-                  const needsResponse = !isLatestFromUs && !latestMessage.isRead;
-                  const isLinkedIn = latestMessage.messageSource === 'LINKEDIN';
-
-                  // More robust status determination
-                  let status: ConversationStatus;
-                  if (latestMessage.status === 'MEETING_BOOKED' || 
-                      latestMessage.status === 'NOT_INTERESTED' || 
-                      latestMessage.status === 'NO_ACTION_NEEDED' ||
-                      latestMessage.status === 'WAITING_FOR_REPLY') {
-                    // Always respect these manually set statuses
-                    status = latestMessage.status;
-                  } else {
-                    // Default to FOLLOW_UP_NEEDED if no status or it's already FOLLOW_UP_NEEDED
-                    status = 'FOLLOW_UP_NEEDED';
+                  if (filteredThreads.length === 0) {
+                    return (
+                      <div className="p-8 text-center">
+                        <p className="text-slate-600">No messages found matching the status filter.</p>
+                        <button 
+                          onClick={() => setStatusFilter('ALL')}
+                          className="mt-2 text-sm text-blue-600 hover:text-blue-800 underline"
+                        >
+                          Show all messages
+                        </button>
+                      </div>
+                    );
                   }
                   
-                  const statusColor = getStatusColor(status, new Date(latestMessage.receivedAt), isLatestFromUs);
-                  const rowStyle = getStatusRowStyle(status, new Date(latestMessage.receivedAt), isLatestFromUs);
-                  
-                  return (
-                    <button
-                      key={threadId}
-                      className={cn(
-                        "w-full px-6 py-4 text-left transition-all",
-                        "hover:bg-slate-50/80 relative",
-                        needsResponse ? "bg-blue-50/70 hover:bg-blue-50/90" : "",
-                        rowStyle
-                      )}
-                      onClick={() => openThread(threadId)}
-                    >
-                      <div className="grid grid-cols-12 gap-4">
-                        {/* Sender & Date */}
-                        <div className="col-span-3">
-                          <div className="font-medium text-slate-900 truncate flex items-center gap-1">
-                            {isLinkedIn && <LinkedInIcon className="h-4 w-4 text-blue-600" />}
-                            {isLinkedIn 
-                              ? getLinkedInSenderName(latestMessage.sender, latestMessage, socialAccounts)
-                              : findOtherParticipant(messages)}
-                          </div>
-                          <div className="text-xs text-slate-500 mt-1">
-                            {formatStoredDate(latestMessage.receivedAt)}
-                          </div>
-                        </div>
-                        
-                        {/* Subject & Preview */}
-                        <div className="col-span-7">
-                          <div className="font-medium text-slate-800 truncate">
-                            {isLinkedIn ? 'LinkedIn Message' : latestMessage.subject}
-                          </div>
-                          <div className="text-sm text-slate-600 truncate mt-1">
-                            {latestMessage.content.replace(/<[^>]*>/g, '').slice(0, 100)}
-                            {latestMessage.content.replace(/<[^>]*>/g, '').length > 100 ? '...' : ''}
-                          </div>
-                        </div>
-                        
-                        {/* Status & Days */}
-                        <div className="col-span-2 flex flex-col items-end justify-center">
-                          <span className={cn(
-                            "px-2 py-0.5 rounded-full text-xs font-medium mb-1",
-                            statusColor
-                          )}>
-                            {getStatusLabel(status, new Date(latestMessage.receivedAt), isLatestFromUs)}
-                          </span>
-                          
-                          {status === 'FOLLOW_UP_NEEDED' && isLatestFromUs && daysSince(new Date(latestMessage.receivedAt)) > 0 && (
-                            <span className={cn(
-                              "px-1.5 py-0.5 rounded text-xs font-medium",
-                              daysSince(new Date(latestMessage.receivedAt)) < 3 ? "bg-blue-100 text-blue-800" : "bg-red-200 text-red-900"
-                            )}>
-                              {daysSince(new Date(latestMessage.receivedAt))}d
-                            </span>
+                  return <>
+                    {filteredThreads.map(threadId => {
+                      const messages = enhancedThreadGroups[threadId];
+                      const latestMessage = messages.reduce((latest, msg) => {
+                        const msgDate = new Date(msg.receivedAt);
+                        const latestDate = new Date(latest.receivedAt);
+                        return msgDate.getTime() > latestDate.getTime() ? msg : latest;
+                      }, messages[0]);
+                      
+                      const isLatestFromUs = isOurEmail(latestMessage.sender, latestMessage);
+                      const needsResponse = !isLatestFromUs && !latestMessage.isRead;
+                      const isLinkedIn = latestMessage.messageSource === 'LINKEDIN';
+
+                      // Use the helper function to get the thread status
+                      const status = getThreadStatus(threadId);
+                      
+                      const statusColor = getStatusColor(status, new Date(latestMessage.receivedAt), isLatestFromUs);
+                      const rowStyle = getStatusRowStyle(status, new Date(latestMessage.receivedAt), isLatestFromUs);
+                      
+                      return (
+                        <button
+                          key={threadId}
+                          className={cn(
+                            "w-full px-6 py-4 text-left transition-all",
+                            "hover:bg-slate-50/80 relative",
+                            needsResponse ? "bg-blue-50/70 hover:bg-blue-50/90" : "",
+                            rowStyle
                           )}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
+                          onClick={() => openThread(threadId)}
+                        >
+                          <div className="grid grid-cols-12 gap-4">
+                            {/* Sender & Date */}
+                            <div className="col-span-3">
+                              <div className="font-medium text-slate-900 truncate flex items-center gap-1">
+                                {isLinkedIn && <LinkedInIcon className="h-4 w-4 text-blue-600" />}
+                                {isLinkedIn 
+                                  ? getLinkedInSenderName(latestMessage.sender, latestMessage, socialAccounts)
+                                  : findOtherParticipant(messages)}
+                              </div>
+                              <div className="text-xs text-slate-500 mt-1">
+                                {formatStoredDate(latestMessage.receivedAt)}
+                              </div>
+                            </div>
+                            
+                            {/* Subject & Preview */}
+                            <div className="col-span-7">
+                              <div className="font-medium text-slate-800 truncate">
+                                {isLinkedIn ? 'LinkedIn Message' : latestMessage.subject}
+                              </div>
+                              <div className="text-sm text-slate-600 truncate mt-1">
+                                {latestMessage.content.replace(/<[^>]*>/g, '').slice(0, 100)}
+                                {latestMessage.content.replace(/<[^>]*>/g, '').length > 100 ? '...' : ''}
+                              </div>
+                            </div>
+                            
+                            {/* Status & Days */}
+                            <div className="col-span-2 flex flex-col items-end justify-center">
+                              <span className={cn(
+                                "px-2 py-0.5 rounded-full text-xs font-medium mb-1",
+                                statusColor
+                              )}>
+                                {getStatusLabel(status, new Date(latestMessage.receivedAt), isLatestFromUs)}
+                              </span>
+                              
+                              {status === 'FOLLOW_UP_NEEDED' && isLatestFromUs && daysSince(new Date(latestMessage.receivedAt)) > 0 && (
+                                <span className={cn(
+                                  "px-1.5 py-0.5 rounded text-xs font-medium",
+                                  daysSince(new Date(latestMessage.receivedAt)) < 3 ? "bg-blue-100 text-blue-800" : "bg-red-200 text-red-900"
+                                )}>
+                                  {daysSince(new Date(latestMessage.receivedAt))}d
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </>;
+                })()}
               </div>
             ) : (
               <div className="p-8 text-center">
@@ -1054,7 +1179,7 @@ export function UniversalInboxClient() {
       {/* Reply Modal */}
       {showReplyModal && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-[30rem] max-w-full">
+          <div className="bg-white rounded-xl shadow-xl w-[80rem] max-w-[95vw] max-h-[90vh] overflow-hidden flex flex-col">
             <div className="flex justify-between items-center p-4 border-b border-slate-200">
               <h3 className="text-lg font-semibold text-slate-900">Reply to Conversation</h3>
               <button 
@@ -1064,71 +1189,170 @@ export function UniversalInboxClient() {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="p-4 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  From
-                </label>
-                {selectedThread && enhancedThreadGroups[selectedThread] && 
-                 isLinkedInThread(enhancedThreadGroups[selectedThread]) ? (
-                  <select
-                    value={selectedSocialAccount}
-                    onChange={(e) => {
-                      setSelectedSocialAccount(e.target.value);
-                      // Set the flag to indicate user has manually selected an account
-                      userSelectedEmailRef.current = true;
-                    }}
-                    className="w-full p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    data-component-name="UniversalInboxClient"
-                  >
-                    <option value="">Select a LinkedIn account</option>
-                    {socialAccounts
-                      .filter(account => account.provider === 'LINKEDIN')
-                      .map(account => (
-                      <option 
-                        key={account.id} 
-                        value={account.id}
-                      >
-                        {account.name}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <select
-                    value={selectedFromEmail}
-                    onChange={(e) => {
-                      setSelectedFromEmail(e.target.value);
-                      // Set the flag to indicate user has manually selected an email
-                      userSelectedEmailRef.current = true;
-                    }}
-                    className="w-full p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Select an email account</option>
-                    {visibleEmailAccounts.map((account) => (
-                      <option key={account.id} value={account.email}>
-                        {account.email}
-                      </option>
-                    ))}
-                  </select>
-                )}
+            <div className="flex flex-1 overflow-hidden">
+              {/* Left column - Reply Form */}
+              <div className="w-1/2 p-4 space-y-4 overflow-y-auto border-r border-slate-200">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    From
+                  </label>
+                  {selectedThread && enhancedThreadGroups[selectedThread] && 
+                   isLinkedInThread(enhancedThreadGroups[selectedThread]) ? (
+                    <select
+                      value={selectedSocialAccount}
+                      onChange={(e) => {
+                        setSelectedSocialAccount(e.target.value);
+                        // Set the flag to indicate user has manually selected an account
+                        userSelectedEmailRef.current = true;
+                      }}
+                      className="w-full p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      data-component-name="UniversalInboxClient"
+                    >
+                      <option value="">Select a LinkedIn account</option>
+                      {socialAccounts
+                        .filter(account => account.provider === 'LINKEDIN')
+                        .map(account => (
+                        <option 
+                          key={account.id} 
+                          value={account.id}
+                        >
+                          {account.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <select
+                      value={selectedFromEmail}
+                      onChange={(e) => {
+                        setSelectedFromEmail(e.target.value);
+                        // Set the flag to indicate user has manually selected an email
+                        userSelectedEmailRef.current = true;
+                      }}
+                      className="w-full p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Select an email account</option>
+                      {visibleEmailAccounts.map((account) => (
+                        <option key={account.id} value={account.email}>
+                          {account.email}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    To
+                  </label>
+                  <div className="text-sm text-slate-800 border border-slate-300 rounded-md p-2 bg-slate-50">
+                    {selectedThread && enhancedThreadGroups[selectedThread] ? 
+                      findOtherParticipant(enhancedThreadGroups[selectedThread]) : 
+                      ''}
+                  </div>
+                </div>
+
+                <textarea
+                  value={replyContent}
+                  onChange={(e) => setReplyContent(e.target.value)}
+                  placeholder="Type your reply here..."
+                  className="w-full h-[calc(100vh-25rem)] p-4 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none whitespace-pre-wrap"
+                />
               </div>
               
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  To
-                </label>
-                <div className="text-sm text-slate-800 border border-slate-300 rounded-md p-2 bg-slate-50">
-                  {selectedThread && enhancedThreadGroups[selectedThread] ? 
-                    findOtherParticipant(enhancedThreadGroups[selectedThread]) : 
-                    ''}
+              {/* Right column - AI Suggestions */}
+              <div className="w-1/2 flex flex-col overflow-hidden">
+                <div className="p-4 pb-2 border-b border-slate-100">
+                  <div className="flex justify-between items-center mb-2">
+                    <div>
+                      <h3 className="text-lg font-medium text-slate-800">AI Suggested Replies</h3>
+                      <p className="text-xs text-slate-500">Scroll to view all suggestions</p>
+                    </div>
+                    <div className="flex items-center">
+                      {suggestionStatus === 'success' && (
+                        <span className="text-xs text-green-600 mr-2 flex items-center">
+                          <CheckCircle className="w-3 h-3 mr-1" /> Suggestions requested
+                        </span>
+                      )}
+                      {suggestionStatus === 'error' && (
+                        <span className="text-xs text-red-600 mr-2 flex items-center">
+                          <XCircle className="w-3 h-3 mr-1" /> Request failed
+                        </span>
+                      )}
+                      <button
+                        onClick={getAISuggestions}
+                        disabled={gettingSuggestions}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm rounded transition-colors"
+                      >
+                        {gettingSuggestions ? (
+                          <>
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            <span>Requesting...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-3 h-3" />
+                            <span>Get AI Suggestions</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex-1 p-4 pt-2 overflow-y-auto custom-scrollbar">
+                  {selectedThread && enhancedThreadGroups[selectedThread] && enhancedThreadGroups[selectedThread].length > 0 && 
+                    (() => {
+                      const latestMessage = enhancedThreadGroups[selectedThread].sort((a, b) => 
+                        new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime()
+                      )[0];
+                      
+                      // Define a reusable SuggestionBox component
+                      const SuggestionBox = ({ suggestion, index }: { suggestion: string | null | undefined, index: number }) => (
+                        <div className="relative rounded-md border border-slate-200 p-4 mb-6 bg-slate-50 hover:bg-slate-100 transition-colors">
+                          <div className="flex justify-between items-start mb-2">
+                            <h4 className="font-medium text-slate-700">AI Suggestion #{index}</h4>
+                            {suggestion && (
+                              <button 
+                                onClick={() => {
+                                  // Trim leading and trailing whitespace/newlines while preserving internal formatting
+                                  const trimmedSuggestion = suggestion.replace(/^\s+|\s+$/g, '');
+                                  setReplyContent(trimmedSuggestion);
+                                  console.log('Using suggestion with line breaks (trimmed):', trimmedSuggestion);
+                                }}
+                                className="bg-blue-600 hover:bg-blue-700 text-white text-sm py-1 px-3 rounded transition-colors ml-2 flex-shrink-0"
+                              >
+                                Use This
+                              </button>
+                            )}
+                          </div>
+                          <div 
+                            className={`
+                              text-sm ${suggestion ? 'text-slate-800' : 'text-slate-400 italic'} 
+                              max-h-[300px] overflow-y-auto pr-2 custom-scrollbar 
+                              ${suggestion && suggestion.length > 300 ? 'scroll-shadow-bottom' : ''}
+                            `}
+                          >
+                            <div className="whitespace-pre-wrap">
+                              {suggestion || `AI suggestion #${index} will appear here`}
+                            </div>
+                          </div>
+                          {suggestion && suggestion.length > 300 && (
+                            <div className="absolute bottom-3 right-4 left-4 h-6 bg-gradient-to-t from-slate-50 to-transparent pointer-events-none"></div>
+                          )}
+                        </div>
+                      );
+                      
+                      return (
+                        <div className="space-y-4">
+                          <SuggestionBox suggestion={latestMessage.aiSuggestion1} index={1} />
+                          <SuggestionBox suggestion={latestMessage.aiSuggestion2} index={2} />
+                          <SuggestionBox suggestion={latestMessage.aiSuggestion3} index={3} />
+                        </div>
+                      );
+                    })()
+                  }
                 </div>
               </div>
-              <textarea
-                value={replyContent}
-                onChange={(e) => setReplyContent(e.target.value)}
-                placeholder="Type your reply here..."
-                className="w-full h-[300px] p-4 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-              />
             </div>
             <div className="px-6 py-4 border-t border-slate-200/60 flex justify-end gap-3">
               <ClientButton
@@ -1213,4 +1437,33 @@ export function UniversalInboxClient() {
       )}
     </PageContainer>
   );
-} 
+}
+
+<style jsx global>{`
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #a1a1a1;
+  }
+  
+  .scroll-shadow-bottom {
+    position: relative;
+    background-image: 
+      linear-gradient(to top, rgba(241, 241, 241, 0), rgba(241, 241, 241, 0) 85%);
+    background-attachment: local;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+`}</style> 

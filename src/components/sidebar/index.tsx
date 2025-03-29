@@ -19,6 +19,7 @@ interface Route {
   label: string;
   icon: React.ReactElement;
   adminOnly?: boolean;
+  managerAccess?: boolean;
 }
 
 const createIcon = (Icon: LucideIcon, key: string) => 
@@ -39,7 +40,8 @@ export default function Sidebar(): JSX.Element {
       href: '/universal-inbox', 
       label: 'Universal Inbox', 
       icon: createIcon(Icons.Inbox, 'universal-inbox-icon'),
-      adminOnly: true
+      adminOnly: true,
+      managerAccess: true
     },
     { 
       href: '/scenarios', 
@@ -54,12 +56,14 @@ export default function Sidebar(): JSX.Element {
     { 
       href: '/snippets', 
       label: 'Snippets', 
-      icon: createIcon(Icons.Code2, 'snippets-icon')
+      icon: createIcon(Icons.Code2, 'snippets-icon'),
+      managerAccess: true
     },
     { 
       href: '/attachments', 
       label: 'Attachments', 
-      icon: createIcon(Icons.FileCode, 'attachments-icon')
+      icon: createIcon(Icons.FileCode, 'attachments-icon'),
+      managerAccess: true
     },
     { 
       href: '/chat', 
@@ -77,12 +81,14 @@ export default function Sidebar(): JSX.Element {
       href: '/webhook-logs', 
       label: 'Logs', 
       icon: createIcon(Icons.Webhook, 'webhook-logs-icon'),
-      adminOnly: true
+      adminOnly: true,
+      managerAccess: true
     },
     { 
       href: '/accounts', 
       label: 'Accounts', 
-      icon: createIcon(Icons.Users, 'accounts-icon')
+      icon: createIcon(Icons.Users, 'accounts-icon'),
+      managerAccess: true
     },
     { 
       href: '/settings', 
@@ -111,7 +117,11 @@ export default function Sidebar(): JSX.Element {
 
           <nav className="flex-1 py-2 px-2">
             {routes
-              .filter(route => !route.adminOnly || session?.user?.role === 'admin')
+              .filter(route => 
+                !route.adminOnly || 
+                session?.user?.role === 'admin' ||
+                (route.managerAccess && session?.user?.role === 'manager')
+              )
               .map((route) => (
                 <SidebarLink
                   key={route.href}

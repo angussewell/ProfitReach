@@ -292,6 +292,9 @@ model EmailMessage {
   messageSource        MessageSource   @default(EMAIL)
   socialAccountId      String?
   statusChangedAt      DateTime        @default(now())
+  aiSuggestion1        String?
+  aiSuggestion2        String?
+  aiSuggestion3        String?
   socialAccount        SocialAccount?     @relation(fields: [socialAccountId], references: [id])
   emailAccount         EmailAccount?      @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
   organization         Organization       @relation(fields: [organizationId], references: [id])

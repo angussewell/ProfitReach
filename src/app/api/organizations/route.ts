@@ -23,7 +23,7 @@ export async function GET(request: Request) {
     });
 
     // Admin users can see all organizations
-    // Regular users can only see their organization
+    // Regular users and managers can only see their organization
     const organizations = session.user.role === 'admin'
       ? await prisma.organization.findMany({
           include: {

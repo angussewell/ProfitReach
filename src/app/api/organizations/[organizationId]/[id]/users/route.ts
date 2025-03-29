@@ -27,6 +27,7 @@ export async function GET(
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
+    // Both regular users and managers are restricted to their organization
     if (user.role !== 'admin' && user.organizationId !== params.id) {
       return new NextResponse('Forbidden', { status: 403 });
     }
@@ -67,11 +68,11 @@ export async function POST(
     // Only allow admins to create users
     const currentUser = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { role: true }
+      select: { role: true, organizationId: true }
     });
 
-    if (!currentUser || currentUser.role !== 'admin') {
-      return new NextResponse('Forbidden', { status: 403 });
+    if (!currentUser) {
+      return new NextResponse('Unauthorized', { status: 401 });
     }
 
     const body = await request.json();
@@ -82,8 +83,26 @@ export async function POST(
     }
 
     // Validate role
-    if (role !== 'user' && role !== 'admin') {
+    if (role !== 'user' && role !== 'admin' && role !== 'manager') {
       return new NextResponse('Invalid role', { status: 400 });
+    }
+
+    // Admin can create any user, manager can only create regular users in their organization
+    if (currentUser.role !== 'admin') {
+      // Check if manager
+      if (currentUser.role !== 'manager') {
+        return new NextResponse('Forbidden', { status: 403 });
+      }
+      
+      // Manager can only create users in their own organization
+      if (currentUser.organizationId !== params.id) {
+        return new NextResponse('Forbidden', { status: 403 });
+      }
+      
+      // Manager cannot create admin users
+      if (role === 'admin') {
+        return new NextResponse('Managers cannot create admin users', { status: 403 });
+      }
     }
 
     // Check if email is already in use
@@ -135,16 +154,6 @@ export async function DELETE(
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
-    // Only allow admins to delete users
-    const currentUser = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { role: true }
-    });
-
-    if (!currentUser || currentUser.role !== 'admin') {
-      return new NextResponse('Forbidden', { status: 403 });
-    }
-
     const url = new URL(request.url);
     const userId = url.searchParams.get('userId');
 
@@ -157,12 +166,58 @@ export async function DELETE(
       return new NextResponse('Cannot delete yourself', { status: 400 });
     }
 
-    // Delete user
-    await prisma.user.delete({
-      where: { id: userId }
+    // Get current user
+    const currentUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { role: true, organizationId: true }
     });
 
-    return new NextResponse(null, { status: 204 });
+    if (!currentUser) {
+      return new NextResponse('Unauthorized', { status: 401 });
+    }
+
+    // Get user to be deleted to check their role
+    const userToDelete = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true, organizationId: true }
+    });
+
+    if (!userToDelete) {
+      return new NextResponse('User not found', { status: 404 });
+    }
+
+    // Admin can delete any user
+    if (currentUser.role === 'admin') {
+      // Delete user
+      await prisma.user.delete({
+        where: { id: userId }
+      });
+      
+      return new NextResponse(null, { status: 204 });
+    }
+    
+    // Manager can only delete regular users in their organization
+    if (currentUser.role === 'manager') {
+      // Manager can only delete users in their own organization
+      if (userToDelete.organizationId !== currentUser.organizationId) {
+        return new NextResponse('Cannot delete users from other organizations', { status: 403 });
+      }
+      
+      // Manager cannot delete admins or other managers
+      if (userToDelete.role === 'admin' || userToDelete.role === 'manager') {
+        return new NextResponse('Managers cannot delete admin or manager users', { status: 403 });
+      }
+      
+      // Delete user
+      await prisma.user.delete({
+        where: { id: userId }
+      });
+      
+      return new NextResponse(null, { status: 204 });
+    }
+    
+    // Regular users cannot delete other users
+    return new NextResponse('Forbidden', { status: 403 });
   } catch (error) {
     console.error('Error deleting organization user:', error);
     return new NextResponse('Internal Server Error', { status: 500 });

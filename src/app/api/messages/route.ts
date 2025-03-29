@@ -53,13 +53,16 @@ export async function GET(request: Request) {
       count: messageCount
     });
 
-    // Fetch messages using raw SQL to avoid type issues
-    const messages = await prisma.$queryRaw<EmailMessage[]>`
-      SELECT * FROM "EmailMessage"
-      WHERE "organizationId" = ${session.user.organizationId}
-      ORDER BY "receivedAt" DESC
-      LIMIT 100
-    `;
+    // Use Prisma ORM instead of raw SQL
+    const messages = await prisma.emailMessage.findMany({
+      where: {
+        organizationId: session.user.organizationId
+      },
+      orderBy: {
+        receivedAt: 'desc'
+      },
+      take: 100
+    });
 
     console.log('Found messages:', {
       count: messages.length,

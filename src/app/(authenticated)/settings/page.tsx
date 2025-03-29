@@ -6,6 +6,7 @@ import { PageContainer } from '@/components/layout/PageContainer';
 import { UserManagement } from '@/components/settings/user-management';
 import { BillingForm } from '@/app/settings/billing/billing-form';
 import { CrmSettings } from '@/components/settings/crm-settings';
+import { DataSettings } from '@/components/settings/data-settings';
 
 interface Organization {
   id: string;
@@ -214,7 +215,7 @@ export default function SettingsPage() {
     // Set initial tab from URL parameter
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get('tab');
-    if (tabParam && ['webhooks', 'users', 'billing', 'crm'].includes(tabParam)) {
+    if (tabParam && ['webhooks', 'users', 'billing', 'crm', 'data'].includes(tabParam)) {
       setActiveTab(tabParam);
     }
     fetchOrganization();
@@ -308,6 +309,16 @@ export default function SettingsPage() {
           >
             CRM
           </button>
+          <button
+            onClick={() => setActiveTab('data')}
+            className={`px-4 py-2 ${
+              activeTab === 'data'
+                ? 'border-b-2 border-red-500 text-red-600'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Data
+          </button>
         </div>
 
         {isLoading ? (
@@ -365,6 +376,9 @@ export default function SettingsPage() {
                   }
                 }}
               />
+            )}
+            {activeTab === 'data' && organization && (
+              <DataSettings organization={organization} />
             )}
           </>
         )}

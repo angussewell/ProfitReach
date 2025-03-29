@@ -74,81 +74,94 @@ export const authOptions: AuthOptions = {
         password: { label: "Password", type: "password" }
       },
       async authorize(credentials) {
-        console.log('Starting authorize function with email:', credentials?.email);
+        // Increased logging for debugging manager login
+        console.log(`[AUTH] Authorize attempt for email: ${credentials?.email}`);
         
         if (!credentials?.email || !credentials?.password) {
-          console.log('Missing credentials - Email or password not provided');
+          console.error('[AUTH] Error: Missing email or password');
           return null;
         }
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email }
-        });
-
-        console.log('User lookup result:', { 
-          email: credentials.email, 
-          userFound: !!user,
-          hasPassword: !!(user?.password)
-        });
-
-        if (!user || !user.password) {
-          console.log('User not found or missing password:', credentials.email);
-          return null;
-        }
-
-        console.log('Attempting password comparison for user:', {
-          email: credentials.email,
-          passwordLength: user.password.length,
-          providedPasswordLength: credentials.password.length
-        });
-
+        let user;
         try {
-          const isPasswordValid = await bcrypt.compare(credentials.password, user.password);
-          console.log('Password validation result:', { 
-            email: credentials.email, 
-            isValid: isPasswordValid 
+          user = await prisma.user.findUnique({
+            where: { email: credentials.email }
           });
+          console.log(`[AUTH] User lookup result for ${credentials.email}:`, user ? `Found user ID ${user.id}, Role: ${user.role}` : 'User not found');
+        } catch (dbError) {
+           console.error(`[AUTH] Database error fetching user ${credentials.email}:`, dbError);
+           return null; // Fail on DB error
+        }
 
-          if (!isPasswordValid) {
-            console.log('Password validation failed');
-            return null;
-          }
-        } catch (error) {
-          console.error('Error comparing passwords:', error);
+        if (!user) {
+          console.warn(`[AUTH] Login failed: User not found for email ${credentials.email}`);
           return null;
         }
 
-        // Get the user's current organization
-        const currentOrg = user.organizationId ? await prisma.organization.findUnique({
-          where: { id: user.organizationId },
-          select: { id: true, name: true }
-        }) : null;
+        if (!user.password) {
+            console.warn(`[AUTH] Login failed: User ${credentials.email} found but has no password set.`);
+            return null; // Or handle case where password might not be required (e.g., OAuth linking)
+        }
+        
+        let isPasswordValid = false;
+        try {
+          isPasswordValid = await bcrypt.compare(credentials.password, user.password);
+          console.log(`[AUTH] Password comparison result for ${credentials.email}: ${isPasswordValid ? 'Valid' : 'Invalid'}`);
+        } catch (bcryptError) {
+          console.error(`[AUTH] Bcrypt error comparing password for ${credentials.email}:`, bcryptError);
+          return null; // Fail on bcrypt error
+        }
 
-        // Get all organizations for the user
-        const organizations = user.role === 'admin'
-          ? await prisma.organization.findMany({
-              orderBy: { name: 'asc' },
-              select: {
-                id: true,
-                name: true
-              }
-            })
-          : await prisma.organization.findMany({
-              where: {
-                users: { some: { id: user.id } }
-              },
-              select: {
-                id: true,
-                name: true
-              }
-            });
+        if (!isPasswordValid) {
+          console.warn(`[AUTH] Login failed: Invalid password for email ${credentials.email}`);
+          return null;
+        }
 
-        console.log('Found organizations for user:', {
-          role: user.role,
-          count: organizations.length,
-          organizations: organizations.map(o => o.name)
-        });
+        // Password is valid, proceed to fetch organization details
+        console.log(`[AUTH] Login success for ${credentials.email}. Fetching organization details...`);
+        
+        let currentOrg: { id: string; name: string } | null = null;
+        try {
+            if (user.organizationId) {
+                currentOrg = await prisma.organization.findUnique({
+                    where: { id: user.organizationId },
+                    select: { id: true, name: true }
+                });
+                console.log(`[AUTH] Found current organization for ${credentials.email}:`, currentOrg);
+            }
+        } catch (orgError) {
+            console.error(`[AUTH] Error fetching current organization ${user.organizationId} for user ${credentials.email}:`, orgError);
+            // Decide if this is fatal. Maybe allow login without full org details?
+            // For now, let's proceed but log the error.
+        }
 
+        let organizations: { id: string; name: string }[] = [];
+        try {
+            if (user.role === 'admin') {
+                organizations = await prisma.organization.findMany({
+                    orderBy: { name: 'asc' },
+                    select: { id: true, name: true }
+                });
+            } else { // Includes 'user' and 'manager' roles
+                organizations = await prisma.organization.findMany({
+                    where: { users: { some: { id: user.id } } },
+                    select: { id: true, name: true }
+                });
+            }
+            console.log(`[AUTH] Found ${organizations.length} accessible organizations for ${credentials.email} (Role: ${user.role})`);
+        } catch (orgListError) {
+            console.error(`[AUTH] Error fetching organization list for user ${credentials.email}:`, orgListError);
+            // Decide if this is fatal. Allow login?
+        }
+
+        // Ensure organizations list contains at least the currentOrg if applicable
+        const finalOrganizations = [...organizations];
+        if (currentOrg && !finalOrganizations.some(org => org.id === currentOrg?.id)) {
+            console.warn(`[AUTH] Current organization ${currentOrg.id} not found in fetched list for ${credentials.email}. Adding it.`);
+            finalOrganizations.push(currentOrg);
+        }
+
+        console.log(`[AUTH] Returning user object for ${credentials.email}`);
         return {
           id: user.id,
           email: user.email || undefined,
@@ -156,7 +169,7 @@ export const authOptions: AuthOptions = {
           role: user.role,
           organizationId: currentOrg?.id,
           organizationName: currentOrg?.name,
-          organizations: organizations.length > 0 ? organizations : currentOrg ? [currentOrg] : []
+          organizations: finalOrganizations
         };
       }
     }),
