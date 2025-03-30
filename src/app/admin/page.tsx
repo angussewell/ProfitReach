@@ -101,6 +101,67 @@ export default function AdminPanelPage() {
   // Add a new state to store the raw received data for testing
   const [receivedTaskData, setReceivedTaskData] = useState<any[]>([]);
   const [showReceivedData, setShowReceivedData] = useState(false);
+  
+  // Browser storage utility functions
+  const getTasksFromLocalStorage = (orgName: string): any[] => {
+    if (typeof window === 'undefined') return [];
+    
+    try {
+      const key = `tasks_${orgName.replace(/[^a-z0-9]/gi, '_')}`;
+      const storedData = localStorage.getItem(key);
+      
+      if (!storedData) return [];
+      
+      const parsedData = JSON.parse(storedData);
+      console.log(`🔍 FRONTEND: Retrieved ${Array.isArray(parsedData) ? parsedData.length : 0} tasks from localStorage for ${orgName}`);
+      
+      return Array.isArray(parsedData) ? parsedData : [];
+    } catch (error) {
+      console.error('Error reading from localStorage:', error);
+      return [];
+    }
+  };
+  
+  const clearTasksFromLocalStorage = (orgName: string): void => {
+    if (typeof window === 'undefined') return;
+    
+    try {
+      const key = `tasks_${orgName.replace(/[^a-z0-9]/gi, '_')}`;
+      localStorage.removeItem(key);
+      console.log(`🔍 FRONTEND: Cleared tasks from localStorage for ${orgName}`);
+    } catch (error) {
+      console.error('Error clearing localStorage:', error);
+    }
+  };
+  
+  // Function to check client-side stored data
+  const checkBrowserStorage = async (orgName: string) => {
+    console.log(`🔍 FRONTEND: Checking browser storage for "${orgName}"...`);
+    setTasksLoading(true);
+    setShowReceivedData(true);
+    setTaskError(`Checking browser storage for ${orgName}...`);
+    
+    try {
+      const storedTasks = getTasksFromLocalStorage(orgName);
+      
+      if (storedTasks.length > 0) {
+        console.log(`🔍 FRONTEND: Found ${storedTasks.length} tasks in browser storage`);
+        setReceivedTaskData(storedTasks);
+        setTasks(storedTasks);
+        setTaskError(`Found ${storedTasks.length} tasks in browser storage for ${orgName}`);
+      } else {
+        console.log(`🔍 FRONTEND: No tasks found in browser storage`);
+        setReceivedTaskData([]);
+        setTaskError(`No tasks found in browser storage for ${orgName}`);
+      }
+    } catch (error) {
+      console.error('🔍 FRONTEND: Error checking browser storage:', error);
+      setTaskError(`Error checking browser storage: ${error instanceof Error ? error.message : String(error)}`);
+      setReceivedTaskData([]);
+    } finally {
+      setTasksLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (status === 'loading') return;
@@ -249,12 +310,47 @@ export default function AdminPanelPage() {
     }
   };
 
-  // Update the useEffect to call our new function
+  // Replace the current useEffect for handling modal opening with one that checks localStorage first
   useEffect(() => {
     if (isTaskModalOpen && selectedOrgName) {
-      fetchTasks();
+      // Try to get tasks from localStorage first
+      const storedTasks = getTasksFromLocalStorage(selectedOrgName);
+      
+      if (storedTasks.length > 0) {
+        console.log(`🔍 FRONTEND: Using ${storedTasks.length} tasks from localStorage`);
+        setTasks(storedTasks);
+        setTaskError(null);
+        setTasksLoading(false);
+      } else {
+        // Fall back to API if no localStorage data
+        fetchTasks();
+      }
     }
   }, [isTaskModalOpen, selectedOrgName]);
+
+  // Check for URL parameters on page load indicating tasks were just received
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tasksReceived = params.get('tasksReceived');
+      const org = params.get('org');
+      const count = params.get('count');
+      
+      if (tasksReceived === 'true' && org) {
+        console.log(`🔍 FRONTEND: Detected tasks received for ${org} (${count} tasks)`);
+        // Clear the URL parameters without full reload
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, newUrl);
+        
+        // Show notification
+        setTaskError(`Successfully received ${count} tasks for ${org}! Data is stored in your browser.`);
+        
+        // Optionally, open the modal to show the data
+        setSelectedOrgName(org);
+        setIsTaskModalOpen(true);
+      }
+    }
+  }, []);
 
   const handleBack = () => router.back();
   const handleDateRangeChange = (newRange: DateRange | undefined) => setDateRange(newRange);
@@ -412,99 +508,6 @@ export default function AdminPanelPage() {
     }
   };
 
-  // Add a function to directly check stored data for a specific organization
-  const checkStoredData = async (orgName: string) => {
-    console.log(`🔍 FRONTEND: Checking stored data for "${orgName}"...`);
-    setTasksLoading(true);
-    setShowReceivedData(true);
-    setTaskError(`Checking stored data for ${orgName}...`);
-    
-    try {
-      // Log the current time for debugging
-      const timestamp = new Date().toISOString();
-      console.log(`🔍 FRONTEND: Making request at ${timestamp}`);
-      
-      // Use a unique query parameter to bypass any caching
-      const url = `/api/admin/tasks-receive?organizationName=${encodeURIComponent(orgName)}&_t=${Date.now()}`;
-      console.log(`🔍 FRONTEND: Fetching from URL: ${url}`);
-      
-      const response = await fetch(url, {
-        method: 'GET',
-        // Explicitly disable caching
-        cache: 'no-store',
-        headers: {
-          'Cache-Control': 'no-cache, no-store',
-          'Pragma': 'no-cache'
-        }
-      });
-      
-      console.log(`🔍 FRONTEND: Response status: ${response.status}, ok: ${response.ok}`);
-      
-      // Try to get response text first for debugging
-      let responseText = '';
-      try {
-        responseText = await response.clone().text();
-        console.log(`🔍 FRONTEND: Raw response text: ${responseText.substring(0, 300)}${responseText.length > 300 ? '...' : ''}`);
-      } catch (textError) {
-        console.error('🔍 FRONTEND: Failed to get response text:', textError);
-      }
-      
-      if (!response.ok) {
-        let errorMessage = `Failed to fetch stored data: ${response.status} ${response.statusText}`;
-        
-        try {
-          // Try to parse error details
-          const errorData = JSON.parse(responseText);
-          if (errorData.error) {
-            errorMessage += ` - ${errorData.error}`;
-            if (errorData.details) {
-              errorMessage += `: ${errorData.details}`;
-            }
-          }
-        } catch (parseError) {
-          // If we can't parse JSON, just use the raw text
-          if (responseText) {
-            errorMessage += ` - ${responseText}`;
-          }
-        }
-        
-        setTaskError(errorMessage);
-        setReceivedTaskData([]);
-        setTasksLoading(false);
-        return;
-      }
-      
-      // Now try to parse as JSON
-      try {
-        const data = await response.json();
-        console.log(`🔍 FRONTEND: Parsed JSON data:`, data);
-        console.log(`🔍 FRONTEND: Received ${Array.isArray(data) ? data.length : 0} stored items for ${orgName}`);
-        
-        if (Array.isArray(data) && data.length > 0) {
-          setReceivedTaskData(data);
-          setTasks(data);
-          setTaskError(`Found ${data.length} tasks in storage for ${orgName}`);
-        } else if (Array.isArray(data)) {
-          setReceivedTaskData([]);
-          setTaskError(`No data found in storage for ${orgName} (empty array received)`);
-        } else {
-          setReceivedTaskData([]);
-          setTaskError(`Invalid data format received for ${orgName}: expected array, got ${typeof data}`);
-        }
-      } catch (jsonError: any) {
-        console.error('🔍 FRONTEND: JSON parse error:', jsonError);
-        setTaskError(`Failed to parse response as JSON: ${jsonError.message} - Raw text: ${responseText.substring(0, 100)}...`);
-        setReceivedTaskData([]);
-      }
-    } catch (error) {
-      console.error('🔍 FRONTEND: Error checking stored data:', error);
-      setTaskError(`Error checking stored data: ${error instanceof Error ? error.message : String(error)}`);
-      setReceivedTaskData([]);
-    } finally {
-      setTasksLoading(false);
-    }
-  };
-
   const getReplyRateStyle = (rate: number) => {
     if (rate >= 2) return "text-emerald-600";
     if (rate >= 1) return "text-amber-600";
@@ -558,10 +561,21 @@ export default function AdminPanelPage() {
         <div className="flex space-x-3">
           <Button 
             variant="outline" 
-            onClick={() => checkStoredData("Scale Your Cause")} 
+            onClick={() => checkBrowserStorage("Scale Your Cause")} 
             className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
           >
-            Check Storage
+            Check Browser Storage
+          </Button>
+          
+          <Button 
+            variant="outline" 
+            onClick={() => {
+              clearTasksFromLocalStorage("Scale Your Cause");
+              setTaskError("Cleared browser storage for Scale Your Cause");
+            }}
+            className="bg-red-50 text-red-700 border-red-200 hover:bg-red-100"
+          >
+            Clear Storage
           </Button>
           
           <Button 
