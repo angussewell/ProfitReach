@@ -4,13 +4,14 @@ import { Fragment, useState, useEffect } from 'react';
 import { Menu, Transition } from '@headlessui/react';
 import { ChevronDownIcon } from '@heroicons/react/20/solid';
 import { cn } from '@/lib/utils';
-import { Building, Plus, LogOut, Search } from 'lucide-react';
+import { Building, Plus, LogOut, Search, LayoutDashboard } from 'lucide-react';
 import { toast } from 'sonner';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { motion } from 'framer-motion';
 import type { ReactElement, JSX } from 'react';
 import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 
 interface OrganizationSwitcherProps {
   open?: boolean;
@@ -25,6 +26,7 @@ const ClientPlus = Plus as unknown as (props: any) => JSX.Element;
 const ClientLogOut = LogOut as unknown as (props: any) => JSX.Element;
 const ClientChevronDown = ChevronDownIcon as unknown as (props: any) => JSX.Element;
 const ClientSearch = Search as unknown as (props: any) => JSX.Element;
+const ClientLayoutDashboard = LayoutDashboard as unknown as (props: any) => JSX.Element;
 
 export default function OrganizationSwitcher({ open = true }: OrganizationSwitcherProps): ReactElement {
   const { 
@@ -39,6 +41,7 @@ export default function OrganizationSwitcher({ open = true }: OrganizationSwitch
 
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === 'admin';
+  const router = useRouter();
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newOrgName, setNewOrgName] = useState('');
@@ -196,6 +199,22 @@ export default function OrganizationSwitcher({ open = true }: OrganizationSwitch
                         >
                           <ClientPlus className="mr-2 h-4 w-4" aria-hidden="true" />
                           Create Organization
+                        </button>
+                      )}
+                    </Menu.Item>
+                  )}
+                  {isAdmin && (
+                    <Menu.Item>
+                      {({ active }) => (
+                        <button
+                          onClick={() => router.push('/admin')}
+                          className={cn(
+                            active ? 'bg-gray-50 text-gray-900' : 'text-gray-700',
+                            'flex w-full items-center px-4 py-2.5 text-left text-[14px] font-medium tracking-[-0.1px]'
+                          )}
+                        >
+                          <ClientLayoutDashboard className="mr-2 h-4 w-4" aria-hidden="true" />
+                          Admin Panel
                         </button>
                       )}
                     </Menu.Item>

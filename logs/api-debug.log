@@ -1,0 +1,305 @@
+[2025-03-29T21:58:41.661Z] 🟢 [zcy4q4vv] API Route started: /api/admin/tasks
+[2025-03-29T21:58:41.661Z] [zcy4q4vv] Attempting to get session...
+[2025-03-29T21:58:41.802Z] [zcy4q4vv] Session exists: true, Is admin: true
+[2025-03-29T21:58:41.802Z] [zcy4q4vv] Parsing request body...
+[2025-03-29T21:58:41.803Z] [zcy4q4vv] Request body: {"organizationName":"The Elevate Project"}
+[2025-03-29T21:58:41.803Z] [zcy4q4vv] Organization name extracted: The Elevate Project
+[2025-03-29T21:58:41.803Z] [zcy4q4vv] 🚨 SKIPPING EXTERNAL API CALL FOR DEBUGGING
+[2025-03-29T21:58:41.803Z] [zcy4q4vv] 🟠 RETURNING TEST DATA: [{"Client Name":"Test Client","Task Name":"Test Task 1","Status":"In Progress","Description":"This is a test task to verify the API is working","Assigned To":"Test User","Due Date":"2023-12-31"},{"Client Name":"Test Client","Task Name":"Test Task 2","Status":"Done","Description":"Another test task with ID: zcy4q4vv","Assigned To":"Test User","Due Date":"2023-12-25"}]
+[2025-03-29T21:58:48.612Z] 🟢 [kxsunf41] API Route started: /api/admin/tasks
+[2025-03-29T21:58:48.613Z] [kxsunf41] Attempting to get session...
+[2025-03-29T21:58:48.676Z] [kxsunf41] Session exists: true, Is admin: true
+[2025-03-29T21:58:48.676Z] [kxsunf41] Parsing request body...
+[2025-03-29T21:58:48.676Z] [kxsunf41] Request body: {"organizationName":"Everyday Entrepreneurs"}
+[2025-03-29T21:58:48.676Z] [kxsunf41] Organization name extracted: Everyday Entrepreneurs
+[2025-03-29T21:58:48.676Z] [kxsunf41] 🚨 SKIPPING EXTERNAL API CALL FOR DEBUGGING
+[2025-03-29T21:58:48.677Z] [kxsunf41] 🟠 RETURNING TEST DATA: [{"Client Name":"Test Client","Task Name":"Test Task 1","Status":"In Progress","Description":"This is a test task to verify the API is working","Assigned To":"Test User","Due Date":"2023-12-31"},{"Client Name":"Test Client","Task Name":"Test Task 2","Status":"Done","Description":"Another test task with ID: kxsunf41","Assigned To":"Test User","Due Date":"2023-12-25"}]
+[2025-03-29T22:01:17.351Z] 🟢 [mu040jqb] API Route started: /api/admin/tasks
+[2025-03-29T22:01:17.352Z] [mu040jqb] Attempting to get session...
+[2025-03-29T22:01:17.604Z] [mu040jqb] Session exists: true, Is admin: true
+[2025-03-29T22:01:17.604Z] [mu040jqb] Parsing request body...
+[2025-03-29T22:01:17.605Z] [mu040jqb] Request body: {"organizationName":"Test Organization"}
+[2025-03-29T22:01:17.605Z] [mu040jqb] Organization name extracted: Test Organization
+[2025-03-29T22:01:17.605Z] [mu040jqb] Preparing to fetch tasks for: Test Organization
+[2025-03-29T22:01:17.605Z] [mu040jqb] 🔵 EXECUTION MARKER: Starting webhook fetch to https://n8n.srv768302.hstgr.cloud/webhook/coda-tasks
+[2025-03-29T22:01:17.605Z] [mu040jqb] 🔵 Request payload: {"organizationName":"Test Organization"}
+[2025-03-29T22:01:18.708Z] [mu040jqb] 🟡 EXECUTION MARKER: Webhook response received with status: 200
+[2025-03-29T22:01:18.709Z] [mu040jqb] 🟡 Response headers: {"content-encoding":"gzip","content-type":"application/json; charset=utf-8","date":"Sat, 29 Mar 2025 22:01:18 GMT","etag":"W/\"667-J7JEi1DJqjdDEdLIAg2OrfB+ygI\"","strict-transport-security":"max-age=315360000; includeSubDomains; preload","transfer-encoding":"chunked","vary":"Accept-Encoding","x-content-type-options":"nosniff","x-xss-protection":"1; mode=block"}
+[2025-03-29T22:01:18.709Z] [mu040jqb] 🟢 EXECUTION MARKER: About to parse JSON response from webhook
+[2025-03-29T22:01:18.714Z] [mu040jqb] ✅ Successfully parsed JSON response from n8n.
+[2025-03-29T22:01:18.715Z] [mu040jqb] 💾 RESPONSE RECEIVED - CRITICAL DEBUG POINT REACHED
+[2025-03-29T22:01:18.715Z] [mu040jqb] 🔍 Logging parsedResponse structure:
+[2025-03-29T22:01:18.715Z] [mu040jqb]    - typeof parsedResponse: object
+[2025-03-29T22:01:18.715Z] [mu040jqb]    - Array.isArray(parsedResponse): false
+[2025-03-29T22:01:18.716Z] [mu040jqb]    - parsedResponse content: {
+  "Client Name": "Scale Your Cause",
+  "Task Name": "Create Initial Scenarios",
+  "Status": "Done",
+  "Description": "Engagement Strategy:\nHere's exactly how I think the email outreach should flow:\nThe email would start with: \"Hey, my name is Sarah (or whatever your name is). I work with Scale Your Cause. I saw we were both connected to XYZ Mutual Connection, so I thought I'd reach out.\"\nThen you'd continue with something like: \"We've been seeing a lot of other food shelters (or whatever their nonprofit type is) in Austin (or whatever their city is) such as Competitor 1 and Competitor 2 using the Google Ads grant and signing up for the Google Ads grant. So we've decided to shift our focus to food nonprofits (or whatever their type of nonprofit is).\"\nNext, you'd mention: \"We're having a few open spots this month for our Google Ad Grant giveaway where we're basically setting up Google Ad Grant for a few non-profits completely for no cost at all.\"\nThen you'd ask: \"Do you know anybody that might be interested in something like this?\" This is important because you want to frame it as an open-handed question.\nYou'd personalize it with: \"Since you're [title] in this, since you have a background in this, since you (personalized aspect of why you are reaching out) I thought you were the person to reach out to.\"\nThat's the exact approach - very conversational, referencing mutual connections, mentioning competitors, offering limited spots for free setup, and asking who they might know who could benefit rather than directly selling to them.\n",
+  "Assigned To": "Iheoma Nwanyanwu",
+  "Order": "",
+  "Due Date": "3/30/2025 3:48:01 PM"
+}
+[2025-03-29T22:01:18.717Z] [mu040jqb] 🟣 EXECUTION MARKER: Beginning data transformation
+[2025-03-29T22:01:18.717Z] [mu040jqb] ⚠️ Transformation skipped: parsedResponse was not an array or was empty.
+[2025-03-29T22:01:18.717Z] [mu040jqb] 🟣 Actual parsedResponse type: object
+[2025-03-29T22:01:18.717Z] [mu040jqb] 🟠 EXECUTION MARKER: About to return 0 tasks to client
+[2025-03-29T22:01:18.717Z] [mu040jqb] 🟠 No tasks to return
+[2025-03-29T22:01:26.494Z] 🟢 [2ql2tt7m] API Route started: /api/admin/tasks
+[2025-03-29T22:01:26.494Z] [2ql2tt7m] Attempting to get session...
+[2025-03-29T22:01:26.563Z] [2ql2tt7m] Session exists: true, Is admin: true
+[2025-03-29T22:01:26.563Z] [2ql2tt7m] Parsing request body...
+[2025-03-29T22:01:26.591Z] [2ql2tt7m] Request body: {"organizationName":"Profithub"}
+[2025-03-29T22:01:26.592Z] [2ql2tt7m] Organization name extracted: Profithub
+[2025-03-29T22:01:26.592Z] [2ql2tt7m] Preparing to fetch tasks for: Profithub
+[2025-03-29T22:01:26.592Z] [2ql2tt7m] 🔵 EXECUTION MARKER: Starting webhook fetch to https://n8n.srv768302.hstgr.cloud/webhook/coda-tasks
+[2025-03-29T22:01:26.592Z] [2ql2tt7m] 🔵 Request payload: {"organizationName":"Profithub"}
+[2025-03-29T22:01:27.093Z] [2ql2tt7m] 🟡 EXECUTION MARKER: Webhook response received with status: 200
+[2025-03-29T22:01:27.094Z] [2ql2tt7m] 🟡 Response headers: {"content-encoding":"gzip","content-type":"application/json; charset=utf-8","date":"Sat, 29 Mar 2025 22:01:27 GMT","etag":"W/\"667-J7JEi1DJqjdDEdLIAg2OrfB+ygI\"","strict-transport-security":"max-age=315360000; includeSubDomains; preload","transfer-encoding":"chunked","vary":"Accept-Encoding","x-content-type-options":"nosniff","x-xss-protection":"1; mode=block"}
+[2025-03-29T22:01:27.095Z] [2ql2tt7m] 🟢 EXECUTION MARKER: About to parse JSON response from webhook
+[2025-03-29T22:01:27.102Z] [2ql2tt7m] ✅ Successfully parsed JSON response from n8n.
+[2025-03-29T22:01:27.102Z] [2ql2tt7m] 💾 RESPONSE RECEIVED - CRITICAL DEBUG POINT REACHED
+[2025-03-29T22:01:27.103Z] [2ql2tt7m] 🔍 Logging parsedResponse structure:
+[2025-03-29T22:01:27.103Z] [2ql2tt7m]    - typeof parsedResponse: object
+[2025-03-29T22:01:27.103Z] [2ql2tt7m]    - Array.isArray(parsedResponse): false
+[2025-03-29T22:01:27.103Z] [2ql2tt7m]    - parsedResponse content: {
+  "Client Name": "Scale Your Cause",
+  "Task Name": "Create Initial Scenarios",
+  "Status": "Done",
+  "Description": "Engagement Strategy:\nHere's exactly how I think the email outreach should flow:\nThe email would start with: \"Hey, my name is Sarah (or whatever your name is). I work with Scale Your Cause. I saw we were both connected to XYZ Mutual Connection, so I thought I'd reach out.\"\nThen you'd continue with something like: \"We've been seeing a lot of other food shelters (or whatever their nonprofit type is) in Austin (or whatever their city is) such as Competitor 1 and Competitor 2 using the Google Ads grant and signing up for the Google Ads grant. So we've decided to shift our focus to food nonprofits (or whatever their type of nonprofit is).\"\nNext, you'd mention: \"We're having a few open spots this month for our Google Ad Grant giveaway where we're basically setting up Google Ad Grant for a few non-profits completely for no cost at all.\"\nThen you'd ask: \"Do you know anybody that might be interested in something like this?\" This is important because you want to frame it as an open-handed question.\nYou'd personalize it with: \"Since you're [title] in this, since you have a background in this, since you (personalized aspect of why you are reaching out) I thought you were the person to reach out to.\"\nThat's the exact approach - very conversational, referencing mutual connections, mentioning competitors, offering limited spots for free setup, and asking who they might know who could benefit rather than directly selling to them.\n",
+  "Assigned To": "Iheoma Nwanyanwu",
+  "Order": "",
+  "Due Date": "3/30/2025 3:48:01 PM"
+}
+[2025-03-29T22:01:27.104Z] [2ql2tt7m] 🟣 EXECUTION MARKER: Beginning data transformation
+[2025-03-29T22:01:27.104Z] [2ql2tt7m] ⚠️ Transformation skipped: parsedResponse was not an array or was empty.
+[2025-03-29T22:01:27.104Z] [2ql2tt7m] 🟣 Actual parsedResponse type: object
+[2025-03-29T22:01:27.104Z] [2ql2tt7m] 🟠 EXECUTION MARKER: About to return 0 tasks to client
+[2025-03-29T22:01:27.104Z] [2ql2tt7m] 🟠 No tasks to return
+[2025-03-29T22:01:30.115Z] 🟢 [gupv74rm] API Route started: /api/admin/tasks
+[2025-03-29T22:01:30.115Z] [gupv74rm] Attempting to get session...
+[2025-03-29T22:01:30.179Z] [gupv74rm] Session exists: true, Is admin: true
+[2025-03-29T22:01:30.179Z] [gupv74rm] Parsing request body...
+[2025-03-29T22:01:30.179Z] [gupv74rm] Request body: {"organizationName":"Test Organization"}
+[2025-03-29T22:01:30.180Z] [gupv74rm] Organization name extracted: Test Organization
+[2025-03-29T22:01:30.180Z] [gupv74rm] Preparing to fetch tasks for: Test Organization
+[2025-03-29T22:01:30.180Z] [gupv74rm] 🔵 EXECUTION MARKER: Starting webhook fetch to https://n8n.srv768302.hstgr.cloud/webhook/coda-tasks
+[2025-03-29T22:01:30.180Z] [gupv74rm] 🔵 Request payload: {"organizationName":"Test Organization"}
+[2025-03-29T22:01:30.486Z] [gupv74rm] 🟡 EXECUTION MARKER: Webhook response received with status: 200
+[2025-03-29T22:01:30.487Z] [gupv74rm] 🟡 Response headers: {"content-encoding":"gzip","content-type":"application/json; charset=utf-8","date":"Sat, 29 Mar 2025 22:01:30 GMT","etag":"W/\"667-J7JEi1DJqjdDEdLIAg2OrfB+ygI\"","strict-transport-security":"max-age=315360000; includeSubDomains; preload","transfer-encoding":"chunked","vary":"Accept-Encoding","x-content-type-options":"nosniff","x-xss-protection":"1; mode=block"}
+[2025-03-29T22:01:30.487Z] [gupv74rm] 🟢 EXECUTION MARKER: About to parse JSON response from webhook
+[2025-03-29T22:01:30.490Z] [gupv74rm] ✅ Successfully parsed JSON response from n8n.
+[2025-03-29T22:01:30.491Z] [gupv74rm] 💾 RESPONSE RECEIVED - CRITICAL DEBUG POINT REACHED
+[2025-03-29T22:01:30.491Z] [gupv74rm] 🔍 Logging parsedResponse structure:
+[2025-03-29T22:01:30.491Z] [gupv74rm]    - typeof parsedResponse: object
+[2025-03-29T22:01:30.491Z] [gupv74rm]    - Array.isArray(parsedResponse): false
+[2025-03-29T22:01:30.492Z] [gupv74rm]    - parsedResponse content: {
+  "Client Name": "Scale Your Cause",
+  "Task Name": "Create Initial Scenarios",
+  "Status": "Done",
+  "Description": "Engagement Strategy:\nHere's exactly how I think the email outreach should flow:\nThe email would start with: \"Hey, my name is Sarah (or whatever your name is). I work with Scale Your Cause. I saw we were both connected to XYZ Mutual Connection, so I thought I'd reach out.\"\nThen you'd continue with something like: \"We've been seeing a lot of other food shelters (or whatever their nonprofit type is) in Austin (or whatever their city is) such as Competitor 1 and Competitor 2 using the Google Ads grant and signing up for the Google Ads grant. So we've decided to shift our focus to food nonprofits (or whatever their type of nonprofit is).\"\nNext, you'd mention: \"We're having a few open spots this month for our Google Ad Grant giveaway where we're basically setting up Google Ad Grant for a few non-profits completely for no cost at all.\"\nThen you'd ask: \"Do you know anybody that might be interested in something like this?\" This is important because you want to frame it as an open-handed question.\nYou'd personalize it with: \"Since you're [title] in this, since you have a background in this, since you (personalized aspect of why you are reaching out) I thought you were the person to reach out to.\"\nThat's the exact approach - very conversational, referencing mutual connections, mentioning competitors, offering limited spots for free setup, and asking who they might know who could benefit rather than directly selling to them.\n",
+  "Assigned To": "Iheoma Nwanyanwu",
+  "Order": "",
+  "Due Date": "3/30/2025 3:48:01 PM"
+}
+[2025-03-29T22:01:30.492Z] [gupv74rm] 🟣 EXECUTION MARKER: Beginning data transformation
+[2025-03-29T22:01:30.493Z] [gupv74rm] ⚠️ Transformation skipped: parsedResponse was not an array or was empty.
+[2025-03-29T22:01:30.493Z] [gupv74rm] 🟣 Actual parsedResponse type: object
+[2025-03-29T22:01:30.493Z] [gupv74rm] 🟠 EXECUTION MARKER: About to return 0 tasks to client
+[2025-03-29T22:01:30.493Z] [gupv74rm] 🟠 No tasks to return
+[2025-03-29T22:04:31.094Z] 🟢 [3w4ccnbg] API Route started: /api/admin/tasks
+[2025-03-29T22:04:31.094Z] [3w4ccnbg] Attempting to get session...
+[2025-03-29T22:04:31.208Z] [3w4ccnbg] Session exists: true, Is admin: true
+[2025-03-29T22:04:31.208Z] [3w4ccnbg] Parsing request body...
+[2025-03-29T22:04:31.208Z] [3w4ccnbg] Request body: {"organizationName":"Test Organization"}
+[2025-03-29T22:04:31.208Z] [3w4ccnbg] Organization name extracted: Test Organization
+[2025-03-29T22:04:31.208Z] [3w4ccnbg] Preparing to fetch tasks for: Test Organization
+[2025-03-29T22:04:31.208Z] [3w4ccnbg] 🔵 EXECUTION MARKER: Starting webhook fetch to https://n8n.srv768302.hstgr.cloud/webhook/coda-tasks
+[2025-03-29T22:04:31.208Z] [3w4ccnbg] 🔵 Request payload: {"organizationName":"Test Organization"}
+[2025-03-29T22:04:32.012Z] [3w4ccnbg] 🟡 EXECUTION MARKER: Webhook response received with status: 200
+[2025-03-29T22:04:32.013Z] [3w4ccnbg] 🟡 Response headers: {"content-encoding":"gzip","content-type":"application/json; charset=utf-8","date":"Sat, 29 Mar 2025 22:04:32 GMT","etag":"W/\"667-J7JEi1DJqjdDEdLIAg2OrfB+ygI\"","strict-transport-security":"max-age=315360000; includeSubDomains; preload","transfer-encoding":"chunked","vary":"Accept-Encoding","x-content-type-options":"nosniff","x-xss-protection":"1; mode=block"}
+[2025-03-29T22:04:32.014Z] [3w4ccnbg] 🟢 EXECUTION MARKER: About to parse JSON response from webhook
+[2025-03-29T22:04:32.020Z] [3w4ccnbg] ✅ Successfully parsed JSON response from n8n.
+[2025-03-29T22:04:32.020Z] [3w4ccnbg] 💾 RESPONSE RECEIVED - CRITICAL DEBUG POINT REACHED
+[2025-03-29T22:04:32.021Z] [3w4ccnbg] 🔍 Logging parsedResponse structure:
+[2025-03-29T22:04:32.021Z] [3w4ccnbg]    - typeof parsedResponse: object
+[2025-03-29T22:04:32.021Z] [3w4ccnbg]    - Array.isArray(parsedResponse): false
+[2025-03-29T22:04:32.021Z] [3w4ccnbg]    - parsedResponse content: {
+  "Client Name": "Scale Your Cause",
+  "Task Name": "Create Initial Scenarios",
+  "Status": "Done",
+  "Description": "Engagement Strategy:\nHere's exactly how I think the email outreach should flow:\nThe email would start with: \"Hey, my name is Sarah (or whatever your name is). I work with Scale Your Cause. I saw we were both connected to XYZ Mutual Connection, so I thought I'd reach out.\"\nThen you'd continue with something like: \"We've been seeing a lot of other food shelters (or whatever their nonprofit type is) in Austin (or whatever their city is) such as Competitor 1 and Competitor 2 using the Google Ads grant and signing up for the Google Ads grant. So we've decided to shift our focus to food nonprofits (or whatever their type of nonprofit is).\"\nNext, you'd mention: \"We're having a few open spots this month for our Google Ad Grant giveaway where we're basically setting up Google Ad Grant for a few non-profits completely for no cost at all.\"\nThen you'd ask: \"Do you know anybody that might be interested in something like this?\" This is important because you want to frame it as an open-handed question.\nYou'd personalize it with: \"Since you're [title] in this, since you have a background in this, since you (personalized aspect of why you are reaching out) I thought you were the person to reach out to.\"\nThat's the exact approach - very conversational, referencing mutual connections, mentioning competitors, offering limited spots for free setup, and asking who they might know who could benefit rather than directly selling to them.\n",
+  "Assigned To": "Iheoma Nwanyanwu",
+  "Order": "",
+  "Due Date": "3/30/2025 3:48:01 PM"
+}
+[2025-03-29T22:04:32.022Z] [3w4ccnbg] 🟣 EXECUTION MARKER: Beginning data transformation
+[2025-03-29T22:04:32.022Z] [3w4ccnbg] 🟣 parsedResponse type: object
+[2025-03-29T22:04:32.022Z] [3w4ccnbg] ⚠️ parsedResponse is not an array: object
+[2025-03-29T22:04:32.022Z] [3w4ccnbg] 🔄 Checking if non-array response has useful properties
+[2025-03-29T22:04:32.023Z] [3w4ccnbg] 🔄 Last resort: attempting to find anything that looks like a task
+[2025-03-29T22:04:32.023Z] [3w4ccnbg] Raw response for examination: {"Client Name":"Scale Your Cause","Task Name":"Create Initial Scenarios","Status":"Done","Description":"Engagement Strategy:\nHere's exactly how I think the email outreach should flow:\nThe email would start with: \"Hey, my name is Sarah (or whatever your name is). I work with Scale Your Cause. I saw we were both connected to XYZ Mutual Connection, so I thought I'd reach out.\"\nThen you'd continue with something like: \"We've been seeing a lot of other food shelters (or whatever their nonprofit...
+[2025-03-29T22:04:32.023Z] [3w4ccnbg] Base64 encoded response: eyJDbGllbnQgTmFtZSI6IlNjYWxlIFlvdXIgQ2F1c2UiLCJUYXNrIE5hbWUiOiJDcmVhdGUgSW5pdGlhbCBTY2VuYXJpb3MiLCJTdGF0dXMiOiJEb25lIiwiRGVzY3JpcHRpb24iOiJFbmdhZ2VtZW50IFN0cmF0ZWd5OlxuSGVyZSdzIGV4YWN0bHkgaG93IEkgdGhpbmsgdGhlIGVtYWlsIG91dHJlYWNoIHNob3VsZCBmbG93OlxuVGhlIGVtYWlsIHdvdWxkIHN0YXJ0IHdpdGg6IFwiSGV5LCBteSBuYW1lIGlzIFNhcmFoIChvciB3aGF0ZXZlciB5b3VyIG5hbWUgaXMpLiBJIHdvcmsgd2l0aCBTY2FsZSBZb3VyIENhdXNlLiBJIHNhdyB3ZSB3ZXJlIGJvdGggY29ubmVjdGVkIHRvIFhZWiBNdXR1YWwgQ29ubmVjdGlvbiwgc28gSSB0aG91Z2h0IEknZCByZWFjaCBvdXQuXCJcblRoZW4geW91J2QgY29udGludWUgd2l0aCBzb21ldGhpbmcgbGlrZTogXCJXZSd2ZSBiZWVuIHNlZWluZyBhIGxvdCBvZiBvdGhlciBmb29kIHNoZWx0ZXJzIChvciB3aGF0ZXZlciB0aGVpciBub25wcm9maXQgdHlwZSBpcykgaW4gQXVzdGluIChvciB3aGF0ZXZlciB0aGVpciBjaXR5IGlzKSBzdWNoIGFzIENvbXBldGl0b3IgMSBhbmQgQ29tcGV0aXRvciAyIHVzaW5nIHRoZSBHb29nbGUgQWRzIGdyYW50IGFuZCBzaWduaW5nIHVwIGZvciB0aGUgR29vZ2xlIEFkcyBncmFudC4gU28gd2UndmUgZGVjaWRlZCB0byBzaGlmdCBvdXIgZm9jdXMgdG8gZm9vZCBub25wcm9maXRzIChvciB3aGF0ZXZlciB0aGVpciB0eXBlIG9mIG5vbnByb2ZpdCBpcykuXCJcbk5leHQsIHlvdSdkIG1lbnRpb246IFwiV2UncmUgaGF2aW5nIGEgZmV3IG9wZW4gc3BvdHMgdGhpcyBtb250aCBmb3Igb3VyIEdvb2dsZSBBZCBHcmFudCBnaXZlYXdheSB3aGVyZSB3ZSdyZSBiYXNpY2FsbHkgc2V0dGluZyB1cCBHb29nbGUgQWQgR3JhbnQgZm9yIGEgZmV3IG5vbi1wcm9maXRzIGNvbXBsZXRlbHkgZm9yIG5vIGNvc3QgYXQgYWxsLlwiXG5UaGVuIHlvdSdkIGFzazogXCJEbyB5b3Uga25vdyBhbnlib2R5IHRoYXQgbWlnaHQgYmUgaW50ZXJlc3RlZCBpbiBzb21ldGhpbmcgbGlrZSB0aGlzP1wiIFRoaXMgaXMgaW1wb3J0YW50IGJlY2F1c2UgeW91IHdhbnQgdG8gZnJhbWUgaXQgYXMgYW4gb3Blbi1oYW5kZWQgcXVlc3Rpb24uXG5Zb3UnZCBwZXJzb25hbGl6ZSBpdCB3aXRoOiBcIlNpbmNlIHlvdSdyZSBbdGl0bGVdIGluIHRoaXMsIHNpbmNlIHlvdSBoYXZlIGEgYmFja2dyb3VuZCBpbiB0aGlzLCBzaW5jZSB5b3UgKHBlcnNvbmFsaXplZCBhc3BlY3Qgb2Ygd2h5IHlvdSBhcmUgcmVhY2hpbmcgb3V0KSBJIHRob3VnaHQgeW91IHdlcmUgdGhlIHBlcnNvbiB0byByZWFjaCBvdXQgdG8uXCJcblRoYXQncyB0aGUgZXhhY3QgYXBwcm9hY2ggLSB2ZXJ5IGNvbnZlcnNhdGlvbmFsLCByZWZlcmVuY2luZyBtdXR1YWwgY29ubmVjdGlvbnMsIG1lbnRpb25pbmcgY29tcGV0aXRvcnMsIG9mZmVyaW5nIGxpbWl0ZWQgc3BvdHMgZm9yIGZyZWUgc2V0dXAsIGFuZCBhc2tpbmcgd2hvIHRoZXkgbWlnaHQga25vdyB3aG8gY291bGQgYmVuZWZpdCByYXRoZXIgdGhhbiBkaXJlY3RseSBzZWxsaW5nIHRvIHRoZW0uXG4iLCJBc3NpZ25lZCBUbyI6IkloZW9tYSBOd2FueWFud3UiLCJPcmRlciI6IiIsIkR1ZSBEYXRlIjoiMy8zMC8yMDI1IDM6NDg6MDEgUE0ifQ==
+[2025-03-29T22:04:32.023Z] [3w4ccnbg] 🟠 EXECUTION MARKER: About to return 0 tasks to client
+[2025-03-29T22:04:32.023Z] [3w4ccnbg] 🟠 No tasks to return
+[2025-03-29T22:05:06.801Z] 🟢 [gxgbfkaw] API Route started: /api/admin/tasks
+[2025-03-29T22:05:06.801Z] [gxgbfkaw] Attempting to get session...
+[2025-03-29T22:05:07.054Z] [gxgbfkaw] Session exists: true, Is admin: true
+[2025-03-29T22:05:07.055Z] [gxgbfkaw] Parsing request body...
+[2025-03-29T22:05:07.058Z] [gxgbfkaw] Request body: {"organizationName":"Default Organization"}
+[2025-03-29T22:05:07.060Z] [gxgbfkaw] Organization name extracted: Default Organization
+[2025-03-29T22:05:07.060Z] [gxgbfkaw] Preparing to fetch tasks for: Default Organization
+[2025-03-29T22:05:07.061Z] [gxgbfkaw] 🔵 EXECUTION MARKER: Starting webhook fetch to https://n8n.srv768302.hstgr.cloud/webhook/coda-tasks
+[2025-03-29T22:05:07.061Z] [gxgbfkaw] 🔵 Request payload: {"organizationName":"Default Organization"}
+[2025-03-29T22:05:07.775Z] [gxgbfkaw] 🟡 EXECUTION MARKER: Webhook response received with status: 200
+[2025-03-29T22:05:07.775Z] [gxgbfkaw] 🟡 Response headers: {"content-encoding":"gzip","content-type":"application/json; charset=utf-8","date":"Sat, 29 Mar 2025 22:05:07 GMT","etag":"W/\"667-J7JEi1DJqjdDEdLIAg2OrfB+ygI\"","strict-transport-security":"max-age=315360000; includeSubDomains; preload","transfer-encoding":"chunked","vary":"Accept-Encoding","x-content-type-options":"nosniff","x-xss-protection":"1; mode=block"}
+[2025-03-29T22:05:07.776Z] [gxgbfkaw] 🟢 EXECUTION MARKER: About to parse JSON response from webhook
+[2025-03-29T22:05:07.783Z] [gxgbfkaw] ✅ Successfully parsed JSON response from n8n.
+[2025-03-29T22:05:07.784Z] [gxgbfkaw] 💾 RESPONSE RECEIVED - CRITICAL DEBUG POINT REACHED
+[2025-03-29T22:05:07.789Z] [gxgbfkaw] 🔍 Logging parsedResponse structure:
+[2025-03-29T22:05:07.790Z] [gxgbfkaw]    - typeof parsedResponse: object
+[2025-03-29T22:05:07.790Z] [gxgbfkaw]    - Array.isArray(parsedResponse): false
+[2025-03-29T22:05:07.790Z] [gxgbfkaw]    - parsedResponse content: {
+  "Client Name": "Scale Your Cause",
+  "Task Name": "Create Initial Scenarios",
+  "Status": "Done",
+  "Description": "Engagement Strategy:\nHere's exactly how I think the email outreach should flow:\nThe email would start with: \"Hey, my name is Sarah (or whatever your name is). I work with Scale Your Cause. I saw we were both connected to XYZ Mutual Connection, so I thought I'd reach out.\"\nThen you'd continue with something like: \"We've been seeing a lot of other food shelters (or whatever their nonprofit type is) in Austin (or whatever their city is) such as Competitor 1 and Competitor 2 using the Google Ads grant and signing up for the Google Ads grant. So we've decided to shift our focus to food nonprofits (or whatever their type of nonprofit is).\"\nNext, you'd mention: \"We're having a few open spots this month for our Google Ad Grant giveaway where we're basically setting up Google Ad Grant for a few non-profits completely for no cost at all.\"\nThen you'd ask: \"Do you know anybody that might be interested in something like this?\" This is important because you want to frame it as an open-handed question.\nYou'd personalize it with: \"Since you're [title] in this, since you have a background in this, since you (personalized aspect of why you are reaching out) I thought you were the person to reach out to.\"\nThat's the exact approach - very conversational, referencing mutual connections, mentioning competitors, offering limited spots for free setup, and asking who they might know who could benefit rather than directly selling to them.\n",
+  "Assigned To": "Iheoma Nwanyanwu",
+  "Order": "",
+  "Due Date": "3/30/2025 3:48:01 PM"
+}
+[2025-03-29T22:05:07.790Z] [gxgbfkaw] 🟣 EXECUTION MARKER: Beginning data transformation
+[2025-03-29T22:05:07.790Z] [gxgbfkaw] 🟣 parsedResponse type: object
+[2025-03-29T22:05:07.791Z] [gxgbfkaw] ⚠️ parsedResponse is not an array: object
+[2025-03-29T22:05:07.791Z] [gxgbfkaw] 🔄 Checking if non-array response has useful properties
+[2025-03-29T22:05:07.791Z] [gxgbfkaw] 🔄 Last resort: attempting to find anything that looks like a task
+[2025-03-29T22:05:07.791Z] [gxgbfkaw] Raw response for examination: {"Client Name":"Scale Your Cause","Task Name":"Create Initial Scenarios","Status":"Done","Description":"Engagement Strategy:\nHere's exactly how I think the email outreach should flow:\nThe email would start with: \"Hey, my name is Sarah (or whatever your name is). I work with Scale Your Cause. I saw we were both connected to XYZ Mutual Connection, so I thought I'd reach out.\"\nThen you'd continue with something like: \"We've been seeing a lot of other food shelters (or whatever their nonprofit...
+[2025-03-29T22:05:07.791Z] [gxgbfkaw] Base64 encoded response: eyJDbGllbnQgTmFtZSI6IlNjYWxlIFlvdXIgQ2F1c2UiLCJUYXNrIE5hbWUiOiJDcmVhdGUgSW5pdGlhbCBTY2VuYXJpb3MiLCJTdGF0dXMiOiJEb25lIiwiRGVzY3JpcHRpb24iOiJFbmdhZ2VtZW50IFN0cmF0ZWd5OlxuSGVyZSdzIGV4YWN0bHkgaG93IEkgdGhpbmsgdGhlIGVtYWlsIG91dHJlYWNoIHNob3VsZCBmbG93OlxuVGhlIGVtYWlsIHdvdWxkIHN0YXJ0IHdpdGg6IFwiSGV5LCBteSBuYW1lIGlzIFNhcmFoIChvciB3aGF0ZXZlciB5b3VyIG5hbWUgaXMpLiBJIHdvcmsgd2l0aCBTY2FsZSBZb3VyIENhdXNlLiBJIHNhdyB3ZSB3ZXJlIGJvdGggY29ubmVjdGVkIHRvIFhZWiBNdXR1YWwgQ29ubmVjdGlvbiwgc28gSSB0aG91Z2h0IEknZCByZWFjaCBvdXQuXCJcblRoZW4geW91J2QgY29udGludWUgd2l0aCBzb21ldGhpbmcgbGlrZTogXCJXZSd2ZSBiZWVuIHNlZWluZyBhIGxvdCBvZiBvdGhlciBmb29kIHNoZWx0ZXJzIChvciB3aGF0ZXZlciB0aGVpciBub25wcm9maXQgdHlwZSBpcykgaW4gQXVzdGluIChvciB3aGF0ZXZlciB0aGVpciBjaXR5IGlzKSBzdWNoIGFzIENvbXBldGl0b3IgMSBhbmQgQ29tcGV0aXRvciAyIHVzaW5nIHRoZSBHb29nbGUgQWRzIGdyYW50IGFuZCBzaWduaW5nIHVwIGZvciB0aGUgR29vZ2xlIEFkcyBncmFudC4gU28gd2UndmUgZGVjaWRlZCB0byBzaGlmdCBvdXIgZm9jdXMgdG8gZm9vZCBub25wcm9maXRzIChvciB3aGF0ZXZlciB0aGVpciB0eXBlIG9mIG5vbnByb2ZpdCBpcykuXCJcbk5leHQsIHlvdSdkIG1lbnRpb246IFwiV2UncmUgaGF2aW5nIGEgZmV3IG9wZW4gc3BvdHMgdGhpcyBtb250aCBmb3Igb3VyIEdvb2dsZSBBZCBHcmFudCBnaXZlYXdheSB3aGVyZSB3ZSdyZSBiYXNpY2FsbHkgc2V0dGluZyB1cCBHb29nbGUgQWQgR3JhbnQgZm9yIGEgZmV3IG5vbi1wcm9maXRzIGNvbXBsZXRlbHkgZm9yIG5vIGNvc3QgYXQgYWxsLlwiXG5UaGVuIHlvdSdkIGFzazogXCJEbyB5b3Uga25vdyBhbnlib2R5IHRoYXQgbWlnaHQgYmUgaW50ZXJlc3RlZCBpbiBzb21ldGhpbmcgbGlrZSB0aGlzP1wiIFRoaXMgaXMgaW1wb3J0YW50IGJlY2F1c2UgeW91IHdhbnQgdG8gZnJhbWUgaXQgYXMgYW4gb3Blbi1oYW5kZWQgcXVlc3Rpb24uXG5Zb3UnZCBwZXJzb25hbGl6ZSBpdCB3aXRoOiBcIlNpbmNlIHlvdSdyZSBbdGl0bGVdIGluIHRoaXMsIHNpbmNlIHlvdSBoYXZlIGEgYmFja2dyb3VuZCBpbiB0aGlzLCBzaW5jZSB5b3UgKHBlcnNvbmFsaXplZCBhc3BlY3Qgb2Ygd2h5IHlvdSBhcmUgcmVhY2hpbmcgb3V0KSBJIHRob3VnaHQgeW91IHdlcmUgdGhlIHBlcnNvbiB0byByZWFjaCBvdXQgdG8uXCJcblRoYXQncyB0aGUgZXhhY3QgYXBwcm9hY2ggLSB2ZXJ5IGNvbnZlcnNhdGlvbmFsLCByZWZlcmVuY2luZyBtdXR1YWwgY29ubmVjdGlvbnMsIG1lbnRpb25pbmcgY29tcGV0aXRvcnMsIG9mZmVyaW5nIGxpbWl0ZWQgc3BvdHMgZm9yIGZyZWUgc2V0dXAsIGFuZCBhc2tpbmcgd2hvIHRoZXkgbWlnaHQga25vdyB3aG8gY291bGQgYmVuZWZpdCByYXRoZXIgdGhhbiBkaXJlY3RseSBzZWxsaW5nIHRvIHRoZW0uXG4iLCJBc3NpZ25lZCBUbyI6IkloZW9tYSBOd2FueWFud3UiLCJPcmRlciI6IiIsIkR1ZSBEYXRlIjoiMy8zMC8yMDI1IDM6NDg6MDEgUE0ifQ==
+[2025-03-29T22:05:07.791Z] [gxgbfkaw] 🟠 EXECUTION MARKER: About to return 0 tasks to client
+[2025-03-29T22:05:07.791Z] [gxgbfkaw] 🟠 No tasks to return
+[2025-03-29T22:11:46.160Z] 🟢 [ljufq59t] API Route started: /api/admin/tasks
+[2025-03-29T22:11:46.160Z] [ljufq59t] Attempting to get session...
+[2025-03-29T22:11:46.385Z] [ljufq59t] Session exists: true, Is admin: true
+[2025-03-29T22:11:46.385Z] [ljufq59t] Parsing request body...
+[2025-03-29T22:11:46.386Z] [ljufq59t] Request body: {"organizationName":"Default Organization"}
+[2025-03-29T22:11:46.386Z] [ljufq59t] Organization name extracted: Default Organization
+[2025-03-29T22:11:46.386Z] [ljufq59t] Preparing to fetch tasks for: Default Organization
+[2025-03-29T22:11:46.387Z] [ljufq59t] 🔵 EXECUTION MARKER: Starting webhook fetch to https://n8n.srv768302.hstgr.cloud/webhook/coda-tasks
+[2025-03-29T22:11:46.387Z] [ljufq59t] 🔵 Request payload: {"organizationName":"Default Organization"}
+[2025-03-29T22:11:47.127Z] [ljufq59t] 🟡 EXECUTION MARKER: Webhook response received with status: 200
+[2025-03-29T22:11:47.129Z] [ljufq59t] 🟡 Response headers: {"content-type":"application/json; charset=utf-8","date":"Sat, 29 Mar 2025 22:11:47 GMT","strict-transport-security":"max-age=315360000; includeSubDomains; preload","transfer-encoding":"chunked","vary":"Accept-Encoding","x-content-type-options":"nosniff","x-xss-protection":"1; mode=block"}
+[2025-03-29T22:11:47.129Z] [ljufq59t] 🟢 EXECUTION MARKER: About to parse JSON response from webhook
+[2025-03-29T22:11:47.133Z] [ljufq59t] Failed to parse JSON response from n8n webhook: SyntaxError: Unexpected end of JSON input
+[2025-03-29T22:11:47.137Z] [ljufq59t] Failed to read response body as text after JSON parse error: TypeError: Body is unusable
+[2025-03-29T22:11:47.138Z] [ljufq59t] Returning empty array due to JSON parse error.
+[2025-03-29T22:13:30.822Z] 🟢 [d8vbeo2d] API Route started: /api/admin/tasks
+[2025-03-29T22:13:30.823Z] [d8vbeo2d] Attempting to get session...
+[2025-03-29T22:13:30.890Z] [d8vbeo2d] Session exists: true, Is admin: true
+[2025-03-29T22:13:30.891Z] [d8vbeo2d] Parsing request body...
+[2025-03-29T22:13:30.891Z] [d8vbeo2d] Request body: {"organizationName":"Profithub"}
+[2025-03-29T22:13:30.891Z] [d8vbeo2d] Organization name extracted: Profithub
+[2025-03-29T22:13:30.891Z] [d8vbeo2d] Preparing to fetch tasks for: Profithub
+[2025-03-29T22:13:30.892Z] [d8vbeo2d] 🔵 EXECUTION MARKER: Starting webhook fetch to https://n8n.srv768302.hstgr.cloud/webhook/coda-tasks
+[2025-03-29T22:13:30.892Z] [d8vbeo2d] 🔵 Request payload: {"organizationName":"Profithub"}
+[2025-03-29T22:13:31.965Z] [d8vbeo2d] 🟡 EXECUTION MARKER: Webhook response received with status: 200
+[2025-03-29T22:13:31.966Z] [d8vbeo2d] 🟡 Response headers: {"content-encoding":"gzip","content-type":"application/json; charset=utf-8","date":"Sat, 29 Mar 2025 22:13:32 GMT","etag":"W/\"669-thAWB+7RtD4osGF6VtqlrSq9GSo\"","strict-transport-security":"max-age=315360000; includeSubDomains; preload","transfer-encoding":"chunked","vary":"Accept-Encoding","x-content-type-options":"nosniff","x-xss-protection":"1; mode=block"}
+[2025-03-29T22:13:31.966Z] [d8vbeo2d] 🟢 EXECUTION MARKER: About to parse JSON response from webhook
+[2025-03-29T22:13:31.979Z] [d8vbeo2d] ✅ Successfully parsed JSON response from n8n.
+[2025-03-29T22:13:31.979Z] [d8vbeo2d] ⚠️ Validation Failed: Parsed response is not an array. Type: object
+[2025-03-29T22:13:31.979Z] [d8vbeo2d] 🟠 EXECUTION MARKER: About to return 0 tasks to client
+[2025-03-29T22:13:35.481Z] 🟢 [e2ltyrrd] API Route started: /api/admin/tasks
+[2025-03-29T22:13:35.481Z] [e2ltyrrd] Attempting to get session...
+[2025-03-29T22:13:35.589Z] [e2ltyrrd] Session exists: true, Is admin: true
+[2025-03-29T22:13:35.590Z] [e2ltyrrd] Parsing request body...
+[2025-03-29T22:13:35.590Z] [e2ltyrrd] Request body: {"organizationName":"Matt Conin"}
+[2025-03-29T22:13:35.590Z] [e2ltyrrd] Organization name extracted: Matt Conin
+[2025-03-29T22:13:35.590Z] [e2ltyrrd] Preparing to fetch tasks for: Matt Conin
+[2025-03-29T22:13:35.591Z] [e2ltyrrd] 🔵 EXECUTION MARKER: Starting webhook fetch to https://n8n.srv768302.hstgr.cloud/webhook/coda-tasks
+[2025-03-29T22:13:35.591Z] [e2ltyrrd] 🔵 Request payload: {"organizationName":"Matt Conin"}
+[2025-03-29T22:13:36.238Z] [e2ltyrrd] 🟡 EXECUTION MARKER: Webhook response received with status: 200
+[2025-03-29T22:13:36.238Z] [e2ltyrrd] 🟡 Response headers: {"content-encoding":"gzip","content-type":"application/json; charset=utf-8","date":"Sat, 29 Mar 2025 22:13:36 GMT","etag":"W/\"669-thAWB+7RtD4osGF6VtqlrSq9GSo\"","strict-transport-security":"max-age=315360000; includeSubDomains; preload","transfer-encoding":"chunked","vary":"Accept-Encoding","x-content-type-options":"nosniff","x-xss-protection":"1; mode=block"}
+[2025-03-29T22:13:36.239Z] [e2ltyrrd] 🟢 EXECUTION MARKER: About to parse JSON response from webhook
+[2025-03-29T22:13:36.248Z] [e2ltyrrd] ✅ Successfully parsed JSON response from n8n.
+[2025-03-29T22:13:36.249Z] [e2ltyrrd] ⚠️ Validation Failed: Parsed response is not an array. Type: object
+[2025-03-29T22:13:36.249Z] [e2ltyrrd] 🟠 EXECUTION MARKER: About to return 0 tasks to client
+[2025-03-29T22:14:03.231Z] 🟢 [z9g7cb6f] API Route started: /api/admin/tasks
+[2025-03-29T22:14:03.231Z] [z9g7cb6f] Attempting to get session...
+[2025-03-29T22:14:03.400Z] [z9g7cb6f] Session exists: true, Is admin: true
+[2025-03-29T22:14:03.400Z] [z9g7cb6f] Parsing request body...
+[2025-03-29T22:14:03.400Z] [z9g7cb6f] Request body: {"organizationName":"Andy Murphy"}
+[2025-03-29T22:14:03.401Z] [z9g7cb6f] Organization name extracted: Andy Murphy
+[2025-03-29T22:14:03.401Z] [z9g7cb6f] Preparing to fetch tasks for: Andy Murphy
+[2025-03-29T22:14:03.401Z] [z9g7cb6f] 🔵 EXECUTION MARKER: Starting webhook fetch to https://n8n.srv768302.hstgr.cloud/webhook/coda-tasks
+[2025-03-29T22:14:03.401Z] [z9g7cb6f] 🔵 Request payload: {"organizationName":"Andy Murphy"}
+[2025-03-29T22:14:03.843Z] [z9g7cb6f] 🟡 EXECUTION MARKER: Webhook response received with status: 200
+[2025-03-29T22:14:03.844Z] [z9g7cb6f] 🟡 Response headers: {"content-encoding":"gzip","content-type":"application/json; charset=utf-8","date":"Sat, 29 Mar 2025 22:14:03 GMT","etag":"W/\"669-thAWB+7RtD4osGF6VtqlrSq9GSo\"","strict-transport-security":"max-age=315360000; includeSubDomains; preload","transfer-encoding":"chunked","vary":"Accept-Encoding","x-content-type-options":"nosniff","x-xss-protection":"1; mode=block"}
+[2025-03-29T22:14:03.845Z] [z9g7cb6f] 🟢 EXECUTION MARKER: About to parse JSON response from webhook
+[2025-03-29T22:14:03.850Z] [z9g7cb6f] ✅ Successfully parsed JSON response from n8n.
+[2025-03-29T22:14:03.850Z] [z9g7cb6f] ⚠️ Validation Failed: Parsed response is not an array. Type: object
+[2025-03-29T22:14:03.852Z] [z9g7cb6f] 🟠 EXECUTION MARKER: About to return 0 tasks to client
+[2025-03-29T22:14:14.515Z] 🟢 [svaslz2l] API Route started: /api/admin/tasks
+[2025-03-29T22:14:14.515Z] [svaslz2l] Attempting to get session...
+[2025-03-29T22:14:14.649Z] [svaslz2l] Session exists: true, Is admin: true
+[2025-03-29T22:14:14.649Z] [svaslz2l] Parsing request body...
+[2025-03-29T22:14:14.650Z] [svaslz2l] Request body: {"organizationName":"Test Organization"}
+[2025-03-29T22:14:14.650Z] [svaslz2l] Organization name extracted: Test Organization
+[2025-03-29T22:14:14.650Z] [svaslz2l] Preparing to fetch tasks for: Test Organization
+[2025-03-29T22:14:14.651Z] [svaslz2l] 🔵 EXECUTION MARKER: Starting webhook fetch to https://n8n.srv768302.hstgr.cloud/webhook/coda-tasks
+[2025-03-29T22:14:14.651Z] [svaslz2l] 🔵 Request payload: {"organizationName":"Test Organization"}
+[2025-03-29T22:14:15.169Z] [svaslz2l] 🟡 EXECUTION MARKER: Webhook response received with status: 200
+[2025-03-29T22:14:15.169Z] [svaslz2l] 🟡 Response headers: {"content-encoding":"gzip","content-type":"application/json; charset=utf-8","date":"Sat, 29 Mar 2025 22:14:15 GMT","etag":"W/\"669-thAWB+7RtD4osGF6VtqlrSq9GSo\"","strict-transport-security":"max-age=315360000; includeSubDomains; preload","transfer-encoding":"chunked","vary":"Accept-Encoding","x-content-type-options":"nosniff","x-xss-protection":"1; mode=block"}
+[2025-03-29T22:14:15.169Z] [svaslz2l] 🟢 EXECUTION MARKER: About to parse JSON response from webhook
+[2025-03-29T22:14:15.171Z] [svaslz2l] ✅ Successfully parsed JSON response from n8n.
+[2025-03-29T22:14:15.171Z] [svaslz2l] ⚠️ Validation Failed: Parsed response is not an array. Type: object
+[2025-03-29T22:14:15.171Z] [svaslz2l] 🟠 EXECUTION MARKER: About to return 0 tasks to client
+[2025-03-29T22:15:29.486Z] 🟢 [w0grekdj] API Route started: /api/admin/tasks
+[2025-03-29T22:15:29.486Z] [w0grekdj] Attempting to get session...
+[2025-03-29T22:15:29.597Z] [w0grekdj] Session exists: true, Is admin: true
+[2025-03-29T22:15:29.597Z] [w0grekdj] Parsing request body...
+[2025-03-29T22:15:29.598Z] [w0grekdj] Request body: {"organizationName":"Test Organization"}
+[2025-03-29T22:15:29.598Z] [w0grekdj] Organization name extracted: Test Organization
+[2025-03-29T22:15:29.598Z] [w0grekdj] Preparing to fetch tasks for: Test Organization
+[2025-03-29T22:15:29.598Z] [w0grekdj] 🔵 EXECUTION MARKER: Starting webhook fetch to https://n8n.srv768302.hstgr.cloud/webhook/coda-tasks
+[2025-03-29T22:15:29.598Z] [w0grekdj] 🔵 Request payload: {"organizationName":"Test Organization"}
+[2025-03-29T22:15:30.173Z] [w0grekdj] 🟡 EXECUTION MARKER: Webhook response received with status: 200
+[2025-03-29T22:15:30.173Z] [w0grekdj] 🟡 Response headers: {"content-encoding":"gzip","content-type":"application/json; charset=utf-8","date":"Sat, 29 Mar 2025 22:15:30 GMT","etag":"W/\"669-thAWB+7RtD4osGF6VtqlrSq9GSo\"","strict-transport-security":"max-age=315360000; includeSubDomains; preload","transfer-encoding":"chunked","vary":"Accept-Encoding","x-content-type-options":"nosniff","x-xss-protection":"1; mode=block"}
+[2025-03-29T22:15:30.174Z] [w0grekdj] 📖 Attempting to read response body as text...
+[2025-03-29T22:15:30.183Z] [w0grekdj]  RAW RESPONSE TEXT: {"clientName":"Scale Your Cause","taskName":"Create Initial Scenarios","status":"Done","description":"Engagement Strategy:\nHere's exactly how I think the email outreach should flow:\nThe email would start with: \"Hey, my name is Sarah (or whatever your name is). I work with Scale Your Cause. I saw we were both connected to XYZ Mutual Connection, so I thought I'd reach out.\"\nThen you'd continue with something like: \"We've been seeing a lot of other food shelters (or whatever their nonprofit type is) in Austin (or whatever their city is) such as Competitor 1 and Competitor 2 using the Google Ads grant and signing up for the Google Ads grant. So we've decided to shift our focus to food nonprofits (or whatever their type of nonprofit is).\"\nNext, you'd mention: \"We're having a few open spots this month for our Google Ad Grant giveaway where we're basically setting up Google Ad Grant for a few non-profits completely for no cost at all.\"\nThen you'd ask: \"Do you know anybody that might be interested in something like this?\" This is important because you want to frame it as an open-handed question.\nYou'd personalize it with: \"Since you're [title] in this, since you have a background in this, since you (personalized aspect of why you are reaching out) I thought you were the person to reach out to.\"\nThat's the exact approach - very conversational, referencing mutual connections, mentioning competitors, offering limited spots for free setup, and asking who they might know who could benefit rather than directly selling to them.\n","assignedTo":"Iheoma Nwanyanwu","order":null,"dueDate":"2025-03-30T15:48:01.000Z"}
+[2025-03-29T22:15:30.183Z] [w0grekdj] 🟢 EXECUTION MARKER: About to parse JSON response from webhook (original response)
+[2025-03-29T22:15:30.184Z] [w0grekdj] ✅ Successfully parsed JSON response from n8n.
+[2025-03-29T22:15:30.184Z] [w0grekdj] ⚠️ Validation Failed: Parsed response is not an array. Type: object
+[2025-03-29T22:15:30.184Z] [w0grekdj] 🟠 EXECUTION MARKER: About to return 0 tasks to client
+[2025-03-30T14:53:53.336Z] 🟢 [2aynuzvv] API Route started: /api/admin/tasks
+[2025-03-30T14:53:53.337Z] [2aynuzvv] Attempting to get session...
+[2025-03-30T14:53:53.392Z] [2aynuzvv] Session exists: true, Is admin: true
+[2025-03-30T14:53:53.392Z] [2aynuzvv] Parsing request body...
+[2025-03-30T14:53:53.393Z] [2aynuzvv] Request body: {"organizationName":"Test Organization"}
+[2025-03-30T14:53:53.393Z] [2aynuzvv] Organization name extracted: Test Organization
+[2025-03-30T14:53:53.393Z] [2aynuzvv] Preparing to fetch tasks for: Test Organization
+[2025-03-30T14:53:53.393Z] [2aynuzvv] 🔵 EXECUTION MARKER: Starting webhook fetch to https://n8n.srv768302.hstgr.cloud/webhook/coda-tasks
+[2025-03-30T14:53:53.393Z] [2aynuzvv] 🔵 Request payload: {"organizationName":"Test Organization"}
+[2025-03-30T14:53:54.856Z] [2aynuzvv] 🟡 EXECUTION MARKER: Webhook response received with status: 200
+[2025-03-30T14:53:54.857Z] [2aynuzvv] 🟡 Response headers: {"content-encoding":"gzip","content-type":"application/json; charset=utf-8","date":"Sun, 30 Mar 2025 14:53:54 GMT","etag":"W/\"669-thAWB+7RtD4osGF6VtqlrSq9GSo\"","strict-transport-security":"max-age=315360000; includeSubDomains; preload","transfer-encoding":"chunked","vary":"Accept-Encoding","x-content-type-options":"nosniff","x-xss-protection":"1; mode=block"}
+[2025-03-30T14:53:54.858Z] [2aynuzvv] 📖 Attempting to read response body as text...
+[2025-03-30T14:53:54.870Z] [2aynuzvv]  RAW RESPONSE TEXT: {"clientName":"Scale Your Cause","taskName":"Create Initial Scenarios","status":"Done","description":"Engagement Strategy:\nHere's exactly how I think the email outreach should flow:\nThe email would start with: \"Hey, my name is Sarah (or whatever your name is). I work with Scale Your Cause. I saw we were both connected to XYZ Mutual Connection, so I thought I'd reach out.\"\nThen you'd continue with something like: \"We've been seeing a lot of other food shelters (or whatever their nonprofit type is) in Austin (or whatever their city is) such as Competitor 1 and Competitor 2 using the Google Ads grant and signing up for the Google Ads grant. So we've decided to shift our focus to food nonprofits (or whatever their type of nonprofit is).\"\nNext, you'd mention: \"We're having a few open spots this month for our Google Ad Grant giveaway where we're basically setting up Google Ad Grant for a few non-profits completely for no cost at all.\"\nThen you'd ask: \"Do you know anybody that might be interested in something like this?\" This is important because you want to frame it as an open-handed question.\nYou'd personalize it with: \"Since you're [title] in this, since you have a background in this, since you (personalized aspect of why you are reaching out) I thought you were the person to reach out to.\"\nThat's the exact approach - very conversational, referencing mutual connections, mentioning competitors, offering limited spots for free setup, and asking who they might know who could benefit rather than directly selling to them.\n","assignedTo":"Iheoma Nwanyanwu","order":null,"dueDate":"2025-03-30T15:48:01.000Z"}
+[2025-03-30T14:53:54.870Z] [2aynuzvv] 🟢 EXECUTION MARKER: About to parse JSON response from webhook (original response)
+[2025-03-30T14:53:54.870Z] [2aynuzvv] ✅ Successfully parsed JSON response from n8n.
+[2025-03-30T14:53:54.871Z] [2aynuzvv] ⚠️ Validation Failed: Parsed response is not an array. Type: object
+[2025-03-30T14:53:54.871Z] [2aynuzvv] 🟠 EXECUTION MARKER: About to return 0 tasks to client
+[2025-03-30T14:59:36.601Z] 🟢 [mncpmh9f] API Route started: /api/admin/tasks
+[2025-03-30T14:59:36.602Z] [mncpmh9f] Attempting to get session...
+[2025-03-30T14:59:36.780Z] [mncpmh9f] Session exists: true, Is admin: true
+[2025-03-30T14:59:36.780Z] [mncpmh9f] Parsing request body...
+[2025-03-30T14:59:36.781Z] [mncpmh9f] Request body: {"organizationName":"Test Organization"}
+[2025-03-30T14:59:36.781Z] [mncpmh9f] Organization name extracted: Test Organization
+[2025-03-30T14:59:36.781Z] [mncpmh9f] Preparing to fetch tasks for: Test Organization
+[2025-03-30T14:59:36.781Z] [mncpmh9f] 🔵 EXECUTION MARKER: Starting webhook fetch to https://n8n.srv768302.hstgr.cloud/webhook/coda-tasks
+[2025-03-30T14:59:36.781Z] [mncpmh9f] 🔵 Request payload: {"organizationName":"Test Organization"}
+[2025-03-30T14:59:37.675Z] [mncpmh9f] 🟡 EXECUTION MARKER: Webhook response received with status: 200
+[2025-03-30T14:59:37.676Z] [mncpmh9f] 🟡 Response headers: {"content-encoding":"gzip","content-type":"application/json; charset=utf-8","date":"Sun, 30 Mar 2025 14:59:37 GMT","etag":"W/\"669-thAWB+7RtD4osGF6VtqlrSq9GSo\"","strict-transport-security":"max-age=315360000; includeSubDomains; preload","transfer-encoding":"chunked","vary":"Accept-Encoding","x-content-type-options":"nosniff","x-xss-protection":"1; mode=block"}
+[2025-03-30T14:59:37.677Z] [mncpmh9f] 📖 Attempting to read response body as text...
+[2025-03-30T14:59:37.687Z] [mncpmh9f]  RAW RESPONSE TEXT: {"clientName":"Scale Your Cause","taskName":"Create Initial Scenarios","status":"Done","description":"Engagement Strategy:\nHere's exactly how I think the email outreach should flow:\nThe email would start with: \"Hey, my name is Sarah (or whatever your name is). I work with Scale Your Cause. I saw we were both connected to XYZ Mutual Connection, so I thought I'd reach out.\"\nThen you'd continue with something like: \"We've been seeing a lot of other food shelters (or whatever their nonprofit type is) in Austin (or whatever their city is) such as Competitor 1 and Competitor 2 using the Google Ads grant and signing up for the Google Ads grant. So we've decided to shift our focus to food nonprofits (or whatever their type of nonprofit is).\"\nNext, you'd mention: \"We're having a few open spots this month for our Google Ad Grant giveaway where we're basically setting up Google Ad Grant for a few non-profits completely for no cost at all.\"\nThen you'd ask: \"Do you know anybody that might be interested in something like this?\" This is important because you want to frame it as an open-handed question.\nYou'd personalize it with: \"Since you're [title] in this, since you have a background in this, since you (personalized aspect of why you are reaching out) I thought you were the person to reach out to.\"\nThat's the exact approach - very conversational, referencing mutual connections, mentioning competitors, offering limited spots for free setup, and asking who they might know who could benefit rather than directly selling to them.\n","assignedTo":"Iheoma Nwanyanwu","order":null,"dueDate":"2025-03-30T15:48:01.000Z"}
+[2025-03-30T14:59:37.688Z] [mncpmh9f] 🟢 EXECUTION MARKER: About to parse JSON response from webhook (original response)
+[2025-03-30T14:59:37.689Z] [mncpmh9f] ✅ Successfully parsed JSON response from n8n.
+[2025-03-30T14:59:37.689Z] [mncpmh9f] ⚠️ Validation Failed: Parsed response is not an array. Type: object
+[2025-03-30T14:59:37.689Z] [mncpmh9f] 🟠 EXECUTION MARKER: About to return 0 tasks to client
