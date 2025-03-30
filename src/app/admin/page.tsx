@@ -514,6 +514,49 @@ export default function AdminPanelPage() {
     }
   };
 
+  // Add a function to fetch tasks from the tasks-receive API
+  const fetchTasksFromServer = async (orgName: string) => {
+    console.log(`🔍 FRONTEND: Fetching tasks for "${orgName}" from server...`);
+    setTasksLoading(true);
+    setShowReceivedData(true);
+    setTaskError(`Loading tasks for ${orgName}...`);
+    
+    try {
+      const response = await fetch(`/api/admin/tasks-receive?organizationName=${encodeURIComponent(orgName)}`, {
+        method: 'GET',
+      });
+      
+      if (!response.ok) {
+        console.error(`🔍 FRONTEND: Error fetching tasks - Status ${response.status}`);
+        setTaskError(`Error fetching tasks: ${response.statusText}`);
+        setReceivedTaskData([]);
+        setTasks([]);
+      } else {
+        const fetchedTasks = await response.json();
+        console.log(`🔍 FRONTEND: Fetched ${fetchedTasks.length} tasks from server`);
+        
+        if (Array.isArray(fetchedTasks) && fetchedTasks.length > 0) {
+          setReceivedTaskData(fetchedTasks);
+          setTasks(fetchedTasks);
+          setTaskError(`Successfully fetched ${fetchedTasks.length} tasks from server for ${orgName}`);
+        } else {
+          console.log(`🔍 FRONTEND: No tasks found on server`);
+          setReceivedTaskData([]);
+          setTasks([]);
+          setTaskError(`No tasks found on server for ${orgName}. 
+            Make sure the n8n webhook has been triggered recently.`);
+        }
+      }
+    } catch (error) {
+      console.error('🔍 FRONTEND: Error fetching tasks:', error);
+      setTaskError(`Error fetching tasks: ${error instanceof Error ? error.message : String(error)}`);
+      setReceivedTaskData([]);
+      setTasks([]);
+    } finally {
+      setTasksLoading(false);
+    }
+  };
+
   const getReplyRateStyle = (rate: number) => {
     if (rate >= 2) return "text-emerald-600";
     if (rate >= 1) return "text-amber-600";
@@ -565,33 +608,30 @@ export default function AdminPanelPage() {
         </div>
         
         <div className="flex space-x-3">
-          <Button
-            variant="outline"
-            // Revert onClick and text
-            onClick={() => checkBrowserStorage("Scale Your Cause")}
+          <Button 
+            variant="outline" 
+            onClick={() => fetchTasksFromServer("Scale Your Cause")} 
             className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
           >
-            Check Browser Storage {/* Reverted Button Text */}
+            Fetch Tasks
           </Button>
-
-          {/* Clear Storage Button remains the same */}
-          <Button
-            variant="outline"
+          
+          <Button 
+            variant="outline" 
             onClick={() => {
-              clearTasksFromLocalStorage("Scale Your Cause");
-              setTaskError("Cleared browser storage for Scale Your Cause");
-              setReceivedTaskData([]); // Clear display when clearing storage
+              setReceivedTaskData([]);
               setTasks([]);
+              setTaskError("Cleared displayed tasks");
+              setShowReceivedData(false);
             }}
             className="bg-red-50 text-red-700 border-red-200 hover:bg-red-100"
           >
-            Clear Storage
+            Clear Display
           </Button>
-
-          {/* API Test Button remains the same */}
-          <Button
-            variant="outline"
-            onClick={runApiTest}
+          
+          <Button 
+            variant="outline" 
+            onClick={runApiTest} 
             className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
           >
             Run API Test
