@@ -244,40 +244,21 @@ export async function POST(request: Request) {
         console.log(`🔍 [${requestId}] Found nested tasks array with ${tasks.length} items`);
       }
     }
-    // Case 3: Handle special case for Scale Your Cause
-    // Force organization name if it contains "scale" or "cause" (case insensitive)
-    const forceOrgCheck = JSON.stringify(data).toLowerCase();
-    if (forceOrgCheck.includes('scale') && forceOrgCheck.includes('cause')) {
-      console.log(`🔍 [${requestId}] Detected Scale Your Cause in payload, forcing organization name`);
-      organizationName = 'Scale Your Cause';
-      
-      // If we have an array, use it as tasks
-      if (Array.isArray(data)) {
-        tasks = data;
-      }
-      // Otherwise if it's an object with a tasks array, use that
-      else if (data?.tasks && Array.isArray(data.tasks)) {
-        tasks = data.tasks;
-      }
-      // If we somehow still don't have tasks, wrap the entire object as a single task
-      else if (typeof data === 'object') {
-        tasks = [data];
-      }
-    }
     
-    // Case 4: HARDCODED FALLBACK - if organization name is still unknown, default to Scale Your Cause
+    // Case 4: Change the fallback logic
     if (!organizationName || organizationName === 'Unknown Organization') {
-      console.log(`⚠️ [${requestId}] Could not determine organization name, defaulting to "Scale Your Cause"`);
-      organizationName = 'Scale Your Cause';
+      // Instead of defaulting, return an error if the name couldn't be extracted
+      console.error(`❌ [${requestId}] Could not determine organization name from data after checking standard fields.`);
+      debugObject(data, `📊 [${requestId}] Failed Payload:`); // Log the payload that failed
+      return NextResponse.json({ 
+        error: 'Missing or unidentifiable organization name', 
+        details: 'Could not automatically extract organization name from the provided data payload. Please ensure the payload includes organizationName or clientName, or is an array where the first item has one of these fields.' 
+      }, { status: 400 });
     }
     
-    // Validate extracted data
+    // Validate extracted data (This check is slightly redundant now but harmless)
     if (!organizationName) {
-      console.error(`❌ [${requestId}] Could not determine organization name from data`);
-      return NextResponse.json({ 
-        error: 'Missing organization name', 
-        details: 'Could not extract organization name from the provided data' 
-      }, { status: 400 });
+       // ... this block should theoretically not be reached anymore ...
     }
     
     if (!Array.isArray(tasks)) {
