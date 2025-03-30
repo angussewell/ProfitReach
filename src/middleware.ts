@@ -63,6 +63,11 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
+  // BYPASS ALL SECURITY FOR AISUGGESTIONS ENDPOINT
+  if (pathname.startsWith('/api/aisuggestions')) {
+    return NextResponse.next();
+  }
+
   // Handle root path redirect
   if (pathname === '/') {
     return NextResponse.redirect(new URL('/scenarios', request.url));
