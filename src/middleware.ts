@@ -49,6 +49,7 @@ const PROTECTED_ROUTES = [
 const PUBLIC_API_ROUTES = [
   '/api/webhooks/mail360',
   '/api/email-accounts/update-webhooks',
+  '/api/aisuggestions',
   '/api/auth'  // Allow all NextAuth endpoints
 ];
 
