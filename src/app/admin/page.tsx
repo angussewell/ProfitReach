@@ -496,6 +496,13 @@ export default function AdminPanelPage() {
   };
 
   const getStatusBadgeClasses = (status: string): string => {
+    // Add a check to handle undefined or null status gracefully
+    if (typeof status !== 'string') {
+      console.warn(`🔍 FRONTEND: Received invalid status type: ${typeof status}, value: ${status}. Defaulting badge.`);
+      // Return default style if status is not a string
+      return 'bg-slate-100 text-slate-700 border-slate-200'; 
+    }
+    
     const lowerStatus = status.toLowerCase();
     if (lowerStatus === 'done') {
       return 'bg-emerald-100 text-emerald-700 border-emerald-200';
@@ -509,7 +516,9 @@ export default function AdminPanelPage() {
     if (lowerStatus === 'not started') {
       return 'bg-slate-100 text-slate-700 border-slate-200';
     }
-    return 'bg-slate-100 text-slate-700 border-slate-200';
+    // Return default style for any other unknown status string
+    console.warn(`🔍 FRONTEND: Received unknown status string: ${status}. Defaulting badge.`);
+    return 'bg-slate-100 text-slate-700 border-slate-200'; 
   };
 
   if (status === 'loading') {
