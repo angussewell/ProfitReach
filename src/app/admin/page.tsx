@@ -134,29 +134,58 @@ export default function AdminPanelPage() {
     }
   };
   
-  // Function to check client-side stored data
-  const checkBrowserStorage = async (orgName: string) => {
-    console.log(`🔍 FRONTEND: Checking browser storage for "${orgName}"...`);
+  // Rename this function to reflect its new purpose
+  const fetchTasksFromServer = async (orgName: string) => {
+    // Keep the log informative
+    console.log(`🔍 FRONTEND: Fetching tasks from server for \"${orgName}\"...`);
     setTasksLoading(true);
-    setShowReceivedData(true);
-    setTaskError(`Checking browser storage for ${orgName}...`);
-    
+    setShowReceivedData(true); // We can still use this state to display the fetched data
+    setTaskError(null); // Clear previous errors
+    setTasks([]); // Clear previous tasks
+
     try {
-      const storedTasks = getTasksFromLocalStorage(orgName);
-      
-      if (storedTasks.length > 0) {
-        console.log(`🔍 FRONTEND: Found ${storedTasks.length} tasks in browser storage`);
-        setReceivedTaskData(storedTasks);
-        setTasks(storedTasks);
-        setTaskError(`Found ${storedTasks.length} tasks in browser storage for ${orgName}`);
-      } else {
-        console.log(`🔍 FRONTEND: No tasks found in browser storage`);
-        setReceivedTaskData([]);
-        setTaskError(`No tasks found in browser storage for ${orgName}`);
+      // Fetch data from the GET endpoint
+      const response = await fetch(`/api/admin/tasks-receive?organizationName=${encodeURIComponent(orgName)}`, {
+        method: 'GET',
+      });
+
+      if (!response.ok) {
+        // Handle specific errors like 403 Forbidden or other server issues
+        if (response.status === 403) {
+          console.error(`🔍 FRONTEND: Error fetching tasks - Forbidden (403)`);
+          setTaskError(`Error fetching tasks: Access Denied. Ensure you are logged in as an admin.`);
+        } else {
+          const errorText = await response.text();
+          console.error(`🔍 FRONTEND: Error fetching tasks - Status ${response.status}: ${errorText}`);
+          setTaskError(`Error fetching tasks: Server returned status ${response.status}`);
+        }
+        setReceivedTaskData([]); // Clear data on error
+        return; // Stop execution on error
       }
+
+      // Parse the JSON response
+      const fetchedTasks = await response.json();
+
+      // Validate if the response is an array
+      if (Array.isArray(fetchedTasks)) {
+        console.log(`🔍 FRONTEND: Found ${fetchedTasks.length} tasks from server`);
+        setReceivedTaskData(fetchedTasks); // Update state with fetched data
+        setTasks(fetchedTasks); // Also update the tasks state used by the modal
+        if (fetchedTasks.length > 0) {
+          setTaskError(`Successfully fetched ${fetchedTasks.length} tasks from server for ${orgName}`);
+        } else {
+           setTaskError(`No tasks found on server for ${orgName}`);
+        }
+      } else {
+        // Handle cases where the response is not an array
+         console.error(`🔍 FRONTEND: Invalid data format received from server (expected array)`);
+         setTaskError(`Invalid data format received from server.`);
+         setReceivedTaskData([]);
+      }
+
     } catch (error) {
-      console.error('🔍 FRONTEND: Error checking browser storage:', error);
-      setTaskError(`Error checking browser storage: ${error instanceof Error ? error.message : String(error)}`);
+      console.error('🔍 FRONTEND: Error fetching tasks from server:', error);
+      setTaskError(`Error fetching tasks: ${error instanceof Error ? error.message : String(error)}`);
       setReceivedTaskData([]);
     } finally {
       setTasksLoading(false);
@@ -559,16 +588,18 @@ export default function AdminPanelPage() {
         </div>
         
         <div className="flex space-x-3">
-          <Button 
-            variant="outline" 
-            onClick={() => checkBrowserStorage("Scale Your Cause")} 
+          <Button
+            variant="outline"
+            // Update the onClick handler and text
+            onClick={() => fetchTasksFromServer("Scale Your Cause")}
             className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
           >
-            Check Browser Storage
+            Fetch Tasks from Server {/* Renamed Button Text */}
           </Button>
-          
-          <Button 
-            variant="outline" 
+
+          {/* Keep the Clear Storage button as it targets localStorage, which might still be useful or used elsewhere */}
+          <Button
+            variant="outline"
             onClick={() => {
               clearTasksFromLocalStorage("Scale Your Cause");
               setTaskError("Cleared browser storage for Scale Your Cause");
@@ -577,10 +608,10 @@ export default function AdminPanelPage() {
           >
             Clear Storage
           </Button>
-          
-          <Button 
-            variant="outline" 
-            onClick={runApiTest} 
+
+          <Button
+            variant="outline"
+            onClick={runApiTest}
             className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
           >
             Run API Test
