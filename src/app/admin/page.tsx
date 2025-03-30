@@ -103,6 +103,70 @@ export default function AdminPanelPage() {
   const [receivedTaskData, setReceivedTaskData] = useState<any[]>([]);
   const [showReceivedData, setShowReceivedData] = useState(false);
   
+  // Browser storage utility functions
+  const getTasksFromLocalStorage = (orgName: string): any[] => {
+    if (typeof window === 'undefined') return [];
+    
+    try {
+      const key = `tasks_${orgName.replace(/[^a-z0-9]/gi, '_')}`;
+      const storedData = localStorage.getItem(key);
+      
+      if (!storedData) return [];
+      
+      const parsedData = JSON.parse(storedData);
+      console.log(`🔍 FRONTEND: Retrieved ${Array.isArray(parsedData) ? parsedData.length : 0} tasks from localStorage for ${orgName}`);
+      
+      return Array.isArray(parsedData) ? parsedData : [];
+    } catch (error) {
+      console.error('Error reading from localStorage:', error);
+      return [];
+    }
+  };
+  
+  const clearTasksFromLocalStorage = (orgName: string): void => {
+    if (typeof window === 'undefined') return;
+    
+    try {
+      const key = `tasks_${orgName.replace(/[^a-z0-9]/gi, '_')}`;
+      localStorage.removeItem(key);
+      console.log(`🔍 FRONTEND: Cleared tasks from localStorage for ${orgName}`);
+    } catch (error) {
+      console.error('Error clearing localStorage:', error);
+    }
+  };
+  
+  // Revert function name and logic
+  // Function to check client-side stored data
+  const checkBrowserStorage = async (orgName: string) => {
+    console.log(`🔍 FRONTEND: Checking browser storage for \"${orgName}\"...`);
+    setTasksLoading(true);
+    setShowReceivedData(true);
+    setTaskError(null); // Clear previous errors
+    setTasks([]); // Clear previous tasks
+
+    try {
+      // Restore logic to ONLY check localStorage
+      const storedTasks = getTasksFromLocalStorage(orgName);
+
+      if (storedTasks.length > 0) {
+        console.log(`🔍 FRONTEND: Found ${storedTasks.length} tasks in browser storage`);
+        setReceivedTaskData(storedTasks);
+        setTasks(storedTasks); // Update tasks state for the modal
+        setTaskError(`Found ${storedTasks.length} tasks in browser storage for ${orgName}`);
+      } else {
+        console.log(`🔍 FRONTEND: No tasks found in browser storage`);
+        setReceivedTaskData([]);
+        setTaskError(`No tasks found in browser storage for ${orgName}`);
+      }
+    } catch (error) {
+      console.error('🔍 FRONTEND: Error checking browser storage:', error);
+      setTaskError(`Error checking browser storage: ${error instanceof Error ? error.message : String(error)}`);
+      setReceivedTaskData([]);
+    } finally {
+      setTasksLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (status === 'loading') return;
     if (status === 'unauthenticated') {
@@ -141,11 +205,38 @@ export default function AdminPanelPage() {
   // Replace the current useEffect for handling modal opening
   useEffect(() => {
     if (isTaskModalOpen && selectedOrgName) {
-      // Directly call the reliable fetch function when the modal opens
+      // Directly call the working fetch function when the modal opens
       console.log(`🔍 FRONTEND: Modal opened for ${selectedOrgName}, calling fetchTasksFromServer...`);
       fetchTasksFromServer(selectedOrgName);
+      // Remove the previous logic that checked localStorage and called fetchTasks
     }
   }, [isTaskModalOpen, selectedOrgName]);
+
+  // Check for URL parameters on page load indicating tasks were just received
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tasksReceived = params.get('tasksReceived');
+      const org = params.get('org');
+      const count = params.get('count');
+
+      if (tasksReceived === 'true' && org) {
+        console.log(`🔍 FRONTEND: Detected tasks received for ${org} (${count} tasks)`);
+        // Clear the URL parameters without full reload
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, newUrl);
+
+        // Show notification
+        toast.success(`Successfully received ${count} tasks for ${org}! Data is stored locally.`);
+
+        // Optionally, open the modal or directly display data by checking localStorage
+        setSelectedOrgName(org); // Set org name if needed for other actions
+        // Trigger checkBrowserStorage to load data into state immediately
+        checkBrowserStorage(org);
+        // Optionally open modal: setIsTaskModalOpen(true);
+      }
+    }
+  }, []); // Run only on mount
 
   const handleBack = () => router.back();
   const handleDateRangeChange = (newRange: DateRange | undefined) => setDateRange(newRange);
