@@ -127,51 +127,122 @@ export default function AdminPanelPage() {
     fetchAdminStats();
   }, [dateRange, session]);
 
-  useEffect(() => {
-    const fetchTasks = async () => {
-      if (!selectedOrgName) return;
-
-      setTasksLoading(true);
-      setTasks([]);
-      setTaskError(null);
-
-      try {
-        const response = await fetch('/api/admin/tasks', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ organizationName: selectedOrgName }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || `Failed to fetch tasks: ${response.statusText}`);
-        }
-
-        const data: Task[] = await response.json();
-        setTasks(data);
-      } catch (error) {
-        console.error('Error fetching tasks:', error);
-        const message = error instanceof Error ? error.message : 'An unknown error occurred';
-        setTaskError(`Failed to load tasks: ${message}`);
-        setTasks([]);
-      } finally {
-        setTasksLoading(false);
-      }
-    };
-
-    if (isTaskModalOpen && selectedOrgName) {
-      fetchTasks().catch(error => {
-        console.error("Original fetch method failed:", error);
-        
-        // If the original approach fails or returns empty, try the new architecture
-        if (tasks.length === 0) {
-          fetchTasksNewArch(selectedOrgName).catch(error => {
-            console.error("New architecture fetch also failed:", error);
-          });
-        }
+  // Simplified fetch task function with improved fallback chain
+  const fetchTasks = async () => {
+    if (!selectedOrgName) return;
+    
+    console.log(`🔍 FRONTEND: Starting task fetch for "${selectedOrgName}"`);
+    setTasksLoading(true);
+    setTasks([]);
+    setTaskError(null);
+    
+    // Track whether we successfully got tasks from any source
+    let gotTasks = false;
+    
+    // Try original endpoint first
+    try {
+      console.log(`🔍 FRONTEND: Trying original tasks endpoint...`);
+      const response = await fetch('/api/admin/tasks', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ organizationName: selectedOrgName }),
       });
+      
+      if (!response.ok) {
+        console.log(`🔍 FRONTEND: Original endpoint returned ${response.status}`);
+        throw new Error(`Original endpoint failed: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log(`🔍 FRONTEND: Original endpoint returned:`, data);
+      
+      if (Array.isArray(data) && data.length > 0) {
+        console.log(`🔍 FRONTEND: Original endpoint returned ${data.length} tasks`);
+        setTasks(data);
+        gotTasks = true;
+      } else {
+        console.log(`🔍 FRONTEND: Original endpoint returned empty array or invalid format`);
+        throw new Error('No tasks received from original endpoint');
+      }
+    } catch (error) {
+      console.log(`🔍 FRONTEND: Original endpoint failed:`, error);
+      
+      // Try new push architecture endpoint
+      try {
+        console.log(`🔍 FRONTEND: Trying new tasks-receive endpoint...`);
+        const response = await fetch(`/api/admin/tasks-receive?organizationName=${encodeURIComponent(selectedOrgName)}`, {
+          method: 'GET',
+        });
+        
+        if (!response.ok) {
+          console.log(`🔍 FRONTEND: New endpoint returned ${response.status}`);
+          throw new Error(`New endpoint failed: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log(`🔍 FRONTEND: New endpoint returned:`, data);
+        
+        if (Array.isArray(data) && data.length > 0) {
+          console.log(`🔍 FRONTEND: New endpoint returned ${data.length} tasks`);
+          setTasks(data);
+          gotTasks = true;
+        } else {
+          console.log(`🔍 FRONTEND: New endpoint returned empty array or invalid format`);
+          throw new Error('No tasks received from new endpoint');
+        }
+      } catch (newEndpointError) {
+        console.log(`🔍 FRONTEND: New endpoint failed:`, newEndpointError);
+        
+        // Try mock endpoint as last resort
+        try {
+          console.log(`🔍 FRONTEND: Trying mock tasks endpoint...`);
+          const response = await fetch('/api/admin/mock-tasks', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ organizationName: selectedOrgName }),
+          });
+          
+          if (!response.ok) {
+            console.log(`🔍 FRONTEND: Mock endpoint returned ${response.status}`);
+            throw new Error(`Mock endpoint failed: ${response.status}`);
+          }
+          
+          const data = await response.json();
+          console.log(`🔍 FRONTEND: Mock endpoint returned:`, data);
+          
+          if (Array.isArray(data) && data.length > 0) {
+            console.log(`🔍 FRONTEND: Using ${data.length} mock tasks as fallback`);
+            setTasks(data);
+            setTaskError("Using mock data - real endpoints failed or returned no data");
+            gotTasks = true;
+          } else {
+            console.log(`🔍 FRONTEND: Mock endpoint returned empty array or invalid format`);
+            throw new Error('No tasks received from mock endpoint');
+          }
+        } catch (mockError) {
+          console.log(`🔍 FRONTEND: All endpoints failed`);
+          setTaskError(`Could not load tasks from any source. Please try again later.`);
+        }
+      }
+    } finally {
+      setTasksLoading(false);
+      
+      // Final check to make sure we display a message if no tasks were found
+      if (!gotTasks) {
+        console.log(`🔍 FRONTEND: No tasks were found from any source`);
+        setTaskError("No tasks found for this organization");
+      }
+    }
+  };
+
+  // Update the useEffect to call our new function
+  useEffect(() => {
+    if (isTaskModalOpen && selectedOrgName) {
+      fetchTasks();
     }
   }, [isTaskModalOpen, selectedOrgName]);
 
@@ -291,80 +362,6 @@ export default function AdminPanelPage() {
       setTaskError(`API test failed: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setTasksLoading(false);
-    }
-  };
-
-  // Add a new function for the updated architecture
-  const fetchTasksNewArch = async (orgName: string) => {
-    if (!orgName) return;
-    
-    setTasksLoading(true);
-    setTasks([]);
-    setTaskError(null);
-    
-    try {
-      console.log(`Fetching tasks for ${orgName} using new architecture...`);
-      const response = await fetch(`/api/admin/tasks-receive?organizationName=${encodeURIComponent(orgName)}`, {
-        method: 'GET',
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `Failed to fetch tasks: ${response.statusText}`);
-      }
-      
-      const data = await response.json();
-      
-      if (Array.isArray(data) && data.length > 0) {
-        console.log(`Received ${data.length} tasks from tasks-receive endpoint`);
-        setTasks(data);
-      } else {
-        console.log(`No tasks received from tasks-receive endpoint`);
-        // If the new endpoint returns empty, try the mock endpoint as fallback
-        await fetchMockTasks(orgName);
-      }
-    } catch (error) {
-      console.error('Error fetching tasks from new architecture:', error);
-      const message = error instanceof Error ? error.message : 'An unknown error occurred';
-      
-      // Try to fetch from the mock endpoint as a fallback
-      await fetchMockTasks(orgName);
-    } finally {
-      setTasksLoading(false);
-    }
-  };
-  
-  // Add a function to fetch from the mock endpoint
-  const fetchMockTasks = async (orgName: string) => {
-    try {
-      console.log(`Fetching mock tasks for ${orgName}...`);
-      const response = await fetch('/api/admin/mock-tasks', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ organizationName: orgName }),
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `Failed to fetch mock tasks: ${response.statusText}`);
-      }
-      
-      const data = await response.json();
-      
-      if (Array.isArray(data) && data.length > 0) {
-        console.log(`Received ${data.length} mock tasks`);
-        setTasks(data);
-        setTaskError("Using mock data - warning: this is not real data");
-      } else {
-        console.log(`No mock tasks received`);
-        setTaskError("No tasks found for this organization");
-      }
-    } catch (error) {
-      console.error('Error fetching mock tasks:', error);
-      const message = error instanceof Error ? error.message : 'An unknown error occurred';
-      setTaskError(`Failed to load tasks: ${message}`);
     }
   };
 
