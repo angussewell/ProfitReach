@@ -558,17 +558,52 @@ export default function AdminPanelPage() {
           setTaskError(`Successfully fetched ${fetchedTasks.length} tasks from server for ${orgName}`);
         } else {
           console.log(`🔍 FRONTEND: No tasks found, response:`, fetchedTasks);
-          setReceivedTaskData([]);
-          setTasks([]);
-          setTaskError(`No tasks found on server for ${orgName}. 
-            Make sure the n8n webhook has been triggered recently.`);
+          
+          // EMERGENCY MOCK DATA FALLBACK
+          console.log(`🔍 FRONTEND: Using frontend emergency mock data fallback`);
+          const emergencyMockData = [
+            {
+              "Task Name": "FRONTEND MOCK: Follow Up With New Leads",
+              "Client Name": orgName,
+              "Status": "Not Started",
+              "Description": "This is frontend emergency mock data because no real data was found on the server.",
+              "Assigned To": "Sales Team",
+              "Due Date": new Date().toISOString()
+            },
+            {
+              "Task Name": "FRONTEND MOCK: Update Website Content",
+              "Client Name": orgName,
+              "Status": "In Progress",
+              "Description": "This is frontend emergency mock data because no real data was found on the server.",
+              "Assigned To": "Marketing Team",
+              "Due Date": new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+            }
+          ];
+          
+          setReceivedTaskData(emergencyMockData);
+          setTasks(emergencyMockData);
+          setTaskError(`No real tasks found. Using FRONTEND emergency mock data for ${orgName}.`);
         }
       }
     } catch (error) {
       console.error('🔍 FRONTEND: Error fetching tasks:', error);
+      
+      // WORST CASE FALLBACK - Always show something even if everything fails
+      console.log(`🔍 FRONTEND: Using worst-case fallback mock data`);
+      const fallbackMockData = [
+        {
+          "Task Name": "ERROR FALLBACK: Review Marketing Strategy",
+          "Client Name": orgName,
+          "Status": "Not Started",
+          "Description": "This is emergency fallback data shown because an error occurred.",
+          "Assigned To": "Marketing Team",
+          "Due Date": new Date().toISOString()
+        }
+      ];
+      
       setTaskError(`Error fetching tasks: ${error instanceof Error ? error.message : String(error)}`);
-      setReceivedTaskData([]);
-      setTasks([]);
+      setReceivedTaskData(fallbackMockData);
+      setTasks(fallbackMockData);
     } finally {
       setTasksLoading(false);
     }
