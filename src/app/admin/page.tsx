@@ -821,6 +821,9 @@ export default function AdminPanelPage() {
             ) : taskError ? (
               <div className="text-center py-10 text-red-600 bg-red-50 border border-red-200 rounded-md px-4">
                 <p><strong>Error:</strong> {taskError}</p>
+                {(taskError.includes("No real tasks found") || taskError.includes("No tasks found")) && (
+                  <p className="text-sm mt-2">If you just triggered the webhook, try refreshing in a few seconds.</p>
+                )}
               </div>
             ) : tasks.length > 0 ? (
               <Table>
@@ -860,10 +863,19 @@ export default function AdminPanelPage() {
             ) : (
               <div className="text-center py-10 text-slate-500 bg-slate-50 border border-slate-100 rounded-md">
                 No tasks found for this organization.
+                <p className="text-sm mt-2">If you recently triggered the webhook, wait a few seconds and try refreshing.</p>
               </div>
             )}
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex justify-between sm:justify-between">
+            <Button 
+              variant="secondary"
+              onClick={() => selectedOrgName && fetchTasksFromServer(selectedOrgName)}
+              disabled={tasksLoading}
+            >
+              {tasksLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Refresh Tasks
+            </Button>
             <DialogClose asChild>
               <Button type="button" variant="outline">Close</Button>
             </DialogClose>

@@ -73,18 +73,19 @@ const getTaskFilePath = (orgName: string): string => {
 };
 
 // Save tasks to file as fallback storage
-const saveTasksToFile = (orgName: string, tasks: any[]): boolean => {
+const saveTasksToFile = (normalizedOrgName: string, tasks: any[], originalOrgName: string): boolean => {
   try {
-    const filePath = getTaskFilePath(orgName);
+    // Use the NORMALIZED name for the file path to match readTasksFromFile
+    const filePath = getTaskFilePath(normalizedOrgName);
     fs.writeFileSync(filePath, JSON.stringify({
       tasks,
       timestamp: Date.now(),
-      originalOrgName: orgName
+      originalOrgName: originalOrgName // Keep original name for potential debugging
     }));
-    console.log(`📝 Saved ${tasks.length} tasks to file: ${filePath}`);
+    console.log(`📝 Saved ${tasks.length} tasks to file: ${filePath} (Original: ${originalOrgName})`);
     return true;
   } catch (error) {
-    console.error(`❌ Failed to save tasks to file: ${error}`);
+    console.error(`❌ Failed to save tasks to file for ${normalizedOrgName}: ${error}`);
     return false;
   }
 };
@@ -325,7 +326,7 @@ export async function POST(request: Request) {
     console.log(`💾 [${requestId}] Stored ${normalizedTasks.length} tasks in memory cache`);
     
     // Store in file as fallback
-    const fileSaved = saveTasksToFile(organizationName, normalizedTasks);
+    const fileSaved = saveTasksToFile(normalizedOrgName, normalizedTasks, organizationName);
     
     // Log current cache state after update
     logCacheState(requestId);
