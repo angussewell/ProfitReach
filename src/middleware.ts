@@ -50,6 +50,7 @@ const PUBLIC_API_ROUTES = [
   '/api/webhooks/mail360',
   '/api/email-accounts/update-webhooks',
   '/api/aisuggestions',
+  '/api/admin/tasks-receive',
   '/api/auth'  // Allow all NextAuth endpoints
 ];
 
@@ -63,8 +64,8 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // BYPASS ALL SECURITY FOR AISUGGESTIONS ENDPOINT
-  if (pathname.startsWith('/api/aisuggestions')) {
+  // BYPASS ALL SECURITY FOR SPECIFIC ENDPOINTS
+  if (pathname.startsWith('/api/aisuggestions') || pathname.startsWith('/api/admin/tasks-receive')) {
     return NextResponse.next();
   }
 

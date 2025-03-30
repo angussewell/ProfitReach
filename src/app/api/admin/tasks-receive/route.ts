@@ -90,6 +90,7 @@ export async function POST(request: Request) {
   const requestId = Math.random().toString(36).substring(2, 10);
   console.log(`🟢 [${requestId}] API Route started: /api/admin/tasks-receive (POST)`);
   console.log(`🟢 [${requestId}] Storage directory: ${STORAGE_DIR}`);
+  console.log(`🟢 [${requestId}] This endpoint is PUBLIC and does NOT require authentication for webhooks`);
   
   try {
     // Get the raw text for debugging
