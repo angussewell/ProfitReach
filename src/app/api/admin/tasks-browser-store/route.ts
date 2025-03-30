@@ -127,20 +127,24 @@ export async function POST(request: Request) {
         <script>
           // Store the tasks data in localStorage
           const tasksData = ${tasksJson};
-          
+          // Pass raw org name to JS, escape quotes if necessary for JS string literal
+          const orgNameJS = "${organizationName.replace(/"/g, '\\"')}"; 
+
           // Format and display the data
           const pre = document.getElementById('data-preview');
           pre.textContent = JSON.stringify(tasksData, null, 2);
-          
-          // Store in localStorage with organization name as key
-          localStorage.setItem('tasks_${organizationName.replace(/[^a-z0-9]/gi, '_')}', JSON.stringify(tasksData));
-          console.log('Tasks data stored in localStorage under key: tasks_${organizationName.replace(/[^a-z0-9]/gi, '_')}');
-          
+
+          // Correctly calculate the sanitized key *in JavaScript* using string concatenation
+          const storageKey = 'tasks_' + orgNameJS.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+          localStorage.setItem(storageKey, JSON.stringify(tasksData));
+          console.log('Tasks data stored in localStorage under key:', storageKey);
+
           // Function to redirect back to admin panel
           function redirectToAdmin() {
-            window.location.href = '/admin?tasksReceived=true&org=${encodeURIComponent(organizationName)}&count=${tasksCount}';
+            // Ensure organizationName is properly encoded for the URL, use concatenation
+            window.location.href = '/admin?tasksReceived=true&org=' + encodeURIComponent(orgNameJS) + '&count=${tasksCount}';
           }
-          
+
           // Auto-redirect after 5 seconds
           setTimeout(redirectToAdmin, 5000);
         </script>
