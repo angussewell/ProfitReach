@@ -103,7 +103,122 @@ export default function AdminPanelPage() {
   const [receivedTaskData, setReceivedTaskData] = useState<any[]>([]);
   const [showReceivedData, setShowReceivedData] = useState(false);
   
-  // Browser storage utility functions
+  // Define constants inside the component or globally if needed
+  const POLLING_INTERVAL_MS = 2000; // Poll every 2 seconds
+  const POLLING_TIMEOUT_MS = 15000; // Timeout after 15 seconds
+  const N8N_WEBHOOK_URL = 'https://n8n.srv768302.hstgr.cloud/webhook/coda-tasks';
+
+  // Move fetchTasksFromServer inside the component as well, as it uses state setters indirectly now via triggerAndPollForTasks
+  const fetchTasksFromServer = async (orgName: string): Promise<Task[]> => {
+    console.log(`🔍 FRONTEND (fetcher): Fetching tasks for "${orgName}"...`);
+    
+    const response = await fetch(`/api/admin/tasks-receive?organizationName=${encodeURIComponent(orgName)}`, {
+      method: 'GET',
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      },
+    });
+    
+    console.log(`🔍 FRONTEND (fetcher): Response status: ${response.status}`);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`🔍 FRONTEND (fetcher): Error fetching tasks - Status ${response.status}, Body: ${errorText}`);
+      throw new Error(`Failed to fetch tasks: ${response.status} - ${errorText}`);
+    }
+    
+    const fetchedTasks = await response.json();
+    
+    if (!Array.isArray(fetchedTasks)) {
+      console.error(`🔍 FRONTEND (fetcher): Invalid response format - expected array, got ${typeof fetchedTasks}`);
+      throw new Error('Invalid response format from server');
+    }
+    
+    console.log(`🔍 FRONTEND (fetcher): Fetched ${fetchedTasks.length} tasks successfully.`);
+    return fetchedTasks;
+  };
+
+  // New function to trigger n8n and poll for results (Now inside the component)
+  const triggerAndPollForTasks = async (orgName: string) => {
+    console.log(`🔍 FRONTEND: Starting trigger & poll process for "${orgName}"...`);
+    setTasksLoading(true);
+    setTaskError(`Triggering task generation for ${orgName}...`);
+    setTasks([]); // Clear previous tasks
+    setShowReceivedData(true); // Show the data area (even if it's just loading/error)
+    setReceivedTaskData([]); // Clear raw data display
+
+    try {
+      // Step 1: Trigger the n8n webhook
+      console.log(`🔍 FRONTEND: Triggering n8n webhook at ${N8N_WEBHOOK_URL}...`);
+      const n8nResponse = await fetch(N8N_WEBHOOK_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        // Send organization name or any required data to n8n
+        body: JSON.stringify({ organizationName: orgName }), 
+      });
+
+      if (!n8nResponse.ok) {
+        // Handle n8n trigger failure (optional, maybe just log and continue polling)
+        console.warn(`🔍 FRONTEND: n8n webhook trigger failed with status ${n8nResponse.status}. Proceeding with polling anyway...`);
+        setTaskError(`Webhook trigger failed (status ${n8nResponse.status}). Attempting to poll for existing data...`);
+      } else {
+        console.log(`🔍 FRONTEND: n8n webhook triggered successfully. Starting polling...`);
+        setTaskError(`Tasks requested. Waiting for data (up to ${POLLING_TIMEOUT_MS / 1000}s)...`);
+      }
+
+      // Step 2: Start polling
+      const startTime = Date.now();
+      let tasksFound: Task[] | null = null;
+
+      while (Date.now() - startTime < POLLING_TIMEOUT_MS) {
+        console.log(`🔍 FRONTEND: Polling attempt for "${orgName}"...`);
+        try {
+          // IMPORTANT: Ensure fetchTasksFromServer is defined within component scope or passed
+          const fetchedTasks = await fetchTasksFromServer(orgName);
+          if (fetchedTasks.length > 0) {
+            console.log(`✅ FRONTEND: Polling successful! Found ${fetchedTasks.length} tasks.`);
+            tasksFound = fetchedTasks;
+            break; // Exit the polling loop
+          }
+        } catch (pollError) {
+          // Log polling errors but continue polling unless it's a fatal error
+          console.warn(`🔍 FRONTEND: Polling attempt failed: ${pollError instanceof Error ? pollError.message : String(pollError)}. Retrying...`);
+        }
+
+        // Wait before the next poll attempt
+        await new Promise(resolve => setTimeout(resolve, POLLING_INTERVAL_MS));
+      }
+
+      // Step 3: Handle results or timeout
+      if (tasksFound) {
+        setReceivedTaskData(tasksFound);
+        setTasks(tasksFound);
+        setTaskError(null); // Clear any previous error/loading messages
+      } else {
+        console.log(`⏳ FRONTEND: Polling timed out after ${POLLING_TIMEOUT_MS / 1000}s for "${orgName}".`);
+        setTaskError(`Polling timed out. No tasks received from server after ${POLLING_TIMEOUT_MS / 1000} seconds.`);
+        // Optionally use mock data fallback here if needed
+        // console.log(`🔍 FRONTEND: Using frontend emergency mock data fallback after timeout`);
+        // const emergencyMockData = [...] // Define mock data
+        // setReceivedTaskData(emergencyMockData);
+        // setTasks(emergencyMockData);
+      }
+
+    } catch (error) {
+      console.error('❌ FRONTEND: Error during trigger/poll process:', error);
+      setTaskError(`Failed to trigger or poll for tasks: ${error instanceof Error ? error.message : String(error)}`);
+      setReceivedTaskData([]);
+      setTasks([]);
+    } finally {
+      setTasksLoading(false);
+    }
+  };
+  
+  // Browser storage utility functions (These can likely stay outside if they don't use component state/props)
   const getTasksFromLocalStorage = (orgName: string): any[] => {
     if (typeof window === 'undefined') return [];
     
@@ -202,13 +317,11 @@ export default function AdminPanelPage() {
     fetchAdminStats();
   }, [dateRange, session]);
 
-  // Replace the current useEffect for handling modal opening
+  // useEffect for handling modal opening
   useEffect(() => {
     if (isTaskModalOpen && selectedOrgName) {
-      // Directly call the working fetch function when the modal opens
-      console.log(`🔍 FRONTEND: Modal opened for ${selectedOrgName}, calling fetchTasksFromServer...`);
-      fetchTasksFromServer(selectedOrgName);
-      // Remove the previous logic that checked localStorage and called fetchTasks
+      console.log(`🔍 FRONTEND: Modal opened for ${selectedOrgName}, calling triggerAndPollForTasks...`);
+      triggerAndPollForTasks(selectedOrgName);
     }
   }, [isTaskModalOpen, selectedOrgName]);
 
@@ -389,101 +502,6 @@ export default function AdminPanelPage() {
     } catch (error) {
       console.error("🔍 FRONTEND: Error in API test:", error);
       setTaskError(`API test failed: ${error instanceof Error ? error.message : String(error)}`);
-    } finally {
-      setTasksLoading(false);
-    }
-  };
-
-  // Add a function to fetch tasks from the tasks-receive API
-  const fetchTasksFromServer = async (orgName: string) => {
-    console.log(`🔍 FRONTEND: Fetching tasks for "${orgName}" from server...`);
-    setTasksLoading(true);
-    setShowReceivedData(true);
-    setTaskError(`Loading tasks for ${orgName}...`);
-    
-    try {
-      // Add debugging for the fetch request
-      console.log(`🔍 FRONTEND: Starting fetch to tasks-receive endpoint...`);
-      
-      const response = await fetch(`/api/admin/tasks-receive?organizationName=${encodeURIComponent(orgName)}`, {
-        method: 'GET',
-        // Add cache control to prevent caching
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        },
-      });
-      
-      console.log(`🔍 FRONTEND: Response status: ${response.status}, statusText: ${response.statusText}`);
-      
-      if (!response.ok) {
-        console.error(`🔍 FRONTEND: Error fetching tasks - Status ${response.status}`);
-        
-        // Try to get more error details
-        let errorText = await response.text();
-        console.error(`🔍 FRONTEND: Error response body: ${errorText}`);
-        
-        setTaskError(`Error fetching tasks: ${response.statusText} - ${errorText}`);
-        setReceivedTaskData([]);
-        setTasks([]);
-      } else {
-        const fetchedTasks = await response.json();
-        console.log(`🔍 FRONTEND: Fetched ${Array.isArray(fetchedTasks) ? fetchedTasks.length : 'non-array'} result`);
-        
-        if (Array.isArray(fetchedTasks) && fetchedTasks.length > 0) {
-          console.log(`🔍 FRONTEND: First task sample:`, fetchedTasks[0]);
-          setReceivedTaskData(fetchedTasks);
-          setTasks(fetchedTasks);
-          setTaskError(`Successfully fetched ${fetchedTasks.length} tasks from server for ${orgName}`);
-        } else {
-          console.log(`🔍 FRONTEND: No tasks found, response:`, fetchedTasks);
-          
-          // EMERGENCY MOCK DATA FALLBACK
-          console.log(`🔍 FRONTEND: Using frontend emergency mock data fallback`);
-          const emergencyMockData = [
-            {
-              "Task Name": "FRONTEND MOCK: Follow Up With New Leads",
-              "Client Name": orgName,
-              "Status": "Not Started",
-              "Description": "This is frontend emergency mock data because no real data was found on the server.",
-              "Assigned To": "Sales Team",
-              "Due Date": new Date().toISOString()
-            },
-            {
-              "Task Name": "FRONTEND MOCK: Update Website Content",
-              "Client Name": orgName,
-              "Status": "In Progress",
-              "Description": "This is frontend emergency mock data because no real data was found on the server.",
-              "Assigned To": "Marketing Team",
-              "Due Date": new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
-            }
-          ];
-          
-          setReceivedTaskData(emergencyMockData);
-          setTasks(emergencyMockData);
-          setTaskError(`No real tasks found. Using FRONTEND emergency mock data for ${orgName}.`);
-        }
-      }
-    } catch (error) {
-      console.error('🔍 FRONTEND: Error fetching tasks:', error);
-      
-      // WORST CASE FALLBACK - Always show something even if everything fails
-      console.log(`🔍 FRONTEND: Using worst-case fallback mock data`);
-      const fallbackMockData = [
-        {
-          "Task Name": "ERROR FALLBACK: Review Marketing Strategy",
-          "Client Name": orgName,
-          "Status": "Not Started",
-          "Description": "This is emergency fallback data shown because an error occurred.",
-          "Assigned To": "Marketing Team",
-          "Due Date": new Date().toISOString()
-        }
-      ];
-      
-      setTaskError(`Error fetching tasks: ${error instanceof Error ? error.message : String(error)}`);
-      setReceivedTaskData(fallbackMockData);
-      setTasks(fallbackMockData);
     } finally {
       setTasksLoading(false);
     }
@@ -870,7 +888,7 @@ export default function AdminPanelPage() {
           <DialogFooter className="flex justify-between sm:justify-between">
             <Button 
               variant="secondary"
-              onClick={() => selectedOrgName && fetchTasksFromServer(selectedOrgName)}
+              onClick={() => selectedOrgName && triggerAndPollForTasks(selectedOrgName)}
               disabled={tasksLoading}
             >
               {tasksLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
