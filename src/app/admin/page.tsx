@@ -76,6 +76,12 @@ interface Task {
   "Due Date": string;
 }
 
+// Add a utility function to handle field name differences
+const getTaskField = (task: any, camelCaseField: string, titleCaseField: string): any => {
+  // Try camelCase first (like from n8n), then Title Case (like from mock data)
+  return task[camelCaseField] !== undefined ? task[camelCaseField] : task[titleCaseField];
+};
+
 export default function AdminPanelPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
@@ -91,6 +97,10 @@ export default function AdminPanelPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [tasksLoading, setTasksLoading] = useState(false);
   const [taskError, setTaskError] = useState<string | null>(null);
+
+  // Add a new state to store the raw received data for testing
+  const [receivedTaskData, setReceivedTaskData] = useState<any[]>([]);
+  const [showReceivedData, setShowReceivedData] = useState(false);
 
   useEffect(() => {
     if (status === 'loading') return;
@@ -254,11 +264,12 @@ export default function AdminPanelPage() {
     setIsTaskModalOpen(true);
   };
 
-  // Add a direct test function for API diagnostics
+  // Update the runApiTest function to also check the tasks-receive endpoint
   const runApiTest = async () => {
     console.log("🔍 FRONTEND: Starting direct API test...");
     setTasksLoading(true);
     setTaskError("Running test...");
+    setShowReceivedData(true);
     
     try {
       // Test the test endpoint first
@@ -357,9 +368,83 @@ export default function AdminPanelPage() {
         }
       }
 
+      // NEW SECTION: Test the tasks-receive endpoint
+      console.log("🔍 FRONTEND: Testing /api/admin/tasks-receive endpoint for all stored data...");
+      const tasksReceiveResponse = await fetch(`/api/admin/tasks-receive?organizationName=Scale Your Cause`, {
+        method: 'GET',
+      });
+      
+      console.log(`🔍 FRONTEND: tasks-receive endpoint response status: ${tasksReceiveResponse.status}`);
+      
+      if (!tasksReceiveResponse.ok) {
+        console.log(`🔍 FRONTEND: tasks-receive endpoint error: ${tasksReceiveResponse.status}`);
+      } else {
+        try {
+          const receiveData = await tasksReceiveResponse.json();
+          console.log("🔍 FRONTEND: Successfully parsed tasks-receive endpoint JSON:", receiveData);
+          
+          if (Array.isArray(receiveData)) {
+            console.log(`🔍 FRONTEND: tasks-receive endpoint returned ${receiveData.length} items`);
+            setReceivedTaskData(receiveData);
+            
+            if (receiveData.length > 0) {
+              console.log(`🔍 FRONTEND: First received task: ${JSON.stringify(receiveData[0])}`);
+              setTasks(receiveData); // Use received data to display
+              setTaskError("Using STORED DATA from tasks-receive endpoint");
+            } else {
+              setTaskError("No data found in tasks-receive storage");
+            }
+          } else {
+            console.log("🔍 FRONTEND: tasks-receive endpoint response is not an array:", typeof receiveData);
+            setReceivedTaskData([]);
+          }
+        } catch (receiveParseError) {
+          console.error("🔍 FRONTEND: Error parsing tasks-receive endpoint response:", receiveParseError);
+          setReceivedTaskData([]);
+        }
+      }
+
     } catch (error) {
       console.error("🔍 FRONTEND: Error in API test:", error);
       setTaskError(`API test failed: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setTasksLoading(false);
+    }
+  };
+
+  // Add a function to directly check stored data for a specific organization
+  const checkStoredData = async (orgName: string) => {
+    console.log(`🔍 FRONTEND: Checking stored data for "${orgName}"...`);
+    setTasksLoading(true);
+    setShowReceivedData(true);
+    setTaskError(`Checking stored data for ${orgName}...`);
+    
+    try {
+      const response = await fetch(`/api/admin/tasks-receive?organizationName=${encodeURIComponent(orgName)}`, {
+        method: 'GET',
+      });
+      
+      if (!response.ok) {
+        setTaskError(`Failed to fetch stored data: ${response.status}`);
+        setReceivedTaskData([]);
+        return;
+      }
+      
+      const data = await response.json();
+      console.log(`🔍 FRONTEND: Received ${Array.isArray(data) ? data.length : 0} stored items for ${orgName}`);
+      
+      if (Array.isArray(data) && data.length > 0) {
+        setReceivedTaskData(data);
+        setTasks(data);
+        setTaskError(`Found ${data.length} tasks in storage for ${orgName}`);
+      } else {
+        setReceivedTaskData([]);
+        setTaskError(`No data found in storage for ${orgName}`);
+      }
+    } catch (error) {
+      console.error('Error checking stored data:', error);
+      setTaskError(`Error checking stored data: ${error instanceof Error ? error.message : String(error)}`);
+      setReceivedTaskData([]);
     } finally {
       setTasksLoading(false);
     }
@@ -415,14 +500,23 @@ export default function AdminPanelPage() {
           <DateRangeFilter value={dateRange} onChange={handleDateRangeChange} />
         </div>
         
-        {/* Add diagnostic test button */}
-        <Button 
-          variant="outline" 
-          onClick={runApiTest} 
-          className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
-        >
-          Run API Test
-        </Button>
+        <div className="flex space-x-3">
+          <Button 
+            variant="outline" 
+            onClick={() => checkStoredData("Scale Your Cause")} 
+            className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
+          >
+            Check Storage
+          </Button>
+          
+          <Button 
+            variant="outline" 
+            onClick={runApiTest} 
+            className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+          >
+            Run API Test
+          </Button>
+        </div>
       </div>
 
       <div>
@@ -590,6 +684,65 @@ export default function AdminPanelPage() {
         </Card>
       </div>
 
+      {/* Add a section to display the raw received data */}
+      {showReceivedData && receivedTaskData.length > 0 && (
+        <div className="mt-8">
+          <div className="flex items-center mb-4">
+            <div className="h-10 w-1 bg-gradient-to-b from-green-600 to-emerald-600 rounded mr-3"></div>
+            <h2 className="text-xl font-semibold text-slate-800">Raw Received Data</h2>
+          </div>
+          
+          <Card className="border-slate-200 shadow-sm overflow-hidden">
+            <CardHeader className="bg-slate-50 pb-2">
+              <CardTitle className="text-sm font-medium">
+                <div className="flex justify-between items-center">
+                  <span>Tasks in Storage: {receivedTaskData.length}</span>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setShowReceivedData(false)} 
+                    className="h-8 px-2 text-xs text-slate-500"
+                  >
+                    Hide
+                  </Button>
+                </div>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-2 max-h-[300px] overflow-y-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[60px]">#</TableHead>
+                    <TableHead>Task Name</TableHead>
+                    <TableHead>Client</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Assigned To</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {receivedTaskData.map((task, index) => (
+                    <TableRow key={`raw-${index}`} className="hover:bg-slate-50/50">
+                      <TableCell className="font-mono text-xs text-slate-500">{index + 1}</TableCell>
+                      <TableCell className="font-medium">{task.taskName}</TableCell>
+                      <TableCell>{task.clientName}</TableCell>
+                      <TableCell>
+                        <Badge 
+                          variant="outline" 
+                          className={cn("border", getStatusBadgeClasses(task.status))}
+                        >
+                          {task.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{task.assignedTo}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       <Dialog open={isTaskModalOpen} onOpenChange={setIsTaskModalOpen}>
         <DialogContent className="sm:max-w-[800px]">
           <DialogHeader>
@@ -621,17 +774,24 @@ export default function AdminPanelPage() {
                 <TableBody>
                   {tasks.map((task, index) => (
                     <TableRow key={index}>
-                      <TableCell className="font-medium">{task["Task Name"]}</TableCell>
+                      <TableCell className="font-medium">
+                        {getTaskField(task, 'taskName', 'Task Name')}
+                      </TableCell>
                       <TableCell>
                         <Badge 
                           variant="outline" 
-                          className={cn("border", getStatusBadgeClasses(task.Status))}
+                          className={cn("border", getStatusBadgeClasses(getTaskField(task, 'status', 'Status')))}
                         >
-                          {task.Status}
+                          {getTaskField(task, 'status', 'Status')}
                         </Badge>
                       </TableCell>
-                      <TableCell>{task["Assigned To"]}</TableCell>
-                      <TableCell>{new Date(task["Due Date"]).toLocaleDateString()}</TableCell>
+                      <TableCell>{getTaskField(task, 'assignedTo', 'Assigned To')}</TableCell>
+                      <TableCell>
+                        {getTaskField(task, 'dueDate', 'Due Date') ? 
+                          new Date(getTaskField(task, 'dueDate', 'Due Date')).toLocaleDateString() : 
+                          'No date'
+                        }
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
