@@ -23,14 +23,27 @@ if (!global.tasksCache) {
 }
 
 // Ensure /tmp directory exists for fallback storage
-const TMP_DIR = '/tmp/profit-reach-tasks';
+// In Vercel, we need to use /tmp directly as it's the only writable directory
+const TMP_DIR = process.env.VERCEL ? '/tmp/profit-reach-tasks' : 
+               (process.env.VERCEL_ENV ? '/tmp/profit-reach-tasks' : 
+               (process.env.NODE_ENV === 'production' ? '/tmp/profit-reach-tasks' : '/tmp/profit-reach-tasks'));
+
 try {
   if (!fs.existsSync(TMP_DIR)) {
     fs.mkdirSync(TMP_DIR, { recursive: true });
     console.log(`📁 Created temporary directory: ${TMP_DIR}`);
   }
+  // Print out the absolute path for verification
+  console.log(`📁 Using temporary directory: ${path.resolve(TMP_DIR)}`);
+  // Check if it's writable
+  const testFile = path.join(TMP_DIR, '_test.txt');
+  fs.writeFileSync(testFile, 'test');
+  if (fs.existsSync(testFile)) {
+    fs.unlinkSync(testFile);
+    console.log(`✅ Temporary directory is writable`);
+  }
 } catch (error) {
-  console.warn(`⚠️ Could not create temp directory: ${error}`);
+  console.warn(`⚠️ Could not create/verify temp directory: ${error}`);
 }
 
 // How long to keep tasks in memory (30 minutes - extended for testing)
@@ -171,6 +184,7 @@ const logCacheState = (requestId: string) => {
 export async function POST(request: Request) {
   const requestId = Math.random().toString(36).substring(2, 10);
   console.log(`🟢 [${requestId}] API Route started: /api/admin/tasks-receive (POST)`);
+  console.log(`🔄 [${requestId}] NODE_ENV: ${process.env.NODE_ENV}, VERCEL_ENV: ${process.env.VERCEL_ENV}`);
   logCacheState(requestId);
   
   try {
@@ -340,6 +354,7 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   const requestId = Math.random().toString(36).substring(2, 10);
   console.log(`🟢 [${requestId}] API Route started: /api/admin/tasks-receive (GET)`);
+  console.log(`🔄 [${requestId}] NODE_ENV: ${process.env.NODE_ENV}, VERCEL_ENV: ${process.env.VERCEL_ENV}`);
   
   // Log current cache state
   logCacheState(requestId);

@@ -522,25 +522,42 @@ export default function AdminPanelPage() {
     setTaskError(`Loading tasks for ${orgName}...`);
     
     try {
+      // Add debugging for the fetch request
+      console.log(`🔍 FRONTEND: Starting fetch to tasks-receive endpoint...`);
+      
       const response = await fetch(`/api/admin/tasks-receive?organizationName=${encodeURIComponent(orgName)}`, {
         method: 'GET',
+        // Add cache control to prevent caching
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        },
       });
+      
+      console.log(`🔍 FRONTEND: Response status: ${response.status}, statusText: ${response.statusText}`);
       
       if (!response.ok) {
         console.error(`🔍 FRONTEND: Error fetching tasks - Status ${response.status}`);
-        setTaskError(`Error fetching tasks: ${response.statusText}`);
+        
+        // Try to get more error details
+        let errorText = await response.text();
+        console.error(`🔍 FRONTEND: Error response body: ${errorText}`);
+        
+        setTaskError(`Error fetching tasks: ${response.statusText} - ${errorText}`);
         setReceivedTaskData([]);
         setTasks([]);
       } else {
         const fetchedTasks = await response.json();
-        console.log(`🔍 FRONTEND: Fetched ${fetchedTasks.length} tasks from server`);
+        console.log(`🔍 FRONTEND: Fetched ${Array.isArray(fetchedTasks) ? fetchedTasks.length : 'non-array'} result`);
         
         if (Array.isArray(fetchedTasks) && fetchedTasks.length > 0) {
+          console.log(`🔍 FRONTEND: First task sample:`, fetchedTasks[0]);
           setReceivedTaskData(fetchedTasks);
           setTasks(fetchedTasks);
           setTaskError(`Successfully fetched ${fetchedTasks.length} tasks from server for ${orgName}`);
         } else {
-          console.log(`🔍 FRONTEND: No tasks found on server`);
+          console.log(`🔍 FRONTEND: No tasks found, response:`, fetchedTasks);
           setReceivedTaskData([]);
           setTasks([]);
           setTaskError(`No tasks found on server for ${orgName}. 
