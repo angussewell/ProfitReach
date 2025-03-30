@@ -51,6 +51,7 @@ const PUBLIC_API_ROUTES = [
   '/api/email-accounts/update-webhooks',
   '/api/aisuggestions',
   '/api/admin/tasks-receive',
+  '/api/admin/tasks-browser-store',
   '/api/auth'  // Allow all NextAuth endpoints
 ];
 
@@ -65,7 +66,11 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // BYPASS ALL SECURITY FOR SPECIFIC ENDPOINTS
-  if (pathname.startsWith('/api/aisuggestions') || pathname.startsWith('/api/admin/tasks-receive')) {
+  if (
+    pathname.startsWith('/api/aisuggestions') || 
+    pathname.startsWith('/api/admin/tasks-receive') || 
+    pathname.startsWith('/api/admin/tasks-browser-store')
+  ) {
     return NextResponse.next();
   }
 

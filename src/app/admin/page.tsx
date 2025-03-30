@@ -34,6 +34,7 @@ import {
   DialogClose
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { toast } from 'react-hot-toast';
 
 type DateRange = {
   from: Date;
@@ -134,58 +135,32 @@ export default function AdminPanelPage() {
     }
   };
   
-  // Rename this function to reflect its new purpose
-  const fetchTasksFromServer = async (orgName: string) => {
-    // Keep the log informative
-    console.log(`🔍 FRONTEND: Fetching tasks from server for \"${orgName}\"...`);
+  // Revert function name and logic
+  // Function to check client-side stored data
+  const checkBrowserStorage = async (orgName: string) => {
+    console.log(`🔍 FRONTEND: Checking browser storage for \"${orgName}\"...`);
     setTasksLoading(true);
-    setShowReceivedData(true); // We can still use this state to display the fetched data
+    setShowReceivedData(true);
     setTaskError(null); // Clear previous errors
     setTasks([]); // Clear previous tasks
 
     try {
-      // Fetch data from the GET endpoint
-      const response = await fetch(`/api/admin/tasks-receive?organizationName=${encodeURIComponent(orgName)}`, {
-        method: 'GET',
-      });
+      // Restore logic to ONLY check localStorage
+      const storedTasks = getTasksFromLocalStorage(orgName);
 
-      if (!response.ok) {
-        // Handle specific errors like 403 Forbidden or other server issues
-        if (response.status === 403) {
-          console.error(`🔍 FRONTEND: Error fetching tasks - Forbidden (403)`);
-          setTaskError(`Error fetching tasks: Access Denied. Ensure you are logged in as an admin.`);
-        } else {
-          const errorText = await response.text();
-          console.error(`🔍 FRONTEND: Error fetching tasks - Status ${response.status}: ${errorText}`);
-          setTaskError(`Error fetching tasks: Server returned status ${response.status}`);
-        }
-        setReceivedTaskData([]); // Clear data on error
-        return; // Stop execution on error
-      }
-
-      // Parse the JSON response
-      const fetchedTasks = await response.json();
-
-      // Validate if the response is an array
-      if (Array.isArray(fetchedTasks)) {
-        console.log(`🔍 FRONTEND: Found ${fetchedTasks.length} tasks from server`);
-        setReceivedTaskData(fetchedTasks); // Update state with fetched data
-        setTasks(fetchedTasks); // Also update the tasks state used by the modal
-        if (fetchedTasks.length > 0) {
-          setTaskError(`Successfully fetched ${fetchedTasks.length} tasks from server for ${orgName}`);
-        } else {
-           setTaskError(`No tasks found on server for ${orgName}`);
-        }
+      if (storedTasks.length > 0) {
+        console.log(`🔍 FRONTEND: Found ${storedTasks.length} tasks in browser storage`);
+        setReceivedTaskData(storedTasks);
+        setTasks(storedTasks); // Update tasks state for the modal
+        setTaskError(`Found ${storedTasks.length} tasks in browser storage for ${orgName}`);
       } else {
-        // Handle cases where the response is not an array
-         console.error(`🔍 FRONTEND: Invalid data format received from server (expected array)`);
-         setTaskError(`Invalid data format received from server.`);
-         setReceivedTaskData([]);
+        console.log(`🔍 FRONTEND: No tasks found in browser storage`);
+        setReceivedTaskData([]);
+        setTaskError(`No tasks found in browser storage for ${orgName}`);
       }
-
     } catch (error) {
-      console.error('🔍 FRONTEND: Error fetching tasks from server:', error);
-      setTaskError(`Error fetching tasks: ${error instanceof Error ? error.message : String(error)}`);
+      console.error('🔍 FRONTEND: Error checking browser storage:', error);
+      setTaskError(`Error checking browser storage: ${error instanceof Error ? error.message : String(error)}`);
       setReceivedTaskData([]);
     } finally {
       setTasksLoading(false);
@@ -364,22 +339,24 @@ export default function AdminPanelPage() {
       const tasksReceived = params.get('tasksReceived');
       const org = params.get('org');
       const count = params.get('count');
-      
+
       if (tasksReceived === 'true' && org) {
         console.log(`🔍 FRONTEND: Detected tasks received for ${org} (${count} tasks)`);
         // Clear the URL parameters without full reload
         const newUrl = window.location.pathname;
         window.history.replaceState({}, document.title, newUrl);
-        
+
         // Show notification
-        setTaskError(`Successfully received ${count} tasks for ${org}! Data is stored in your browser.`);
-        
-        // Optionally, open the modal to show the data
-        setSelectedOrgName(org);
-        setIsTaskModalOpen(true);
+        toast.success(`Successfully received ${count} tasks for ${org}! Data is stored locally.`);
+
+        // Optionally, open the modal or directly display data by checking localStorage
+        setSelectedOrgName(org); // Set org name if needed for other actions
+        // Trigger checkBrowserStorage to load data into state immediately
+        checkBrowserStorage(org);
+        // Optionally open modal: setIsTaskModalOpen(true);
       }
     }
-  }, []);
+  }, []); // Run only on mount
 
   const handleBack = () => router.back();
   const handleDateRangeChange = (newRange: DateRange | undefined) => setDateRange(newRange);
@@ -590,25 +567,28 @@ export default function AdminPanelPage() {
         <div className="flex space-x-3">
           <Button
             variant="outline"
-            // Update the onClick handler and text
-            onClick={() => fetchTasksFromServer("Scale Your Cause")}
+            // Revert onClick and text
+            onClick={() => checkBrowserStorage("Scale Your Cause")}
             className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
           >
-            Fetch Tasks from Server {/* Renamed Button Text */}
+            Check Browser Storage {/* Reverted Button Text */}
           </Button>
 
-          {/* Keep the Clear Storage button as it targets localStorage, which might still be useful or used elsewhere */}
+          {/* Clear Storage Button remains the same */}
           <Button
             variant="outline"
             onClick={() => {
               clearTasksFromLocalStorage("Scale Your Cause");
               setTaskError("Cleared browser storage for Scale Your Cause");
+              setReceivedTaskData([]); // Clear display when clearing storage
+              setTasks([]);
             }}
             className="bg-red-50 text-red-700 border-red-200 hover:bg-red-100"
           >
             Clear Storage
           </Button>
 
+          {/* API Test Button remains the same */}
           <Button
             variant="outline"
             onClick={runApiTest}
