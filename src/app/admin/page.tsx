@@ -420,29 +420,84 @@ export default function AdminPanelPage() {
     setTaskError(`Checking stored data for ${orgName}...`);
     
     try {
-      const response = await fetch(`/api/admin/tasks-receive?organizationName=${encodeURIComponent(orgName)}`, {
+      // Log the current time for debugging
+      const timestamp = new Date().toISOString();
+      console.log(`🔍 FRONTEND: Making request at ${timestamp}`);
+      
+      // Use a unique query parameter to bypass any caching
+      const url = `/api/admin/tasks-receive?organizationName=${encodeURIComponent(orgName)}&_t=${Date.now()}`;
+      console.log(`🔍 FRONTEND: Fetching from URL: ${url}`);
+      
+      const response = await fetch(url, {
         method: 'GET',
+        // Explicitly disable caching
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store',
+          'Pragma': 'no-cache'
+        }
       });
       
+      console.log(`🔍 FRONTEND: Response status: ${response.status}, ok: ${response.ok}`);
+      
+      // Try to get response text first for debugging
+      let responseText = '';
+      try {
+        responseText = await response.clone().text();
+        console.log(`🔍 FRONTEND: Raw response text: ${responseText.substring(0, 300)}${responseText.length > 300 ? '...' : ''}`);
+      } catch (textError) {
+        console.error('🔍 FRONTEND: Failed to get response text:', textError);
+      }
+      
       if (!response.ok) {
-        setTaskError(`Failed to fetch stored data: ${response.status}`);
+        let errorMessage = `Failed to fetch stored data: ${response.status} ${response.statusText}`;
+        
+        try {
+          // Try to parse error details
+          const errorData = JSON.parse(responseText);
+          if (errorData.error) {
+            errorMessage += ` - ${errorData.error}`;
+            if (errorData.details) {
+              errorMessage += `: ${errorData.details}`;
+            }
+          }
+        } catch (parseError) {
+          // If we can't parse JSON, just use the raw text
+          if (responseText) {
+            errorMessage += ` - ${responseText}`;
+          }
+        }
+        
+        setTaskError(errorMessage);
         setReceivedTaskData([]);
+        setTasksLoading(false);
         return;
       }
       
-      const data = await response.json();
-      console.log(`🔍 FRONTEND: Received ${Array.isArray(data) ? data.length : 0} stored items for ${orgName}`);
-      
-      if (Array.isArray(data) && data.length > 0) {
-        setReceivedTaskData(data);
-        setTasks(data);
-        setTaskError(`Found ${data.length} tasks in storage for ${orgName}`);
-      } else {
+      // Now try to parse as JSON
+      try {
+        const data = await response.json();
+        console.log(`🔍 FRONTEND: Parsed JSON data:`, data);
+        console.log(`🔍 FRONTEND: Received ${Array.isArray(data) ? data.length : 0} stored items for ${orgName}`);
+        
+        if (Array.isArray(data) && data.length > 0) {
+          setReceivedTaskData(data);
+          setTasks(data);
+          setTaskError(`Found ${data.length} tasks in storage for ${orgName}`);
+        } else if (Array.isArray(data)) {
+          setReceivedTaskData([]);
+          setTaskError(`No data found in storage for ${orgName} (empty array received)`);
+        } else {
+          setReceivedTaskData([]);
+          setTaskError(`Invalid data format received for ${orgName}: expected array, got ${typeof data}`);
+        }
+      } catch (jsonError: any) {
+        console.error('🔍 FRONTEND: JSON parse error:', jsonError);
+        setTaskError(`Failed to parse response as JSON: ${jsonError.message} - Raw text: ${responseText.substring(0, 100)}...`);
         setReceivedTaskData([]);
-        setTaskError(`No data found in storage for ${orgName}`);
       }
     } catch (error) {
-      console.error('Error checking stored data:', error);
+      console.error('🔍 FRONTEND: Error checking stored data:', error);
       setTaskError(`Error checking stored data: ${error instanceof Error ? error.message : String(error)}`);
       setReceivedTaskData([]);
     } finally {

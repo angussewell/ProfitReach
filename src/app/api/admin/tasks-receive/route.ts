@@ -1,40 +1,101 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import fs from 'fs';
+import path from 'path';
 
-// In-memory storage solution (will reset on server restart)
-// Map organization names to their task data
-const organizationTasksStore: Map<string, any[]> = new Map();
-
-// Utility to get tasks by organization name
-const getTasks = (organizationName: string): any[] => {
-  return organizationTasksStore.get(organizationName) || [];
+// Define the storage file path using /tmp directory which is writable in serverless environments
+const STORAGE_DIR = process.env.NODE_ENV === 'production' ? '/tmp' : './tmp';
+const getStorageFilePath = (orgName: string) => {
+  // Sanitize the organization name for safe file naming
+  const sanitizedName = orgName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+  return path.join(STORAGE_DIR, `tasks_${sanitizedName}.json`);
 };
 
-// Utility to store tasks for an organization
-const storeTasks = (organizationName: string, tasks: any[]): void => {
-  organizationTasksStore.set(organizationName, tasks);
-  console.log(`Stored ${tasks.length} tasks for organization: ${organizationName}`);
+// Make sure the storage directory exists
+try {
+  if (!fs.existsSync(STORAGE_DIR)) {
+    fs.mkdirSync(STORAGE_DIR, { recursive: true });
+    console.log(`Created storage directory: ${STORAGE_DIR}`);
+  }
+} catch (error) {
+  console.error(`Failed to create storage directory: ${error}`);
+}
+
+// File-based storage utility for persisting tasks
+const fileStorage = {
+  storeTasks: (organizationName: string, tasks: any[]): boolean => {
+    try {
+      const filePath = getStorageFilePath(organizationName);
+      fs.writeFileSync(filePath, JSON.stringify(tasks, null, 2), 'utf8');
+      console.log(`Stored ${tasks.length} tasks for ${organizationName} at ${filePath}`);
+      
+      // Verify the file exists after writing
+      const exists = fs.existsSync(filePath);
+      const stats = exists ? fs.statSync(filePath) : null;
+      console.log(`File verification: exists=${exists}, size=${stats ? stats.size : 'N/A'} bytes`);
+      
+      return true;
+    } catch (error) {
+      console.error(`Failed to store tasks for ${organizationName}:`, error);
+      return false;
+    }
+  },
+  
+  getTasks: (organizationName: string): any[] => {
+    try {
+      const filePath = getStorageFilePath(organizationName);
+      
+      if (!fs.existsSync(filePath)) {
+        console.log(`No stored tasks file found for ${organizationName} at ${filePath}`);
+        return [];
+      }
+      
+      const fileContent = fs.readFileSync(filePath, 'utf8');
+      
+      // Check if the file has content
+      if (!fileContent || fileContent.trim() === '') {
+        console.log(`Empty tasks file for ${organizationName}`);
+        return [];
+      }
+      
+      const stats = fs.statSync(filePath);
+      console.log(`Reading tasks for ${organizationName}: file size=${stats.size} bytes`);
+      
+      // Parse the JSON data
+      const tasks = JSON.parse(fileContent);
+      console.log(`Retrieved ${tasks.length} tasks for ${organizationName} from ${filePath}`);
+      return Array.isArray(tasks) ? tasks : [];
+    } catch (error) {
+      console.error(`Failed to retrieve tasks for ${organizationName}:`, error);
+      return [];
+    }
+  }
 };
 
 // Debug utility to print object structure
 const debugObject = (obj: any, prefix = ''): void => {
   console.log(`${prefix} Type: ${typeof obj}`);
   console.log(`${prefix} Is Array: ${Array.isArray(obj)}`);
-  console.log(`${prefix} Keys: ${Object.keys(obj).join(', ')}`);
-  console.log(`${prefix} Raw: ${JSON.stringify(obj).substring(0, 300)}...`);
+  if (obj) {
+    console.log(`${prefix} Keys: ${Object.keys(obj).join(', ')}`);
+    console.log(`${prefix} Raw: ${JSON.stringify(obj).substring(0, 300)}...`);
+  } else {
+    console.log(`${prefix} Value: ${obj}`);
+  }
 };
 
 // Endpoint for n8n to push task data to
 export async function POST(request: Request) {
   const requestId = Math.random().toString(36).substring(2, 10);
-  console.log(`🟢 [${requestId}] API Route started: /api/admin/tasks-receive`);
+  console.log(`🟢 [${requestId}] API Route started: /api/admin/tasks-receive (POST)`);
+  console.log(`🟢 [${requestId}] Storage directory: ${STORAGE_DIR}`);
   
   try {
     // Get the raw text for debugging
     const clonedRequest = request.clone();
     const rawText = await clonedRequest.text();
-    console.log(`[${requestId}] Raw request body: ${rawText.substring(0, 300)}...`);
+    console.log(`[${requestId}] Raw request body (first 300 chars): ${rawText.substring(0, 300)}...`);
     
     // Parse the incoming data - could be array or object
     let data: any;
@@ -111,10 +172,24 @@ export async function POST(request: Request) {
     }
     
     console.log(`[${requestId}] Extracted organization: ${organizationName}, Tasks count: ${tasks.length}`);
-    console.log(`[${requestId}] First task sample:`, JSON.stringify(tasks[0]).substring(0, 300));
+    if (tasks.length > 0) {
+      console.log(`[${requestId}] First task sample:`, JSON.stringify(tasks[0]).substring(0, 300));
+    }
     
-    // Store the tasks in our in-memory store
-    storeTasks(organizationName, tasks);
+    // Store the tasks in our file storage
+    const stored = fileStorage.storeTasks(organizationName, tasks);
+    
+    if (!stored) {
+      console.error(`[${requestId}] Failed to store tasks in file storage`);
+      return NextResponse.json({ 
+        error: 'Storage failure', 
+        details: 'Failed to save tasks to persistent storage' 
+      }, { status: 500 });
+    }
+    
+    // Verify storage worked by reading it back
+    const verifyTasks = fileStorage.getTasks(organizationName);
+    console.log(`[${requestId}] Verification read returned ${verifyTasks.length} tasks`);
     
     // Return success
     return NextResponse.json({ 
@@ -134,6 +209,7 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   const requestId = Math.random().toString(36).substring(2, 10);
   console.log(`🟢 [${requestId}] API Route GET started: /api/admin/tasks-receive`);
+  console.log(`🟢 [${requestId}] Storage directory: ${STORAGE_DIR}`);
   
   try {
     // Check auth - only admins can retrieve tasks
@@ -157,8 +233,16 @@ export async function GET(request: Request) {
       }, { status: 400 });
     }
     
+    // Check directory contents for debugging
+    try {
+      const dirContents = fs.readdirSync(STORAGE_DIR);
+      console.log(`[${requestId}] Storage directory contents: ${dirContents.join(', ')}`);
+    } catch (dirError) {
+      console.error(`[${requestId}] Failed to read storage directory:`, dirError);
+    }
+    
     // Retrieve tasks for this organization
-    const tasks = getTasks(organizationName);
+    const tasks = fileStorage.getTasks(organizationName);
     console.log(`[${requestId}] Retrieved ${tasks.length} tasks for organization: ${organizationName}`);
     
     // Return the tasks array
