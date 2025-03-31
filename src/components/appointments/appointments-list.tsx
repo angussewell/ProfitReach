@@ -10,11 +10,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Trash2, Edit, Calendar, User, FileText, Tag, Mail, PlusCircle, X } from 'lucide-react';
+import { Trash2, Edit, Calendar, User, FileText, Tag, Mail, PlusCircle, X, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useEffect } from 'react';
 import { format, parse } from 'date-fns';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 
 // Define time zones
 const TIME_ZONES = [
@@ -46,6 +48,11 @@ interface Appointment {
   recipients?: string[];
 }
 
+interface TimeOption {
+  value: string;
+  label: string;
+}
+
 interface AppointmentsListProps {
   appointments: Appointment[];
 }
@@ -55,6 +62,8 @@ export function AppointmentsList({ appointments }: AppointmentsListProps) {
   const [isEditDialogOpen, setIsEditDialogOpen] = React.useState(false);
   const [editDate, setEditDate] = React.useState('');
   const [editTime, setEditTime] = React.useState('');
+  const [timePopoverOpen, setTimePopoverOpen] = React.useState(false);
+  const [timeSearchQuery, setTimeSearchQuery] = React.useState('');
   const [emailAccounts, setEmailAccounts] = React.useState<EmailAccount[]>([]);
   const [selectedEmailId, setSelectedEmailId] = React.useState<string>('');
   const [editRecipients, setEditRecipients] = React.useState<string[]>([]);
@@ -261,11 +270,27 @@ export function AppointmentsList({ appointments }: AppointmentsListProps) {
   }
 
   // Generate time options in 30-minute increments
-  const timeOptions = Array.from({ length: 48 }, (_, i) => {
+  const timeOptions: TimeOption[] = Array.from({ length: 48 }, (_, i) => {
     const hour = Math.floor(i / 2);
     const minute = i % 2 === 0 ? '00' : '30';
-    return `${hour.toString().padStart(2, '0')}:${minute}`;
+    const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+    const period = hour >= 12 ? 'PM' : 'AM';
+    return {
+      value: `${hour.toString().padStart(2, '0')}:${minute}`,
+      label: `${displayHour}:${minute} ${period}`
+    };
   });
+
+  // Filtered time options based on search query
+  const filteredTimeOptions = React.useMemo(() => {
+    if (!timeSearchQuery) return timeOptions;
+    return timeOptions.filter(option => 
+      option.label.toLowerCase().includes(timeSearchQuery.toLowerCase())
+    );
+  }, [timeOptions, timeSearchQuery]);
+
+  // Get the display label for the selected time
+  const selectedTimeLabel = timeOptions.find(opt => opt.value === editTime)?.label || 'Select time';
 
   return (
     <>
@@ -405,24 +430,52 @@ export function AppointmentsList({ appointments }: AppointmentsListProps) {
               
               <div className="space-y-2">
                 <Label htmlFor="editTime">Time</Label>
-                <Select value={editTime} onValueChange={setEditTime}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select time" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {timeOptions.map((time) => {
-                      const [hour, minute] = time.split(':').map(Number);
-                      const period = hour >= 12 ? 'PM' : 'AM';
-                      const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-                      
-                      return (
-                        <SelectItem key={time} value={time}>
-                          {`${displayHour}:${minute.toString().padStart(2, '0')} ${period}`}
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
+                <Popover open={timePopoverOpen} onOpenChange={setTimePopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      role="combobox" 
+                      aria-expanded={timePopoverOpen}
+                      className="w-full justify-between"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-muted-foreground" />
+                        <span>{selectedTimeLabel}</span>
+                      </div>
+                      <Calendar className="ml-auto h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[220px] p-0">
+                    <Command>
+                      <CommandInput 
+                        placeholder="Search time..." 
+                        className="h-9" 
+                        value={timeSearchQuery}
+                        onValueChange={setTimeSearchQuery}
+                      />
+                      <CommandList>
+                        <CommandEmpty>No time found.</CommandEmpty>
+                        <CommandGroup>
+                          <ScrollArea className="h-[200px]">
+                            {filteredTimeOptions.map((time) => (
+                              <CommandItem
+                                key={time.value}
+                                onSelect={() => {
+                                  setEditTime(time.value);
+                                  setTimePopoverOpen(false);
+                                  setTimeSearchQuery('');
+                                }}
+                                className="cursor-pointer"
+                              >
+                                {time.label}
+                              </CommandItem>
+                            ))}
+                          </ScrollArea>
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
             
