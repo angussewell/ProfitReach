@@ -1,16 +1,30 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { getToken } from 'next-auth/jwt';
 
-export function middleware(request: NextRequest) {
-  // Ultra simple fix - just redirect to the root path
-  // This avoids any complex route matching and is the simplest path forward
-  if (request.nextUrl.pathname === '/scenarios') {
-    return NextResponse.redirect(new URL('/', request.url));
+export async function middleware(request: NextRequest) {
+  const token = await getToken({ req: request });
+
+  // If there's no token and we're not on the login page, redirect to login
+  if (!token && !request.nextUrl.pathname.startsWith('/auth')) {
+    const loginUrl = new URL('/auth/login', request.url);
+    loginUrl.searchParams.set('callbackUrl', request.nextUrl.pathname);
+    return NextResponse.redirect(loginUrl);
   }
-  
+
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/scenarios'],
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - api (API routes)
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - auth (authentication routes)
+     */
+    '/((?!api|_next/static|_next/image|favicon.ico|auth).*)',
+  ],
 }; 
