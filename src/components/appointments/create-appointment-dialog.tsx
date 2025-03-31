@@ -8,13 +8,11 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, PlusCircle, X, Search, Clock } from 'lucide-react';
+import { CalendarIcon, PlusCircle, X } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { formatDateInCentralTime } from '@/lib/date-utils';
 import { useEffect, useState } from 'react';
 import { format } from 'date-fns';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { ScrollArea } from '@/components/ui/scroll-area';
 
 // Define time zones
 const TIME_ZONES = [
@@ -68,8 +66,6 @@ export function CreateAppointmentDialog({
   const [appointmentType, setAppointmentType] = React.useState('sales_appointment');
   const [appointmentDate, setAppointmentDate] = React.useState<Date | undefined>();
   const [appointmentTime, setAppointmentTime] = React.useState('09:00');
-  const [timePopoverOpen, setTimePopoverOpen] = React.useState(false);
-  const [timeSearchQuery, setTimeSearchQuery] = React.useState('');
   const [timeZone, setTimeZone] = React.useState('America/Chicago');
   const [notes, setNotes] = React.useState('');
   const [status, setStatus] = React.useState('appointment_booked');
@@ -77,20 +73,6 @@ export function CreateAppointmentDialog({
   const [selectedEmailId, setSelectedEmailId] = React.useState<string>('');
   const [recipients, setRecipients] = React.useState<string[]>([]);
   const [newRecipient, setNewRecipient] = React.useState('');
-
-  // Filtered time options based on search query
-  const filteredTimeOptions = React.useMemo(() => {
-    if (!timeSearchQuery) return TIME_OPTIONS;
-    return TIME_OPTIONS.filter(option => 
-      option.label.toLowerCase().includes(timeSearchQuery.toLowerCase())
-    );
-  }, [timeSearchQuery]);
-
-  // Get the display label for the selected time
-  const selectedTimeLabel = React.useMemo(() => 
-    TIME_OPTIONS.find(opt => opt.value === appointmentTime)?.label || 'Select time',
-    [appointmentTime]
-  );
 
   // Fetch email accounts when the dialog opens
   useEffect(() => {
@@ -219,52 +201,18 @@ export function CreateAppointmentDialog({
 
             <div className="space-y-2">
               <Label htmlFor="appointmentTime">Time</Label>
-              <Popover open={timePopoverOpen} onOpenChange={setTimePopoverOpen}>
-                <PopoverTrigger asChild>
-                  <Button 
-                    variant="outline" 
-                    role="combobox" 
-                    aria-expanded={timePopoverOpen}
-                    className="w-full justify-between"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-muted-foreground" />
-                      <span>{selectedTimeLabel}</span>
-                    </div>
-                    <CalendarIcon className="ml-auto h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[220px] p-0">
-                  <Command>
-                    <CommandInput 
-                      placeholder="Search time..." 
-                      className="h-9" 
-                      value={timeSearchQuery}
-                      onValueChange={setTimeSearchQuery}
-                    />
-                    <CommandList>
-                      <CommandEmpty>No time found.</CommandEmpty>
-                      <CommandGroup>
-                        <ScrollArea className="h-[200px]">
-                          {filteredTimeOptions.map((time) => (
-                            <CommandItem
-                              key={time.value}
-                              onSelect={() => {
-                                setAppointmentTime(time.value);
-                                setTimePopoverOpen(false);
-                                setTimeSearchQuery('');
-                              }}
-                              className="cursor-pointer"
-                            >
-                              {time.label}
-                            </CommandItem>
-                          ))}
-                        </ScrollArea>
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
+              <Select value={appointmentTime} onValueChange={setAppointmentTime}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select time" />
+                </SelectTrigger>
+                <SelectContent className="max-h-[200px] overflow-y-auto">
+                  {TIME_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -274,7 +222,7 @@ export function CreateAppointmentDialog({
               <SelectTrigger>
                 <SelectValue placeholder="Select time zone" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-[200px] overflow-y-auto">
                 {TIME_ZONES.map((zone) => (
                   <SelectItem key={zone.value} value={zone.value}>
                     {zone.label}
@@ -290,7 +238,7 @@ export function CreateAppointmentDialog({
               <SelectTrigger>
                 <SelectValue placeholder="Select status" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-[200px] overflow-y-auto">
                 <SelectItem value="appointment_booked">Appointment Booked</SelectItem>
                 <SelectItem value="webinar_booked">Webinar Booked</SelectItem>
                 <SelectItem value="appointment_no_showed">No Show</SelectItem>
