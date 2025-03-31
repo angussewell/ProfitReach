@@ -3,11 +3,16 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
+import { 
+  fetchAppointments, 
+  sendAppointmentWebhook as sendWebhook, 
+  APPOINTMENT_WEBHOOK_URL 
+} from '@/lib/appointments/appointment-utils';
 
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session || !session.user.organizationId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -15,25 +20,14 @@ export async function GET(req: NextRequest) {
     const from = searchParams.get('from');
     const to = searchParams.get('to');
 
-    const dateFilter = from && to 
-      ? Prisma.sql`AND "createdAt" BETWEEN ${new Date(from)}::timestamp(3) AND ${new Date(to)}::timestamp(3)`
-      : Prisma.empty;
-
-    const appointments = await prisma.$queryRaw`
-      SELECT 
-        "id"::text, 
-        "organizationId", 
-        "createdAt"::timestamp(3), 
-        "notes", 
-        "clientName", 
-        "appointmentType", 
-        "appointmentDateTime"::timestamp, 
-        "status"
-      FROM "Appointment"
-      WHERE "organizationId" = ${session.user.organizationId}
-      ${dateFilter}
-      ORDER BY "appointmentDateTime" DESC
-    `;
+    // Use the utility function to safely fetch appointments
+    const appointments = await fetchAppointments(
+      session.user.organizationId,
+      from && to ? { 
+        from: new Date(from), 
+        to: new Date(to) 
+      } : undefined
+    );
 
     return NextResponse.json(appointments);
   } catch (error) {
@@ -42,15 +36,51 @@ export async function GET(req: NextRequest) {
   }
 }
 
+// Send appointment data to webhook
+async function sendAppointmentWebhook(appointmentData: any) {
+  try {
+    console.log('Sending appointment webhook to:', APPOINTMENT_WEBHOOK_URL);
+    
+    const response = await fetch(APPOINTMENT_WEBHOOK_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(appointmentData),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Webhook failed with status: ${response.status}`);
+    }
+
+    const webhookResponse = await response.json().catch(() => ({}));
+    console.log('Webhook response:', webhookResponse);
+    
+    return { success: true, response: webhookResponse };
+  } catch (error) {
+    console.error('Error sending appointment webhook:', error);
+    return { success: false, error };
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session || !session.user.organizationId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const body = await req.json();
-    const { clientName, appointmentType, appointmentDateTime, notes } = body;
+    const { 
+      clientName, 
+      appointmentType, 
+      appointmentDateTime, 
+      notes, 
+      status, 
+      timeZone, 
+      fromEmail,
+      recipients 
+    } = body;
 
     const appointment = await prisma.$queryRaw`
       INSERT INTO "Appointment" (
@@ -59,7 +89,10 @@ export async function POST(req: NextRequest) {
         "appointmentType", 
         "appointmentDateTime", 
         "notes",
-        "status"
+        "status",
+        "timeZone",
+        "fromEmail",
+        "recipients"
       ) 
       VALUES (
         ${session.user.organizationId},
@@ -67,7 +100,10 @@ export async function POST(req: NextRequest) {
         ${appointmentType},
         ${new Date(appointmentDateTime)}::timestamp,
         ${notes},
-        'appointment_booked'::text
+        ${status || 'appointment_booked'}::text,
+        ${timeZone}::text,
+        ${fromEmail}::text,
+        ${recipients ? JSON.stringify(recipients) : null}::jsonb
       )
       RETURNING 
         "id"::text, 
@@ -77,10 +113,30 @@ export async function POST(req: NextRequest) {
         "clientName", 
         "appointmentType", 
         "appointmentDateTime"::timestamp, 
-        "status"
+        "status",
+        "timeZone",
+        "fromEmail",
+        "recipients"
     `;
 
-    return NextResponse.json(appointment);
+    // The appointment data to return in the response
+    const appointmentData = Array.isArray(appointment) ? appointment[0] : appointment;
+
+    // Send the webhook in the background
+    // We don't await this to avoid blocking the API response
+    sendWebhook({
+      ...appointmentData,
+      organizationId: session.user.organizationId,
+      // Include any additional metadata that might be useful
+      meta: {
+        createdBy: session.user.email,
+        userAgent: req.headers.get('user-agent'),
+        source: 'ProfitReach',
+        eventType: 'appointment_created'
+      }
+    });
+
+    return NextResponse.json(appointmentData);
   } catch (error) {
     console.error('Error creating appointment:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -90,12 +146,22 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session || !session.user.organizationId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const body = await req.json();
-    const { id, clientName, appointmentType, appointmentDateTime, notes, status } = body;
+    const { 
+      id, 
+      clientName, 
+      appointmentType, 
+      appointmentDateTime, 
+      notes, 
+      status,
+      timeZone,
+      fromEmail,
+      recipients
+    } = body;
 
     // Verify the appointment belongs to the organization
     const existingAppointment = await prisma.$queryRaw`
@@ -127,6 +193,15 @@ export async function PUT(req: NextRequest) {
     if (status) {
       updates.push(Prisma.sql`"status" = ${status}::text`);
     }
+    if (timeZone) {
+      updates.push(Prisma.sql`"timeZone" = ${timeZone}::text`);
+    }
+    if (fromEmail) {
+      updates.push(Prisma.sql`"fromEmail" = ${fromEmail}::text`);
+    }
+    if (recipients !== undefined) {
+      updates.push(Prisma.sql`"recipients" = ${recipients ? JSON.stringify(recipients) : null}::jsonb`);
+    }
 
     if (updates.length === 0) {
       return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
@@ -145,10 +220,27 @@ export async function PUT(req: NextRequest) {
         "clientName", 
         "appointmentType", 
         "appointmentDateTime"::timestamp, 
-        "status"
+        "status",
+        "timeZone",
+        "fromEmail",
+        "recipients"
     `;
 
     const updatedAppointment = await prisma.$queryRaw(updateQuery);
+
+    // Send webhook notification for updates too
+    const appointmentData = Array.isArray(updatedAppointment) ? updatedAppointment[0] : updatedAppointment;
+    sendWebhook({
+      ...appointmentData,
+      organizationId: session.user.organizationId,
+      // Include additional metadata for update events
+      meta: {
+        updatedBy: session.user.email,
+        userAgent: req.headers.get('user-agent'),
+        source: 'ProfitReach',
+        eventType: 'appointment_updated'
+      }
+    });
 
     return NextResponse.json(updatedAppointment);
   } catch (error) {
@@ -160,7 +252,7 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session || !session.user.organizationId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -170,6 +262,18 @@ export async function DELETE(req: NextRequest) {
     if (!id) {
       return NextResponse.json({ error: 'Appointment ID is required' }, { status: 400 });
     }
+
+    // Get the appointment data before deleting it
+    const appointmentToDelete = await prisma.$queryRaw`
+      SELECT 
+        "id"::text, 
+        "clientName",
+        "appointmentType",
+        "status"
+      FROM "Appointment"
+      WHERE "id" = ${id}::uuid
+      AND "organizationId" = ${session.user.organizationId}
+    `;
 
     // Delete the appointment only if it belongs to the organization
     const result = await prisma.$queryRaw`
@@ -181,6 +285,21 @@ export async function DELETE(req: NextRequest) {
 
     if (!result) {
       return NextResponse.json({ error: 'Appointment not found' }, { status: 404 });
+    }
+
+    // Send webhook notification for deletion
+    if (appointmentToDelete && Array.isArray(appointmentToDelete) && appointmentToDelete.length > 0) {
+      sendWebhook({
+        ...appointmentToDelete[0],
+        organizationId: session.user.organizationId,
+        // Include additional metadata for delete events
+        meta: {
+          deletedBy: session.user.email,
+          userAgent: req.headers.get('user-agent'),
+          source: 'ProfitReach',
+          eventType: 'appointment_deleted'
+        }
+      });
     }
 
     return NextResponse.json({ message: 'Appointment deleted successfully' });

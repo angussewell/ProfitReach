@@ -434,6 +434,9 @@ model Appointment {
   appointmentType     String
   appointmentDateTime DateTime
   status              String       @default("appointment_booked")
+  timeZone            String?
+  fromEmail           String?
+  recipients          Json?
   organization        Organization @relation(fields: [organizationId], references: [id])
 
   @@index([organizationId])

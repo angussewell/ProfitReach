@@ -10,9 +10,27 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Trash2, Edit, Calendar, User, FileText, Tag } from 'lucide-react';
+import { Trash2, Edit, Calendar, User, FileText, Tag, Mail, PlusCircle, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useEffect } from 'react';
+import { format, parse } from 'date-fns';
+
+// Define time zones
+const TIME_ZONES = [
+  { value: 'America/New_York', label: 'Eastern Time (ET)' },
+  { value: 'America/Chicago', label: 'Central Time (CT)' },
+  { value: 'America/Denver', label: 'Mountain Time (MT)' },
+  { value: 'America/Los_Angeles', label: 'Pacific Time (PT)' },
+  { value: 'America/Anchorage', label: 'Alaska Time (AKT)' },
+  { value: 'Pacific/Honolulu', label: 'Hawaii Time (HT)' },
+];
+
+interface EmailAccount {
+  id: string;
+  name: string;
+  email: string;
+}
 
 interface Appointment {
   id: string;
@@ -23,6 +41,9 @@ interface Appointment {
   status: string;
   organizationId: string;
   createdAt: string;
+  timeZone?: string;
+  fromEmail?: string;
+  recipients?: string[];
 }
 
 interface AppointmentsListProps {
@@ -32,6 +53,12 @@ interface AppointmentsListProps {
 export function AppointmentsList({ appointments }: AppointmentsListProps) {
   const [editingAppointment, setEditingAppointment] = React.useState<Appointment | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = React.useState(false);
+  const [editDate, setEditDate] = React.useState('');
+  const [editTime, setEditTime] = React.useState('');
+  const [emailAccounts, setEmailAccounts] = React.useState<EmailAccount[]>([]);
+  const [selectedEmailId, setSelectedEmailId] = React.useState<string>('');
+  const [editRecipients, setEditRecipients] = React.useState<string[]>([]);
+  const [newRecipient, setNewRecipient] = React.useState('');
 
   const sortedAppointments = React.useMemo(() => {
     return [...appointments].sort((a, b) => {
@@ -46,6 +73,52 @@ export function AppointmentsList({ appointments }: AppointmentsListProps) {
       }
     });
   }, [appointments]);
+
+  // Fetch email accounts when needed
+  useEffect(() => {
+    if (isEditDialogOpen) {
+      fetchEmailAccounts();
+    }
+  }, [isEditDialogOpen]);
+
+  // Set up the edit form when an appointment is selected for editing
+  useEffect(() => {
+    if (editingAppointment) {
+      try {
+        // Parse the date and time from the appointment date
+        const appointmentDate = new Date(editingAppointment.appointmentDateTime);
+        setEditDate(format(appointmentDate, 'yyyy-MM-dd'));
+        setEditTime(format(appointmentDate, 'HH:mm'));
+        
+        // Set recipients
+        setEditRecipients(editingAppointment.recipients || []);
+        
+        // Find and set the email account
+        if (editingAppointment.fromEmail && emailAccounts.length > 0) {
+          const account = emailAccounts.find(acc => acc.email === editingAppointment.fromEmail);
+          if (account) {
+            setSelectedEmailId(account.id);
+          }
+        }
+      } catch (error) {
+        console.error('Error setting up edit form:', error);
+      }
+    }
+  }, [editingAppointment, emailAccounts]);
+
+  const fetchEmailAccounts = async () => {
+    try {
+      const response = await fetch('/api/email-accounts');
+      if (response.ok) {
+        const data = await response.json();
+        setEmailAccounts(data);
+      } else {
+        console.error('Failed to fetch email accounts');
+      }
+    } catch (error) {
+      console.error('Error fetching email accounts:', error);
+    }
+  };
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this appointment?')) {
@@ -101,18 +174,45 @@ export function AppointmentsList({ appointments }: AppointmentsListProps) {
     setIsEditDialogOpen(true);
   };
 
+  const addRecipient = () => {
+    if (newRecipient && !editRecipients.includes(newRecipient)) {
+      setEditRecipients([...editRecipients, newRecipient]);
+      setNewRecipient('');
+    }
+  };
+
+  const removeRecipient = (email: string) => {
+    setEditRecipients(editRecipients.filter(r => r !== email));
+  };
+
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingAppointment) return;
 
     try {
+      // Combine date and time
+      const dateTimeString = `${editDate}T${editTime}:00`;
+      const appointmentDateTime = new Date(dateTimeString);
+
+      // Find the selected email
+      const selectedEmail = emailAccounts.find(account => account.id === selectedEmailId);
+
+      // Updated appointment data
+      const updatedAppointment = {
+        ...editingAppointment,
+        appointmentDateTime: appointmentDateTime.toISOString(),
+        timeZone: editingAppointment.timeZone || 'America/Chicago',
+        fromEmail: selectedEmail?.email,
+        recipients: editRecipients.length > 0 ? editRecipients : undefined
+      };
+
       const response = await fetch('/api/appointments', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify(editingAppointment),
+        body: JSON.stringify(updatedAppointment),
       });
 
       if (!response.ok) {
@@ -160,6 +260,13 @@ export function AppointmentsList({ appointments }: AppointmentsListProps) {
     );
   }
 
+  // Generate time options in 30-minute increments
+  const timeOptions = Array.from({ length: 48 }, (_, i) => {
+    const hour = Math.floor(i / 2);
+    const minute = i % 2 === 0 ? '00' : '30';
+    return `${hour.toString().padStart(2, '0')}:${minute}`;
+  });
+
   return (
     <>
       <ScrollArea className="h-[500px] rounded-md border">
@@ -175,6 +282,12 @@ export function AppointmentsList({ appointments }: AppointmentsListProps) {
                         <Calendar className="h-4 w-4" />
                         <span>{formatDateInCentralTime(appointment.appointmentDateTime)}</span>
                       </div>
+                      {appointment.fromEmail && (
+                        <div className="flex items-center gap-2 text-sm text-slate-500 mt-1">
+                          <Mail className="h-4 w-4" />
+                          <span className="truncate">{appointment.fromEmail}</span>
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-1">
                       <Button
@@ -247,7 +360,7 @@ export function AppointmentsList({ appointments }: AppointmentsListProps) {
       </ScrollArea>
 
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Edit Appointment</DialogTitle>
           </DialogHeader>
@@ -261,6 +374,7 @@ export function AppointmentsList({ appointments }: AppointmentsListProps) {
                 required
               />
             </div>
+            
             <div className="space-y-2">
               <Label htmlFor="appointmentType">Type</Label>
               <Select
@@ -276,38 +390,120 @@ export function AppointmentsList({ appointments }: AppointmentsListProps) {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="appointmentDateTime">Appointment Time</Label>
-              <Input
-                id="appointmentDateTime"
-                type="datetime-local"
-                value={editingAppointment?.appointmentDateTime ? 
-                  (() => {
-                    try {
-                      // Parse the stored date and format it for datetime-local input
-                      const date = new Date(editingAppointment.appointmentDateTime);
-                      // The utility already adds 4 hours, so we don't need to add it here
-                      return date.toISOString().slice(0, 16);
-                    } catch (e) {
-                      return '';
-                    }
-                  })() 
-                  : ''
-                }
-                onChange={(e) => {
-                  if (!e.target.value) {
-                    setEditingAppointment(prev => prev ? {...prev, appointmentDateTime: new Date().toISOString()} : null);
-                    return;
-                  }
-                  // The date from input already includes the +4 offset visually,
-                  // so we need to subtract 4 hours to store it correctly
-                  const date = new Date(e.target.value);
-                  date.setHours(date.getHours() - 4);
-                  setEditingAppointment(prev => prev ? {...prev, appointmentDateTime: date.toISOString()} : null);
-                }}
-                required
-              />
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="editDate">Date</Label>
+                <Input
+                  id="editDate"
+                  type="date"
+                  value={editDate}
+                  onChange={(e) => setEditDate(e.target.value)}
+                  required
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="editTime">Time</Label>
+                <Select value={editTime} onValueChange={setEditTime}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select time" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {timeOptions.map((time) => {
+                      const [hour, minute] = time.split(':').map(Number);
+                      const period = hour >= 12 ? 'PM' : 'AM';
+                      const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+                      
+                      return (
+                        <SelectItem key={time} value={time}>
+                          {`${displayHour}:${minute.toString().padStart(2, '0')} ${period}`}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="timeZone">Time Zone</Label>
+              <Select 
+                value={editingAppointment?.timeZone || 'America/Chicago'} 
+                onValueChange={(value) => setEditingAppointment(prev => prev ? {...prev, timeZone: value} : null)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select time zone" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIME_ZONES.map((zone) => (
+                    <SelectItem key={zone.value} value={zone.value}>
+                      {zone.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="fromEmail">From Email</Label>
+              <Select 
+                value={selectedEmailId} 
+                onValueChange={setSelectedEmailId}
+                disabled={emailAccounts.length === 0}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={emailAccounts.length === 0 ? "No email accounts found" : "Select email"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {emailAccounts.map((account) => (
+                    <SelectItem key={account.id} value={account.id}>
+                      {account.email} ({account.name})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="recipients">Recipients</Label>
+              <div className="flex space-x-2">
+                <Input
+                  id="newRecipient"
+                  placeholder="Enter email address"
+                  value={newRecipient}
+                  onChange={(e) => setNewRecipient(e.target.value)}
+                />
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  size="icon"
+                  onClick={addRecipient}
+                >
+                  <PlusCircle className="h-4 w-4" />
+                </Button>
+              </div>
+              
+              {editRecipients.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {editRecipients.map(email => (
+                    <div key={email} className="flex items-center bg-secondary text-secondary-foreground px-3 py-1 rounded-full text-sm">
+                      {email}
+                      <Button 
+                        type="button" 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-5 w-5 ml-1 p-0"
+                        onClick={() => removeRecipient(email)}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            
             <div className="space-y-2">
               <Label htmlFor="notes">Notes</Label>
               <Textarea
@@ -317,6 +513,7 @@ export function AppointmentsList({ appointments }: AppointmentsListProps) {
                 rows={3}
               />
             </div>
+            
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
                 Cancel
