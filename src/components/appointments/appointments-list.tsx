@@ -69,6 +69,32 @@ export function AppointmentsList({ appointments }: AppointmentsListProps) {
   const [editRecipients, setEditRecipients] = React.useState<string[]>([]);
   const [newRecipient, setNewRecipient] = React.useState('');
 
+  // Generate time options in 30-minute increments - moved here before any conditional return
+  const timeOptions: TimeOption[] = React.useMemo(() => Array.from({ length: 48 }, (_, i) => {
+    const hour = Math.floor(i / 2);
+    const minute = i % 2 === 0 ? '00' : '30';
+    const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+    const period = hour >= 12 ? 'PM' : 'AM';
+    return {
+      value: `${hour.toString().padStart(2, '0')}:${minute}`,
+      label: `${displayHour}:${minute} ${period}`
+    };
+  }), []);
+
+  // Filtered time options based on search query - moved here before any conditional return
+  const filteredTimeOptions = React.useMemo(() => {
+    if (!timeSearchQuery) return timeOptions;
+    return timeOptions.filter(option => 
+      option.label.toLowerCase().includes(timeSearchQuery.toLowerCase())
+    );
+  }, [timeOptions, timeSearchQuery]);
+
+  // Get the display label for the selected time - moved here before any conditional return
+  const selectedTimeLabel = React.useMemo(() => 
+    timeOptions.find(opt => opt.value === editTime)?.label || 'Select time',
+    [timeOptions, editTime]
+  );
+
   const sortedAppointments = React.useMemo(() => {
     return [...appointments].sort((a, b) => {
       try {
@@ -268,29 +294,6 @@ export function AppointmentsList({ appointments }: AppointmentsListProps) {
       </div>
     );
   }
-
-  // Generate time options in 30-minute increments
-  const timeOptions: TimeOption[] = Array.from({ length: 48 }, (_, i) => {
-    const hour = Math.floor(i / 2);
-    const minute = i % 2 === 0 ? '00' : '30';
-    const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-    const period = hour >= 12 ? 'PM' : 'AM';
-    return {
-      value: `${hour.toString().padStart(2, '0')}:${minute}`,
-      label: `${displayHour}:${minute} ${period}`
-    };
-  });
-
-  // Filtered time options based on search query
-  const filteredTimeOptions = React.useMemo(() => {
-    if (!timeSearchQuery) return timeOptions;
-    return timeOptions.filter(option => 
-      option.label.toLowerCase().includes(timeSearchQuery.toLowerCase())
-    );
-  }, [timeOptions, timeSearchQuery]);
-
-  // Get the display label for the selected time
-  const selectedTimeLabel = timeOptions.find(opt => opt.value === editTime)?.label || 'Select time';
 
   return (
     <>

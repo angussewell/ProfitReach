@@ -86,6 +86,12 @@ export function CreateAppointmentDialog({
     );
   }, [timeSearchQuery]);
 
+  // Get the display label for the selected time
+  const selectedTimeLabel = React.useMemo(() => 
+    TIME_OPTIONS.find(opt => opt.value === appointmentTime)?.label || 'Select time',
+    [appointmentTime]
+  );
+
   // Fetch email accounts when the dialog opens
   useEffect(() => {
     if (open) {
@@ -157,9 +163,6 @@ export function CreateAppointmentDialog({
   const removeRecipient = (email: string) => {
     setRecipients(recipients.filter(r => r !== email));
   };
-
-  // Get the display label for the selected time
-  const selectedTimeLabel = TIME_OPTIONS.find(opt => opt.value === appointmentTime)?.label || 'Select time';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
