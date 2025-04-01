@@ -190,13 +190,14 @@ export function AppointmentsList({ appointments }: AppointmentsListProps) {
     if (!editingAppointment) return;
 
     try {
-      // Create the raw appointment time string first for logging
-      const appointmentDateTimeString = `${editDate}T${editTime}:00`;
-      console.log('Updating appointment with local time:', appointmentDateTimeString);
+      // Format the date and create ISO string for the database
+      const localTimeString = `${editDate}T${editTime}:00`;
+      const appointmentDateTime = new Date(localTimeString);
+      const isoString = appointmentDateTime.toISOString();
+      
+      console.log('Updating appointment with local time:', localTimeString);
+      console.log('Converted to UTC ISO string:', isoString);
       console.log('Time zone selected:', editingAppointment.timeZone);
-
-      // Create a date object that will convert to ISO for DB storage
-      const appointmentDateTime = new Date(appointmentDateTimeString);
 
       // Find the selected email
       const selectedEmail = emailAccounts.find(account => account.id === selectedEmailId);
@@ -204,7 +205,7 @@ export function AppointmentsList({ appointments }: AppointmentsListProps) {
       // Updated appointment data
       const updatedAppointment = {
         ...editingAppointment,
-        appointmentDateTime: appointmentDateTime.toISOString(),
+        appointmentDateTime: isoString,
         timeZone: editingAppointment.timeZone || 'America/Chicago',
         fromEmail: selectedEmail?.email,
         recipients: editRecipients.length > 0 ? editRecipients : undefined

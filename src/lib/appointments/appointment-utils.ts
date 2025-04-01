@@ -78,30 +78,10 @@ export async function sendAppointmentWebhook(appointmentData: any) {
     // Create a deep copy of the appointment data to avoid modifying the original
     const webhookData = JSON.parse(JSON.stringify(appointmentData));
     
-    // If the appointment has datetime info, make sure it's presented correctly
+    // Simply log the appointment date/time for debugging
     if (webhookData.appointmentDateTime) {
-      try {
-        console.log('Original appointment date/time:', webhookData.appointmentDateTime);
-        
-        // Parse the ISO string
-        const isoDate = webhookData.appointmentDateTime;
-        const date = parseISO(isoDate);
-        
-        // Extract the raw local time portions from the original string
-        // This is important - we're PRESERVING the original user-entered time
-        // but keeping it in ISO format
-        const localDatePart = format(date, 'yyyy-MM-dd');
-        const timeParts = webhookData.appointmentDateTime.split('T')[1].split('.')[0];
-        
-        // Create a proper ISO format but preserve the local time as entered
-        // We are intentionally dropping the Z suffix to denote it's not UTC converted
-        webhookData.appointmentDateTime = `${localDatePart}T${timeParts}`;
-        
-        console.log('Modified webhook appointment date/time:', webhookData.appointmentDateTime);
-        console.log('Time zone being sent:', webhookData.timeZone);
-      } catch (timeError) {
-        console.error('Error formatting time for webhook:', timeError);
-      }
+      console.log('Appointment date/time (ISO format):', webhookData.appointmentDateTime);
+      console.log('Time zone being sent:', webhookData.timeZone);
     }
     
     console.log('Final webhook payload:', JSON.stringify(webhookData, null, 2));
