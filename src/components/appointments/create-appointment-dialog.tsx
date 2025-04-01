@@ -49,6 +49,7 @@ interface CreateAppointmentDialogProps {
     clientName: string;
     appointmentType: string;
     appointmentDateTime: string;
+    rawDateTime: string;
     notes?: string;
     status: string;
     timeZone?: string;
@@ -104,14 +105,13 @@ export function CreateAppointmentDialog({
       return;
     }
 
-    // Combine date and time
-    const dateTimeString = `${format(appointmentDate, 'yyyy-MM-dd')}T${appointmentTime}:00`;
+    // Combine date and time in a raw ISO format without timezone conversion
+    const rawDateTime = `${format(appointmentDate, 'yyyy-MM-dd')}T${appointmentTime}:00.000Z`;
     
-    // Create a UTC date object - this will correctly represent the time
-    // in the database and for the webhook
-    const appointmentDateTime = new Date(dateTimeString);
+    // Create a date object for other processing
+    const appointmentDateTime = new Date(`${format(appointmentDate, 'yyyy-MM-dd')}T${appointmentTime}:00`);
     
-    console.log('Creating appointment for time:', appointmentDateTime.toISOString());
+    console.log('Creating appointment with raw time:', rawDateTime);
     console.log('Time zone selected:', timeZone);
 
     // Find the selected email
@@ -121,6 +121,7 @@ export function CreateAppointmentDialog({
       clientName,
       appointmentType,
       appointmentDateTime: appointmentDateTime.toISOString(),
+      rawDateTime: rawDateTime, // Pass the raw time to preserve the exact time
       notes,
       status,
       timeZone,
