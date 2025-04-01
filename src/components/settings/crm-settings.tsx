@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import { EmailListInput } from '@/components/ui/email-list-input';
 
 interface Organization {
   id: string;
@@ -14,6 +15,7 @@ interface Organization {
 
 interface CrmInfo {
   organizationId: string;
+  notification_emails: string[] | any; // Accept both string[] and JSON from database
   private_integration_token: string | null;
   prospect_research: string | null;
   company_research: string | null;
@@ -60,13 +62,31 @@ export function CrmSettings({ organization, onLocationIdChange }: CrmSettingsPro
   useEffect(() => {
     async function fetchCrmInfo() {
       try {
+        console.log('Fetching CRM info for organization:', organization.id);
         const response = await fetch(`/api/organizations/${organization.id}/crm-info`);
+        
+        console.log('Response status:', response.status);
+        
         if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Error response from API:', errorText);
+          try {
+            // Try to parse as JSON if possible
+            const errorJson = JSON.parse(errorText);
+            console.error('Parsed error:', errorJson);
+          } catch (e) {
+            // If not JSON, just log the text
+            console.error('Error response is not JSON');
+          }
           throw new Error('Failed to fetch CRM info');
         }
+        
         const data = await response.json();
+        console.log('CRM info fetch successful, data received:', !!data);
+        
         const initialData = data || {
           organizationId: '',
+          notification_emails: [],
           private_integration_token: null,
           prospect_research: null,
           company_research: null,
@@ -90,10 +110,38 @@ export function CrmSettings({ organization, onLocationIdChange }: CrmSettingsPro
           linkedin_profile_photo_field_id: null,
           linkedin_posts_field_id: null,
         };
+        
+        // Ensure notification_emails is always an array
+        if (initialData && initialData.notification_emails) {
+          console.log('notification_emails type:', typeof initialData.notification_emails);
+          
+          // Handle case where it might be a JSON string or already an array
+          if (typeof initialData.notification_emails === 'string') {
+            try {
+              console.log('Parsing notification_emails from string');
+              initialData.notification_emails = JSON.parse(initialData.notification_emails);
+            } catch (e) {
+              console.error('Error parsing notification_emails:', e);
+              initialData.notification_emails = [];
+            }
+          } else if (!Array.isArray(initialData.notification_emails)) {
+            console.log('notification_emails is not an array, setting to empty array');
+            initialData.notification_emails = [];
+          }
+        } else {
+          console.log('No notification_emails found, setting to empty array');
+          initialData.notification_emails = [];
+        }
+        
+        console.log('Final notification_emails:', initialData.notification_emails);
         setCrmInfo(initialData);
         setEditedCrmInfo(initialData);
       } catch (error) {
         console.error('Error fetching CRM info:', error);
+        if (error instanceof Error) {
+          console.error('Error message:', error.message);
+          console.error('Error stack:', error.stack);
+        }
         toast.error('Failed to load CRM info');
       } finally {
         setLoading(false);
@@ -111,6 +159,30 @@ export function CrmSettings({ organization, onLocationIdChange }: CrmSettingsPro
       // Compare with original to see if there are changes
       const hasAnyChanges = Object.keys(updated).some(
         key => updated[key as keyof CrmInfo] !== crmInfo?.[key as keyof CrmInfo]
+      );
+      setHasChanges(hasAnyChanges);
+      
+      return updated;
+    });
+  };
+
+  const handleEmailListChange = (emails: string[]) => {
+    setEditedCrmInfo(prev => {
+      if (!prev) return null;
+      const updated = { ...prev, notification_emails: emails };
+      
+      // Compare with original to see if there are changes
+      const hasAnyChanges = Object.keys(updated).some(
+        key => {
+          if (key === 'notification_emails') {
+            // Compare arrays
+            const originalEmails = Array.isArray(crmInfo?.notification_emails) ? crmInfo?.notification_emails : [];
+            const updatedEmails = updated.notification_emails;
+            if (originalEmails.length !== updatedEmails.length) return true;
+            return originalEmails.some((email: string, i: number) => email !== updatedEmails[i]);
+          }
+          return updated[key as keyof CrmInfo] !== crmInfo?.[key as keyof CrmInfo];
+        }
       );
       setHasChanges(hasAnyChanges);
       
@@ -194,6 +266,25 @@ export function CrmSettings({ organization, onLocationIdChange }: CrmSettingsPro
               className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
               placeholder="Enter your location ID"
             />
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm ring-1 ring-gray-950/5 p-6">
+        <h2 className="text-lg font-semibold mb-4">Notification Settings</h2>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Notification Emails
+            </label>
+            <EmailListInput 
+              emails={editedCrmInfo.notification_emails || []}
+              onChange={handleEmailListChange}
+              placeholder="Enter email address and press Enter"
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              These email addresses will receive notifications for important events.
+            </p>
           </div>
         </div>
       </div>

@@ -22,8 +22,9 @@ export async function GET(
   { params }: { params: { organizationId: string } }
 ) {
   try {
+    console.log('GET request for CRM info starting...');
     const session = await getServerSession(authOptions);
-    console.log('Debug - Session object:', JSON.stringify(session, null, 2));
+    console.log('Session retrieved:', session ? 'Present' : 'Missing');
     
     if (!session?.user?.organizationId) {
       console.log('Debug - No organization ID in session');
@@ -31,9 +32,12 @@ export async function GET(
     }
 
     const { organizationId } = params;
+    console.log('Requested organization ID:', organizationId);
     
     // Check if user has access to this organization
     const hasAccess = await hasOrganizationAccess(session.user.organizationId, organizationId);
+    console.log('User has access to organization:', hasAccess);
+    
     if (!hasAccess) {
       console.log('Debug - User does not have access to organization');
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -45,24 +49,88 @@ export async function GET(
       
       // No need to get table schema first
       const result = await prisma.$queryRaw`
-        SELECT * FROM "CrmInfo"
+        SELECT 
+          "organizationId", 
+          "private_integration_token", 
+          "prospect_research", 
+          "company_research", 
+          "previous_message_copy", 
+          "previous_message_subject_line", 
+          "previous_message_id", 
+          "thread_id", 
+          "email_sender", 
+          "original_outbound_rep_name", 
+          "date_of_research", 
+          "all_employees", 
+          "provider_id", 
+          "mutual_connections", 
+          "additional_research", 
+          "current_scenario", 
+          "outbound_rep_name", 
+          "lead_status", 
+          "initial_linkedin_message_copy", 
+          "linkedin_user_provider_id", 
+          "title_field_id", 
+          "linkedin_profile_photo_field_id", 
+          "linkedin_posts_field_id",
+          COALESCE("notification_emails", '[]'::jsonb) as "notification_emails"
+        FROM "CrmInfo"
         WHERE "organizationId" = ${organizationId}::text
       `;
+      console.log('SQL query executed successfully');
       console.log('CRM info fetch result type:', typeof result);
       console.log('CRM info fetch result is array:', Array.isArray(result));
+      
       if (Array.isArray(result)) {
         console.log('CRM info fetch result length:', result.length);
         if (result.length > 0) {
           console.log('CRM info fetch result first item keys:', Object.keys(result[0]));
+        } else {
+          console.log('CRM info fetch returned empty array');
         }
+      } else {
+        console.log('CRM info fetch result is not an array, type:', typeof result);
       }
 
       // Handle case where result is an array
       const crmInfo = Array.isArray(result) ? result[0] : result;
+      
+      // Debug logging for crmInfo structure
+      console.log('CrmInfo structure:', crmInfo ? 'Present' : 'Missing');
+      
+      // Create a safe version of crmInfo with default values for missing fields
+      let safeCrmInfo = crmInfo;
+      
+      // If crmInfo is null or undefined, create a default empty object
+      if (!safeCrmInfo) {
+        console.log('Creating default empty CrmInfo object');
+        safeCrmInfo = {
+          organizationId: organizationId,
+          notification_emails: [],
+        };
+      }
+      
+      // Debug logging for notification_emails
+      try {
+        console.log('CrmInfo notification_emails type:', typeof safeCrmInfo.notification_emails);
+        console.log('CrmInfo notification_emails value:', safeCrmInfo.notification_emails);
+        
+        // Ensure notification_emails is processed properly
+        if (safeCrmInfo.notification_emails === null || safeCrmInfo.notification_emails === undefined) {
+          console.log('Setting null/undefined notification_emails to empty array');
+          safeCrmInfo.notification_emails = [];
+        }
+      } catch (notificationError) {
+        console.error('Error processing notification_emails:', notificationError);
+        // Ensure we have a valid notification_emails field regardless of error
+        safeCrmInfo.notification_emails = [];
+      }
 
-      return NextResponse.json(crmInfo || null);
+      return NextResponse.json(safeCrmInfo || null);
     } catch (sqlError) {
       console.error('SQL Error during fetch:', sqlError);
+      console.error('SQL Error details:', sqlError instanceof Error ? sqlError.message : String(sqlError));
+      console.error('SQL Error stack:', sqlError instanceof Error ? sqlError.stack : 'No stack trace');
       throw sqlError;
     }
   } catch (error) {
@@ -135,6 +203,7 @@ export async function PUT(
           "title_field_id" = ${body.title_field_id || null}::text,
           "linkedin_profile_photo_field_id" = ${body.linkedin_profile_photo_field_id || null}::text,
           "linkedin_posts_field_id" = ${body.linkedin_posts_field_id || null}::text,
+          "notification_emails" = ${body.notification_emails ? JSON.stringify(body.notification_emails) : '[]'}::jsonb,
           "updatedAt" = CURRENT_TIMESTAMP
         WHERE "organizationId" = ${organizationId}::text
       `;
@@ -155,7 +224,7 @@ export async function PUT(
          "date_of_research", "all_employees", "provider_id", "mutual_connections", 
          "additional_research", "current_scenario", "outbound_rep_name", "lead_status", 
          "initial_linkedin_message_copy", "linkedin_user_provider_id", "title_field_id",
-         "linkedin_profile_photo_field_id", "linkedin_posts_field_id", "updatedAt", "createdAt")
+         "linkedin_profile_photo_field_id", "linkedin_posts_field_id", "notification_emails", "updatedAt", "createdAt")
         VALUES 
         ('${uuid}', '${organizationId}', 
          ${escapeSqlString(body.private_integration_token)}, 
@@ -180,6 +249,7 @@ export async function PUT(
          ${escapeSqlString(body.title_field_id)},
          ${escapeSqlString(body.linkedin_profile_photo_field_id)},
          ${escapeSqlString(body.linkedin_posts_field_id)}, 
+         '${body.notification_emails ? JSON.stringify(body.notification_emails) : '[]'}',
          CURRENT_TIMESTAMP, 
          CURRENT_TIMESTAMP)
       `);
@@ -189,7 +259,32 @@ export async function PUT(
     
     // Fetch the updated record
     const updatedResult = await prisma.$queryRaw`
-      SELECT * FROM "CrmInfo"
+      SELECT 
+        "organizationId", 
+        "private_integration_token", 
+        "prospect_research", 
+        "company_research", 
+        "previous_message_copy", 
+        "previous_message_subject_line", 
+        "previous_message_id", 
+        "thread_id", 
+        "email_sender", 
+        "original_outbound_rep_name", 
+        "date_of_research", 
+        "all_employees", 
+        "provider_id", 
+        "mutual_connections", 
+        "additional_research", 
+        "current_scenario", 
+        "outbound_rep_name", 
+        "lead_status", 
+        "initial_linkedin_message_copy", 
+        "linkedin_user_provider_id", 
+        "title_field_id", 
+        "linkedin_profile_photo_field_id", 
+        "linkedin_posts_field_id",
+        COALESCE("notification_emails", '[]'::jsonb) as "notification_emails"
+      FROM "CrmInfo"
       WHERE "organizationId" = ${organizationId}::text
     `;
 
