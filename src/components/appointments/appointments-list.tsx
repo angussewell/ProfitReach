@@ -190,14 +190,9 @@ export function AppointmentsList({ appointments }: AppointmentsListProps) {
     if (!editingAppointment) return;
 
     try {
-      // Format the date and create ISO string for the database
-      const localTimeString = `${editDate}T${editTime}:00`;
-      const appointmentDateTime = new Date(localTimeString);
-      const isoString = appointmentDateTime.toISOString();
-      
-      console.log('Updating appointment with local time:', localTimeString);
-      console.log('Converted to UTC ISO string:', isoString);
-      console.log('Time zone selected:', editingAppointment.timeZone);
+      // Combine date and time
+      const dateTimeString = `${editDate}T${editTime}:00`;
+      const appointmentDateTime = new Date(dateTimeString);
 
       // Find the selected email
       const selectedEmail = emailAccounts.find(account => account.id === selectedEmailId);
@@ -205,7 +200,7 @@ export function AppointmentsList({ appointments }: AppointmentsListProps) {
       // Updated appointment data
       const updatedAppointment = {
         ...editingAppointment,
-        appointmentDateTime: isoString,
+        appointmentDateTime: appointmentDateTime.toISOString(),
         timeZone: editingAppointment.timeZone || 'America/Chicago',
         fromEmail: selectedEmail?.email,
         recipients: editRecipients.length > 0 ? editRecipients : undefined

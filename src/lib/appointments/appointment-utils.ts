@@ -1,6 +1,5 @@
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
-import { format, parseISO } from 'date-fns';
 
 /**
  * The webhook URL for appointment notifications
@@ -75,23 +74,12 @@ export async function sendAppointmentWebhook(appointmentData: any) {
   try {
     console.log('Sending appointment webhook to:', APPOINTMENT_WEBHOOK_URL);
     
-    // Create a deep copy of the appointment data to avoid modifying the original
-    const webhookData = JSON.parse(JSON.stringify(appointmentData));
-    
-    // Simply log the appointment date/time for debugging
-    if (webhookData.appointmentDateTime) {
-      console.log('Appointment date/time (ISO format):', webhookData.appointmentDateTime);
-      console.log('Time zone being sent:', webhookData.timeZone);
-    }
-    
-    console.log('Final webhook payload:', JSON.stringify(webhookData, null, 2));
-    
     const response = await fetch(APPOINTMENT_WEBHOOK_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(webhookData),
+      body: JSON.stringify(appointmentData),
     });
 
     if (!response.ok) {

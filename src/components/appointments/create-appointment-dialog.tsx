@@ -104,15 +104,9 @@ export function CreateAppointmentDialog({
       return;
     }
 
-    // Format the date and create ISO string for the database
-    const dateString = format(appointmentDate, 'yyyy-MM-dd');
-    const localTimeString = `${dateString}T${appointmentTime}:00`;
-    const appointmentDateTime = new Date(localTimeString);
-    const isoString = appointmentDateTime.toISOString();
-    
-    console.log('Creating appointment with local time:', localTimeString);
-    console.log('Converted to UTC ISO string:', isoString);
-    console.log('Time zone selected:', timeZone);
+    // Combine date and time
+    const dateTimeString = `${format(appointmentDate, 'yyyy-MM-dd')}T${appointmentTime}:00`;
+    const appointmentDateTime = new Date(dateTimeString);
 
     // Find the selected email
     const selectedEmail = emailAccounts.find(account => account.id === selectedEmailId);
@@ -120,7 +114,7 @@ export function CreateAppointmentDialog({
     onSubmit({
       clientName,
       appointmentType,
-      appointmentDateTime: isoString,
+      appointmentDateTime: appointmentDateTime.toISOString(),
       notes,
       status,
       timeZone,
