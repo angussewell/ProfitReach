@@ -190,14 +190,13 @@ export function AppointmentsList({ appointments }: AppointmentsListProps) {
     if (!editingAppointment) return;
 
     try {
-      // Combine date and time in raw ISO format without timezone conversion
-      const rawDateTime = `${editDate}T${editTime}:00.000Z`;
-      
-      // Create a date object for other processing
-      const appointmentDateTime = new Date(`${editDate}T${editTime}:00`);
-      
-      console.log('Updating appointment with raw time:', rawDateTime);
+      // Create the raw appointment time string first for logging
+      const appointmentDateTimeString = `${editDate}T${editTime}:00`;
+      console.log('Updating appointment with local time:', appointmentDateTimeString);
       console.log('Time zone selected:', editingAppointment.timeZone);
+
+      // Create a date object that will convert to ISO for DB storage
+      const appointmentDateTime = new Date(appointmentDateTimeString);
 
       // Find the selected email
       const selectedEmail = emailAccounts.find(account => account.id === selectedEmailId);
@@ -206,7 +205,6 @@ export function AppointmentsList({ appointments }: AppointmentsListProps) {
       const updatedAppointment = {
         ...editingAppointment,
         appointmentDateTime: appointmentDateTime.toISOString(),
-        rawDateTime: rawDateTime, // Pass the raw time to preserve the exact time
         timeZone: editingAppointment.timeZone || 'America/Chicago',
         fromEmail: selectedEmail?.email,
         recipients: editRecipients.length > 0 ? editRecipients : undefined

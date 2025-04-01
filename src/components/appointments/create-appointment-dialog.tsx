@@ -49,7 +49,6 @@ interface CreateAppointmentDialogProps {
     clientName: string;
     appointmentType: string;
     appointmentDateTime: string;
-    rawDateTime: string;
     notes?: string;
     status: string;
     timeZone?: string;
@@ -105,13 +104,14 @@ export function CreateAppointmentDialog({
       return;
     }
 
-    // Combine date and time in a raw ISO format without timezone conversion
-    const rawDateTime = `${format(appointmentDate, 'yyyy-MM-dd')}T${appointmentTime}:00.000Z`;
+    // Combine date and time without conversion to ISO string yet
+    const dateString = format(appointmentDate, 'yyyy-MM-dd');
     
-    // Create a date object for other processing
-    const appointmentDateTime = new Date(`${format(appointmentDate, 'yyyy-MM-dd')}T${appointmentTime}:00`);
+    // Create a raw ISO-formatted string but WITHOUT timezone conversion
+    // This preserves the exact time entered by the user
+    const appointmentDateTimeString = `${dateString}T${appointmentTime}:00`;
     
-    console.log('Creating appointment with raw time:', rawDateTime);
+    console.log('Creating appointment for local time:', appointmentDateTimeString);
     console.log('Time zone selected:', timeZone);
 
     // Find the selected email
@@ -120,8 +120,9 @@ export function CreateAppointmentDialog({
     onSubmit({
       clientName,
       appointmentType,
-      appointmentDateTime: appointmentDateTime.toISOString(),
-      rawDateTime: rawDateTime, // Pass the raw time to preserve the exact time
+      // To Neon, we send the full ISO string with timezone indicator
+      // But our webhook util will modify this before sending to n8n
+      appointmentDateTime: new Date(`${dateString}T${appointmentTime}:00`).toISOString(),
       notes,
       status,
       timeZone,

@@ -75,7 +75,6 @@ export async function POST(req: NextRequest) {
       clientName, 
       appointmentType, 
       appointmentDateTime, 
-      rawDateTime,
       notes, 
       status, 
       timeZone, 
@@ -133,9 +132,7 @@ export async function POST(req: NextRequest) {
         createdBy: session.user.email,
         userAgent: req.headers.get('user-agent'),
         source: 'ProfitReach',
-        eventType: 'appointment_created',
-        // CRITICAL: Pass the raw date string to preserve the exact time entered
-        rawDateTime: body.rawDateTime || appointmentDateTime
+        eventType: 'appointment_created'
       }
     });
 
@@ -159,7 +156,6 @@ export async function PUT(req: NextRequest) {
       clientName, 
       appointmentType, 
       appointmentDateTime, 
-      rawDateTime,
       notes, 
       status,
       timeZone,
@@ -242,9 +238,7 @@ export async function PUT(req: NextRequest) {
         updatedBy: session.user.email,
         userAgent: req.headers.get('user-agent'),
         source: 'ProfitReach',
-        eventType: 'appointment_updated',
-        // CRITICAL: Pass the raw date string to preserve the exact time entered
-        rawDateTime: body.rawDateTime || appointmentDateTime
+        eventType: 'appointment_updated'
       }
     });
 

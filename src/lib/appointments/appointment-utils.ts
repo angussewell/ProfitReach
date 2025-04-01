@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
+import { format, parseISO } from 'date-fns';
 
 /**
  * The webhook URL for appointment notifications
@@ -74,19 +75,37 @@ export async function sendAppointmentWebhook(appointmentData: any) {
   try {
     console.log('Sending appointment webhook to:', APPOINTMENT_WEBHOOK_URL);
     
-    // Create a copy of the appointment data to avoid modifying the original
-    const webhookData = {...appointmentData};
+    // Create a deep copy of the appointment data to avoid modifying the original
+    const webhookData = JSON.parse(JSON.stringify(appointmentData));
     
-    // CRITICAL FIX: Get the raw input time from metadata if available
-    if (webhookData.meta?.rawDateTime) {
-      console.log('Using raw appointment date/time for webhook:', webhookData.meta.rawDateTime);
-      webhookData.appointmentDateTime = webhookData.meta.rawDateTime;
-    } else if (webhookData.appointmentDateTime) {
-      // Fallback logging
-      console.log('Original ISO appointment date/time:', webhookData.appointmentDateTime);
+    // If the appointment has datetime info, make sure it's presented correctly
+    if (webhookData.appointmentDateTime) {
+      try {
+        console.log('Original appointment date/time:', webhookData.appointmentDateTime);
+        
+        // Parse the ISO string
+        const isoDate = webhookData.appointmentDateTime;
+        const date = parseISO(isoDate);
+        
+        // Extract the raw local time portions from the original string
+        // This is important - we're PRESERVING the original user-entered time
+        // but keeping it in ISO format
+        const localDatePart = format(date, 'yyyy-MM-dd');
+        const timeParts = webhookData.appointmentDateTime.split('T')[1].split('.')[0];
+        
+        // Create a proper ISO format but preserve the local time as entered
+        // We are intentionally dropping the Z suffix to denote it's not UTC converted
+        webhookData.appointmentDateTime = `${localDatePart}T${timeParts}`;
+        
+        console.log('Modified webhook appointment date/time:', webhookData.appointmentDateTime);
+        console.log('Time zone being sent:', webhookData.timeZone);
+      } catch (timeError) {
+        console.error('Error formatting time for webhook:', timeError);
+      }
     }
     
-    // Send the webhook with the raw time
+    console.log('Final webhook payload:', JSON.stringify(webhookData, null, 2));
+    
     const response = await fetch(APPOINTMENT_WEBHOOK_URL, {
       method: 'POST',
       headers: {
