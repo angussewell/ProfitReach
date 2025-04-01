@@ -152,7 +152,7 @@ export function CreateAppointmentDialog({
         <DialogTitle>Create New Appointment</DialogTitle>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="clientName">Client Name</Label>
+            <Label htmlFor="clientName">Prospect Name</Label>
             <Input
               id="clientName"
               value={clientName}
