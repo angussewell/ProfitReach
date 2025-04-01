@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
         ${session.user.organizationId},
         ${clientName},
         ${appointmentType},
-        ${new Date(appointmentDateTime)}::timestamp,
+        ${appointmentDateTime}::timestamp,
         ${notes},
         ${status || 'appointment_booked'}::text,
         ${timeZone}::text,
@@ -185,7 +185,7 @@ export async function PUT(req: NextRequest) {
       updates.push(Prisma.sql`"appointmentType" = ${appointmentType}::text`);
     }
     if (appointmentDateTime) {
-      updates.push(Prisma.sql`"appointmentDateTime" = ${new Date(appointmentDateTime)}::timestamp`);
+      updates.push(Prisma.sql`"appointmentDateTime" = ${appointmentDateTime}::timestamp`);
     }
     if (notes !== undefined) {
       updates.push(Prisma.sql`"notes" = ${notes}::text`);

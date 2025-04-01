@@ -13,7 +13,8 @@ import { format } from 'date-fns';
 export function formatDateInCentralTime(dateStr: string | Date | null): string {
   if (!dateStr) return '';
   try {
-    // Parse the input date
+    // Parse the input date - we just need to format it without timezone adjustments
+    // This preserves the exact time that was entered
     const date = new Date(dateStr);
     if (isNaN(date.getTime())) return ''; // Invalid date
     

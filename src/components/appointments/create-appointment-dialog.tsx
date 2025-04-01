@@ -104,17 +104,21 @@ export function CreateAppointmentDialog({
       return;
     }
 
-    // Combine date and time
-    const dateTimeString = `${format(appointmentDate, 'yyyy-MM-dd')}T${appointmentTime}:00`;
-    const appointmentDateTime = new Date(dateTimeString);
-
+    // Combine date and time but preserve the selected timezone
+    // First format the date and time parts
+    const datePart = format(appointmentDate, 'yyyy-MM-dd');
+    
+    // Create an ISO-8601 datetime string with the selected timezone
+    // This format keeps the exact time as specified in the form without any timezone conversions
+    const appointmentDateTime = `${datePart}T${appointmentTime}:00`;
+    
     // Find the selected email
     const selectedEmail = emailAccounts.find(account => account.id === selectedEmailId);
     
     onSubmit({
       clientName,
       appointmentType,
-      appointmentDateTime: appointmentDateTime.toISOString(),
+      appointmentDateTime, // Send as string, not converted to ISO
       notes,
       status,
       timeZone,

@@ -190,9 +190,8 @@ export function AppointmentsList({ appointments }: AppointmentsListProps) {
     if (!editingAppointment) return;
 
     try {
-      // Combine date and time
-      const dateTimeString = `${editDate}T${editTime}:00`;
-      const appointmentDateTime = new Date(dateTimeString);
+      // Combine date and time without timezone conversion
+      const appointmentDateTime = `${editDate}T${editTime}:00`;
 
       // Find the selected email
       const selectedEmail = emailAccounts.find(account => account.id === selectedEmailId);
@@ -200,7 +199,7 @@ export function AppointmentsList({ appointments }: AppointmentsListProps) {
       // Updated appointment data
       const updatedAppointment = {
         ...editingAppointment,
-        appointmentDateTime: appointmentDateTime.toISOString(),
+        appointmentDateTime,
         timeZone: editingAppointment.timeZone || 'America/Chicago',
         fromEmail: selectedEmail?.email,
         recipients: editRecipients.length > 0 ? editRecipients : undefined
