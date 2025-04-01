@@ -352,9 +352,20 @@ export function AppointmentsList({ appointments }: AppointmentsListProps) {
                             }
                           })()}</span>
                         </div>
+                        <div className="flex items-center gap-2 text-sm text-slate-500">
+                          <Clock className="h-4 w-4 opacity-0" />
+                          <span>Time Zone: {(() => {
+                            if (appointment.timeZone) {
+                              // Look up the label for this time zone if available
+                              const timeZoneObj = TIME_ZONES.find(tz => tz.value === appointment.timeZone);
+                              return timeZoneObj ? timeZoneObj.label : appointment.timeZone;
+                            }
+                            return 'CT (Default)'; // Default if not specified
+                          })()}</span>
+                        </div>
                       </div>
                       {appointment.fromEmail && (
-                        <div className="flex items-center gap-2 text-sm text-slate-500 mt-1">
+                        <div className="flex items-center gap-2 text-slate-500 mt-1">
                           <Mail className="h-4 w-4" />
                           <span className="truncate">{appointment.fromEmail}</span>
                         </div>
