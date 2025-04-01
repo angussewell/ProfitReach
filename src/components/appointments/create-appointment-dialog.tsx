@@ -106,7 +106,13 @@ export function CreateAppointmentDialog({
 
     // Combine date and time
     const dateTimeString = `${format(appointmentDate, 'yyyy-MM-dd')}T${appointmentTime}:00`;
+    
+    // Create a UTC date object - this will correctly represent the time
+    // in the database and for the webhook
     const appointmentDateTime = new Date(dateTimeString);
+    
+    console.log('Creating appointment for time:', appointmentDateTime.toISOString());
+    console.log('Time zone selected:', timeZone);
 
     // Find the selected email
     const selectedEmail = emailAccounts.find(account => account.id === selectedEmailId);

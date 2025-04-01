@@ -193,6 +193,9 @@ export function AppointmentsList({ appointments }: AppointmentsListProps) {
       // Combine date and time
       const dateTimeString = `${editDate}T${editTime}:00`;
       const appointmentDateTime = new Date(dateTimeString);
+      
+      console.log('Updating appointment for time:', appointmentDateTime.toISOString());
+      console.log('Time zone selected:', editingAppointment.timeZone);
 
       // Find the selected email
       const selectedEmail = emailAccounts.find(account => account.id === selectedEmailId);

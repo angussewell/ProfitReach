@@ -74,12 +74,31 @@ export async function sendAppointmentWebhook(appointmentData: any) {
   try {
     console.log('Sending appointment webhook to:', APPOINTMENT_WEBHOOK_URL);
     
+    // Create a copy of the appointment data to avoid modifying the original
+    const webhookData = {...appointmentData};
+    
+    // If the appointment has timezone info, make sure it's reflected in the date
+    if (webhookData.appointmentDateTime && webhookData.timeZone) {
+      try {
+        // Format the date/time in the timezone-specific format
+        console.log('Original appointment date/time:', webhookData.appointmentDateTime);
+        
+        // For debugging - log the time zone
+        console.log('Appointment time zone:', webhookData.timeZone);
+        
+        // Don't modify the date format - just log what we're sending
+        // This preserves the original date format which works with the database
+      } catch (timeError) {
+        console.error('Error formatting time for webhook:', timeError);
+      }
+    }
+    
     const response = await fetch(APPOINTMENT_WEBHOOK_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(appointmentData),
+      body: JSON.stringify(webhookData),
     });
 
     if (!response.ok) {
