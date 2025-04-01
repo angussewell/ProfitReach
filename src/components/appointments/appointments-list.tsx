@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Trash2, Edit, Calendar, User, FileText, Tag, Mail, PlusCircle, X } from 'lucide-react';
+import { Trash2, Edit, Calendar, User, FileText, Tag, Mail, PlusCircle, X, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useEffect } from 'react';
@@ -278,9 +278,80 @@ export function AppointmentsList({ appointments }: AppointmentsListProps) {
                   <div className="flex items-start justify-between">
                     <div className="flex-grow">
                       <h4 className="font-medium text-lg text-slate-800 mb-1 line-clamp-1">{appointment.clientName}</h4>
-                      <div className="flex items-center gap-2 text-sm text-slate-500">
-                        <Calendar className="h-4 w-4" />
-                        <span>{formatDateInCentralTime(appointment.appointmentDateTime)}</span>
+                      <div className="flex flex-col space-y-1">
+                        <div className="flex items-center gap-2 text-sm text-slate-500">
+                          <Calendar className="h-4 w-4" />
+                          <span>Date: {(() => {
+                            try {
+                              console.log('Raw appointment data:', appointment.appointmentDateTime);
+                              
+                              if (typeof appointment.appointmentDateTime === 'string') {
+                                // First attempt: Check if it's in the format "Mar 14, 2025 at 11:11 AM"
+                                if (appointment.appointmentDateTime.includes(' at ')) {
+                                  return appointment.appointmentDateTime.split(' at ')[0];
+                                }
+                                
+                                // Second attempt: Check for SQL date format "2025-04-07 20:30:00"
+                                const match = appointment.appointmentDateTime.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                                if (match) {
+                                  // We have [fullMatch, year, month, day]
+                                  const year = match[1];
+                                  const month = parseInt(match[2], 10);
+                                  const day = parseInt(match[3], 10);
+                                  
+                                  // Create date object and format it
+                                  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                                  return `${months[month-1]} ${day}, ${year}`;
+                                }
+                              }
+                              
+                              // For debugging - show the type if it's not a string
+                              if (typeof appointment.appointmentDateTime !== 'string') {
+                                return `Not a string: ${typeof appointment.appointmentDateTime}`;
+                              }
+                              
+                              // Fallback
+                              return 'Invalid date';
+                            } catch (error) {
+                              console.error('Date parsing error:', error);
+                              return 'Error parsing date';
+                            }
+                          })()}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-slate-500">
+                          <Clock className="h-4 w-4" />
+                          <span>Time: {(() => {
+                            try {
+                              if (typeof appointment.appointmentDateTime === 'string') {
+                                // First attempt: Check if it's in the format "Mar 14, 2025 at 11:11 AM"
+                                if (appointment.appointmentDateTime.includes(' at ')) {
+                                  return appointment.appointmentDateTime.split(' at ')[1];
+                                }
+                                
+                                // Second attempt: Extract time part from SQL format "2025-04-07 20:30:00"
+                                const match = appointment.appointmentDateTime.match(/\s(\d{2}):(\d{2}):\d{2}$/);
+                                if (match) {
+                                  // We have [fullMatch, hours, minutes]
+                                  let hours = parseInt(match[1], 10);
+                                  const minutes = match[2];
+                                  const ampm = hours >= 12 ? 'PM' : 'AM';
+                                  
+                                  // Convert to 12-hour format
+                                  hours = hours % 12;
+                                  hours = hours ? hours : 12; // Convert 0 to 12
+                                  
+                                  return `${hours}:${minutes} ${ampm}`;
+                                }
+                              }
+                              
+                              // Fallback
+                              return 'Invalid time';
+                            } catch (error) {
+                              console.error('Time parsing error:', error);
+                              return 'Error parsing time';
+                            }
+                          })()}</span>
+                        </div>
                       </div>
                       {appointment.fromEmail && (
                         <div className="flex items-center gap-2 text-sm text-slate-500 mt-1">
