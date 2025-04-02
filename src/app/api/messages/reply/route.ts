@@ -79,8 +79,8 @@ function getCurrentCentralTime(): Date {
 export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.organizationId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session?.user?.organizationId || !session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized or user email missing from session' }, { status: 401 });
     }
 
     // Parse request body
@@ -249,6 +249,7 @@ export async function POST(request: Request) {
         // LinkedIn-specific payload with detailed information
         webhookPayload = {
           ...basePayload,
+          repliedByEmail: session.user.email,
           messageSource: 'LINKEDIN',
           socialAccountId: socialAccount.id,
           unipileAccountId: socialAccount.unipileAccountId,
@@ -267,6 +268,7 @@ export async function POST(request: Request) {
         
         logDebug('Sending LinkedIn reply to webhook with newMessageId', {
           webhook: LINKEDIN_WEBHOOK_URL,
+          repliedByEmail: session.user.email,
           messageId: originalMessage.messageId,
           newMessageId: newMessageId,
           socialAccountId: socialAccount.id,
@@ -277,6 +279,7 @@ export async function POST(request: Request) {
         // Email-specific payload
         webhookPayload = {
           ...basePayload,
+          repliedByEmail: session.user.email,
           messageSource: 'EMAIL',
           unipileEmailId: originalMessage.unipileEmailId,
           internalAccountId: emailAccount.id,
@@ -292,6 +295,7 @@ export async function POST(request: Request) {
         
         logDebug('Sending email reply to webhooks with newMessageId', {
           webhooks: EMAIL_WEBHOOK_URLS,
+          repliedByEmail: session.user.email,
           messageId: originalMessage.messageId,
           newMessageId: newMessageId,
           status: 'WAITING_FOR_REPLY'
@@ -300,6 +304,7 @@ export async function POST(request: Request) {
 
       logDebug('Webhook payload', {
         messageSource: webhookPayload.messageSource,
+        repliedByEmail: webhookPayload.repliedByEmail,
         socialAccountId: isLinkedInMessage && 'socialAccountId' in webhookPayload ? webhookPayload.socialAccountId : null,
         messageId: webhookPayload.messageId,
         threadId: webhookPayload.threadId,
