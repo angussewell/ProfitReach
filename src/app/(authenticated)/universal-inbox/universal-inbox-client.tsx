@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { PageHeader } from '@/components/ui/page-header';
 import { ClientCard, ClientButton, ClientInput } from '@/components/ui/client-components';
@@ -294,6 +294,21 @@ export function UniversalInboxClient() {
 
   const hasMessages = useMemo(() => Object.keys(enhancedThreadGroups).length > 0, [enhancedThreadGroups]);
 
+  // **MOVED** Helper function to determine the status of a thread
+  const getThreadStatus = useCallback((threadId: string): ConversationStatus => {
+    const messages = enhancedThreadGroups[threadId];
+    if (!messages || messages.length === 0) return 'NO_ACTION_NEEDED'; // Default or handle error
+
+    const latestMessage = messages.reduce((latest, msg) => {
+      const msgDate = new Date(msg.receivedAt);
+      const latestDate = new Date(latest.receivedAt);
+      return msgDate.getTime() > latestDate.getTime() ? msg : latest;
+    }, messages[0]);
+
+    // Return the status from the latest message, default if null/undefined
+    return latestMessage.status || 'NO_ACTION_NEEDED'; 
+  }, [enhancedThreadGroups]); // Depends on the grouped messages
+
   // Memoize filtering based on search
   const filteredSortedThreadIds = useMemo(() => {
     // Need access to enhancedThreadGroups if getThreadStatus uses it
@@ -301,7 +316,7 @@ export function UniversalInboxClient() {
     return sortedThreadIds.filter(
       threadId => statusFilter === 'ALL' || getThreadStatus(threadId) === statusFilter
     );
-  }, [sortedThreadIds, statusFilter, enhancedThreadGroups]); // Add enhancedThreadGroups dependency
+  }, [sortedThreadIds, statusFilter, getThreadStatus]); // Add getThreadStatus dependency
 
   const currentIndex = useMemo(() => {
     if (!selectedThread) return -1;
@@ -794,28 +809,6 @@ export function UniversalInboxClient() {
       setSuggestionStatus('error');
     } finally {
       setGettingSuggestions(false);
-    }
-  };
-
-  // Helper function to determine a thread's effective status
-  const getThreadStatus = (threadId: string): ConversationStatus => {
-    const messages = enhancedThreadGroups[threadId];
-    const latestMessage = messages.reduce((latest, msg) => {
-      const msgDate = new Date(msg.receivedAt);
-      const latestDate = new Date(latest.receivedAt);
-      return msgDate.getTime() > latestDate.getTime() ? msg : latest;
-    }, messages[0]);
-
-    // More robust status determination
-    if (latestMessage.status === 'MEETING_BOOKED' || 
-        latestMessage.status === 'NOT_INTERESTED' || 
-        latestMessage.status === 'NO_ACTION_NEEDED' ||
-        latestMessage.status === 'WAITING_FOR_REPLY') {
-      // Always respect these manually set statuses
-      return latestMessage.status;
-    } else {
-      // Default to FOLLOW_UP_NEEDED if no status or it's already FOLLOW_UP_NEEDED
-      return 'FOLLOW_UP_NEEDED';
     }
   };
 
