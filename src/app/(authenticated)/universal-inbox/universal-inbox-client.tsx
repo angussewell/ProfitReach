@@ -309,6 +309,12 @@ export function UniversalInboxClient() {
     return latestMessage.status || 'NO_ACTION_NEEDED'; 
   }, [enhancedThreadGroups]); // Depends on the grouped messages
 
+  // **MOVED AGAIN & WRAPPED** Navigate back to list view
+  const backToList = useCallback(() => {
+    setViewMode('list');
+    setSelectedThread(null); // Also clear selection when going back
+  }, []); // No dependencies needed if setViewMode/setSelectedThread are stable
+
   // Memoize filtering based on search
   const filteredSortedThreadIds = useMemo(() => {
     // Need access to enhancedThreadGroups if getThreadStatus uses it
@@ -330,24 +336,20 @@ export function UniversalInboxClient() {
       setSelectedThread(pendingThreadSelection);
       setPendingThreadSelection(null); // Reset pending state
     } else if (pendingThreadSelection) {
-        // Optional: Handle case where thread ID no longer exists after refresh?
-        console.log('Pending thread selection ID not found in updated list, clearing:', pendingThreadSelection);
-        setPendingThreadSelection(null);
-        // Optionally, go back to list view or select the first available thread
-        // backToList(); // Example: Go back to list if thread disappears
+        // Thread replied to is no longer in the filtered list due to status change
+        console.log('Pending thread selection ID not found in filtered list, returning to list view:', pendingThreadSelection);
+        backToList(); // Navigate back to the list view
+        setPendingThreadSelection(null); // Reset pending state
+        // // Optional: Show a toast message? 
+        // toast.info('Conversation status updated and moved from current filter.');
     }
   // Ensure all dependencies are correctly listed for this effect
-  }, [messages, filteredSortedThreadIds, pendingThreadSelection, enhancedThreadGroups]); 
+  }, [messages, filteredSortedThreadIds, pendingThreadSelection, enhancedThreadGroups, backToList]); // backToList dependency is correct
 
   // Navigate to thread detail view
   const openThread = (threadId: string) => {
     setSelectedThread(threadId);
     setViewMode('detail');
-  };
-
-  // Navigate back to list view
-  const backToList = () => {
-    setViewMode('list');
   };
 
   // Fetch messages and email accounts
