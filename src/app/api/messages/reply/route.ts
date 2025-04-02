@@ -403,6 +403,24 @@ export async function POST(request: Request) {
         messageSource: originalMessage.messageSource
       });
 
+      // --- ADDED: Log the successful reply ---
+      try {
+        await prisma.replyLog.create({
+          data: {
+            userEmail: session.user.email, // Checked for existence at the start
+            messageId: newMessageId,
+            threadId: originalMessage.threadId,
+            organizationId: session.user.organizationId,
+            // repliedAt defaults to now()
+          }
+        });
+        logDebug('Successfully logged reply event', { userEmail: session.user.email, messageId: newMessageId });
+      } catch (logError) {
+        // Log the error but don't fail the main reply operation
+        console.error('Failed to log reply event:', logError);
+      }
+      // --- END ADDED ---
+
       // Store the response in a scoped variable
       const response = {
         message: 'Reply sent to webhook. N8n will create the message record',

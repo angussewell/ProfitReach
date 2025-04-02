@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Users, Percent, CalendarCheck, ClipboardList, TrendingUp, Eye, Loader2 } from 'lucide-react';
+import { ArrowLeft, Users, Percent, CalendarCheck, ClipboardList, TrendingUp, Eye, Loader2, Mail } from 'lucide-react';
 import { subDays } from 'date-fns';
 import { DateRangeFilter } from '@/components/filters/date-range-filter';
 import { useSession } from 'next-auth/react';
@@ -83,6 +83,12 @@ const getTaskField = (task: any, camelCaseField: string, titleCaseField: string)
   return task[camelCaseField] !== undefined ? task[camelCaseField] : task[titleCaseField];
 };
 
+// Interface for setter stats
+interface SetterStat {
+  userEmail: string;
+  replyCount: number;
+}
+
 export default function AdminPanelPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
@@ -92,6 +98,11 @@ export default function AdminPanelPage() {
     from: subDays(new Date(), 29),
     to: new Date(),
   });
+  
+  // Add new state for setter stats
+  const [setterStats, setSetterStats] = useState<SetterStat[]>([]);
+  const [setterStatsLoading, setSetterStatsLoading] = useState(false);
+  const [setterStatsError, setSetterStatsError] = useState<string | null>(null);
 
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [selectedOrgName, setSelectedOrgName] = useState<string | null>(null);
@@ -314,7 +325,36 @@ export default function AdminPanelPage() {
         setLoading(false);
       }
     };
+    
+    // Add new function to fetch setter stats
+    const fetchSetterStats = async () => {
+      if (!dateRange?.from || !dateRange?.to) return;
+      setSetterStatsLoading(true);
+      setSetterStatsError(null);
+      
+      try {
+        const url = new URL('/api/admin/setter-stats', window.location.origin);
+        url.searchParams.set('startDate', dateRange.from.toISOString());
+        url.searchParams.set('endDate', dateRange.to.toISOString());
+        
+        const response = await fetch(url, { credentials: 'include' });
+        if (!response.ok) {
+          throw new Error(`Failed to fetch setter stats: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        setSetterStats(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error('Error fetching setter stats:', error);
+        setSetterStatsError(`Failed to load setter statistics: ${error instanceof Error ? error.message : String(error)}`);
+        setSetterStats([]);
+      } finally {
+        setSetterStatsLoading(false);
+      }
+    };
+    
     fetchAdminStats();
+    fetchSetterStats(); // Call the new fetch function
   }, [dateRange, session]);
 
   // useEffect for handling modal opening
@@ -821,6 +861,68 @@ export default function AdminPanelPage() {
           </Card>
         </div>
       )}
+
+      {/* Setter Statistics Card */}
+      <div className="mt-8">
+        <div className="flex items-center mb-4">
+          <div className="h-10 w-1 bg-gradient-to-b from-blue-600 to-indigo-600 rounded mr-3"></div>
+          <h2 className="text-xl font-semibold text-slate-800">Setter Statistics</h2>
+        </div>
+        
+        <Card className="border-slate-200 shadow-sm overflow-hidden">
+          <CardHeader className="bg-slate-50 pb-2">
+            <CardTitle className="text-base font-medium">
+              <div className="flex items-center">
+                <Mail className="mr-2 h-4 w-4 text-indigo-500" />
+                <span>Reply Statistics by User</span>
+              </div>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-4">
+            {setterStatsLoading ? (
+              <div className="py-6">
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <div key={`skel-setter-${index}`} className="flex justify-between items-center py-3 border-b border-slate-100">
+                    <Skeleton className="h-5 w-[200px]" />
+                    <Skeleton className="h-5 w-[60px]" />
+                  </div>
+                ))}
+              </div>
+            ) : setterStatsError ? (
+              <div className="py-6 text-center text-red-500">
+                <p>{setterStatsError}</p>
+              </div>
+            ) : setterStats.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-slate-50/50 hover:bg-slate-50/80 border-b border-slate-200">
+                    <TableHead className="text-slate-700 pl-4">User Email</TableHead>
+                    <TableHead className="text-right text-slate-700 pr-4">Replies Sent</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {setterStats.map((stat, idx) => (
+                    <TableRow 
+                      key={`setter-${idx}`}
+                      className={`hover:bg-slate-50 transition-colors duration-150 border-b border-slate-100 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}`}
+                    >
+                      <TableCell className="font-medium py-3 pl-4">{stat.userEmail}</TableCell>
+                      <TableCell className="text-right py-3 pr-4 font-semibold text-indigo-600">
+                        {stat.replyCount}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <div className="text-center py-8 text-slate-500">
+                <p>No reply data available for the selected period.</p>
+                <p className="text-sm mt-1">Replies will be tracked when users respond to messages.</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       <Dialog open={isTaskModalOpen} onOpenChange={setIsTaskModalOpen}>
         <DialogContent className="sm:max-w-[800px]">

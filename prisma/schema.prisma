@@ -66,6 +66,7 @@ model Organization {
   appointments         Appointment[]
   chatConversations    ChatConversation[]
   statusChanges        StatusChangeLog[]
+  replyLogs            ReplyLog[]
 
   @@index([stripeTestCustomerId], map: "organization_stripe_test_customer_idx")
 }
@@ -527,21 +528,34 @@ enum ConversationStatus {
 }
 
 model StatusChangeLog {
-  id              String            @id @default(uuid())
-  messageId       String
-  threadId        String
-  organizationId  String
-  oldStatus       ConversationStatus
-  newStatus       ConversationStatus
-  changedAt       DateTime          @default(now())
-  scheduledChange Boolean           @default(false)
-  successful      Boolean
-  errorMessage    String?
+  id             String   @id @default(cuid())
+  threadId       String
+  oldStatus      String?
+  newStatus      String
+  changedAt      DateTime @default(now())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  emailMessageId String?
+  emailMessage   EmailMessage? @relation(fields: [emailMessageId], references: [id])
 
-  message         EmailMessage @relation(fields: [messageId], references: [messageId])
-  organization    Organization @relation(fields: [organizationId], references: [id])
-
-  @@index([messageId])
+  @@index([threadId])
   @@index([organizationId])
   @@index([changedAt])
+  @@index([emailMessageId])
+}
+
+model ReplyLog {
+  id             String   @id @default(cuid())
+  userEmail      String   // Email of the user who sent the reply
+  messageId      String   // ID of the reply message sent
+  threadId       String   // ID of the conversation thread
+  repliedAt      DateTime @default(now()) // Timestamp of the reply
+  organizationId String   // Link to the organization
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([userEmail])
+  @@index([messageId])
+  @@index([threadId])
+  @@index([repliedAt])
+  @@index([organizationId])
 }
