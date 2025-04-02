@@ -208,93 +208,89 @@ export function UniversalInboxClient() {
   // Add ref for textarea
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Group messages by thread and sort them
-  const threadGroups = messages.reduce((groups, message) => {
-    if (!groups[message.threadId]) {
-      groups[message.threadId] = [];
-    }
-    groups[message.threadId].push(message);
-    return groups;
-  }, {} as Record<string, EmailMessage[]>);
+  // Memoize enhancedThreadGroups to stabilize its identity
+  const enhancedThreadGroups = useMemo(() => {
+    console.log("Recalculating enhancedThreadGroups..."); // Debug log
+    const threadGroups = messages.reduce((groups, message) => {
+      if (!groups[message.threadId]) {
+        groups[message.threadId] = [];
+      }
+      groups[message.threadId].push(message);
+      return groups;
+    }, {} as Record<string, EmailMessage[]>);
 
-  // Enhance grouping to match by recipient and subject (Gmail-like functionality)
-  // This will merge conversations with the same recipient and similar subject lines
-  const enhancedThreadGroups: Record<string, EmailMessage[]> = { ...threadGroups };
-  
-  // Helper to normalize a subject line (remove Re:, Fwd:, etc.)
-  const normalizeSubject = (subject: string): string => {
-    return subject.replace(/^(Re|Fwd|FW|RE|FWD):\s+/i, '').trim();
-  };
-
-  // Identify threadIds to merge (only for EMAIL messages, not LinkedIn)
-  const threadMappings: Record<string, string> = {};
-  
-  // First, create a map of recipient+subject -> threadId
-  const recipientSubjectMap: Record<string, string> = {};
-  
-  Object.entries(threadGroups).forEach(([threadId, messages]) => {
-    // Skip LinkedIn messages and threads that are already handled
-    if (messages.some(msg => msg.messageSource === 'LINKEDIN') || threadMappings[threadId]) {
-      return;
-    }
+    const currentEnhancedThreadGroups: Record<string, EmailMessage[]> = { ...threadGroups };
     
-    // Group by normalized subject and recipient
-    messages.forEach(msg => {
-      const normalizedSubject = normalizeSubject(msg.subject);
+    const normalizeSubject = (subject: string): string => {
+      return subject.replace(/^(Re|Fwd|FW|RE|FWD):\s+/i, '').trim();
+    };
+
+    const threadMappings: Record<string, string> = {};
+    const recipientSubjectMap: Record<string, string> = {};
+    
+    Object.entries(threadGroups).forEach(([threadId, threadMessages]) => {
+      if (threadMessages.some(msg => msg.messageSource === 'LINKEDIN') || threadMappings[threadId]) {
+        return;
+      }
       
-      // Create keys for both directions of the conversation
-      const recipientSubjectKey1 = `${msg.sender}|${msg.recipientEmail}|${normalizedSubject}`;
-      const recipientSubjectKey2 = `${msg.recipientEmail}|${msg.sender}|${normalizedSubject}`;
-      
-      // If this combination already exists, we found a match
-      if (recipientSubjectMap[recipientSubjectKey1] && recipientSubjectMap[recipientSubjectKey1] !== threadId) {
-        threadMappings[threadId] = recipientSubjectMap[recipientSubjectKey1];
-      } else if (recipientSubjectMap[recipientSubjectKey2] && recipientSubjectMap[recipientSubjectKey2] !== threadId) {
-        threadMappings[threadId] = recipientSubjectMap[recipientSubjectKey2];
+      threadMessages.forEach(msg => {
+        const normalizedSubject = normalizeSubject(msg.subject);
+        const recipientSubjectKey1 = `${msg.sender}|${msg.recipientEmail}|${normalizedSubject}`;
+        const recipientSubjectKey2 = `${msg.recipientEmail}|${msg.sender}|${normalizedSubject}`;
+        
+        if (recipientSubjectMap[recipientSubjectKey1] && recipientSubjectMap[recipientSubjectKey1] !== threadId) {
+          threadMappings[threadId] = recipientSubjectMap[recipientSubjectKey1];
+        } else if (recipientSubjectMap[recipientSubjectKey2] && recipientSubjectMap[recipientSubjectKey2] !== threadId) {
+          threadMappings[threadId] = recipientSubjectMap[recipientSubjectKey2];
+        } else {
+          recipientSubjectMap[recipientSubjectKey1] = threadId;
+          recipientSubjectMap[recipientSubjectKey2] = threadId;
+        }
+      });
+    });
+    
+    Object.entries(threadMappings).forEach(([sourceThreadId, targetThreadId]) => {
+      if (currentEnhancedThreadGroups[sourceThreadId] && currentEnhancedThreadGroups[targetThreadId]) {
+        currentEnhancedThreadGroups[targetThreadId] = [
+          ...currentEnhancedThreadGroups[targetThreadId],
+          ...currentEnhancedThreadGroups[sourceThreadId]
+        ];
+        delete currentEnhancedThreadGroups[sourceThreadId];
       } else {
-        // Otherwise, register this thread for potential future matches
-        recipientSubjectMap[recipientSubjectKey1] = threadId;
-        recipientSubjectMap[recipientSubjectKey2] = threadId;
+        console.warn(`Skipping merge: Source (${sourceThreadId}) or Target (${targetThreadId}) not found in currentEnhancedThreadGroups`);
       }
     });
-  });
-  
-  // Now merge the threads based on the mappings
-  Object.entries(threadMappings).forEach(([sourceThreadId, targetThreadId]) => {
-    if (enhancedThreadGroups[sourceThreadId]) {
-      // Add messages from source thread to target thread
-      enhancedThreadGroups[targetThreadId] = [
-        ...enhancedThreadGroups[targetThreadId],
-        ...enhancedThreadGroups[sourceThreadId]
-      ];
-      // Remove the source thread as it's now merged
-      delete enhancedThreadGroups[sourceThreadId];
-    }
-  });
 
-  // Sort threads by latest message date
-  const sortedThreadIds = Object.keys(enhancedThreadGroups).sort((a, b) => {
-    const aMessages = enhancedThreadGroups[a];
-    const bMessages = enhancedThreadGroups[b];
-    
-    // Get latest message from each thread
-    const aLatest = aMessages.reduce((latest, msg) => {
-      const aDate = new Date(msg.receivedAt);
-      const latestDate = new Date(latest.receivedAt);
-      return aDate.getTime() > latestDate.getTime() ? msg : latest;
-    }, aMessages[0]);
-    
-    const bLatest = bMessages.reduce((latest, msg) => {
-      const bDate = new Date(msg.receivedAt);
-      const latestDate = new Date(latest.receivedAt);
-      return bDate.getTime() > latestDate.getTime() ? msg : latest;
-    }, bMessages[0]);
-    
-    // Sort in descending order (newest first)
-    return new Date(bLatest.receivedAt).getTime() - new Date(aLatest.receivedAt).getTime();
-  });
+    return currentEnhancedThreadGroups;
+  }, [messages]); // Dependency: messages
 
-  const hasMessages = Object.keys(enhancedThreadGroups).length > 0;
+  // Memoize sortedThreadIds to stabilize its identity
+  const sortedThreadIds = useMemo(() => {
+    console.log("Recalculating sortedThreadIds..."); // Debug log
+    return Object.keys(enhancedThreadGroups).sort((a, b) => {
+      const aMessages = enhancedThreadGroups[a];
+      const bMessages = enhancedThreadGroups[b];
+      
+      if (!aMessages || aMessages.length === 0) return 1; // Push threads with no messages down
+      if (!bMessages || bMessages.length === 0) return -1;
+
+      const aLatest = aMessages.reduce((latest, msg) => {
+        const aDate = new Date(msg.receivedAt);
+        const latestDate = new Date(latest.receivedAt);
+        return aDate.getTime() > latestDate.getTime() ? msg : latest;
+      }, aMessages[0]);
+      
+      const bLatest = bMessages.reduce((latest, msg) => {
+        const bDate = new Date(msg.receivedAt);
+        const latestDate = new Date(latest.receivedAt);
+        return bDate.getTime() > latestDate.getTime() ? msg : latest;
+      }, bMessages[0]);
+      
+      return new Date(bLatest.receivedAt).getTime() - new Date(aLatest.receivedAt).getTime();
+    });
+  }, [enhancedThreadGroups]); // Dependency: enhancedThreadGroups
+
+  const hasMessages = useMemo(() => Object.keys(enhancedThreadGroups).length > 0, [enhancedThreadGroups]);
 
   // Navigate to thread detail view
   const openThread = (threadId: string) => {
