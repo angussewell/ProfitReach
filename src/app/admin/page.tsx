@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Users, Percent, CalendarCheck, ClipboardList, TrendingUp, Eye, Loader2, Mail } from 'lucide-react';
+import { ArrowLeft, Users, Percent, CalendarCheck, ClipboardList, TrendingUp, Eye, Loader2, Mail, InfoIcon } from 'lucide-react';
 import { subDays } from 'date-fns';
 import { DateRangeFilter } from '@/components/filters/date-range-filter';
 import { useSession } from 'next-auth/react';
@@ -89,6 +89,22 @@ interface SetterStat {
   replyCount: number;
 }
 
+// Interface for setter stats API response metadata
+interface SetterStatsMetadata {
+  dateFiltered: boolean;
+  organizationId: string;
+  startDate?: string;
+  endDate?: string;
+  totalUsers: number;
+  totalReplies?: number;
+}
+
+// Interface for setter stats API response
+interface SetterStatsResponse {
+  data: SetterStat[];
+  metadata: SetterStatsMetadata;
+}
+
 export default function AdminPanelPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
@@ -104,6 +120,9 @@ export default function AdminPanelPage() {
   const [setterStatsLoading, setSetterStatsLoading] = useState(false);
   const [setterStatsError, setSetterStatsError] = useState<string | null>(null);
 
+  // Add new state for metadata
+  const [setterStatsMetadata, setSetterStatsMetadata] = useState<SetterStatsMetadata | null>(null);
+
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [selectedOrgName, setSelectedOrgName] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -118,6 +137,10 @@ export default function AdminPanelPage() {
   const POLLING_INTERVAL_MS = 2000; // Poll every 2 seconds
   const POLLING_TIMEOUT_MS = 15000; // Timeout after 15 seconds
   const N8N_WEBHOOK_URL = 'https://n8n.srv768302.hstgr.cloud/webhook/coda-tasks';
+
+  // Add new state for debug mode
+  const [bypassDateFilter, setBypassDateFilter] = useState(false);
+  const isDevelopment = process.env.NODE_ENV === 'development';
 
   // Move fetchTasksFromServer inside the component as well, as it uses state setters indirectly now via triggerAndPollForTasks
   const fetchTasksFromServer = async (orgName: string): Promise<Task[]> => {
@@ -337,16 +360,52 @@ export default function AdminPanelPage() {
         url.searchParams.set('startDate', dateRange.from.toISOString());
         url.searchParams.set('endDate', dateRange.to.toISOString());
         
-        const response = await fetch(url, { credentials: 'include' });
-        if (!response.ok) {
-          throw new Error(`Failed to fetch setter stats: ${response.statusText}`);
+        // Add the bypass parameter if enabled
+        if (bypassDateFilter) {
+          url.searchParams.set('bypass_date_filter', 'true');
         }
         
-        const data = await response.json();
-        setSetterStats(Array.isArray(data) ? data : []);
+        const response = await fetch(url, { credentials: 'include' });
+        
+        // Handle non-OK responses
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
+          console.error('Error response from setter-stats API:', errorData);
+          
+          // Extract detailed error information if available
+          const errorMessage = errorData.details?.message || errorData.error || response.statusText;
+          throw new Error(`Failed to fetch setter stats: ${errorMessage}`);
+        }
+        
+        // Get the response data with the new structure
+        const responseData: SetterStatsResponse = await response.json();
+        console.log('Setter stats response:', responseData);
+        
+        // Check if we have the expected data structure
+        if (responseData && 'data' in responseData) {
+          setSetterStats(responseData.data || []);
+          
+          // Store metadata for UI display
+          if (responseData.metadata) {
+            setSetterStatsMetadata(responseData.metadata);
+            
+            // Log metadata for debugging
+            console.log('Setter stats metadata:', responseData.metadata);
+            
+            // Optionally show a message if date filtering was bypassed
+            if (responseData.metadata.dateFiltered === false) {
+              console.log('Note: Date filtering was bypassed, showing all available data');
+            }
+          }
+        } else {
+          // Handle legacy or unexpected response format
+          console.warn('Unexpected setter stats response format:', responseData);
+          setSetterStats(Array.isArray(responseData) ? responseData : []);
+          setSetterStatsMetadata(null);
+        }
       } catch (error) {
         console.error('Error fetching setter stats:', error);
-        setSetterStatsError(`Failed to load setter statistics: ${error instanceof Error ? error.message : String(error)}`);
+        setSetterStatsError(`${error instanceof Error ? error.message : String(error)}`);
         setSetterStats([]);
       } finally {
         setSetterStatsLoading(false);
@@ -355,7 +414,7 @@ export default function AdminPanelPage() {
     
     fetchAdminStats();
     fetchSetterStats(); // Call the new fetch function
-  }, [dateRange, session]);
+  }, [dateRange, session, bypassDateFilter]);
 
   // useEffect for handling modal opening
   useEffect(() => {
@@ -872,9 +931,28 @@ export default function AdminPanelPage() {
         <Card className="border-slate-200 shadow-sm overflow-hidden">
           <CardHeader className="bg-slate-50 pb-2">
             <CardTitle className="text-base font-medium">
-              <div className="flex items-center">
-                <Mail className="mr-2 h-4 w-4 text-indigo-500" />
-                <span>Reply Statistics by User</span>
+              <div className="flex items-center justify-between w-full">
+                <div className="flex items-center">
+                  <Mail className="mr-2 h-4 w-4 text-indigo-500" />
+                  <span>Reply Statistics by User</span>
+                </div>
+                
+                {isDevelopment && (
+                  <div className="flex items-center text-xs">
+                    <label className="inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={bypassDateFilter}
+                        onChange={() => setBypassDateFilter(!bypassDateFilter)}
+                        className="sr-only peer"
+                      />
+                      <div className="relative w-8 h-4 bg-gray-200 rounded-full peer peer-checked:bg-blue-500 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all"></div>
+                      <span className="ms-2 text-xs text-gray-500">
+                        Bypass Date Filter
+                      </span>
+                    </label>
+                  </div>
+                )}
               </div>
             </CardTitle>
           </CardHeader>
@@ -893,27 +971,45 @@ export default function AdminPanelPage() {
                 <p>{setterStatsError}</p>
               </div>
             ) : setterStats.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-slate-50/50 hover:bg-slate-50/80 border-b border-slate-200">
-                    <TableHead className="text-slate-700 pl-4">User Email</TableHead>
-                    <TableHead className="text-right text-slate-700 pr-4">Replies Sent</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {setterStats.map((stat, idx) => (
-                    <TableRow 
-                      key={`setter-${idx}`}
-                      className={`hover:bg-slate-50 transition-colors duration-150 border-b border-slate-100 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}`}
-                    >
-                      <TableCell className="font-medium py-3 pl-4">{stat.userEmail}</TableCell>
-                      <TableCell className="text-right py-3 pr-4 font-semibold text-indigo-600">
-                        {stat.replyCount}
-                      </TableCell>
+              <>
+                {setterStatsMetadata && !setterStatsMetadata.dateFiltered && (
+                  <div className="mb-4 p-2 bg-yellow-50 border border-yellow-200 rounded-md text-yellow-700 text-sm">
+                    <InfoIcon className="inline-block h-4 w-4 mr-1" />
+                    Note: Showing all available data (date filtering was bypassed or no data found in the selected date range).
+                  </div>
+                )}
+                
+                {setterStatsMetadata && (
+                  <div className="mb-4 text-sm text-slate-500">
+                    <p>Total users with replies: <span className="font-medium">{setterStatsMetadata.totalUsers}</span></p>
+                    {setterStatsMetadata.totalReplies !== undefined && (
+                      <p>Total replies sent: <span className="font-medium">{setterStatsMetadata.totalReplies}</span></p>
+                    )}
+                  </div>
+                )}
+                
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-slate-50/50 hover:bg-slate-50/80 border-b border-slate-200">
+                      <TableHead className="text-slate-700 pl-4">User Email</TableHead>
+                      <TableHead className="text-right text-slate-700 pr-4">Replies Sent</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {setterStats.map((stat, idx) => (
+                      <TableRow 
+                        key={`setter-${idx}`}
+                        className={`hover:bg-slate-50 transition-colors duration-150 border-b border-slate-100 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}`}
+                      >
+                        <TableCell className="font-medium py-3 pl-4">{stat.userEmail}</TableCell>
+                        <TableCell className="text-right py-3 pr-4 font-semibold text-indigo-600">
+                          {stat.replyCount}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </>
             ) : (
               <div className="text-center py-8 text-slate-500">
                 <p>No reply data available for the selected period.</p>
