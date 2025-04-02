@@ -331,20 +331,24 @@ export function UniversalInboxClient() {
 
   // useEffect to handle thread selection after messages update
   useEffect(() => {
-    if (pendingThreadSelection && filteredSortedThreadIds.includes(pendingThreadSelection)) {
-      console.log('Applying pending thread selection:', pendingThreadSelection);
-      setSelectedThread(pendingThreadSelection);
-      setPendingThreadSelection(null); // Reset pending state
-    } else if (pendingThreadSelection) {
-        // Thread replied to is no longer in the filtered list due to status change
-        console.log('Pending thread selection ID not found in filtered list, returning to list view:', pendingThreadSelection);
-        backToList(); // Navigate back to the list view
-        setPendingThreadSelection(null); // Reset pending state
-        // // Optional: Show a toast message? 
-        // toast.info('Conversation status updated and moved from current filter.');
+    // Only proceed if there is a pending selection to handle
+    if (pendingThreadSelection) {
+      // Check if the pending thread exists in the *current* filtered list
+      if (filteredSortedThreadIds.includes(pendingThreadSelection)) {
+        // Thread found: Select it
+        console.log('Applying pending thread selection:', pendingThreadSelection);
+        setSelectedThread(pendingThreadSelection);
+      } else {
+        // Thread not found: Status change likely removed it from the filtered view
+        console.log('Pending thread ID not found in filtered list, returning to list view:', pendingThreadSelection);
+        backToList(); 
+        // Optional: toast.info('Conversation status updated and moved from current filter.');
+      }
+      // Reset the pending state now that we've handled it
+      setPendingThreadSelection(null); 
     }
-  // Ensure all dependencies are correctly listed for this effect
-  }, [messages, filteredSortedThreadIds, pendingThreadSelection, enhancedThreadGroups, backToList]); // backToList dependency is correct
+  // Depend only on the pending state, the list to check against, and the function to call
+  }, [pendingThreadSelection, filteredSortedThreadIds, backToList]);
 
   // Navigate to thread detail view
   const openThread = (threadId: string) => {
