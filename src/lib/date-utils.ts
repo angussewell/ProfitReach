@@ -8,8 +8,7 @@
  * @param dateStr - Date or ISO date string or any valid date string
  * @returns Formatted date string (e.g., "Mar 14, 2025 at 11:11 AM")
  */
-import { format } from 'date-fns';
-import { utcToZonedTime, zonedTimeToUtc } from 'date-fns-tz';
+import { format, parseISO } from 'date-fns';
 
 export function formatDateInCentralTime(dateStr: string | Date | null): string {
   if (!dateStr) return '';
@@ -46,6 +45,7 @@ export function getCurrentCentralTime(): string {
 
 /**
  * Convert a local time string and timezone to UTC
+ * This function properly converts a time in a specific timezone to UTC
  * 
  * @param dateTimeStr - Local date-time string in format 'YYYY-MM-DDTHH:MM:SS'
  * @param timeZone - IANA timezone string (e.g., 'America/Chicago')
@@ -53,11 +53,30 @@ export function getCurrentCentralTime(): string {
  */
 export function convertToUTC(dateTimeStr: string, timeZone: string = 'America/Chicago'): string {
   try {
-    // Parse the local date-time string
-    const localDate = new Date(dateTimeStr);
+    // Get the timezone offset for the specified timezone
+    // These are standard offsets from UTC in hours, positive for west of UTC
+    const timezoneOffsets: Record<string, string> = {
+      'America/New_York': '-04:00', // EDT
+      'America/Chicago': '-05:00',  // CDT
+      'America/Denver': '-06:00',   // MDT
+      'America/Los_Angeles': '-07:00', // PDT
+      'America/Anchorage': '-08:00', // AKDT
+      'Pacific/Honolulu': '-10:00'  // HST
+    };
     
-    // Convert to a Date object in the specified timezone
-    const utcDate = zonedTimeToUtc(localDate, timeZone);
+    // Get the offset string for the timezone
+    const offsetString = timezoneOffsets[timeZone] || '-05:00';
+    
+    // Ensure the dateTimeStr doesn't already have a timezone
+    const cleanDateTimeStr = dateTimeStr.endsWith('Z') ? 
+      dateTimeStr.slice(0, -1) : 
+      dateTimeStr;
+    
+    // Create an ISO 8601 string with the timezone offset
+    const isoWithOffset = `${cleanDateTimeStr}${offsetString}`;
+    
+    // Parse this to a Date object and convert to UTC
+    const utcDate = new Date(isoWithOffset);
     
     // Return as ISO string
     return utcDate.toISOString();

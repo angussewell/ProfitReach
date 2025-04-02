@@ -74,23 +74,51 @@ export async function fetchAppointments(organizationId: string, dateFilter?: { f
 export async function sendAppointmentWebhook(appointmentData: any) {
   try {
     console.log('Sending appointment webhook to:', APPOINTMENT_WEBHOOK_URL);
+    console.log('Original appointment data:', JSON.stringify(appointmentData, null, 2));
     
     // Create a copy of the data to avoid modifying the original
     const webhookData = { ...appointmentData };
     
+    // Force string format for appointmentDateTime if it's not already
+    if (webhookData.appointmentDateTime && typeof webhookData.appointmentDateTime !== 'string') {
+      webhookData.appointmentDateTime = webhookData.appointmentDateTime.toISOString ? 
+        webhookData.appointmentDateTime.toISOString() : String(webhookData.appointmentDateTime);
+    }
+    
+    // Make sure the appointmentDateTime is in the correct format (YYYY-MM-DDTHH:MM:SS)
+    // If it's already an ISO string with Z, strip that off to get local time
+    if (webhookData.appointmentDateTime && webhookData.appointmentDateTime.endsWith('Z')) {
+      webhookData.appointmentDateTime = webhookData.appointmentDateTime.slice(0, -1);
+    }
+    
+    // Debug the actual values we're working with
+    console.log('Debug - appointmentDateTime format:', webhookData.appointmentDateTime);
+    console.log('Debug - timeZone value:', webhookData.timeZone);
+    
     // Convert the appointment datetime to UTC based on the specified timezone
-    if (webhookData.appointmentDateTime && webhookData.timeZone) {
+    if (webhookData.appointmentDateTime) {
       // Store the original local time for reference
       webhookData.localAppointmentDateTime = webhookData.appointmentDateTime;
+      webhookData.originalTimeZone = webhookData.timeZone || 'America/Chicago';
       
-      // Convert to UTC ISO string
+      // Convert to UTC ISO string - with or without explicit timezone, use what we have
+      const beforeConversion = webhookData.appointmentDateTime;
       webhookData.appointmentDateTime = convertToUTC(
         webhookData.appointmentDateTime, 
-        webhookData.timeZone
+        webhookData.timeZone || 'America/Chicago'
       );
       
-      console.log(`Converted appointment time from ${webhookData.localAppointmentDateTime} ${webhookData.timeZone} to UTC: ${webhookData.appointmentDateTime}`);
+      console.log(`Timezone conversion details:`);
+      console.log(`- Original time: ${beforeConversion}`);
+      console.log(`- Timezone: ${webhookData.originalTimeZone}`);
+      console.log(`- Converted UTC time: ${webhookData.appointmentDateTime}`);
+    } else {
+      console.log('Missing required data for timezone conversion:');
+      console.log(`- appointmentDateTime: ${webhookData.appointmentDateTime}`);
+      console.log(`- timeZone: ${webhookData.timeZone}`);
     }
+    
+    console.log('Sending webhook payload:', JSON.stringify(webhookData, null, 2));
     
     const response = await fetch(APPOINTMENT_WEBHOOK_URL, {
       method: 'POST',
