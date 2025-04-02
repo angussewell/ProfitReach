@@ -202,6 +202,8 @@ export function UniversalInboxClient() {
   const [suggestionStatus, setSuggestionStatus] = useState<'idle' | 'success' | 'error'>('idle');
   // Add a new state for status filtering
   const [statusFilter, setStatusFilter] = useState<ConversationStatus | 'ALL'>('ALL');
+  // Add state to manage thread selection after refresh
+  const [pendingThreadSelection, setPendingThreadSelection] = useState<string | null>(null);
 
   // Add a ref for the reply card
   const replyCardRef = useRef<HTMLDivElement>(null);
@@ -264,7 +266,7 @@ export function UniversalInboxClient() {
     return currentEnhancedThreadGroups;
   }, [messages]); // Dependency: messages
 
-  // Memoize sortedThreadIds to stabilize its identity
+  // Memoize sorting for performance
   const sortedThreadIds = useMemo(() => {
     console.log("Recalculating sortedThreadIds..."); // Debug log
     return Object.keys(enhancedThreadGroups).sort((a, b) => {
@@ -291,6 +293,36 @@ export function UniversalInboxClient() {
   }, [enhancedThreadGroups]); // Dependency: enhancedThreadGroups
 
   const hasMessages = useMemo(() => Object.keys(enhancedThreadGroups).length > 0, [enhancedThreadGroups]);
+
+  // Memoize filtering based on search
+  const filteredSortedThreadIds = useMemo(() => {
+    // Need access to enhancedThreadGroups if getThreadStatus uses it
+    // Ensure getThreadStatus is stable or included in dependencies if needed
+    return sortedThreadIds.filter(
+      threadId => statusFilter === 'ALL' || getThreadStatus(threadId) === statusFilter
+    );
+  }, [sortedThreadIds, statusFilter, enhancedThreadGroups]); // Add enhancedThreadGroups dependency
+
+  const currentIndex = useMemo(() => {
+    if (!selectedThread) return -1;
+    return filteredSortedThreadIds.indexOf(selectedThread);
+  }, [selectedThread, filteredSortedThreadIds]);
+
+  // useEffect to handle thread selection after messages update
+  useEffect(() => {
+    if (pendingThreadSelection && filteredSortedThreadIds.includes(pendingThreadSelection)) {
+      console.log('Applying pending thread selection:', pendingThreadSelection);
+      setSelectedThread(pendingThreadSelection);
+      setPendingThreadSelection(null); // Reset pending state
+    } else if (pendingThreadSelection) {
+        // Optional: Handle case where thread ID no longer exists after refresh?
+        console.log('Pending thread selection ID not found in updated list, clearing:', pendingThreadSelection);
+        setPendingThreadSelection(null);
+        // Optionally, go back to list view or select the first available thread
+        // backToList(); // Example: Go back to list if thread disappears
+    }
+  // Ensure all dependencies are correctly listed for this effect
+  }, [messages, filteredSortedThreadIds, pendingThreadSelection, enhancedThreadGroups]); 
 
   // Navigate to thread detail view
   const openThread = (threadId: string) => {
@@ -604,13 +636,13 @@ export function UniversalInboxClient() {
       // Refresh messages
       const messagesResponse = await fetch('/api/messages');
       if (!messagesResponse.ok) throw new Error('Failed to fetch messages');
-      const messages = await messagesResponse.json();
+      const messagesData = await messagesResponse.json();
       
       // Update messages state
-      setMessages(messages);
+      setMessages(messagesData);
       
-      // Ensure the current thread remains selected
-      setSelectedThread(currentThreadId);
+      // Instead of setting selectedThread directly, set pending selection
+      setPendingThreadSelection(currentThreadId);
       
     } catch (error) {
       console.error('Error sending reply:', error);
@@ -786,21 +818,6 @@ export function UniversalInboxClient() {
       return 'FOLLOW_UP_NEEDED';
     }
   };
-
-  // Memoize the filtered list of thread IDs based on the current filter
-  const filteredSortedThreadIds = useMemo(() => {
-    // Need access to enhancedThreadGroups if getThreadStatus uses it
-    // Ensure getThreadStatus is stable or included in dependencies if needed
-    return sortedThreadIds.filter(
-      threadId => statusFilter === 'ALL' || getThreadStatus(threadId) === statusFilter
-    );
-  }, [sortedThreadIds, statusFilter, enhancedThreadGroups]); // Add enhancedThreadGroups dependency
-
-  // Memoize the index of the current thread within the filtered list
-  const currentIndex = useMemo(() => {
-    if (!selectedThread) return -1;
-    return filteredSortedThreadIds.indexOf(selectedThread);
-  }, [selectedThread, filteredSortedThreadIds]);
 
   if (loading) {
     return (
