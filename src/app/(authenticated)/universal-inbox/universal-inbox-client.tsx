@@ -602,11 +602,20 @@ export function UniversalInboxClient() {
         setSelectedFromEmail('');
       }
       
+      // Store the current thread ID before refresh
+      const currentThreadId = selectedThread;
+      
       // Refresh messages
       const messagesResponse = await fetch('/api/messages');
       if (!messagesResponse.ok) throw new Error('Failed to fetch messages');
       const messages = await messagesResponse.json();
+      
+      // Update messages state
       setMessages(messages);
+      
+      // Ensure the current thread remains selected
+      setSelectedThread(currentThreadId);
+      
     } catch (error) {
       console.error('Error sending reply:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to send reply');
