@@ -36,33 +36,6 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// Send appointment data to webhook
-async function sendAppointmentWebhook(appointmentData: any) {
-  try {
-    console.log('Sending appointment webhook to:', APPOINTMENT_WEBHOOK_URL);
-    
-    const response = await fetch(APPOINTMENT_WEBHOOK_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(appointmentData),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Webhook failed with status: ${response.status}`);
-    }
-
-    const webhookResponse = await response.json().catch(() => ({}));
-    console.log('Webhook response:', webhookResponse);
-    
-    return { success: true, response: webhookResponse };
-  } catch (error) {
-    console.error('Error sending appointment webhook:', error);
-    return { success: false, error };
-  }
-}
-
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);

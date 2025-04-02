@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
+import { convertToUTC } from '@/lib/date-utils';
 
 /**
  * The webhook URL for appointment notifications
@@ -74,12 +75,29 @@ export async function sendAppointmentWebhook(appointmentData: any) {
   try {
     console.log('Sending appointment webhook to:', APPOINTMENT_WEBHOOK_URL);
     
+    // Create a copy of the data to avoid modifying the original
+    const webhookData = { ...appointmentData };
+    
+    // Convert the appointment datetime to UTC based on the specified timezone
+    if (webhookData.appointmentDateTime && webhookData.timeZone) {
+      // Store the original local time for reference
+      webhookData.localAppointmentDateTime = webhookData.appointmentDateTime;
+      
+      // Convert to UTC ISO string
+      webhookData.appointmentDateTime = convertToUTC(
+        webhookData.appointmentDateTime, 
+        webhookData.timeZone
+      );
+      
+      console.log(`Converted appointment time from ${webhookData.localAppointmentDateTime} ${webhookData.timeZone} to UTC: ${webhookData.appointmentDateTime}`);
+    }
+    
     const response = await fetch(APPOINTMENT_WEBHOOK_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(appointmentData),
+      body: JSON.stringify(webhookData),
     });
 
     if (!response.ok) {

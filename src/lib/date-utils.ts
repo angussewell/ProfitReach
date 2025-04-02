@@ -9,6 +9,7 @@
  * @returns Formatted date string (e.g., "Mar 14, 2025 at 11:11 AM")
  */
 import { format } from 'date-fns';
+import { utcToZonedTime, zonedTimeToUtc } from 'date-fns-tz';
 
 export function formatDateInCentralTime(dateStr: string | Date | null): string {
   if (!dateStr) return '';
@@ -40,5 +41,29 @@ export function getCurrentCentralTime(): string {
   } catch (error) {
     console.error('Error getting current time:', error);
     return '';
+  }
+}
+
+/**
+ * Convert a local time string and timezone to UTC
+ * 
+ * @param dateTimeStr - Local date-time string in format 'YYYY-MM-DDTHH:MM:SS'
+ * @param timeZone - IANA timezone string (e.g., 'America/Chicago')
+ * @returns UTC ISO string
+ */
+export function convertToUTC(dateTimeStr: string, timeZone: string = 'America/Chicago'): string {
+  try {
+    // Parse the local date-time string
+    const localDate = new Date(dateTimeStr);
+    
+    // Convert to a Date object in the specified timezone
+    const utcDate = zonedTimeToUtc(localDate, timeZone);
+    
+    // Return as ISO string
+    return utcDate.toISOString();
+  } catch (error) {
+    console.error('Error converting to UTC:', error);
+    // If conversion fails, return the input as-is
+    return dateTimeStr;
   }
 }
