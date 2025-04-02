@@ -152,7 +152,7 @@ export function CreateAppointmentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogTitle>Create New Appointment</DialogTitle>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
@@ -165,20 +165,40 @@ export function CreateAppointmentDialog({
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="appointmentType">Appointment Type</Label>
-            <Select value={appointmentType} onValueChange={setAppointmentType}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="sales_appointment">Sales Appointment</SelectItem>
-                <SelectItem value="webinar">Webinar</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="appointmentType">Appointment Type</Label>
+              <Select value={appointmentType} onValueChange={setAppointmentType}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="sales_appointment">Sales Appointment</SelectItem>
+                  <SelectItem value="webinar">Webinar</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="status">Status</Label>
+              <Select value={status} onValueChange={setStatus}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent className="max-h-[200px] overflow-y-auto">
+                  <SelectItem value="appointment_booked">Appointment Booked</SelectItem>
+                  <SelectItem value="webinar_booked">Webinar Booked</SelectItem>
+                  <SelectItem value="appointment_no_showed">No Show</SelectItem>
+                  <SelectItem value="appointment_showed">Showed</SelectItem>
+                  <SelectItem value="appointment_unqualified">Unqualified</SelectItem>
+                  <SelectItem value="invoice_sent">Invoice Sent</SelectItem>
+                  <SelectItem value="invoice_paid">Invoice Paid</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label>Date</Label>
               <Popover>
@@ -218,40 +238,22 @@ export function CreateAppointmentDialog({
                 </SelectContent>
               </Select>
             </div>
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="timeZone">Time Zone</Label>
-            <Select value={timeZone} onValueChange={setTimeZone}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select time zone" />
-              </SelectTrigger>
-              <SelectContent className="max-h-[200px] overflow-y-auto">
-                {TIME_ZONES.map((zone) => (
-                  <SelectItem key={zone.value} value={zone.value}>
-                    {zone.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="status">Status</Label>
-            <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select status" />
-              </SelectTrigger>
-              <SelectContent className="max-h-[200px] overflow-y-auto">
-                <SelectItem value="appointment_booked">Appointment Booked</SelectItem>
-                <SelectItem value="webinar_booked">Webinar Booked</SelectItem>
-                <SelectItem value="appointment_no_showed">No Show</SelectItem>
-                <SelectItem value="appointment_showed">Showed</SelectItem>
-                <SelectItem value="appointment_unqualified">Unqualified</SelectItem>
-                <SelectItem value="invoice_sent">Invoice Sent</SelectItem>
-                <SelectItem value="invoice_paid">Invoice Paid</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="space-y-2">
+              <Label htmlFor="timeZone">Time Zone</Label>
+              <Select value={timeZone} onValueChange={setTimeZone}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select time zone" />
+                </SelectTrigger>
+                <SelectContent className="max-h-[200px] overflow-y-auto">
+                  {TIME_ZONES.map((zone) => (
+                    <SelectItem key={zone.value} value={zone.value}>
+                      {zone.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="space-y-2">

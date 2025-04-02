@@ -1,0 +1,1 @@
+const dateStr = "2025-04-25T09:00:00"; console.log("9AM Central would be UTC:", new Date(dateStr).toISOString(), "but with our conversions:"); console.log("Central:", new Date(dateStr + "-05:00").toISOString()); console.log("Mountain:", new Date(dateStr + "-06:00").toISOString()); console.log("Pacific:", new Date(dateStr + "-07:00").toISOString());

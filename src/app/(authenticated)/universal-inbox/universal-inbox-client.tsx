@@ -1,11 +1,11 @@
 'use client';
 
 import * as React from 'react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { PageHeader } from '@/components/ui/page-header';
 import { ClientCard, ClientButton, ClientInput } from '@/components/ui/client-components';
-import { Inbox, Loader2, MessageSquare, Reply, Send, Trash2, X, Calendar, ThumbsDown, Clock, CheckCircle, RefreshCw, Sparkles, XCircle } from 'lucide-react';
+import { Inbox, Loader2, MessageSquare, Reply, Send, Trash2, X, Calendar, ThumbsDown, Clock, CheckCircle, RefreshCw, Sparkles, XCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { LucideProps } from 'lucide-react';
 import { toast } from 'sonner';
@@ -183,7 +183,7 @@ export function UniversalInboxClient() {
   const [selectedThread, setSelectedThread] = useState<string | null>(null);
   const [messages, setMessages] = useState<EmailMessage[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showReplyModal, setShowReplyModal] = useState(false);
+  const [isReplying, setIsReplying] = useState(false);
   const [replyContent, setReplyContent] = useState('');
   const [replying, setReplying] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -202,6 +202,11 @@ export function UniversalInboxClient() {
   const [suggestionStatus, setSuggestionStatus] = useState<'idle' | 'success' | 'error'>('idle');
   // Add a new state for status filtering
   const [statusFilter, setStatusFilter] = useState<ConversationStatus | 'ALL'>('ALL');
+
+  // Add a ref for the reply card
+  const replyCardRef = useRef<HTMLDivElement>(null);
+  // Add ref for textarea
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Group messages by thread and sort them
   const threadGroups = messages.reduce((groups, message) => {
@@ -418,7 +423,7 @@ export function UniversalInboxClient() {
   // Update the useEffect that handles pre-selection
   useEffect(() => {
     // Only pre-select if the modal is being opened and the user hasn't manually selected an email
-    if (showReplyModal && selectedThread && enhancedThreadGroups[selectedThread] && !userSelectedEmailRef.current) {
+    if (isReplying && selectedThread && enhancedThreadGroups[selectedThread] && !userSelectedEmailRef.current) {
       const messages = enhancedThreadGroups[selectedThread];
       const latestMessage = messages.sort((a, b) => 
         new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime()
@@ -457,13 +462,28 @@ export function UniversalInboxClient() {
     }
     
     // Reset the user selection flag when the modal closes
-    if (!showReplyModal) {
+    if (!isReplying) {
       userSelectedEmailRef.current = false;
     }
-  }, [showReplyModal, selectedThread, emailAccounts, socialAccounts, enhancedThreadGroups]);
+  }, [isReplying, selectedThread, emailAccounts, socialAccounts, enhancedThreadGroups]);
 
   // Filter visible accounts for UI display
   const visibleEmailAccounts = emailAccounts.filter(account => !account.isHidden);
+
+  // Update useEffect for scrolling AND focusing
+  useEffect(() => {
+    if (isReplying) {
+      // Scroll card into view
+      replyCardRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest' 
+      });
+      // Focus textarea after a short delay to allow for scroll/render
+      setTimeout(() => {
+        textareaRef.current?.focus();
+      }, 100); // Small delay might be needed
+    }
+  }, [isReplying]);
 
   const handleReply = async () => {
     if (!selectedThread) return;
@@ -572,9 +592,8 @@ export function UniversalInboxClient() {
       // Show appropriate success message based on message type
       toast.success(isLinkedIn ? 'LinkedIn reply sent successfully' : 'Email reply sent successfully');
       
-      setShowReplyModal(false);
+      setIsReplying(false);
       setReplyContent('');
-      setViewMode('list');
       
       // Reset selected accounts
       if (isLinkedIn) {
@@ -763,6 +782,21 @@ export function UniversalInboxClient() {
     }
   };
 
+  // Memoize the filtered list of thread IDs based on the current filter
+  const filteredSortedThreadIds = useMemo(() => {
+    // Need access to enhancedThreadGroups if getThreadStatus uses it
+    // Ensure getThreadStatus is stable or included in dependencies if needed
+    return sortedThreadIds.filter(
+      threadId => statusFilter === 'ALL' || getThreadStatus(threadId) === statusFilter
+    );
+  }, [sortedThreadIds, statusFilter, enhancedThreadGroups]); // Add enhancedThreadGroups dependency
+
+  // Memoize the index of the current thread within the filtered list
+  const currentIndex = useMemo(() => {
+    if (!selectedThread) return -1;
+    return filteredSortedThreadIds.indexOf(selectedThread);
+  }, [selectedThread, filteredSortedThreadIds]);
+
   if (loading) {
     return (
       <PageContainer>
@@ -821,7 +855,7 @@ export function UniversalInboxClient() {
               <div className="divide-y divide-slate-200/60 overflow-y-auto flex-1">
                 {/* Filter threads based on the selected status */}
                 {(() => {
-                  const filteredThreads = sortedThreadIds.filter(
+                  const filteredThreads = filteredSortedThreadIds.filter(
                     threadId => statusFilter === 'ALL' || getThreadStatus(threadId) === statusFilter
                   );
                   
@@ -926,464 +960,480 @@ export function UniversalInboxClient() {
             )}
           </ClientCard>
         ) : (
-          // Detail View (Full Width)
-          <ClientCard className="h-[calc(100vh-14rem)] overflow-hidden flex flex-col border-slate-200/60 shadow-lg shadow-slate-200/50">
-            <div className="px-6 py-4 border-b border-slate-200/60 flex justify-between items-center bg-white/95">
-              <div className="flex items-center gap-4 min-w-0 max-w-[60%]">
-                <ClientButton 
-                  variant="ghost" 
-                  size="sm"
-                  className="text-slate-600 hover:text-slate-800 hover:bg-slate-50 flex-shrink-0"
-                  onClick={backToList}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 mr-1">
-                    <path d="M15 18l-6-6 6-6" />
-                  </svg>
-                  <span>Back</span>
-                </ClientButton>
-                <h2 className="text-lg font-semibold text-slate-900 truncate overflow-hidden text-ellipsis">
-                  {selectedThread ? findOtherParticipant(enhancedThreadGroups[selectedThread]) : ''}
-                </h2>
-              </div>
-              <div className="flex gap-2 items-center flex-shrink-0">
-                {/* Status update buttons group */}
-                <div className="flex bg-slate-50 rounded-md p-1 gap-1">
+          // Detail View (Container for BOTH cards)
+          <>
+            {/* First Card: Message Thread */}
+            <ClientCard className="h-[calc(100vh-14rem)] overflow-hidden flex flex-col border-slate-200/60 shadow-lg shadow-slate-200/50">
+              <div className="px-6 py-4 border-b border-slate-200/60 flex justify-between items-center bg-white/95">
+                <div className="flex items-center gap-2 min-w-0 max-w-[60%]">
                   <ClientButton 
                     variant="ghost" 
                     size="sm"
-                    className="text-green-600 hover:text-green-800 hover:bg-green-50"
-                    onClick={() => selectedThread && updateConversationStatus(selectedThread, 'MEETING_BOOKED')}
-                    disabled={updatingStatus}
+                    className="text-slate-600 hover:text-slate-800 hover:bg-slate-50 flex-shrink-0"
+                    onClick={backToList}
                   >
-                    <CalendarIcon className="h-4 w-4 mr-1" />
-                    <span>Meeting Booked</span>
+                    <ChevronLeft className="h-4 w-4 mr-1" />
+                    <span>Back</span>
                   </ClientButton>
                   
-                  <ClientButton 
-                    variant="ghost" 
-                    size="sm"
-                    className="text-red-600 hover:text-red-800 hover:bg-red-50"
-                    onClick={() => selectedThread && updateConversationStatus(selectedThread, 'NOT_INTERESTED')}
-                    disabled={updatingStatus}
-                  >
-                    <ThumbsDownIcon className="h-4 w-4 mr-1" />
-                    <span>Not Interested</span>
-                  </ClientButton>
-                  
-                  <ClientButton 
-                    variant="ghost" 
-                    size="sm"
-                    className="text-blue-600 hover:text-blue-800 hover:bg-blue-50"
-                    onClick={() => selectedThread && updateConversationStatus(selectedThread, 'NO_ACTION_NEEDED')}
-                    disabled={updatingStatus}
-                  >
-                    <CheckCircleIcon className="h-4 w-4 mr-1" />
-                    <span>No Action</span>
-                  </ClientButton>
-                  
-                  <ClientButton 
-                    variant="ghost" 
-                    size="sm"
-                    className="text-amber-600 hover:text-amber-800 hover:bg-amber-50"
-                    onClick={() => selectedThread && updateConversationStatus(selectedThread, 'FOLLOW_UP_NEEDED')}
-                    disabled={updatingStatus}
-                  >
-                    <ClockIcon className="h-4 w-4 mr-1" />
-                    <span>Follow Up</span>
-                  </ClientButton>
-                </div>
-
-                {/* Divider */}
-                <div className="h-8 w-px bg-slate-200 mx-2"></div>
-
-                {/* Action buttons */}
-                <div className="flex gap-2">
-                  <ClientButton 
-                    variant="outline" 
-                    size="sm"
-                    className="text-blue-600 border-blue-300 hover:text-blue-800 hover:bg-blue-50"
-                    onClick={() => setShowReplyModal(true)}
-                  >
-                    <ReplyIcon className="h-4 w-4 mr-1" />
-                    <span>Reply</span>
-                  </ClientButton>
-
-                  <ClientButton 
-                    variant="outline" 
-                    size="sm"
-                    className="text-red-600 border-red-300 hover:text-red-800 hover:bg-red-50"
+                  <ClientButton
+                    variant="ghost"
+                    size="icon"
                     onClick={() => {
-                      if (!selectedThread) return;
-                      const latestMessage = enhancedThreadGroups[selectedThread].sort((a, b) => 
-                        new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime()
-                      )[0];
-                      handleDelete(latestMessage);
+                      if (currentIndex > 0) {
+                        setSelectedThread(filteredSortedThreadIds[currentIndex - 1]);
+                      }
                     }}
+                    disabled={currentIndex <= 0}
+                    aria-label="Previous conversation"
+                    className="flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <TrashIcon className="h-4 w-4 mr-1" />
-                    <span>Delete</span>
+                    <ChevronLeft className="h-5 w-5" />
                   </ClientButton>
+
+                  <ClientButton
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      if (currentIndex !== -1 && currentIndex < filteredSortedThreadIds.length - 1) {
+                        setSelectedThread(filteredSortedThreadIds[currentIndex + 1]);
+                      }
+                    }}
+                    disabled={currentIndex === -1 || currentIndex >= filteredSortedThreadIds.length - 1}
+                    aria-label="Next conversation"
+                    className="flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </ClientButton>
+                  
+                  <div className="h-6 w-px bg-slate-200 mx-1"></div>
+
+                  <h2 className="text-lg font-semibold text-slate-900 truncate overflow-hidden text-ellipsis">
+                    {selectedThread ? findOtherParticipant(enhancedThreadGroups[selectedThread]) : ''}
+                  </h2>
                 </div>
-              </div>
-            </div>
-            
-            {selectedThread && (
-              <div className="flex h-full flex-col">
-                {selectedThread && enhancedThreadGroups[selectedThread] && 
-                 isLinkedInThread(enhancedThreadGroups[selectedThread]) && (
-                  <div className="flex items-center justify-end border-b border-gray-200 p-4">
-                    <button
-                      className="flex items-center space-x-1 rounded bg-blue-500 px-3 py-1.5 text-sm text-white hover:bg-blue-600"
+                <div className="flex gap-2 items-center flex-shrink-0">
+                  <div className="flex bg-slate-50 rounded-md p-1 gap-1">
+                    <ClientButton 
+                      variant="ghost" 
+                      size="sm"
+                      className="text-green-600 hover:text-green-800 hover:bg-green-50"
+                      onClick={() => selectedThread && updateConversationStatus(selectedThread, 'MEETING_BOOKED')}
+                      disabled={updatingStatus}
+                    >
+                      <CalendarIcon className="h-4 w-4 mr-1" />
+                      <span>Meeting Booked</span>
+                    </ClientButton>
+                    
+                    <ClientButton 
+                      variant="ghost" 
+                      size="sm"
+                      className="text-red-600 hover:text-red-800 hover:bg-red-50"
+                      onClick={() => selectedThread && updateConversationStatus(selectedThread, 'NOT_INTERESTED')}
+                      disabled={updatingStatus}
+                    >
+                      <ThumbsDownIcon className="h-4 w-4 mr-1" />
+                      <span>Not Interested</span>
+                    </ClientButton>
+                    
+                    <ClientButton 
+                      variant="ghost" 
+                      size="sm"
+                      className="text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+                      onClick={() => selectedThread && updateConversationStatus(selectedThread, 'NO_ACTION_NEEDED')}
+                      disabled={updatingStatus}
+                    >
+                      <CheckCircleIcon className="h-4 w-4 mr-1" />
+                      <span>No Action</span>
+                    </ClientButton>
+                    
+                    <ClientButton 
+                      variant="ghost" 
+                      size="sm"
+                      className="text-amber-600 hover:text-amber-800 hover:bg-amber-50"
+                      onClick={() => selectedThread && updateConversationStatus(selectedThread, 'FOLLOW_UP_NEEDED')}
+                      disabled={updatingStatus}
+                    >
+                      <ClockIcon className="h-4 w-4 mr-1" />
+                      <span>Follow Up</span>
+                    </ClientButton>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <ClientButton 
+                      variant="outline" 
+                      size="sm"
+                      className="text-blue-600 border-blue-300 hover:text-blue-800 hover:bg-blue-50"
+                      onClick={() => setIsReplying(true)}
+                    >
+                      <ReplyIcon className="h-4 w-4 mr-1" />
+                      <span>Reply</span>
+                    </ClientButton>
+
+                    <ClientButton 
+                      variant="outline" 
+                      size="sm"
+                      className="text-red-600 border-red-300 hover:text-red-800 hover:bg-red-50"
                       onClick={() => {
-                        // Get the first message of the thread 
-                        const messages = enhancedThreadGroups[selectedThread];
-                        const message = messages[0]; // Use the first message in the thread
-                        
-                        // Find the correct social account to get the Unipile account ID
-                        const socialAccount = socialAccounts.find(acc => acc.id === message.socialAccountId);
-                        const unipileAccountId = socialAccount?.unipileAccountId || '';
-                        
-                        toast.info("Retrieving full chat history...");
-                        fetch("https://n8n.srv768302.hstgr.cloud/webhook/linkedin-conversation", {
-                          method: "POST",
-                          headers: {
-                            "Content-Type": "application/json",
-                          },
-                          body: JSON.stringify({
-                            // Send all available message data
-                            thread_id: message.threadId,
-                            account_id: message.socialAccountId,
-                            organization_id: message.organizationId,
-                            message_id: message.messageId,
-                            id: message.id,
-                            subject: message.subject,
-                            sender: message.sender,
-                            recipient_email: message.recipientEmail,
-                            content: message.content,
-                            received_at: message.receivedAt,
-                            message_type: message.messageType,
-                            is_read: message.isRead,
-                            status: message.status,
-                            message_source: message.messageSource,
-                            unipile_account_id: unipileAccountId, // Use the correct Unipile account ID from the social account
-                            unipile_email_id: message.unipileEmailId,
-                            email_account_id: message.emailAccountId,
-                            classification_scores: message.classificationScores,
-                          }),
-                        })
-                        .then((response) => response.json())
-                        .then((data) => {
-                          console.log("Success:", data);
-                          toast.success("Chat history retrieved successfully!");
-                        })
-                        .catch((error) => {
-                          console.error("Error:", error);
-                          toast.error("Failed to retrieve chat history");
-                        });
+                        if (!selectedThread) return;
+                        const latestMessage = enhancedThreadGroups[selectedThread].sort((a, b) => 
+                          new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime()
+                        )[0];
+                        handleDelete(latestMessage);
                       }}
                     >
-                      <RefreshCw className="h-4 w-4" />
-                      <span>Get Full Chat</span>
-                    </button>
-                  </div>
-                )}
-                
-                <div className="p-6 space-y-6 overflow-y-auto flex-1">
-                  {enhancedThreadGroups[selectedThread]
-                    .sort((a, b) => {
-                      // Extract timestamp from messageId if it exists (messageIds often contain timestamps)
-                      const aIdTime = a.messageId.match(/^(\d+)/);
-                      const bIdTime = b.messageId.match(/^(\d+)/);
-                      
-                      // If both messages have timestamp-based IDs, use those for primary sorting
-                      if (aIdTime && bIdTime) {
-                        return parseInt(aIdTime[1]) - parseInt(bIdTime[1]);
-                      }
-                      
-                      // If timestamps are very close (within 2 seconds), use messageId as secondary sort
-                      const aDate = new Date(a.receivedAt);
-                      const bDate = new Date(b.receivedAt);
-                      const timeDiff = Math.abs(aDate.getTime() - bDate.getTime());
-                      
-                      if (timeDiff < 2000) {
-                        // Use message ID as secondary sort key
-                        return a.messageId.localeCompare(b.messageId);
-                      }
-                      
-                      // Default to standard timestamp sort
-                      return aDate.getTime() - bDate.getTime();
-                    })
-                    .map((message, index, array) => {
-                      const isFromUs = isOurEmail(message.sender, message);
-                      const isLastMessage = index === array.length - 1;
-                      const isLatestMessage = index === array.length - 1;
-                      const isLinkedIn = message.messageSource === 'LINKEDIN';
-                      
-                      // Determine message status for the thread
-                      const latestMessage = array[array.length - 1];
-                      let status: ConversationStatus = latestMessage.status || 'FOLLOW_UP_NEEDED';
-                      
-                      return (
-                        <div
-                          key={message.id}
-                          className={cn(
-                            "py-5 px-6 rounded-lg",
-                            isFromUs ? "bg-blue-50/80 border border-blue-100/50" : "bg-white border border-slate-200/60"
-                          )}
-                        >
-                          <div className="flex justify-between items-start mb-4">
-                            <div className="min-w-0 max-w-[70%]">
-                              <p className="font-medium text-slate-900 flex items-center gap-1 truncate overflow-hidden text-ellipsis">
-                                {isLinkedIn && <LinkedInIcon className="h-4 w-4 text-blue-600 flex-shrink-0" />}
-                                <span className="truncate">
-                                {isLinkedIn 
-                                  ? getLinkedInSenderName(message.sender, message, socialAccounts)
-                                  : message.sender}
-                                </span>
-                              </p>
-                              {!isLinkedIn && message.recipientEmail && (
-                                <p className="text-xs text-slate-500 mt-0.5 truncate overflow-hidden text-ellipsis">
-                                  to {message.recipientEmail}
-                                </p>
-                              )}
-                              {isLinkedIn && (
-                                <p className="text-xs text-slate-500 mt-0.5">
-                                  via LinkedIn
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              <div className="text-sm text-slate-500">
-                                {formatStoredDate(message.receivedAt)}
-                              </div>
-                              {isLinkedIn && isLatestMessage && (
-                                <div></div>
-                              )}
-                            </div>
-                          </div>
-                          
-                          <div className="mt-3 text-sm text-slate-800 whitespace-pre-wrap" 
-                               dangerouslySetInnerHTML={{ __html: message.content }} />
-                        </div>
-                      );
-                    })}
-                  {/* Add padding div at the bottom to ensure last message is fully visible */}
-                  <div className="h-10"></div>
-                </div>
-              </div>
-            )}
-          </ClientCard>
-        )}
-      </div>
-
-      {/* Reply Modal */}
-      {showReplyModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-[80rem] max-w-[95vw] max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="flex justify-between items-center p-4 border-b border-slate-200">
-              <h3 className="text-lg font-semibold text-slate-900">Reply to Conversation</h3>
-              <button 
-                onClick={() => setShowReplyModal(false)}
-                className="text-slate-400 hover:text-slate-500"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="flex flex-1 overflow-hidden">
-              {/* Left column - Reply Form */}
-              <div className="w-1/2 p-4 space-y-4 overflow-y-auto border-r border-slate-200">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    From
-                  </label>
-                  {selectedThread && enhancedThreadGroups[selectedThread] && 
-                   isLinkedInThread(enhancedThreadGroups[selectedThread]) ? (
-                    <select
-                      value={selectedSocialAccount}
-                      onChange={(e) => {
-                        setSelectedSocialAccount(e.target.value);
-                        // Set the flag to indicate user has manually selected an account
-                        userSelectedEmailRef.current = true;
-                      }}
-                      className="w-full p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      data-component-name="UniversalInboxClient"
-                    >
-                      <option value="">Select a LinkedIn account</option>
-                      {socialAccounts
-                        .filter(account => account.provider === 'LINKEDIN')
-                        .map(account => (
-                        <option 
-                          key={account.id} 
-                          value={account.id}
-                        >
-                          {account.name}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <select
-                      value={selectedFromEmail}
-                      onChange={(e) => {
-                        setSelectedFromEmail(e.target.value);
-                        // Set the flag to indicate user has manually selected an email
-                        userSelectedEmailRef.current = true;
-                      }}
-                      className="w-full p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="">Select an email account</option>
-                      {visibleEmailAccounts.map((account) => (
-                        <option key={account.id} value={account.email}>
-                          {account.email}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    To
-                  </label>
-                  <div className="text-sm text-slate-800 border border-slate-300 rounded-md p-2 bg-slate-50">
-                    {selectedThread && enhancedThreadGroups[selectedThread] ? 
-                      findOtherParticipant(enhancedThreadGroups[selectedThread]) : 
-                      ''}
+                      <TrashIcon className="h-4 w-4 mr-1" />
+                      <span>Delete</span>
+                    </ClientButton>
                   </div>
                 </div>
-
-                <textarea
-                  value={replyContent}
-                  onChange={(e) => setReplyContent(e.target.value)}
-                  placeholder="Type your reply here..."
-                  className="w-full h-[calc(100vh-25rem)] p-4 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none whitespace-pre-wrap"
-                />
               </div>
               
-              {/* Right column - AI Suggestions */}
-              <div className="w-1/2 flex flex-col overflow-hidden">
-                <div className="p-4 pb-2 border-b border-slate-100">
-                  <div className="flex justify-between items-center mb-2">
-                    <div>
-                      <h3 className="text-lg font-medium text-slate-800">AI Suggested Replies</h3>
-                      <p className="text-xs text-slate-500">Scroll to view all suggestions</p>
-                    </div>
-                    <div className="flex items-center">
-                      {suggestionStatus === 'success' && (
-                        <span className="text-xs text-green-600 mr-2 flex items-center">
-                          <CheckCircle className="w-3 h-3 mr-1" /> Suggestions requested
-                        </span>
-                      )}
-                      {suggestionStatus === 'error' && (
-                        <span className="text-xs text-red-600 mr-2 flex items-center">
-                          <XCircle className="w-3 h-3 mr-1" /> Request failed
-                        </span>
-                      )}
+              {selectedThread && (
+                <div className="flex h-full flex-col">
+                  {selectedThread && enhancedThreadGroups[selectedThread] && 
+                   isLinkedInThread(enhancedThreadGroups[selectedThread]) && (
+                    <div className="flex items-center justify-end border-b border-gray-200 p-4">
                       <button
-                        onClick={getAISuggestions}
-                        disabled={gettingSuggestions}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm rounded transition-colors"
+                        className="flex items-center space-x-1 rounded bg-blue-500 px-3 py-1.5 text-sm text-white hover:bg-blue-600"
+                        onClick={() => {
+                          // Get the first message of the thread 
+                          const messages = enhancedThreadGroups[selectedThread];
+                          const message = messages[0]; // Use the first message in the thread
+                          
+                          // Find the correct social account to get the Unipile account ID
+                          const socialAccount = socialAccounts.find(acc => acc.id === message.socialAccountId);
+                          const unipileAccountId = socialAccount?.unipileAccountId || '';
+                          
+                          toast.info("Retrieving full chat history...");
+                          fetch("https://n8n.srv768302.hstgr.cloud/webhook/linkedin-conversation", {
+                            method: "POST",
+                            headers: {
+                              "Content-Type": "application/json",
+                            },
+                            body: JSON.stringify({
+                              // Send all available message data
+                              thread_id: message.threadId,
+                              account_id: message.socialAccountId,
+                              organization_id: message.organizationId,
+                              message_id: message.messageId,
+                              id: message.id,
+                              subject: message.subject,
+                              sender: message.sender,
+                              recipient_email: message.recipientEmail,
+                              content: message.content,
+                              received_at: message.receivedAt,
+                              message_type: message.messageType,
+                              is_read: message.isRead,
+                              status: message.status,
+                              message_source: message.messageSource,
+                              unipile_account_id: unipileAccountId, // Use the correct Unipile account ID from the social account
+                              unipile_email_id: message.unipileEmailId,
+                              email_account_id: message.emailAccountId,
+                              classification_scores: message.classificationScores,
+                            }),
+                          })
+                          .then((response) => response.json())
+                          .then((data) => {
+                            console.log("Success:", data);
+                            toast.success("Chat history retrieved successfully!");
+                          })
+                          .catch((error) => {
+                            console.error("Error:", error);
+                            toast.error("Failed to retrieve chat history");
+                          });
+                        }}
                       >
-                        {gettingSuggestions ? (
-                          <>
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                            <span>Requesting...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles className="w-3 h-3" />
-                            <span>Get AI Suggestions</span>
-                          </>
-                        )}
+                        <RefreshCw className="h-4 w-4" />
+                        <span>Get Full Chat</span>
                       </button>
+                    </div>
+                  )}
+                  
+                  <div className="p-6 space-y-6 overflow-y-auto flex-1">
+                    {enhancedThreadGroups[selectedThread]
+                      .sort((a, b) => {
+                        // Extract timestamp from messageId if it exists (messageIds often contain timestamps)
+                        const aIdTime = a.messageId.match(/^(\d+)/);
+                        const bIdTime = b.messageId.match(/^(\d+)/);
+                        
+                        // If both messages have timestamp-based IDs, use those for primary sorting
+                        if (aIdTime && bIdTime) {
+                          return parseInt(aIdTime[1]) - parseInt(bIdTime[1]);
+                        }
+                        
+                        // If timestamps are very close (within 2 seconds), use messageId as secondary sort
+                        const aDate = new Date(a.receivedAt);
+                        const bDate = new Date(b.receivedAt);
+                        const timeDiff = Math.abs(aDate.getTime() - bDate.getTime());
+                        
+                        if (timeDiff < 2000) {
+                          // Use message ID as secondary sort key
+                          return a.messageId.localeCompare(b.messageId);
+                        }
+                        
+                        // Default to standard timestamp sort
+                        return aDate.getTime() - bDate.getTime();
+                      })
+                      .map((message, index, array) => {
+                        const isFromUs = isOurEmail(message.sender, message);
+                        const isLastMessage = index === array.length - 1;
+                        const isLatestMessage = index === array.length - 1;
+                        const isLinkedIn = message.messageSource === 'LINKEDIN';
+                        
+                        // Determine message status for the thread
+                        const latestMessage = array[array.length - 1];
+                        let status: ConversationStatus = latestMessage.status || 'FOLLOW_UP_NEEDED';
+                        
+                        return (
+                          <div
+                            key={message.id}
+                            className={cn(
+                              "py-5 px-6 rounded-lg",
+                              isFromUs ? "bg-blue-50/80 border border-blue-100/50" : "bg-white border border-slate-200/60"
+                            )}
+                          >
+                            <div className="flex justify-between items-start mb-4">
+                              <div className="min-w-0 max-w-[70%]">
+                                <p className="font-medium text-slate-900 flex items-center gap-1 truncate overflow-hidden text-ellipsis">
+                                  {isLinkedIn && <LinkedInIcon className="h-4 w-4 text-blue-600 flex-shrink-0" />}
+                                  <span className="truncate">
+                                  {isLinkedIn 
+                                    ? getLinkedInSenderName(message.sender, message, socialAccounts)
+                                    : message.sender}
+                                  </span>
+                                </p>
+                                {!isLinkedIn && message.recipientEmail && (
+                                  <p className="text-xs text-slate-500 mt-0.5 truncate overflow-hidden text-ellipsis">
+                                    to {message.recipientEmail}
+                                  </p>
+                                )}
+                                {isLinkedIn && (
+                                  <p className="text-xs text-slate-500 mt-0.5">
+                                    via LinkedIn
+                                  </p>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <div className="text-sm text-slate-500">
+                                  {formatStoredDate(message.receivedAt)}
+                                </div>
+                                {isLinkedIn && isLatestMessage && (
+                                  <div></div>
+                                )}
+                              </div>
+                            </div>
+                            
+                            <div className="mt-3 text-sm text-slate-800 whitespace-pre-wrap" 
+                                 dangerouslySetInnerHTML={{ __html: message.content }} />
+                          </div>
+                        );
+                      })}
+                    {/* Add padding div at the bottom to ensure last message is fully visible */}
+                    <div className="h-10"></div>
+                  </div>
+                </div>
+              )}
+            </ClientCard>
+            
+            {/* Second Card: Inline Reply Section (Appears Conditionally Below) */}
+            {isReplying && selectedThread && (
+              <ClientCard ref={replyCardRef} className="mt-6 border-slate-200/60 shadow-lg shadow-slate-200/50">
+                <div className="p-6 space-y-6"> {/* Increased overall vertical spacing slightly */}
+                  {/* Form Fields */}
+                  <div className='grid grid-cols-2 gap-4'>
+                    {/* From Select */}
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        From
+                      </label>
+                      {enhancedThreadGroups[selectedThread] && 
+                       isLinkedInThread(enhancedThreadGroups[selectedThread]) ? (
+                        <select
+                          value={selectedSocialAccount}
+                          onChange={(e) => {
+                            setSelectedSocialAccount(e.target.value);
+                            userSelectedEmailRef.current = true;
+                          }}
+                          className="w-full p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          data-component-name="UniversalInboxClient"
+                        >
+                          <option value="">Select a LinkedIn account</option>
+                          {socialAccounts
+                            .filter(account => account.provider === 'LINKEDIN')
+                            .map(account => (
+                            <option 
+                              key={account.id} 
+                              value={account.id}
+                            >
+                              {account.name}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <select
+                          value={selectedFromEmail}
+                          onChange={(e) => {
+                            setSelectedFromEmail(e.target.value);
+                            userSelectedEmailRef.current = true;
+                          }}
+                          className="w-full p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="">Select an email account</option>
+                          {visibleEmailAccounts.map((account) => (
+                            <option key={account.id} value={account.email}>
+                              {account.email}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                    
+                    {/* To Display */}
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        To
+                      </label>
+                      <div className="text-sm text-slate-800 border border-slate-300 rounded-md p-2 bg-slate-50 h-[42px] flex items-center">
+                        {enhancedThreadGroups[selectedThread] ? 
+                          findOtherParticipant(enhancedThreadGroups[selectedThread]) : 
+                          ''}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Textarea (Full Width) */}
+                  <div>
+                    <label htmlFor="replyTextArea" className="sr-only">Reply Content</label>
+                    <textarea
+                      ref={textareaRef} // Attach ref
+                      id="replyTextArea" 
+                      value={replyContent}
+                      onChange={(e) => setReplyContent(e.target.value)}
+                      placeholder="Type your reply here..."
+                      className="w-full h-[30vh] p-4 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none whitespace-pre-wrap"
+                    />
+                  </div>
+
+                  {/* Action Buttons (Moved Here) */}
+                  <div className="flex justify-end gap-3"> 
+                    {/* Removed border-t, bg-slate-50, px-6, py-4. Relying on parent space-y-6 */}
+                    <ClientButton
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setIsReplying(false);
+                          setReplyContent(''); 
+                        }}
+                      >
+                        Cancel
+                      </ClientButton>
+                    <ClientButton
+                        size="sm"
+                        onClick={handleReply}
+                        disabled={
+                          !replyContent.trim() || 
+                          replying || 
+                          (isLinkedInThread(enhancedThreadGroups[selectedThread || '']) ? !selectedSocialAccount : !selectedFromEmail)
+                        }
+                        className="flex items-center gap-2"
+                      >
+                        {replying ? (
+                          <LoaderIcon className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <SendIcon className="h-4 w-4" />
+                        )}
+                        {replying ? 'Sending...' : 'Send Reply'}
+                      </ClientButton>
+                  </div>
+                  
+                  {/* AI Suggestions Section (Now Below Buttons) */}
+                  <div className="pt-6 border-t border-slate-200/60">
+                    <div className="flex justify-between items-center mb-4">
+                        <div>
+                          <h3 className="text-base font-medium text-slate-800 flex items-center">
+                            {/* Added Icon */}
+                            <Sparkles className="w-4 h-4 mr-2 inline text-blue-600" /> 
+                            AI Suggested Replies
+                          </h3>
+                          <p className="text-xs text-slate-500 mt-1">Scroll to view all suggestions</p>
+                        </div>
+                        <div className="flex items-center">
+                            {/* ... suggestion status indicators ... */}
+                            {/* Converted to ClientButton */}
+                            <ClientButton
+                              onClick={getAISuggestions}
+                              disabled={gettingSuggestions}
+                              size="sm" // Match other buttons
+                              // variant default (primary blue)
+                            >
+                              {gettingSuggestions ? (
+                                <>
+                                  <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                  <span>Requesting...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Sparkles className="w-3 h-3 mr-1" />
+                                  <span>Get Suggestions</span> {/* Slightly shorter text */}
+                                </>
+                              )}
+                            </ClientButton>
+                          </div>
+                      </div>
+                      
+                    {/* Suggestion Boxes */}
+                    <div className="space-y-3 max-h-[40vh] overflow-y-auto custom-scrollbar pr-2">
+                      {enhancedThreadGroups[selectedThread] && enhancedThreadGroups[selectedThread].length > 0 && 
+                        (() => {
+                          const latestMessage = enhancedThreadGroups[selectedThread].sort((a, b) => 
+                            new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime()
+                          )[0];
+                          const SuggestionBox = ({ suggestion, index }: { suggestion: string | null | undefined, index: number }) => (
+                            <div className="relative rounded-md border border-slate-200 p-3 bg-slate-50/80 hover:bg-slate-100 transition-colors">
+                              <div className="flex justify-between items-start mb-1">
+                                <h4 className="font-medium text-sm text-slate-700">AI Suggestion #{index}</h4>
+                                {suggestion && (
+                                  /* Converted to ClientButton with ghost variant */
+                                  <ClientButton 
+                                    variant="ghost" 
+                                    size="sm"
+                                    onClick={() => {
+                                      const trimmedSuggestion = suggestion.replace(/^\s+|\s+$/g, '');
+                                      setReplyContent(trimmedSuggestion);
+                                    }}
+                                    className="text-blue-600 hover:text-blue-700 px-2" // Adjusted padding for ghost
+                                  >
+                                    Use This
+                                  </ClientButton>
+                                )}
+                              </div>
+                              <div 
+                                className={`text-xs ${suggestion ? 'text-slate-800' : 'text-slate-400 italic'} max-h-[150px] overflow-y-auto pr-2 custom-scrollbar`}
+                              >
+                                <div className="whitespace-pre-wrap">
+                                  {suggestion || `AI suggestion #${index} will appear here`}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                          return (
+                            <>
+                              <SuggestionBox suggestion={latestMessage.aiSuggestion1} index={1} />
+                              <SuggestionBox suggestion={latestMessage.aiSuggestion2} index={2} />
+                              <SuggestionBox suggestion={latestMessage.aiSuggestion3} index={3} />
+                            </>
+                          );
+                        })()
+                      }
                     </div>
                   </div>
                 </div>
-                
-                <div className="flex-1 p-4 pt-2 overflow-y-auto custom-scrollbar">
-                  {selectedThread && enhancedThreadGroups[selectedThread] && enhancedThreadGroups[selectedThread].length > 0 && 
-                    (() => {
-                      const latestMessage = enhancedThreadGroups[selectedThread].sort((a, b) => 
-                        new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime()
-                      )[0];
-                      
-                      // Define a reusable SuggestionBox component
-                      const SuggestionBox = ({ suggestion, index }: { suggestion: string | null | undefined, index: number }) => (
-                        <div className="relative rounded-md border border-slate-200 p-4 mb-6 bg-slate-50 hover:bg-slate-100 transition-colors">
-                          <div className="flex justify-between items-start mb-2">
-                            <h4 className="font-medium text-slate-700">AI Suggestion #{index}</h4>
-                            {suggestion && (
-                              <button 
-                                onClick={() => {
-                                  // Trim leading and trailing whitespace/newlines while preserving internal formatting
-                                  const trimmedSuggestion = suggestion.replace(/^\s+|\s+$/g, '');
-                                  setReplyContent(trimmedSuggestion);
-                                  console.log('Using suggestion with line breaks (trimmed):', trimmedSuggestion);
-                                }}
-                                className="bg-blue-600 hover:bg-blue-700 text-white text-sm py-1 px-3 rounded transition-colors ml-2 flex-shrink-0"
-                              >
-                                Use This
-                              </button>
-                            )}
-                          </div>
-                          <div 
-                            className={`
-                              text-sm ${suggestion ? 'text-slate-800' : 'text-slate-400 italic'} 
-                              max-h-[300px] overflow-y-auto pr-2 custom-scrollbar 
-                              ${suggestion && suggestion.length > 300 ? 'scroll-shadow-bottom' : ''}
-                            `}
-                          >
-                            <div className="whitespace-pre-wrap">
-                              {suggestion || `AI suggestion #${index} will appear here`}
-                            </div>
-                          </div>
-                          {suggestion && suggestion.length > 300 && (
-                            <div className="absolute bottom-3 right-4 left-4 h-6 bg-gradient-to-t from-slate-50 to-transparent pointer-events-none"></div>
-                          )}
-                        </div>
-                      );
-                      
-                      return (
-                        <div className="space-y-4">
-                          <SuggestionBox suggestion={latestMessage.aiSuggestion1} index={1} />
-                          <SuggestionBox suggestion={latestMessage.aiSuggestion2} index={2} />
-                          <SuggestionBox suggestion={latestMessage.aiSuggestion3} index={3} />
-                        </div>
-                      );
-                    })()
-                  }
-                </div>
-              </div>
-            </div>
-            <div className="px-6 py-4 border-t border-slate-200/60 flex justify-end gap-3">
-              <ClientButton
-                variant="outline"
-                onClick={() => {
-                  setShowReplyModal(false);
-                  setReplyContent('');
-                }}
-              >
-                Cancel
-              </ClientButton>
-              <ClientButton
-                onClick={handleReply}
-                disabled={
-                  !replyContent.trim() || 
-                  replying || 
-                  (isLinkedInThread(enhancedThreadGroups[selectedThread || '']) ? !selectedSocialAccount : !selectedFromEmail)
-                }
-                className="flex items-center gap-2"
-              >
-                {replying ? (
-                  <LoaderIcon className="h-4 w-4 animate-spin" />
-                ) : (
-                  <SendIcon className="h-4 w-4" />
-                )}
-                {replying ? 'Sending...' : 'Send Reply'}
-              </ClientButton>
-            </div>
-          </div>
-        </div>
-      )}
+              </ClientCard>
+            )}
+          </>
+        )}
+      </div>
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && messageToDelete && (
