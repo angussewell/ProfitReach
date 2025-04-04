@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Trash2, Edit, Calendar, User, FileText, Tag, Mail, PlusCircle, X, Clock } from 'lucide-react';
+import { Trash2, Edit, Calendar, User, FileText, Tag, Mail, PlusCircle, X, Clock, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useEffect } from 'react';
@@ -363,12 +363,32 @@ export function AppointmentsList({ appointments }: AppointmentsListProps) {
                           })()}</span>
                         </div>
                       </div>
-                      {appointment.fromEmail && (
-                        <div className="flex items-center gap-2 text-slate-500 mt-1">
-                          <Mail className="h-4 w-4" />
-                          <span className="truncate">{appointment.fromEmail}</span>
-                        </div>
-                      )}
+                      {(() => {
+                        const allEmails = [];
+                        if (appointment.fromEmail) {
+                          allEmails.push(appointment.fromEmail);
+                        }
+                        if (appointment.recipients && appointment.recipients.length > 0) {
+                          allEmails.push(...appointment.recipients);
+                        }
+                        
+                        if (allEmails.length > 0) {
+                          return (
+                            <div className="flex items-start gap-2 text-slate-500 mt-1">
+                              <Users className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                              <div className="flex flex-col">
+                                <span className="text-sm font-medium text-slate-600 mb-0.5">Recipients:</span>
+                                {allEmails.map((email, index) => (
+                                  <span key={index} className="text-sm truncate">
+                                    {email}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
                     <div className="flex items-center gap-1">
                       <Button
