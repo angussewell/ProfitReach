@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { buildSqlWhereFromFilters } from '@/lib/filter-utils';
+import { buildSqlWhereFromFilters } from '../../../../lib/filter-utils';
 import { FilterState } from '@/types/filters';
 
 // Constants

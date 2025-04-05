@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { Prisma } from '@prisma/client';
 import { FilterState } from '@/types/filters';
-import { buildSqlWhereFromFilters } from '@/lib/filter-utils';
+import { buildSqlWhereFromFilters } from '../../../../lib/filter-utils';
 
 // Constants
 const PLACEHOLDER_ORG_ID = 'org_test_alpha'; // Fallback for testing

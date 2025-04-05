@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { FilterState } from '@/types/filters';
-import { buildSqlWhereFromFilters } from '@/lib/filter-utils';
+import { buildSqlWhereFromFilters } from '../../../../lib/filter-utils';
 
 // Constants - Fallback for testing purposes
 const PLACEHOLDER_ORG_ID = 'org_test_alpha';
