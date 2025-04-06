@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react'; // Added React import
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Filter, FilterOperator, FilterGroup, createFilter } from '@/types/filters';
+import { Filter, FilterOperator } from '@/types/filters'; // Removed FilterGroup, createFilter
+import { createFilter } from '@/lib/filter-utils'; // Import createFilter from the correct location
 import { X, Plus, ChevronDown } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 
@@ -16,7 +17,8 @@ interface FilterGroupProps {
 }
 
 function FilterGroupComponent({ filters, fields, onUpdate, onDelete, showDelete }: FilterGroupProps) {
-  const operators: FilterOperator[] = ['exists', 'not exists', 'equals', 'not equals', 'contains', 'not contains'];
+  // Corrected operator names to match FilterOperator type (camelCase)
+  const operators: FilterOperator[] = ['exists', 'not exists', 'equals', 'notEquals', 'contains', 'notContains']; 
 
   const addFilter = () => {
     const newFilter = createFilter(fields[0], 'exists');
@@ -70,9 +72,9 @@ function FilterGroupComponent({ filters, fields, onUpdate, onDelete, showDelete 
               ))}
             </select>
 
-            {/* Value input for operators that need it */}
-            {(filter.operator === 'equals' || filter.operator === 'not equals' || 
-              filter.operator === 'contains' || filter.operator === 'not contains') && (
+            {/* Value input for operators that need it - corrected operator names */}
+            {(filter.operator === 'equals' || filter.operator === 'notEquals' || 
+              filter.operator === 'contains' || filter.operator === 'notContains') && (
               <Input
                 type="text"
                 value={filter.value || ''}
@@ -204,4 +206,4 @@ export function FilterBuilder({ initialFilters = [], fields, onChange }: FilterB
       </Button>
     </div>
   );
-} 
+}

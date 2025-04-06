@@ -1,479 +1,677 @@
-import { Filter, FilterOperator } from '@/types/filters';
-import prisma from '@/lib/prisma';
-import get from 'lodash/get';
-import { log } from '@/lib/utils';
+import { FilterCondition, FilterState, FilterOperator, Filter } from '@/types/filters';
+import { Prisma } from '@prisma/client';
 
-interface WebhookData {
-  [key: string]: any;
-}
-
-interface NormalizedData {
-  [key: string]: string | null;
+/**
+ * Helper function to generate a unique ID for filters
+ */
+export function generateFilterId(): string {
+  return Math.random().toString(36).substring(2, 11);
 }
 
 /**
- * Single source of truth for string normalization
+ * Creates a new Filter object with a unique ID
  */
-function normalizeForComparison(value: any): string {
-  if (value === null || value === undefined) return '';
-  return String(value).toLowerCase().trim().replace(/\s+/g, ' ');
+export function createFilter(field: string, operator: FilterOperator, value?: any): Filter {
+  return {
+    id: generateFilterId(),
+    field,
+    operator,
+    value,
+  };
 }
 
 /**
- * Normalizes webhook data into a flat structure with standardized field access
+ * Converts a set of filter conditions to a Prisma where object
  */
-export function normalizeWebhookData(data: Record<string, any>): Record<string, any> {
-  // Log incoming data
-  log('info', 'Normalizing webhook data', { 
-    input: data,
-    hasContactData: !!data
-  });
-
-  // Create a clean copy of the data
-  const normalized = {
-    contactData: {
-      ...data,  // Copy all fields directly
-      PMS: data.PMS || data.propertyManagementSoftware  // Special handling for PMS
-    }
+export function buildPrismaWhereFromFilters(
+  filterState: FilterState,
+  organizationId: string
+): any {
+  // Start with the required organizationId filter
+  const where: any = {
+    organizationId
   };
 
-  // Log normalized result
-  log('info', 'Data normalized', { 
-    original: data,
-    normalized,
-    pmsValue: normalized.contactData.PMS,
-    fields: Object.keys(normalized.contactData)
-  });
+  if (!filterState.conditions || filterState.conditions.length === 0) {
+    return where;
+  }
 
-  return normalized;
+  // Build an array of conditions
+  const conditions = filterState.conditions.map(condition => 
+    buildPrismaCondition(condition)
+  ).filter(Boolean);
+
+  if (conditions.length === 0) {
+    return where;
+  }
+
+  // Combine conditions with AND or OR
+  if (filterState.logicalOperator === 'OR') {
+    where.OR = conditions;
+  } else {
+    where.AND = conditions;
+  }
+
+  return where;
 }
 
 /**
- * Normalize a single value for comparison
+ * Build a single Prisma condition from a filter condition
  */
-function normalizeValue(value: any): string {
-  if (value === null || value === undefined) return '';
-  return String(value).toLowerCase().trim();
-}
-
-/**
- * Normalize all data fields recursively
- */
-function normalizeData(data: Record<string, any>): Record<string, any> {
-  const normalized: Record<string, any> = {};
+function buildPrismaCondition(condition: FilterCondition): any {
+  const { field, operator, value } = condition;
   
-  for (const [key, value] of Object.entries(data)) {
-    const normalizedKey = key.toLowerCase().trim();
-    normalized[normalizedKey] = typeof value === 'object' && value !== null
-      ? normalizeData(value)
-      : normalizeValue(value);
+  // Handle tags separately
+  if (field === 'tags') {
+    return buildTagsCondition(operator, value);
   }
   
-  return normalized;
-}
-
-/**
- * Finds a field value in the data object, trying multiple formats
- */
-function findFieldValue(data: Record<string, any>, field: string): string {
-  const normalizedField = field.toLowerCase().trim();
-  return normalizeValue(
-    data[normalizedField] ||
-    data.contactdata?.[normalizedField] ||
-    ''
-  );
-}
-
-function compareValues(actual: any, expected: any, operator: FilterOperator): { passed: boolean; reason: string } {
-  // Handle null/undefined cases
-  if (actual === null || actual === undefined) actual = '';
-  if (expected === null || expected === undefined) expected = '';
+  // Check if this is a field in additionalData
+  if (field === 'status') {
+    return buildJsonFieldCondition(field, operator, value);
+  }
   
-  // Convert to strings and normalize
-  const actualStr = normalizeValue(actual);
-  const expectedStr = normalizeValue(expected);
+  // Handle date fields
+  if (['createdAt', 'updatedAt', 'lastActivityAt'].includes(field)) {
+    return buildDateCondition(field, operator, value);
+  }
   
-  log('info', 'Comparing values', {
-    original: { actual, expected },
-    normalized: { actualStr, expectedStr },
-    operator
-  });
-
+  // Handle empty/not empty operators
+  if (operator === 'isEmpty') {
+    return { [field]: { equals: null } };
+  }
+  
+  if (operator === 'isNotEmpty') {
+    return { [field]: { not: null } };
+  }
+  
+  // Need a value for the remaining operators
+  if (value === null || value === undefined) {
+    return null;
+  }
+  
+  // Map operators to Prisma operators
   switch (operator) {
     case 'equals':
-      return {
-        passed: actualStr === expectedStr,
-        reason: actualStr === expectedStr ? 
-          `Value "${actual}" equals "${expected}"` : 
-          `Value "${actual}" does not equal "${expected}"`
-      };
-
-    case 'not equals':
-      return {
-        passed: actualStr !== expectedStr,
-        reason: actualStr !== expectedStr ? 
-          `Value "${actual}" does not equal "${expected}"` : 
-          `Value "${actual}" equals "${expected}"`
-      };
-
+      return { [field]: { equals: value } };
+    case 'notEquals':
+      return { [field]: { not: value } };
     case 'contains':
-      return {
-        passed: actualStr.includes(expectedStr),
-        reason: actualStr.includes(expectedStr) ? 
-          `Value "${actual}" contains "${expected}"` : 
-          `Value "${actual}" does not contain "${expected}"`
-      };
-
-    case 'not contains':
-      return {
-        passed: !actualStr.includes(expectedStr),
-        reason: !actualStr.includes(expectedStr) ? 
-          `Value "${actual}" does not contain "${expected}"` : 
-          `Value "${actual}" contains "${expected}"`
-      };
-
+      return { [field]: { contains: value, mode: 'insensitive' } };
+    case 'notContains':
+      return { [field]: { not: { contains: value, mode: 'insensitive' } } };
+    case 'startsWith':
+      return { [field]: { startsWith: value, mode: 'insensitive' } };
+    case 'endsWith':
+      return { [field]: { endsWith: value, mode: 'insensitive' } };
+    case 'greaterThan':
+      return { [field]: { gt: Number(value) } };
+    case 'lessThan':
+      return { [field]: { lt: Number(value) } };
+    case 'isAfter':
+      return { [field]: { gt: new Date(value as string) } };
+    case 'isBefore':
+      return { [field]: { lt: new Date(value as string) } };
     default:
-      return {
-        passed: false,
-        reason: `Unknown operator: ${operator}`
-      };
+      return null;
   }
 }
 
-// Evaluate a single filter
-async function evaluateFilter(
-  filter: Filter,
-  data: Record<string, any>
-): Promise<{ passed: boolean; reason: string; details?: any }> {
-  // Log filter evaluation start with complete data structure
-  log('info', 'Evaluating filter', { 
-    filter,
-    dataStructure: {
-      keys: Object.keys(data),
-      hasContactData: 'contactData' in data,
-      topLevelFields: Object.keys(data)
+/**
+ * Build a condition for a JSON field (additionalData)
+ */
+function buildJsonFieldCondition(field: string, operator: string, value: any): any {
+  // For additionalData.status
+  if (field === 'status') {
+    // Handle empty/not empty operators
+    if (operator === 'isEmpty') {
+      return {
+        OR: [
+          { additionalData: { path: ['status'], equals: null } },
+          { additionalData: { path: ['status'], equals: '' } },
+          { additionalData: { equals: {} } },
+          { additionalData: { equals: null } }
+        ]
+      };
     }
-  });
-
-  // Get the actual value - try both direct access and contactData
-  const fieldValue = data[filter.field] || data.contactData?.[filter.field];
-
-  // Log the value lookup attempt
-  log('info', 'Field value lookup result', {
-    field: filter.field,
-    directValue: data[filter.field],
-    contactDataValue: data.contactData?.[filter.field],
-    resolvedValue: fieldValue,
-    filterValue: filter.value,
-    operator: filter.operator
-  });
-
-  // Special handling for exists/not exists
-  if (filter.operator === 'exists') {
-    const exists = fieldValue !== undefined && fieldValue !== null && fieldValue !== '';
-    log('info', 'Evaluating exists operator', {
-      field: filter.field,
-      value: fieldValue,
-      exists,
-      details: {
-        isUndefined: fieldValue === undefined,
-        isNull: fieldValue === null,
-        isEmpty: fieldValue === '',
-        type: typeof fieldValue
-      }
-    });
-    return {
-      passed: exists,
-      reason: `${filter.field} ${exists ? 'exists' : 'does not exist'}`,
-      details: {
-        field: filter.field,
-        value: fieldValue,
-        operator: filter.operator,
-        dataStructure: {
-          hasDirectField: filter.field in data,
-          hasContactDataField: data.contactData && filter.field in data.contactData,
-          fieldValue,
-          exists
-        }
-      }
-    };
-  }
-
-  if (filter.operator === 'not exists') {
-    const exists = fieldValue !== undefined && fieldValue !== null && fieldValue !== '';
-    log('info', 'Evaluating not exists operator', {
-      field: filter.field,
-      value: fieldValue,
-      exists,
-      details: {
-        isUndefined: fieldValue === undefined,
-        isNull: fieldValue === null,
-        isEmpty: fieldValue === '',
-        type: typeof fieldValue
-      }
-    });
-    return {
-      passed: !exists,
-      reason: `${filter.field} ${!exists ? 'does not exist' : 'exists'}`,
-      details: {
-        field: filter.field,
-        value: fieldValue,
-        operator: filter.operator,
-        dataStructure: {
-          hasDirectField: filter.field in data,
-          hasContactDataField: data.contactData && filter.field in data.contactData,
-          fieldValue,
-          exists
-        }
-      }
-    };
-  }
-
-  // For other operators, if value doesn't exist, fail
-  if (fieldValue === undefined || fieldValue === null) {
-    return {
-      passed: false,
-      reason: `${filter.field} is undefined or null`,
-      details: {
-        field: filter.field,
-        value: fieldValue,
-        operator: filter.operator,
-        expectedValue: filter.value
-      }
-    };
-  }
-
-  // Normalize values for comparison
-  const normalizedActual = String(fieldValue).toLowerCase().trim();
-  const normalizedExpected = String(filter.value).toLowerCase().trim();
-
-  // Log normalized values
-  log('info', 'Normalized values for comparison', {
-    field: filter.field,
-    original: {
-      actual: fieldValue,
-      expected: filter.value
-    },
-    normalized: {
-      actual: normalizedActual,
-      expected: normalizedExpected
+    
+    if (operator === 'isNotEmpty') {
+      return {
+        AND: [
+          { additionalData: { path: ['status'], not: null } },
+          { additionalData: { path: ['status'], not: '' } }
+        ]
+      };
     }
-  });
-
-  // Evaluate based on operator
-  const evaluationResult = {
-    field: filter.field,
-    originalValue: fieldValue,
-    normalizedValue: normalizedActual,
-    expectedValue: filter.value,
-    normalizedExpected: normalizedExpected,
-    operator: filter.operator
-  };
-
-  switch (filter.operator) {
-    case 'equals':
-      return {
-        passed: normalizedActual === normalizedExpected,
-        reason: `${filter.field} ${normalizedActual === normalizedExpected ? 'equals' : 'does not equal'} ${filter.value}`,
-        details: evaluationResult
-      };
-
-    case 'not equals':
-      return {
-        passed: normalizedActual !== normalizedExpected,
-        reason: `${filter.field} ${normalizedActual !== normalizedExpected ? 'does not equal' : 'equals'} ${filter.value}`,
-        details: evaluationResult
-      };
-
-    case 'contains':
-      return {
-        passed: normalizedActual.includes(normalizedExpected),
-        reason: `${filter.field} ${normalizedActual.includes(normalizedExpected) ? 'contains' : 'does not contain'} ${filter.value}`,
-        details: evaluationResult
-      };
-
-    case 'not contains':
-      return {
-        passed: !normalizedActual.includes(normalizedExpected),
-        reason: `${filter.field} ${!normalizedActual.includes(normalizedExpected) ? 'does not contain' : 'contains'} ${filter.value}`,
-        details: evaluationResult
-      };
-
-    default:
-      log('warn', 'Unknown operator', { operator: filter.operator });
-      return {
-        passed: false,
-        reason: `Unknown operator: ${filter.operator}`,
-        details: evaluationResult
-      };
-  }
-}
-
-// Normalize field names consistently
-function normalizeFieldName(field: string): string {
-  return field.toLowerCase().replace(/[^a-z0-9]/g, '');
-}
-
-async function getFieldMapping(systemField: string) {
-  const mapping = await prisma.webhookField.findFirst({
-    where: { 
-      OR: [
-        { name: normalizeFieldName(systemField) },
-        { originalName: systemField }
-      ]
+    
+    // Map operators to JSON path operators
+    switch (operator) {
+      case 'equals':
+        return {
+          additionalData: {
+            path: ['status'],
+            equals: value
+          }
+        };
+      case 'notEquals':
+        return {
+          additionalData: {
+            path: ['status'],
+            not: value
+          }
+        };
+      case 'contains':
+        return {
+          additionalData: {
+            path: ['status'],
+            string_contains: value
+          }
+        };
+      case 'notContains':
+        return {
+          additionalData: {
+            path: ['status'],
+            not: { string_contains: value }
+          }
+        };
+      case 'startsWith':
+        return {
+          additionalData: {
+            path: ['status'],
+            string_starts_with: value
+          }
+        };
+      case 'endsWith':
+        return {
+          additionalData: {
+            path: ['status'],
+            string_ends_with: value
+          }
+        };
+      default:
+        return null;
     }
-  });
-  return mapping?.originalName || systemField;
-}
-
-// Update FilterPipeline to handle field mapping
-const FilterPipeline = {
-  normalize: (filter: Filter): Filter => {
-    // Log incoming filter
-    log('info', 'Normalizing filter', { 
-      original: filter
-    });
-
-    const normalized = {
-      ...filter,
-      field: filter.field,  // Don't lowercase the field name anymore
-      value: filter.value?.trim(),
-      operator: filter.operator
-    };
-
-    // Log normalized result
-    log('info', 'Normalized filter', { 
-      original: filter,
-      normalized
-    });
-
-    return normalized;
-  },
+  }
   
-  validate: (filter: Filter): Filter => {
-    const errors = [];
-    if (!filter.field) errors.push('Field required');
-    if (filter.operator === 'equals' && !filter.value) errors.push('Value required for equals operator');
-    if (errors.length > 0) {
-      log('error', 'Filter validation failed', { filter, errors });
-      throw new Error(errors.join(', '));
-    }
-    return filter;
-  },
+  return null;
+}
+
+/**
+ * Builds a SQL WHERE clause for the raw query approach 
+ * (Used as alternative if Prisma Client filtering is not sufficient)
+ */
+export function buildSqlWhereFromFilters(
+  filterState: FilterState,
+  organizationId: string
+): { sql: string, params: any[] } {
+  // Start with the base WHERE clause for organization
+  let sql = `WHERE "organizationId" = $1`;
+  const params: any[] = [organizationId];
   
-  process: async (filter: Filter, data: Record<string, any>): Promise<{ passed: boolean; reason: string }> => {
-    try {
-      const normalized = FilterPipeline.normalize(filter);
-      FilterPipeline.validate(normalized);
-      
-      // Get webhook field from mapping
-      const webhookField = await getFieldMapping(normalized.field);
-      log('info', 'Field mapping lookup result', {
-        originalField: filter.field,
-        normalizedField: normalized.field,
-        mappedField: webhookField
-      });
-
-      if (!webhookField) {
-        log('error', 'No field mapping found', { 
-          systemField: normalized.field,
-          availableFields: await prisma.fieldMapping.findMany().then(mappings => 
-            mappings.map(m => m.name)
-          )
-        });
-        return { passed: false, reason: `No mapping found for field ${normalized.field}` };
-      }
-      
-      // Use mapped field for evaluation
-      const mappedFilter = { ...normalized, field: webhookField };
-      log('info', 'Processing filter with mapping', { 
-        original: filter,
-        normalized,
-        mappedField: webhookField,
-        finalFilter: mappedFilter
-      });
-      
-      return evaluateFilter(mappedFilter, data);
-    } catch (error) {
-      log('error', 'Filter processing failed', { filter, error: String(error) });
-      return { passed: false, reason: String(error) };
-    }
+  if (!filterState.conditions || filterState.conditions.length === 0) {
+    return { sql, params };
   }
-};
-
-// Evaluate filter groups
-export async function evaluateFilters(
-  filters: Filter[],
-  data: Record<string, any>
-): Promise<{
-  passed: boolean;
-  results: Array<{
-    filter: Filter;
-    passed: boolean;
-    reason: string;
-    details: any;
-  }>;
-  summary: {
-    totalFilters: number;
-    passedFilters: number;
-    failedFilters: number;
-    evaluationTime: string;
-  };
-}> {
-  const startTime = Date.now();
-
-  // Group filters by their group property
-  const groups = filters.reduce((acc, filter) => {
-    const groupId = filter.group || 'default';
-    if (!acc[groupId]) acc[groupId] = [];
-    acc[groupId].push(filter);
-    return acc;
-  }, {} as Record<string, Filter[]>);
-
-  // Evaluate each group (OR logic between groups)
-  const groupResults = await Promise.all(
-    Object.values(groups).map(async (groupFilters) => {
-      // Evaluate filters within group (AND logic within group)
-      const filterResults = await Promise.all(
-        groupFilters.map(filter => evaluateFilter(filter, data))
+  
+  // Process each condition
+  const conditionSql: string[] = [];
+  
+  filterState.conditions.forEach(condition => {
+    const { field, operator, value } = condition;
+    const paramIndex = params.length + 1;
+    
+    // Handle JSON fields (additionalData)
+    if (field === 'status') {
+      const jsonCondition = buildJsonFieldSqlCondition(
+        field, 
+        operator, 
+        value, 
+        paramIndex
       );
       
-      // Group passes if all filters in the group pass (AND logic)
-      const groupPassed = filterResults.every(r => r.passed);
-      
-      return {
-        passed: groupPassed,
-        filters: groupFilters,
-        results: filterResults
+      if (jsonCondition) {
+        conditionSql.push(jsonCondition.sql);
+        if (jsonCondition.param !== undefined) {
+          params.push(jsonCondition.param);
+        }
+      }
+      return;
+    }
+    
+    // Handle standard fields
+    const fieldCondition = buildFieldSqlCondition(
+      field, 
+      operator, 
+      value, 
+      paramIndex
+    );
+    
+    if (fieldCondition) {
+      conditionSql.push(fieldCondition.sql);
+      if (fieldCondition.param !== undefined) {
+        params.push(fieldCondition.param);
+      }
+    }
+  });
+  
+  if (conditionSql.length > 0) {
+    // Combine using AND or OR
+    const combiner = filterState.logicalOperator === 'OR' ? ' OR ' : ' AND ';
+    sql += ` AND (${conditionSql.join(combiner)})`;
+  }
+  
+  return { sql, params };
+}
+
+/**
+ * Build SQL condition for a standard field
+ */
+function buildFieldSqlCondition(
+  field: string, 
+  operator: string, 
+  value: any, 
+  paramIndex: number
+): { sql: string, param?: any } | null {
+  // Safe field name - whitelist of allowed fields to prevent SQL injection
+  const safeFieldName = getSafeFieldName(field);
+  if (!safeFieldName) return null;
+  
+  // Handle empty/not empty operators
+  if (operator === 'isEmpty') {
+    return { sql: `${safeFieldName} IS NULL OR ${safeFieldName} = ''` };
+  }
+  
+  if (operator === 'isNotEmpty') {
+    return { sql: `${safeFieldName} IS NOT NULL AND ${safeFieldName} <> ''` };
+  }
+  
+  // Need a value for remaining operators
+  if (value === null || value === undefined) {
+    return null;
+  }
+  
+  // Map operators to SQL operators
+  switch (operator) {
+    case 'equals':
+      return { sql: `${safeFieldName} = $${paramIndex}`, param: value };
+    case 'notEquals':
+      return { sql: `${safeFieldName} <> $${paramIndex}`, param: value };
+    case 'contains':
+      return { 
+        sql: `${safeFieldName} ILIKE $${paramIndex}`, 
+        param: `%${value}%` 
       };
-    })
-  );
+    case 'notContains':
+      return { 
+        sql: `${safeFieldName} NOT ILIKE $${paramIndex}`, 
+        param: `%${value}%` 
+      };
+    case 'startsWith':
+      return { 
+        sql: `${safeFieldName} ILIKE $${paramIndex}`, 
+        param: `${value}%` 
+      };
+    case 'endsWith':
+      return { 
+        sql: `${safeFieldName} ILIKE $${paramIndex}`, 
+        param: `%${value}` 
+      };
+    case 'greaterThan':
+      return { 
+        sql: `${safeFieldName} > $${paramIndex}`, 
+        param: Number(value) 
+      };
+    case 'lessThan':
+      return { 
+        sql: `${safeFieldName} < $${paramIndex}`, 
+        param: Number(value) 
+      };
+    case 'isAfter':
+      return { 
+        sql: `${safeFieldName} > $${paramIndex}`, 
+        param: new Date(value as string) 
+      };
+    case 'isBefore':
+      return { 
+        sql: `${safeFieldName} < $${paramIndex}`, 
+        param: new Date(value as string) 
+      };
+    default:
+      return null;
+  }
+}
 
-  // Overall evaluation passes if any group passes (OR logic)
-  const passed = groupResults.some(g => g.passed);
+/**
+ * Build SQL condition for a JSON field
+ */
+function buildJsonFieldSqlCondition(
+  field: string, 
+  operator: string, 
+  value: any, 
+  paramIndex: number
+): { sql: string, param?: any } | null {
+  // For additionalData.status
+  if (field === 'status') {
+    // Handle empty/not empty
+    if (operator === 'isEmpty') {
+      return { 
+        sql: `"additionalData"->>'status' IS NULL OR "additionalData"->>'status' = '' OR "additionalData" IS NULL OR "additionalData" = '{}'::jsonb` 
+      };
+    }
+    
+    if (operator === 'isNotEmpty') {
+      return { 
+        sql: `"additionalData"->>'status' IS NOT NULL AND "additionalData"->>'status' <> ''` 
+      };
+    }
+    
+    // Map operators to JSON operators
+    switch (operator) {
+      case 'equals':
+        return { 
+          sql: `"additionalData"->>'status' = $${paramIndex}`, 
+          param: value 
+        };
+      case 'notEquals':
+        return { 
+          sql: `"additionalData"->>'status' <> $${paramIndex}`, 
+          param: value 
+        };
+      case 'contains':
+        return { 
+          sql: `"additionalData"->>'status' ILIKE $${paramIndex}`, 
+          param: `%${value}%` 
+        };
+      case 'notContains':
+        return { 
+          sql: `"additionalData"->>'status' NOT ILIKE $${paramIndex}`, 
+          param: `%${value}%` 
+        };
+      case 'startsWith':
+        return { 
+          sql: `"additionalData"->>'status' ILIKE $${paramIndex}`, 
+          param: `${value}%` 
+        };
+      case 'endsWith':
+        return { 
+          sql: `"additionalData"->>'status' ILIKE $${paramIndex}`, 
+          param: `%${value}` 
+        };
+      default:
+        return null;
+    }
+  }
   
-  // Flatten results for consistent return format
-  const flatResults = groupResults.flatMap((group, groupIndex) => 
-    group.results.map((result, filterIndex) => ({
-      filter: group.filters[filterIndex],
-      passed: result.passed,
-      reason: result.reason,
-      details: result.details
-    }))
-  );
+  return null;
+}
 
-  const endTime = Date.now();
+/**
+ * Get a safe field name for SQL queries
+ * This is a security measure to prevent SQL injection
+ */
+function getSafeFieldName(field: string): string | null {
+  // Whitelist of allowed field names
+  const allowedFields = [
+    'firstName', 'lastName', 'email', 'title', 'currentCompanyName',
+    'leadStatus', 'city', 'state', 'country', 'createdAt', 'updatedAt', 
+    'lastActivityAt'
+  ];
   
-  const summary = {
-    totalFilters: filters.length,
-    passedFilters: flatResults.filter(r => r.passed).length,
-    failedFilters: flatResults.filter(r => !r.passed).length,
-    evaluationTime: `${endTime - startTime}ms`
-  };
+  if (allowedFields.includes(field)) {
+    return `"${field}"`; // Return with quotes for PostgreSQL
+  }
+  
+  return null;
+}
 
-  return {
-    passed,
-    results: flatResults,
-    summary
-  };
-} 
+/**
+ * Builds a Prisma condition for filtering by tags
+ */
+function buildTagsCondition(operator: string, value: any): any {
+  if (!value) return null;
+  
+  // Convert value to array of tag names if it's a string
+  const tagNames = typeof value === 'string' 
+    ? value.split(',').map(s => s.trim()).filter(Boolean)
+    : Array.isArray(value) ? value : [value];
+  
+  if (tagNames.length === 0) return null;
+  
+  switch(operator) {
+    case 'hasAllTags':
+      return {
+        ContactTags: {
+          every: {
+            Tags: {
+              name: {
+                in: tagNames
+              }
+            }
+          }
+        }
+      };
+    
+    case 'hasAnyTags':
+      return {
+        ContactTags: {
+          some: {
+            Tags: {
+              name: {
+                in: tagNames
+              }
+            }
+          }
+        }
+      };
+      
+    case 'hasNoneTags':
+      return {
+        ContactTags: {
+          none: {
+            Tags: {
+              name: {
+                in: tagNames
+              }
+            }
+          }
+        }
+      };
+      
+    case 'isEmpty':
+      return {
+        ContactTags: {
+          none: {}
+        }
+      };
+      
+    case 'isNotEmpty':
+      return {
+        ContactTags: {
+          some: {}
+        }
+      };
+      
+    default:
+      return null;
+  }
+}
+
+/**
+ * Builds a SQL condition for filtering by tags
+ */
+function buildTagsSqlCondition(
+  operator: string,
+  value: any,
+  paramIndex: number
+): { sql: string, param?: any } | null {
+  if (!value && operator !== 'isEmpty' && operator !== 'isNotEmpty') {
+    return null;
+  }
+  
+  // Convert value to array of tag names if it's a string
+  const tagNames = typeof value === 'string' 
+    ? value.split(',').map(s => s.trim()).filter(Boolean)
+    : Array.isArray(value) ? value : [value];
+  
+  switch(operator) {
+    case 'hasAllTags':
+      // This requires a subquery to count the matches and ensure they equal the number of tags requested
+      return { 
+        sql: `(
+          SELECT COUNT(DISTINCT t."name") 
+          FROM "ContactTags" ct 
+          JOIN "Tags" t ON ct."tagId" = t."id" 
+          WHERE ct."contactId" = "Contacts"."id" AND t."name" = ANY($${paramIndex}::text[])
+        ) = $${paramIndex + 1}`,
+        param: [tagNames, tagNames.length]
+      };
+      
+    case 'hasAnyTags':
+      return { 
+        sql: `EXISTS (
+          SELECT 1 FROM "ContactTags" ct 
+          JOIN "Tags" t ON ct."tagId" = t."id" 
+          WHERE ct."contactId" = "Contacts"."id" AND t."name" = ANY($${paramIndex}::text[])
+        )`,
+        param: tagNames
+      };
+      
+    case 'hasNoneTags':
+      return { 
+        sql: `NOT EXISTS (
+          SELECT 1 FROM "ContactTags" ct 
+          JOIN "Tags" t ON ct."tagId" = t."id" 
+          WHERE ct."contactId" = "Contacts"."id" AND t."name" = ANY($${paramIndex}::text[])
+        )`,
+        param: tagNames
+      };
+      
+    case 'isEmpty':
+      return { 
+        sql: `NOT EXISTS (
+          SELECT 1 FROM "ContactTags" ct 
+          WHERE ct."contactId" = "Contacts"."id"
+        )`
+      };
+      
+    case 'isNotEmpty':
+      return { 
+        sql: `EXISTS (
+          SELECT 1 FROM "ContactTags" ct 
+          WHERE ct."contactId" = "Contacts"."id"
+        )`
+      };
+      
+    default:
+      return null;
+  }
+}
+
+/**
+ * Build a condition specifically for date fields
+ */
+function buildDateCondition(field: string, operator: string, value: any): any {
+  // Handle empty checks
+  if (operator === 'isEmpty') {
+    return { [field]: { equals: null } };
+  }
+  
+  if (operator === 'isNotEmpty') {
+    return { [field]: { not: null } };
+  }
+  
+  // Need a value for the remaining operators (except isEmpty/isNotEmpty)
+  if (value === null || value === undefined) {
+    return null;
+  }
+  
+  // Map operators to Prisma date operators
+  switch (operator) {
+    case 'equals': {
+      try {
+        // For equals, we want to match the entire day
+        const date = new Date(value as string);
+        const startOfDay = new Date(date);
+        startOfDay.setHours(0, 0, 0, 0);
+        
+        const endOfDay = new Date(date);
+        endOfDay.setHours(23, 59, 59, 999);
+        
+        return { 
+          [field]: { 
+            gte: startOfDay,
+            lte: endOfDay
+          } 
+        };
+      } catch (e) {
+        console.error('Invalid date value for equals:', value);
+        return null;
+      }
+    }
+      
+    case 'notEquals': {
+      try {
+        const date = new Date(value as string);
+        const startOfDay = new Date(date);
+        startOfDay.setHours(0, 0, 0, 0);
+        
+        const endOfDay = new Date(date);
+        endOfDay.setHours(23, 59, 59, 999);
+        
+        return { 
+          OR: [
+            { [field]: { lt: startOfDay } },
+            { [field]: { gt: endOfDay } }
+          ]
+        };
+      } catch (e) {
+        console.error('Invalid date value for notEquals:', value);
+        return null;
+      }
+    }
+      
+    case 'isAfter': {
+      try {
+        const date = new Date(value as string);
+        return { [field]: { gt: date } };
+      } catch (e) {
+        console.error('Invalid date value for isAfter:', value);
+        return null;
+      }
+    }
+      
+    case 'isBefore': {
+      try {
+        const date = new Date(value as string);
+        return { [field]: { lt: date } };
+      } catch (e) {
+        console.error('Invalid date value for isBefore:', value);
+        return null;
+      }
+    }
+      
+    case 'between': {
+      if (!Array.isArray(value) || value.length !== 2) {
+        console.error('Invalid date range for between:', value);
+        return null;
+      }
+      
+      try {
+        const startDate = new Date(value[0]);
+        const endDate = new Date(value[1]);
+        
+        return { 
+          [field]: { 
+            gte: startDate,
+            lte: endDate
+          } 
+        };
+      } catch (e) {
+        console.error('Invalid date range for between:', value);
+        return null;
+      }
+    }
+      
+    default:
+      return null;
+  }
+}
