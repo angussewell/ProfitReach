@@ -200,6 +200,8 @@ export function UniversalInboxClient() {
   // Add a new state for managing the AI suggestions request
   const [gettingSuggestions, setGettingSuggestions] = useState(false);
   const [suggestionStatus, setSuggestionStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  // Add state for user's optional suggestion input
+  const [userSuggestionInput, setUserSuggestionInput] = useState('');
   // Add a new state for status filtering
   const [statusFilter, setStatusFilter] = useState<ConversationStatus | 'ALL'>('ALL');
   // Add state to manage thread selection after refresh
@@ -787,7 +789,8 @@ export function UniversalInboxClient() {
           unipileEmailId: latestMessage.unipileEmailId,
           status: latestMessage.status,
           messageSource: latestMessage.messageSource,
-          socialAccountId: latestMessage.socialAccountId
+          socialAccountId: latestMessage.socialAccountId,
+          userSuggestion: userSuggestionInput // Include user's optional suggestion
         }
       ];
 
@@ -839,12 +842,11 @@ export function UniversalInboxClient() {
     <PageContainer>
       <div className="space-y-6">
         <div className="flex flex-col space-y-6">
-          <div className="flex justify-between items-center">
-            <PageHeader
-              title="Universal Inbox"
-              description="View and manage all your email communications in one place."
-            />
-          </div>
+          {/* PageHeader is already used here, no changes needed for the header itself */}
+          <PageHeader
+            title="Universal Inbox"
+            description="View and manage all your email communications in one place."
+          />
         </div>
 
         {viewMode === 'list' ? (
@@ -1276,7 +1278,7 @@ export function UniversalInboxClient() {
                             setSelectedSocialAccount(e.target.value);
                             userSelectedEmailRef.current = true;
                           }}
-                          className="w-full p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full p-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-slate-900"
                           data-component-name="UniversalInboxClient"
                         >
                           <option value="">Select a LinkedIn account</option>
@@ -1298,7 +1300,7 @@ export function UniversalInboxClient() {
                             setSelectedFromEmail(e.target.value);
                             userSelectedEmailRef.current = true;
                           }}
-                          className="w-full p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full p-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-slate-900"
                         >
                           <option value="">Select an email account</option>
                           {visibleEmailAccounts.map((account) => (
@@ -1312,12 +1314,12 @@ export function UniversalInboxClient() {
                     
                     {/* To Display */}
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">
-                        To
-                      </label>
-                      <div className="text-sm text-slate-800 border border-slate-300 rounded-md p-2 bg-slate-50 h-[42px] flex items-center">
-                        {enhancedThreadGroups[selectedThread] ? 
-                          findOtherParticipant(enhancedThreadGroups[selectedThread]) : 
+                       <label className="block text-sm font-medium text-slate-700 mb-1">
+                         To
+                       </label>
+                       <div className="text-sm text-slate-900 border border-slate-300 rounded-md p-2 bg-white h-[42px] flex items-center">
+                         {enhancedThreadGroups[selectedThread] ? 
+                           findOtherParticipant(enhancedThreadGroups[selectedThread]) : 
                           ''}
                       </div>
                     </div>
@@ -1330,11 +1332,11 @@ export function UniversalInboxClient() {
                       ref={textareaRef} // Attach ref
                       id="replyTextArea" 
                       value={replyContent}
-                      onChange={(e) => setReplyContent(e.target.value)}
-                      placeholder="Type your reply here..."
-                      className="w-full h-[30vh] p-4 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none whitespace-pre-wrap"
-                    />
-                  </div>
+                       onChange={(e) => setReplyContent(e.target.value)}
+                       placeholder="Type your reply here..."
+                       className="w-full h-[30vh] p-4 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none whitespace-pre-wrap bg-white text-slate-900"
+                     />
+                   </div>
 
                   {/* Action Buttons (Moved Here) */}
                   <div className="flex justify-end gap-3"> 
@@ -1402,9 +1404,24 @@ export function UniversalInboxClient() {
                             </ClientButton>
                           </div>
                       </div>
+
+                    {/* User Suggestion Input */}
+                    <div className="mb-4"> {/* Add some margin below */}
+                      <label htmlFor="userSuggestionInput" className="block text-sm font-medium text-slate-700 mb-1">
+                        Optional: Add your own suggestions or context
+                      </label>
+                      <textarea
+                        id="userSuggestionInput"
+                        value={userSuggestionInput}
+                        onChange={(e) => setUserSuggestionInput(e.target.value)}
+                        placeholder="Hey, input any suggestions..."
+                        className="w-full p-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y min-h-[60px] bg-white text-slate-900" // Allow vertical resize
+                        rows={2} // Start with 2 rows
+                      />
+                    </div>
                       
                     {/* Suggestion Boxes */}
-                    <div className="space-y-3 max-h-[40vh] overflow-y-auto custom-scrollbar pr-2">
+                    <div className="space-y-3 pr-2">
                       {enhancedThreadGroups[selectedThread] && enhancedThreadGroups[selectedThread].length > 0 && 
                         (() => {
                           const latestMessage = enhancedThreadGroups[selectedThread].sort((a, b) => 
@@ -1430,7 +1447,7 @@ export function UniversalInboxClient() {
                                 )}
                               </div>
                               <div 
-                                className={`text-xs ${suggestion ? 'text-slate-800' : 'text-slate-400 italic'} max-h-[150px] overflow-y-auto pr-2 custom-scrollbar`}
+                                className={`text-xs ${suggestion ? 'text-slate-800' : 'text-slate-400 italic'} pr-2`}
                               >
                                 <div className="whitespace-pre-wrap">
                                   {suggestion || `AI suggestion #${index} will appear here`}
@@ -1537,4 +1554,4 @@ export function UniversalInboxClient() {
   .custom-scrollbar::-webkit-scrollbar-corner {
     background: transparent;
   }
-`}</style> 
+`}</style>
