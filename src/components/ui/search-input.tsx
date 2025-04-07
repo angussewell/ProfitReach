@@ -19,13 +19,13 @@ export function SearchInput({
 }: SearchInputProps) {
   return (
     <div className={cn("relative max-w-2xl", className)}>
-      <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <Input
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="pl-12 h-12 border border-gray-200 focus:border-red-500 focus:ring-red-100 transition-all duration-200 shadow-sm hover:shadow bg-white rounded-xl text-base"
+        className="pl-9 bg-background border-input rounded-md shadow-sm hover:shadow transition-all duration-200"
       />
     </div>
   );
-} 
+}
