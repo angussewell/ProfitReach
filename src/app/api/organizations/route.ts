@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -90,4 +90,4 @@ export async function POST(request: Request) {
       details: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
     }, { status: 500 });
   }
-} 
+}

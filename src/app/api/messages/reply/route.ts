@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client'; // Import Prisma for raw query types
 
 // Schema for reply request validation
 const replyRequestSchema = z.object({
@@ -109,13 +109,14 @@ export async function POST(request: Request) {
       hasSocialAccountId: !!validatedData.socialAccountId
     });
 
-    // Get the original message
-    const originalMessage = await prisma.emailMessage.findFirst({
-      where: {
-        messageId: validatedData.messageId,
-        organizationId: session.user.organizationId,
-      },
-    });
+    // Get the original message using raw SQL
+    const originalMessages: any[] = await prisma.$queryRaw(
+      Prisma.sql`SELECT * FROM "EmailMessage" 
+                 WHERE "messageId" = ${validatedData.messageId} 
+                 AND "organizationId" = ${session.user.organizationId} 
+                 LIMIT 1`
+    );
+    const originalMessage = originalMessages.length > 0 ? originalMessages[0] : null;
 
     if (!originalMessage) {
       console.error('Original message not found:', validatedData.messageId);
@@ -124,10 +125,16 @@ export async function POST(request: Request) {
         { status: 404 }
       );
     }
+    // --- ADDED: Explicit check for originalMessage ---
+    if (!originalMessage) {
+      console.error('CRITICAL: originalMessage became null after initial check', { messageId: validatedData.messageId });
+      return NextResponse.json({ error: 'Internal server error: Failed to retrieve original message consistently' }, { status: 500 });
+    }
+    // --- END ADDED ---
 
     // Check if this is a LinkedIn message
     const isLinkedInMessage = originalMessage.messageSource === 'LINKEDIN';
-    logDebug('Message source identified', { 
+    logDebug('Message source identified', {
       isLinkedInMessage, 
       messageSource: originalMessage.messageSource,
       hasSocialAccountId: isLinkedInMessage && !!originalMessage.socialAccountId,
@@ -381,19 +388,15 @@ export async function POST(request: Request) {
         return acc;
       }, {} as Record<string, any>);
 
-      // Get the latest message in the thread to check its status
-      const latestThreadMessage = await prisma.emailMessage.findFirst({
-        where: {
-          threadId: originalMessage.threadId,
-          organizationId: session.user.organizationId
-        },
-        orderBy: {
-          receivedAt: 'desc'
-        },
-        select: {
-          status: true
-        }
-      });
+      // Get the latest message in the thread to check its status using raw SQL
+      const latestThreadMessages: { status: string }[] = await prisma.$queryRaw(
+        Prisma.sql`SELECT status FROM "EmailMessage" 
+                   WHERE "threadId" = ${originalMessage.threadId} 
+                   AND "organizationId" = ${session.user.organizationId} 
+                   ORDER BY "receivedAt" DESC 
+                   LIMIT 1`
+      );
+      const latestThreadMessage = latestThreadMessages.length > 0 ? latestThreadMessages[0] : null;
 
       // We're no longer creating the database entry directly
       // N8n will handle this when it receives the webhook
@@ -459,4 +462,4 @@ function formatEmailContent(content: string, originalMessage: any): string {
   // Process message content
   // Simple implementation - wrap in a div
   return `<div>${content.replace(/\n/g, '<br/>')}</div>`;
-} 
+}

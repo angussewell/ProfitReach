@@ -33,11 +33,22 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
   // Fetch organizations and current organization
   useEffect(() => {
     const fetchData = async () => {
+      console.log('Organization context - Session state:', {
+        hasSession: !!session,
+        hasUser: !!session?.user,
+        userId: session?.user?.id,
+        email: session?.user?.email,
+        organizationId: session?.user?.organizationId,
+        sessionData: JSON.stringify(session)
+      });
+      
       if (!session?.user) return;
       
       try {
         setLoading(true);
         setError(null);
+        
+        console.log('Fetching organizations with session user ID:', session.user.id);
         
         // Fetch all organizations
         const orgRes = await fetch('/api/organizations');
@@ -48,9 +59,9 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
         const orgs = await orgRes.json();
         setOrganizations(orgs);
 
-        // If we have an organizationId, fetch the current organization
-        if (session.user.organizationId) {
-          const currentOrgRes = await fetch(`/api/organizations/${session.user.organizationId}`);
+          // If we have an organizationId, fetch the current organization
+          if (session.user.organizationId) {
+            const currentOrgRes = await fetch(`/api/organizations/${session.user.organizationId}`);
           if (!currentOrgRes.ok) {
             const errorData = await currentOrgRes.json();
             console.error('Failed to fetch current organization:', errorData);
@@ -187,4 +198,4 @@ export function useOrganization() {
     throw new Error('useOrganization must be used within an OrganizationProvider');
   }
   return context;
-} 
+}

@@ -49,24 +49,27 @@ model Organization {
   location_id          String?                   @unique
   attachments          Attachment[]
   billingEvents        BillingEvent[]
+  chatConversations    ChatConversation[]
   connectedAccounts    ConnectedAccountBilling[]
+  ContactWorkflowState ContactWorkflowState[]
+  Contacts             Contacts[]
   creditUsage          CreditUsage[]
   CrmInfo              CrmInfo?
   emailAccounts        EmailAccount[]
-  emailMessages        EmailMessage[]
+  emailMessages        EmailMessage[]            @relation("OrganizationToEmailMessage") @ignore
   metrics              Metric[]
   prompts              Prompt[]
+  replyLogs            ReplyLog[]
   researchResults      ResearchResult[]
+  SavedFilters         SavedFilters[]
   scenarios            Scenario[]
   snippets             Snippet[]
   socialAccounts       SocialAccount[]
   subscriptions        Subscription[]
+  Tags                 Tags[]
   users                User[]
   webhookLogs          WebhookLog[]
-  appointments         Appointment[]
-  chatConversations    ChatConversation[]
-  statusChanges        StatusChangeLog[]
-  replyLogs            ReplyLog[]
+  WorkflowDefinition   WorkflowDefinition[]
 
   @@index([stripeTestCustomerId], map: "organization_stripe_test_customer_idx")
 }
@@ -83,9 +86,10 @@ model User {
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   accounts          Account[]
+  chatConversations ChatConversation[]
+  SavedFilters      SavedFilters[]
   sessions          Session[]
   organization      Organization?      @relation(fields: [organizationId], references: [id])
-  chatConversations ChatConversation[]
 }
 
 model VerificationToken {
@@ -266,45 +270,48 @@ model EmailAccount {
   updatedAt        DateTime        @updatedAt
   isActive         Boolean         @default(true)
   unipileAccountId String?
+  dailySendLimit   Int             @default(50)
+  dailySendCount   Int             @default(0)
+  lastResetDate    DateTime?       @db.Date
   organization     Organization    @relation(fields: [organizationId], references: [id])
-  emailMessages    EmailMessage[]
   socialAccounts   SocialAccount[]
 
   @@unique([email, organizationId])
   @@index([organizationId])
+  @@index([organizationId, isActive], map: "idx_emailaccount_organizationid_isactive")
 }
 
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
 model EmailMessage {
-  id                   String             @id @default(cuid())
-  messageId            String             @unique
+  id                   String             @default(cuid())
+  messageId            String
   threadId             String
   organizationId       String
-  emailAccountId       String?
+  emailAccountId       String
   subject              String
   sender               String
   recipientEmail       String
-  content              String          @db.Text
+  content              String
   receivedAt           DateTime
-  messageType          MessageType     @default(REAL_REPLY)
-  isRead               Boolean         @default(false)
+  messageType          MessageType
+  isRead               Boolean            @default(false)
   classificationScores Json?
   unipileEmailId       String?
-  status               MessageStatus   @default(NO_ACTION_NEEDED)
-  messageSource        MessageSource   @default(EMAIL)
+  status               ConversationStatus @default(FOLLOW_UP_NEEDED)
+  messageSource        MessageSource      @default(EMAIL)
   socialAccountId      String?
-  statusChangedAt      DateTime        @default(now())
+  statusChangedAt      DateTime?          @default(now()) @db.Timestamptz(6)
   aiSuggestion1        String?
   aiSuggestion2        String?
   aiSuggestion3        String?
-  socialAccount        SocialAccount?     @relation(fields: [socialAccountId], references: [id])
-  emailAccount         EmailAccount?      @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
-  organization         Organization       @relation(fields: [organizationId], references: [id])
-  statusChanges        StatusChangeLog[]
+  organization         Organization       @relation("OrganizationToEmailMessage", fields: [organizationId], references: [id])
+  socialAccount        SocialAccount?     @relation("SocialAccountToEmailMessage", fields: [socialAccountId], references: [id])
 
   @@index([organizationId])
   @@index([emailAccountId])
   @@index([threadId])
   @@index([socialAccountId])
+  @@ignore
 }
 
 model ScenarioMessage {
@@ -330,16 +337,16 @@ model SocialAccount {
   username         String
   name             String
   provider         String
-  providerId       String?
   organizationId   String
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
   isActive         Boolean        @default(true)
   unipileAccountId String?        @unique
   emailAccountId   String?
+  providerId       String?
+  messages         EmailMessage[] @relation("SocialAccountToEmailMessage") @ignore
   emailAccount     EmailAccount?  @relation(fields: [emailAccountId], references: [id])
   organization     Organization   @relation(fields: [organizationId], references: [id])
-  messages         EmailMessage[]
 
   @@index([organizationId])
   @@index([provider])
@@ -417,7 +424,7 @@ model ScenarioResponse {
   id         String   @id @default(cuid())
   scenarioId String
   source     String
-  threadId   String?
+  threadId   String?  @unique(map: "unique_thread_id")
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   scenario   Scenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
@@ -427,18 +434,17 @@ model ScenarioResponse {
 }
 
 model Appointment {
-  id                  String       @id @default(uuid())
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   organizationId      String
-  createdAt           DateTime     @default(now())
+  createdAt           DateTime @default(now())
   notes               String?
   clientName          String
   appointmentType     String
-  appointmentDateTime DateTime
-  status              String       @default("appointment_booked")
+  appointmentDateTime DateTime @db.Timestamp(6)
+  status              String   @default("appointment_booked")
   timeZone            String?
   fromEmail           String?
   recipients          Json?
-  organization        Organization @relation(fields: [organizationId], references: [id])
 
   @@index([organizationId])
   @@index([createdAt])
@@ -470,9 +476,216 @@ model CrmInfo {
   linkedin_user_provider_id       String?
   title_field_id                  String?
   linkedin_profile_photo_field_id String?
+  linkedin_posts_field_id         String?
+  notification_emails             Json?        @default("[]")
   Organization                    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "CrmInfo_organization_id_fkey")
 
   @@index([organizationId], map: "crm_info_organization_id_idx")
+}
+
+model ChatConversation {
+  id             String        @id @default(cuid())
+  title          String?
+  createdAt      DateTime      @default(now()) @db.Timestamp(6)
+  updatedAt      DateTime      @default(now()) @updatedAt @db.Timestamp(6)
+  userId         String
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_organization")
+  user           User          @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_user")
+  messages       ChatMessage[]
+
+  @@index([organizationId], map: "idx_chat_conversation_org")
+  @@index([updatedAt], map: "idx_chat_conversation_updated")
+  @@index([userId], map: "idx_chat_conversation_user")
+}
+
+model ChatMessage {
+  id             String           @id @default(cuid())
+  content        String
+  role           String
+  createdAt      DateTime         @default(now()) @db.Timestamp(6)
+  conversationId String
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_conversation")
+
+  @@index([conversationId], map: "idx_chat_message_conversation")
+  @@index([createdAt], map: "idx_chat_message_created")
+}
+
+model StatusChangeLog {
+  id              String             @id @default(cuid())
+  messageId       String
+  threadId        String
+  organizationId  String
+  oldStatus       ConversationStatus
+  newStatus       ConversationStatus
+  changedAt       DateTime?          @default(now()) @db.Timestamptz(6)
+  scheduledChange Boolean?           @default(false)
+  successful      Boolean
+  errorMessage    String?
+
+  @@index([changedAt], map: "status_change_log_changed_at_idx")
+  @@index([messageId], map: "status_change_log_message_id_idx")
+  @@index([organizationId], map: "status_change_log_organization_id_idx")
+}
+
+model ReplyLog {
+  id             String       @id @default(cuid())
+  userEmail      String
+  messageId      String
+  threadId       String
+  repliedAt      DateTime     @default(now())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([userEmail])
+  @@index([messageId])
+  @@index([threadId])
+  @@index([repliedAt])
+  @@index([organizationId])
+}
+
+model ContactWorkflowState {
+  stateId              String                 @id
+  contactId            String
+  workflowId           String
+  organizationId       String
+  currentStepOrder     Int
+  status               String
+  nextActionTime       DateTime?              @db.Timestamptz(6)
+  scheduledDate        DateTime?              @db.Date
+  stateData            Json?
+  errorMessage         String?
+  attempts             Int                    @default(0)
+  enrolledAt           DateTime               @default(now()) @db.Timestamptz(6)
+  lastProcessedAt      DateTime?              @db.Timestamptz(6)
+  Contacts             Contacts               @relation(fields: [contactId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Organization         Organization           @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  WorkflowDefinition   WorkflowDefinition     @relation(fields: [workflowId], references: [workflowId], onDelete: NoAction, onUpdate: NoAction)
+  WorkflowExecutionLog WorkflowExecutionLog[]
+
+  @@unique([contactId, workflowId], map: "unique_contact_in_workflow")
+  @@index([contactId], map: "idx_contactworkflowstate_contactid")
+  @@index([status, nextActionTime], map: "idx_contactworkflowstate_status_nextactiontime")
+  @@index([workflowId, scheduledDate], map: "idx_contactworkflowstate_workflowid_scheduleddate")
+  @@index([workflowId, status], map: "idx_contactworkflowstate_workflowid_status")
+}
+
+model Contacts {
+  id                   String                 @id(map: "apolloContacts_pkey") @db.VarChar(50)
+  firstName            String?                @db.VarChar(100)
+  lastName             String?                @db.VarChar(100)
+  fullName             String?                @db.VarChar(200)
+  linkedinUrl          String?
+  title                String?                @db.VarChar(200)
+  email                String                 @db.VarChar(255)
+  emailStatus          String?                @db.VarChar(50)
+  photoUrl             String?
+  headline             String?
+  state                String?                @db.VarChar(100)
+  city                 String?                @db.VarChar(100)
+  country              String?                @db.VarChar(100)
+  currentCompanyName   String?                @db.VarChar(255)
+  currentCompanyId     String?                @db.VarChar(50)
+  twitterUrl           String?
+  facebookUrl          String?
+  githubUrl            String?
+  companyLinkedinUrl   String?
+  companyWebsiteUrl    String?
+  employmentHistory    Json?
+  phoneNumbers         Json?
+  contactEmails        Json?
+  additionalData       Json?
+  createdAt            DateTime?              @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime?              @default(now()) @db.Timestamptz(6)
+  organizationId       String?
+  leadStatus           String?
+  lastActivityAt       DateTime?              @db.Timestamptz(6)
+  ContactTags          ContactTags[]
+  ContactWorkflowState ContactWorkflowState[]
+  Organization         Organization?          @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_contacts_organization")
+
+  @@index([currentCompanyName], map: "idx_apolloContacts_company")
+  @@index([email], map: "idx_apolloContacts_email")
+  @@index([linkedinUrl], map: "idx_apolloContacts_linkedin")
+  @@index([organizationId], map: "idx_contacts_organizationid")
+  @@index([leadStatus], map: "idx_contacts_leadstatus")
+}
+
+model WorkflowDefinition {
+  workflowId           String                 @id
+  organizationId       String
+  name                 String
+  description          String?
+  steps                Json
+  dailyContactLimit    Int?
+  dripStartTime        DateTime?              @db.Time(6)
+  dripEndTime          DateTime?              @db.Time(6)
+  timezone             String?
+  isActive             Boolean                @default(true)
+  createdAt            DateTime               @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime               @default(now()) @db.Timestamptz(6)
+  ContactWorkflowState ContactWorkflowState[]
+  Organization         Organization           @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([organizationId, isActive], map: "idx_workflowdefinition_organizationid_isactive")
+}
+
+model WorkflowExecutionLog {
+  logId                  BigInt               @id @default(autoincrement())
+  contactWorkflowStateId String
+  workflowId             String
+  contactId              String
+  stepOrder              Int
+  actionType             String
+  timestamp              DateTime             @default(now()) @db.Timestamptz(6)
+  status                 String
+  details                Json?
+  ContactWorkflowState   ContactWorkflowState @relation(fields: [contactWorkflowStateId], references: [stateId], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([contactWorkflowStateId], map: "idx_workflowexecutionlog_contactworkflowstateid")
+  @@index([timestamp], map: "idx_workflowexecutionlog_timestamp")
+}
+
+model ContactTags {
+  contactId String   @db.VarChar(50)
+  tagId     String   @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  Contacts  Contacts @relation(fields: [contactId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  Tags      Tags     @relation(fields: [tagId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([contactId, tagId])
+  @@index([contactId], map: "idx_contacttags_contactid")
+  @@index([tagId], map: "idx_contacttags_tagid")
+}
+
+model SavedFilters {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String
+  userId         String?
+  name           String
+  filters        Json
+  isDefault      Boolean      @default(false)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime     @default(now()) @db.Timestamptz(6)
+  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  User           User?        @relation(fields: [userId], references: [id], onDelete: SetNull, onUpdate: NoAction) // Added onDelete: SetNull
+
+  @@unique([organizationId, userId, name], map: "unique_filter_name_org_user") // Added unique constraint
+  @@index([organizationId], map: "idx_savedfilters_organizationid")
+  @@index([userId], map: "idx_savedfilters_userid")
+}
+
+model Tags {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String
+  name           String
+  createdAt      DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime      @default(now()) @db.Timestamptz(6)
+  ContactTags    ContactTags[]
+  Organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([organizationId, name])
+  @@index([organizationId], map: "idx_tags_organizationid")
 }
 
 enum MessageType {
@@ -488,37 +701,6 @@ enum MessageSource {
   LINKEDIN
 }
 
-enum MessageStatus {
-  MEETING_BOOKED
-  NOT_INTERESTED
-  NO_ACTION_NEEDED
-  FOLLOW_UP_NEEDED
-  WAITING_FOR_REPLY
-  ARCHIVED
-  SPAM
-}
-
-model ChatConversation {
-  id             String        @id @default(cuid())
-  title          String?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  userId         String
-  organizationId String
-  user           User          @relation(fields: [userId], references: [id])
-  organization   Organization  @relation(fields: [organizationId], references: [id])
-  messages       ChatMessage[]
-}
-
-model ChatMessage {
-  id             String           @id @default(cuid())
-  content        String           @db.Text
-  role           String // 'user' or 'assistant'
-  createdAt      DateTime         @default(now())
-  conversationId String
-  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-}
-
 enum ConversationStatus {
   MEETING_BOOKED
   NOT_INTERESTED
@@ -527,35 +709,13 @@ enum ConversationStatus {
   WAITING_FOR_REPLY
 }
 
-model StatusChangeLog {
-  id             String   @id @default(cuid())
-  threadId       String
-  oldStatus      String?
-  newStatus      String
-  changedAt      DateTime @default(now())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  emailMessageId String?
-  emailMessage   EmailMessage? @relation(fields: [emailMessageId], references: [id])
-
-  @@index([threadId])
-  @@index([organizationId])
-  @@index([changedAt])
-  @@index([emailMessageId])
-}
-
-model ReplyLog {
-  id             String   @id @default(cuid())
-  userEmail      String   // Email of the user who sent the reply
-  messageId      String   // ID of the reply message sent
-  threadId       String   // ID of the conversation thread
-  repliedAt      DateTime @default(now()) // Timestamp of the reply
-  organizationId String   // Link to the organization
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  @@index([userEmail])
-  @@index([messageId])
-  @@index([threadId])
-  @@index([repliedAt])
-  @@index([organizationId])
+enum AppointmentStatus {
+  appointment_booked
+  webinar_booked
+  appointment_no_showed
+  appointment_showed
+  appointment_unqualified
+  appointment_paid
+  invoice_sent
+  invoice_paid
 }

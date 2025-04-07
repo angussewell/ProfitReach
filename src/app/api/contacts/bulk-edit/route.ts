@@ -4,9 +4,11 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { Prisma } from '@prisma/client';
 import { FilterState } from '@/types/filters';
+import { buildCombinedWhereClause, createApiResponse } from '@/lib/filters';
 
 // Constants
 const PLACEHOLDER_ORG_ID = 'org_test_alpha'; // Fallback for testing
+const MAX_BULK_LIMIT = 1000; // Maximum number of contacts to edit at once
 
 // Valid lead status values
 const VALID_LEAD_STATUSES = [
@@ -261,59 +263,88 @@ export async function POST(request: NextRequest) {
             throw new Error('Tags value must be an array');
           }
           
-          // Process each contact's tags
-          for (const contactId of validContactIds) {
-            // 1. Delete existing tags for this contact
+          // Filter out empty tag names
+          const validTagNames = newValue
+            .map(tag => tag.trim())
+            .filter(tag => tag.length > 0);
+          
+          if (validTagNames.length === 0) {
+            // If no valid tags, just delete existing tags for all contacts
             await tx.$executeRaw`
               DELETE FROM "ContactTags"
-              WHERE "contactId" = ${contactId}
+              WHERE "contactId" = ANY(${validContactIds}::text[])
+            `;
+          } else {
+            // First get or create all necessary tags in a single batch
+            // This approach reduces the number of database operations
+            
+            // 1. Find all existing tags matching the given names
+            const existingTags = await tx.$queryRaw<{id: string, name: string}[]>`
+              SELECT id, name 
+              FROM "Tags" 
+              WHERE "organizationId" = ${organizationId} 
+              AND name = ANY(${validTagNames}::text[])
             `;
             
-            // 2. Process each tag
-            for (const tagName of newValue) {
-              if (!tagName.trim()) continue; // Skip empty tags
+            // Get a map of existing tag names to their IDs for quick lookup
+            const existingTagMap = new Map(
+              existingTags.map(tag => [tag.name, tag.id])
+            );
+            
+            // 2. Create any tags that don't exist yet
+            const tagsToCreate = validTagNames.filter(name => !existingTagMap.has(name));
+            
+            if (tagsToCreate.length > 0) {
+              // Prepare values for a batch insert of multiple tags
+              const tagInsertValues = tagsToCreate
+                .map(tagName => `(gen_random_uuid(), ${organizationId}, '${tagName.replace(/'/g, "''")}', NOW(), NOW())`)
+                .join(', ');
               
-              // Try to find the tag first
-              const existingTags = await tx.$queryRaw`
-                SELECT id FROM "Tags" 
-                WHERE "organizationId" = ${organizationId} 
-                AND name = ${tagName}
-                LIMIT 1
+              // Execute batch insert for new tags
+              await tx.$executeRaw`
+                INSERT INTO "Tags" (id, "organizationId", name, "createdAt", "updatedAt")
+                VALUES ${Prisma.raw(tagInsertValues)}
+                ON CONFLICT ("organizationId", name) DO NOTHING
               `;
               
-              let tagId: string;
+              // Fetch the newly created tags to get their IDs
+              const newTags = await tx.$queryRaw<{id: string, name: string}[]>`
+                SELECT id, name 
+                FROM "Tags" 
+                WHERE "organizationId" = ${organizationId} 
+                AND name = ANY(${tagsToCreate}::text[])
+              `;
               
-              if (Array.isArray(existingTags) && existingTags.length > 0) {
-                // Tag exists, use its ID
-                tagId = existingTags[0].id;
-              } else {
-                // Tag doesn't exist, create it
-                await tx.$executeRaw`
-                  INSERT INTO "Tags" (id, "organizationId", name, "createdAt", "updatedAt")
-                  VALUES (gen_random_uuid(), ${organizationId}, ${tagName}, NOW(), NOW())
-                  ON CONFLICT ("organizationId", name) DO NOTHING
-                `;
-                
-                // Fetch the newly created tag's ID
-                const newTags = await tx.$queryRaw`
-                  SELECT id FROM "Tags" 
-                  WHERE "organizationId" = ${organizationId} 
-                  AND name = ${tagName}
-                  LIMIT 1
-                `;
-                
-                if (Array.isArray(newTags) && newTags.length > 0) {
-                  tagId = newTags[0].id;
-                } else {
-                  console.error(`Failed to create or find tag: ${tagName}`);
-                  continue; // Skip this tag
+              // Add these to the existing tag map
+              newTags.forEach(tag => existingTagMap.set(tag.name, tag.id));
+            }
+            
+            // Now we have IDs for all the tags we need in existingTagMap
+            
+            // 3. Delete all existing ContactTags for the affected contacts
+            await tx.$executeRaw`
+              DELETE FROM "ContactTags"
+              WHERE "contactId" = ANY(${validContactIds}::text[])
+            `;
+            
+            // 4. Create all new ContactTags relationships in a batch
+            if (existingTagMap.size > 0) {
+              const tagIds = Array.from(existingTagMap.values());
+              
+              // Create multiple contactTag entries for each contactId and tagId combination
+              // This is much more efficient than individual inserts
+              let contactTagInsertValues = [];
+              
+              for (const contactId of validContactIds) {
+                for (const tagId of tagIds) {
+                  contactTagInsertValues.push(`('${contactId}', '${tagId}', NOW())`);
                 }
               }
               
-              // Create the contact-tag relationship
+              // Insert all contact-tag relationships in a single transaction
               await tx.$executeRaw`
                 INSERT INTO "ContactTags" ("contactId", "tagId", "createdAt")
-                VALUES (${contactId}, ${tagId}, NOW())
+                VALUES ${Prisma.raw(contactTagInsertValues.join(', '))}
                 ON CONFLICT ("contactId", "tagId") DO NOTHING
               `;
             }
@@ -342,14 +373,57 @@ export async function POST(request: NextRequest) {
             AND "organizationId" = ${organizationId}
           `;
         } else {
-          // Standard field update - use Prisma.sql`` for safety
-          await tx.$executeRaw`
-            UPDATE "Contacts"
-            SET "${Prisma.raw(fieldToUpdate)}" = ${newValue},
-                "updatedAt" = NOW()
-            WHERE id = ANY(${validContactIds}::text[])
-            AND "organizationId" = ${organizationId}
-          `;
+          // Use a switch statement with hardcoded column names for safety
+          // This prevents SQL injection by avoiding dynamic field names
+          switch (fieldToUpdate) {
+            case 'title':
+              await tx.$executeRaw`
+                UPDATE "Contacts"
+                SET "title" = ${newValue},
+                    "updatedAt" = NOW()
+                WHERE id = ANY(${validContactIds}::text[])
+                AND "organizationId" = ${organizationId}
+              `;
+              break;
+            case 'currentCompanyName':
+              await tx.$executeRaw`
+                UPDATE "Contacts"
+                SET "currentCompanyName" = ${newValue},
+                    "updatedAt" = NOW()
+                WHERE id = ANY(${validContactIds}::text[])
+                AND "organizationId" = ${organizationId}
+              `;
+              break;
+            case 'country':
+              await tx.$executeRaw`
+                UPDATE "Contacts"
+                SET "country" = ${newValue},
+                    "updatedAt" = NOW()
+                WHERE id = ANY(${validContactIds}::text[])
+                AND "organizationId" = ${organizationId}
+              `;
+              break;
+            case 'state':
+              await tx.$executeRaw`
+                UPDATE "Contacts"
+                SET "state" = ${newValue},
+                    "updatedAt" = NOW()
+                WHERE id = ANY(${validContactIds}::text[])
+                AND "organizationId" = ${organizationId}
+              `;
+              break;
+            case 'city':
+              await tx.$executeRaw`
+                UPDATE "Contacts"
+                SET "city" = ${newValue},
+                    "updatedAt" = NOW()
+                WHERE id = ANY(${validContactIds}::text[])
+                AND "organizationId" = ${organizationId}
+              `;
+              break;
+            default:
+              throw new Error(`Update for field '${fieldToUpdate}' not implemented`);
+          }
         }
         
         return {

@@ -2,6 +2,7 @@
 
 import { prisma } from './prisma'
 import { revalidatePath } from 'next/cache'
+import { Prisma } from '@prisma/client'; // Import Prisma for raw query types
 
 // Example server action for getting a user
 export async function getUser(id: string) {
@@ -28,19 +29,14 @@ export async function updateUser(id: string, data: any) {
 // Server action to update conversation status
 export async function updateMessageStatus(threadId: string, status: string) {
   try {
-    // Find the latest message in the thread to verify the thread exists
-    const latestMessage = await prisma.emailMessage.findFirst({
-      where: { 
-        threadId: threadId 
-      },
-      orderBy: {
-        receivedAt: 'desc'
-      }
-    })
+    // Verify the thread exists using raw SQL
+    const messages: { id: string }[] = await prisma.$queryRaw(
+      Prisma.sql`SELECT id FROM "EmailMessage" WHERE "threadId" = ${threadId} LIMIT 1`
+    );
 
-    if (!latestMessage) {
-      return { 
-        success: false, 
+    if (messages.length === 0) {
+      return {
+        success: false,
         error: 'Thread not found' 
       }
     }
@@ -66,4 +62,4 @@ export async function updateMessageStatus(threadId: string, status: string) {
       error: error instanceof Error ? error.message : 'Unknown error occurred' 
     }
   }
-} 
+}

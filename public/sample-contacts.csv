@@ -1,0 +1,6 @@
+First Name,Last Name,Email,Job Title,Company,LinkedIn URL,Twitter,Facebook,Phone,City,State,Country,Status,Photo URL,Source,Notes
+John,Doe,john.doe@example.com,Sales Director,Acme Inc,https://linkedin.com/in/johndoe,https://twitter.com/johndoe,https://facebook.com/johndoe,555-123-4567,New York,NY,USA,Lead,https://example.com/photos/john.jpg,Website,Met at conference
+Jane,Smith,jane.smith@example.com,CTO,Tech Solutions,https://linkedin.com/in/janesmith,https://twitter.com/janesmith,,555-987-6543,San Francisco,CA,USA,Prospect,https://example.com/photos/jane.jpg,Referral,Interested in enterprise plan
+Michael,Johnson,michael@example.com,Marketing Manager,Global Marketing,,https://twitter.com/michaelj,https://facebook.com/michaelj,555-456-7890,Chicago,IL,USA,Customer,,Cold Email,Needs follow-up next week
+Sarah,Williams,sarah.williams@example.com,CEO,Startup Inc,https://linkedin.com/in/sarahw,,,555-789-0123,Austin,TX,USA,Lead,,LinkedIn,Requested demo
+David,Brown,david.brown@example.com,Developer,Tech Corp,https://linkedin.com/in/davidb,https://twitter.com/davidb,https://github.com/davidb,555-321-6540,Seattle,WA,USA,Prospect,,GitHub,Looking for API documentation

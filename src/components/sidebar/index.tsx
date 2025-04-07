@@ -44,12 +44,24 @@ export default function Sidebar(): JSX.Element {
       managerAccess: true
     },
     { 
+      href: '/contacts', 
+      label: 'Contacts', 
+      icon: createIcon(Icons.Users2, 'contacts-icon'),
+      managerAccess: true
+    },
+    { 
       href: '/scenarios', 
       label: 'Scenarios', 
       icon: createIcon(Icons.LayoutGrid, 'scenarios-icon')
     },
-    { 
-      href: '/settings/scenarios', 
+    {
+      href: '/workflows',
+      label: 'Workflows',
+      icon: createIcon(Icons.Workflow, 'workflows-icon'), // Added Workflow icon
+      managerAccess: true // Assuming managers should access this
+    },
+    {
+      href: '/settings/scenarios',
       label: 'Manage Scenarios', 
       icon: createIcon(Icons.LayoutList, 'manage-scenarios-icon')
     },
@@ -184,4 +196,4 @@ export default function Sidebar(): JSX.Element {
       </SidebarBody>
     </SidebarContainer>
   );
-} 
+}

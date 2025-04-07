@@ -1,8 +1,10 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react'; // Added useCallback
 import { useRouter } from 'next/navigation';
 import BulkEditModal from '@/components/contacts/BulkEditModal';
+import { EnrollWorkflowModal } from '@/components/contacts/EnrollWorkflowModal'; // Import the new modal
+import { Button } from '@/components/ui/button'; // Import Button if not already used implicitly
 // FilterBar import removed - handled by parent
 import { FilterState } from '@/types/filters';
 
@@ -194,7 +196,10 @@ export default function EnhancedContactsTable({
   
   // Bulk edit state
   const [isBulkEditModalOpen, setIsBulkEditModalOpen] = useState(false);
-  
+
+  // Enroll in Workflow state
+  const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
+
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(DEFAULT_ITEMS_PER_PAGE);
@@ -223,7 +228,9 @@ export default function EnhancedContactsTable({
   // Get current page data
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentContacts = contacts.slice(indexOfFirstItem, indexOfLastItem);
+  // Safeguard: Ensure contacts is an array before slicing
+  const safeContacts = Array.isArray(contacts) ? contacts : [];
+  const currentContacts = safeContacts.slice(indexOfFirstItem, indexOfLastItem);
   
   // Reset to first page when contacts array changes (e.g., after filtering)
   useEffect(() => {
@@ -339,6 +346,24 @@ export default function EnhancedContactsTable({
     setIsBulkEditModalOpen(false);
   };
 
+  // Enroll modal handling
+  const openEnrollModal = () => {
+    setIsEnrollModalOpen(true);
+  };
+
+  const closeEnrollModal = () => {
+    setIsEnrollModalOpen(false);
+  };
+
+  // Callback after successful enrollment
+  const handleEnrollmentComplete = useCallback(() => {
+    // Clear selection state
+    setSelectedContactIds([]);
+    setIsSelectAllMatchingActive(false);
+    // Optionally, you could add a success message here or trigger a refresh
+    // router.refresh(); // Uncomment if you want to refresh data after enrollment
+  }, []); // Removed router from dependencies unless refresh is needed
+
   const handleBulkDelete = async (force: boolean = false) => {
     if (selectedContactIds.length === 0 && !isSelectAllMatchingActive) return;
     
@@ -451,6 +476,15 @@ export default function EnhancedContactsTable({
               >
                 Bulk Edit
               </button>
+              {/* Enroll Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={openEnrollModal}
+                className="px-3 py-1 text-sm bg-green-100 text-green-700 rounded-md hover:bg-green-200 border-green-200 hover:border-green-300 disabled:opacity-50"
+              >
+                Enroll in Workflow
+              </Button>
             </div>
           </div>
         )}
@@ -606,9 +640,10 @@ export default function EnhancedContactsTable({
             {/* Desktop pagination info */}
             <div>
               <p className="text-sm text-gray-700">
-                Showing <span className="font-medium">{indexOfFirstItem + 1}</span> to{' '}
-                <span className="font-medium">{Math.min(indexOfLastItem, totalItems)}</span> of{' '}
-                <span className="font-medium">{totalItems}</span> contacts
+                Showing <span className="font-medium">{totalMatchingCount === 0 ? 0 : indexOfFirstItem + 1}</span> to{' '}
+                <span className="font-medium">{Math.min(indexOfLastItem, totalMatchingCount)}</span> of{' '}
+                <span className="font-medium">{totalMatchingCount}</span> contacts
+                {totalMatchingCount === 0 && " (No contacts found)"}
               </p>
             </div>
             
@@ -741,6 +776,19 @@ export default function EnhancedContactsTable({
         totalMatchingCount={totalMatchingCount}
         currentFilterState={currentFilterState}
         searchTerm={searchTerm}
+      />
+
+      {/* Enroll Workflow Modal */}
+      <EnrollWorkflowModal
+        isOpen={isEnrollModalOpen}
+        onClose={closeEnrollModal}
+        selectedContacts={{
+          contactIds: selectedContactIds,
+          isSelectAllMatchingActive: isSelectAllMatchingActive,
+          filters: currentFilterState ?? undefined, // Pass filters if select all is active
+          searchTerm: searchTerm ?? undefined, // Pass search term if select all is active
+        }}
+        onEnrollmentComplete={handleEnrollmentComplete}
       />
     </>
   );

@@ -1,13 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { organizationId: string } }
 ) {
   try {
-    // TODO: Add authentication
-    console.log("Fetching organization data for:", params.organizationId);
+    const session = await getServerSession(authOptions);
+    const organizationId = params.organizationId;
+
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Regular users can only access their own organization
+    if (session.user.role !== 'admin' && session.user.organizationId !== organizationId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    console.log("Fetching organization data for:", organizationId);
 
     const organization = await prisma.organization.findUnique({
       where: {
@@ -67,4 +82,4 @@ export async function GET(
       { status: 500 }
     );
   }
-} 
+}

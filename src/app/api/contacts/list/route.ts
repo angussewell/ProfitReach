@@ -2,236 +2,153 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { Prisma } from '@prisma/client';
 import { FilterState } from '@/types/filters';
+import { buildCombinedWhereClause, createApiResponse } from '@/lib/filters'; // Ensure buildCombinedWhereClause is imported
+import { Prisma } from '@prisma/client'; // Import Prisma types if needed
 
-// Constants - Fallback for testing purposes
-const PLACEHOLDER_ORG_ID = 'org_test_alpha';
-
-// Function to build SQL WHERE clause from filters
-// Simplified version extracted directly from filter-utils.ts to avoid import issues
-function buildSqlWhereFromFilters(
-  filterState: FilterState,
-  organizationId: string
-): { sql: string, params: any[] } {
-  // Start with the base WHERE clause for organization
-  let sql = `WHERE "organizationId" = $1`;
-  const params: any[] = [organizationId];
-  
-  if (!filterState?.conditions || filterState.conditions.length === 0) {
-    return { sql, params };
-  }
-  
-  // For simplicity, we're only implementing the basic WHERE clause generation
-  // In a production environment, you would want to implement all the condition building logic
-  // But for our current needs, this basic implementation should work
-  const conditionSql: string[] = [];
-  
-  filterState.conditions.forEach(condition => {
-    const { field, operator, value } = condition;
-    const paramIndex = params.length + 1;
-    
-    // Handle standard fields - this is a simplified implementation
-    // Whitelist of allowed field names to prevent SQL injection
-    const allowedFields = [
-      'firstName', 'lastName', 'email', 'title', 'currentCompanyName',
-      'leadStatus', 'city', 'state', 'country', 'createdAt', 'updatedAt', 
-      'lastActivityAt'
-    ];
-    
-    if (!allowedFields.includes(field)) {
-      return; // Skip fields that aren't in the whitelist
-    }
-    
-    const safeFieldName = `"${field}"`;
-    
-    // Basic operator handling
-    switch (operator) {
-      case 'equals':
-        conditionSql.push(`${safeFieldName} = $${paramIndex}`);
-        params.push(value);
-        break;
-      case 'contains':
-        conditionSql.push(`${safeFieldName} ILIKE $${paramIndex}`);
-        params.push(`%${value}%`);
-        break;
-      case 'startsWith':
-        conditionSql.push(`${safeFieldName} ILIKE $${paramIndex}`);
-        params.push(`${value}%`);
-        break;
-      case 'endsWith':
-        conditionSql.push(`${safeFieldName} ILIKE $${paramIndex}`);
-        params.push(`%${value}`);
-        break;
-      // Add more operators as needed
-    }
-  });
-  
-  if (conditionSql.length > 0) {
-    // Combine using AND or OR
-    const combiner = filterState.logicalOperator === 'OR' ? ' OR ' : ' AND ';
-    sql += ` AND (${conditionSql.join(combiner)})`;
-  }
-  
-  return { sql, params };
-}
+// Constants
+const MAX_ITEMS_PER_PAGE = 500; // Safety limit for pagination
 
 export async function GET(request: Request) {
   try {
+    console.log('[CONTACTS API] Fetching contacts with filtering and search');
+
     // Extract search params
     const url = new URL(request.url);
-    const filtersParam = url.searchParams.get('filters');
-    const searchTerm = url.searchParams.get('search');
-    
+    const pageParam = url.searchParams.get('page');
+    const pageSizeParam = url.searchParams.get('pageSize');
+    const filterParam = url.searchParams.get('filters'); // Stringified JSON FilterState
+    const searchParam = url.searchParams.get('search'); // Search term string
+
+    // Parse pagination params
+    const page = pageParam ? parseInt(pageParam, 10) : 1;
+    const pageSize = pageSizeParam ? Math.min(parseInt(pageSizeParam, 10), MAX_ITEMS_PER_PAGE) : MAX_ITEMS_PER_PAGE;
+    const skip = (page - 1) * pageSize;
+
     // Get the organization ID from the session
     const session = await getServerSession(authOptions);
-    const organizationId = session?.user?.organizationId || PLACEHOLDER_ORG_ID;
-    
-    // Parse filter state from search params
-    let filterState: FilterState | null = null;
-    
-    if (filtersParam) {
-      try {
-        filterState = JSON.parse(decodeURIComponent(filtersParam));
-        console.log('API - Applied filters:', filterState);
-      } catch (e) {
-        console.error('API - Error parsing filters:', e);
-      }
-    }
-    
-    // Build the where clause with the filter state using SQL approach
-    const where = filterState 
-      ? buildSqlWhereFromFilters(filterState, organizationId)
-      : { sql: `WHERE "organizationId" = $1`, params: [organizationId] };
-      
-    // Add search conditions if searchTerm is provided
-    let searchCondition = '';
-    let searchParams: any[] = [];
-    
-    if (searchTerm && searchTerm.trim() !== '') {
-      const trimmedSearch = searchTerm.trim();
-      
-      // Create a search condition across multiple fields
-      searchCondition = `
-        AND (
-          "firstName" ILIKE $${where.params.length + 1} OR
-          "lastName" ILIKE $${where.params.length + 1} OR
-          "email" ILIKE $${where.params.length + 1} OR
-          "leadStatus" ILIKE $${where.params.length + 1} OR
-          "title" ILIKE $${where.params.length + 1} OR
-          "currentCompanyName" ILIKE $${where.params.length + 1}
-        )
-      `;
-      
-      // Add the search parameter (only once since we're using the same parameter multiple times)
-      searchParams = [`%${trimmedSearch}%`];
-      
-      console.log('API - Searching for:', trimmedSearch);
-    }
-    
-    // Combine the where clause with search conditions
-    const finalWhereClause = {
-      sql: where.sql + searchCondition,
-      params: [...where.params, ...searchParams]
-    };
-    
-    console.log('API - Fetching contacts with where clause:', finalWhereClause);
-    
-    // Fetch contacts with the dynamic SQL where clause and params
-    let contacts;
-    
-    // We need to handle the parameters correctly
-    if (finalWhereClause.params && finalWhereClause.params.length > 0) {
-      // Constructing the query with parameters
-      const sqlQuery = `
-        SELECT 
-          id, 
-          "firstName", 
-          "lastName", 
-          email, 
-          "photoUrl", 
-          title, 
-          "currentCompanyName", 
-          "additionalData",
-          "leadStatus",
-          city,
-          state,
-          country
-        FROM "Contacts"
-        ${finalWhereClause.sql}
-        ORDER BY "updatedAt" DESC
-      `;
-      
-      // Execute with parameters from the where.params array
-      contacts = await prisma.$queryRawUnsafe(sqlQuery, ...finalWhereClause.params);
-      
-      // Get total count for the same query
-      const countQuery = `
-        SELECT COUNT(*) as count
-        FROM "Contacts"
-        ${finalWhereClause.sql}
-      `;
-      
-      const countResult = await prisma.$queryRawUnsafe<{count: string}[]>(countQuery, ...finalWhereClause.params);
-      var totalCount = parseInt(countResult[0].count, 10);
-    } else {
-      // Fallback to simple query without parameters
-      contacts = await prisma.$queryRaw`
-        SELECT 
-          id, 
-          "firstName", 
-          "lastName", 
-          email, 
-          "photoUrl", 
-          title, 
-          "currentCompanyName", 
-          "additionalData",
-          "leadStatus",
-          city,
-          state,
-          country
-        FROM "Contacts"
-        ${Prisma.raw(finalWhereClause.sql)}
-        ORDER BY "updatedAt" DESC
-      `;
-      
-      // Get total count
-      const countResult = await prisma.$queryRaw<{count: string}[]>`
-        SELECT COUNT(*) as count
-        FROM "Contacts"
-        ${Prisma.raw(finalWhereClause.sql)}
-      `;
-      
-      var totalCount = parseInt(countResult[0].count, 10);
+    const organizationId = session?.user?.organizationId;
+
+    if (!organizationId) {
+      console.error('[CONTACTS API] Error: Organization ID not found in session. Returning empty list.');
+      const { response } = createApiResponse(true, { data: [], totalCount: 0, page, pageSize, totalPages: 0 });
+      return NextResponse.json(response);
     }
 
-    // Process the contacts to extract status from additionalData
-    const processedContacts = (contacts as any[]).map((contact: any) => {
-      let status: string | undefined = undefined;
-      
-      if (contact.additionalData && typeof contact.additionalData === 'object') {
-        const additionalData = contact.additionalData as any;
-        status = additionalData.status;
+    console.log(`[CONTACTS API] Using organization ID: ${organizationId}, Page: ${page}, PageSize: ${pageSize}`);
+    console.log(`[CONTACTS API] Received filterParam: ${filterParam}`);
+    console.log(`[CONTACTS API] Received searchParam: ${searchParam}`);
+
+    // Parse filters if provided
+    let parsedFilterState: FilterState | null = null;
+    if (filterParam) {
+      try {
+        parsedFilterState = JSON.parse(filterParam) as FilterState;
+        console.log('[CONTACTS API] Parsed FilterState:', JSON.stringify(parsedFilterState, null, 2));
+      } catch (parseError) {
+        console.error('[CONTACTS API] Error parsing filters JSON:', parseError);
+        // Decide how to handle: ignore filters, return error? For now, ignore.
+        parsedFilterState = null;
       }
-      
+    }
+
+    // *** FIX: Build the combined WHERE clause using the utility function ***
+    const whereClause: Prisma.ContactsWhereInput = buildCombinedWhereClause(
+      organizationId,
+      parsedFilterState,
+      searchParam
+    );
+
+    console.log('[CONTACTS API] Generated Prisma WHERE clause:', JSON.stringify(whereClause, null, 2));
+
+    // *** FIX: Use the combined whereClause for counting ***
+    const totalCount = await prisma.contacts.count({
+      where: whereClause,
+    });
+
+    console.log(`[CONTACTS API] Found ${totalCount} contacts matching criteria for organization ${organizationId}`);
+
+    // *** FIX: Use the combined whereClause for fetching ***
+    const contacts = await prisma.contacts.findMany({
+      where: whereClause, // Apply combined filters and search
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        photoUrl: true,
+        title: true,
+        currentCompanyName: true,
+        additionalData: true, // Keep for status extraction
+        leadStatus: true,
+        city: true,
+        state: true,
+        country: true,
+        // Include fields needed for filtering/display if not already present
+        createdAt: true,
+        updatedAt: true,
+        lastActivityAt: true,
+        ContactTags: { // Correct relation name
+          select: {
+            Tags: { // Correct field name pointing to Tags model
+              select: { id: true, name: true },
+            },
+          },
+        },
+      },
+      orderBy: {
+        updatedAt: 'desc', // Or make this dynamic based on request?
+      },
+      skip,
+      take: pageSize,
+    });
+
+    console.log(`[API /contacts/list] Retrieved contacts: ${contacts.length}`);
+
+    // Process the contacts (e.g., extract status, format tags)
+    const processedContacts = contacts.map(contact => {
+      let status: string | undefined = undefined;
+      if (contact.additionalData && typeof contact.additionalData === 'object') {
+        // @ts-ignore - additionalData is JSONB
+        status = contact.additionalData.status;
+      }
+      // Format tags if needed, using correct relation name and field name, letting TS infer type
+      const tags = contact.ContactTags?.map(ct => ct.Tags) // Access the selected Tags object
+                                       .filter(tag => tag != null) // Filter out potential nulls if relation is optional (though likely not here)
+                                       || [];
+
+      // Create a new object excluding additionalData and the original ContactTags relation
+      const { additionalData, ContactTags, ...restOfContact } = contact;
+
       return {
-        ...contact,
-        status
+        ...restOfContact, // Spread the rest of the contact properties
+        tags, // Include formatted tags
+        status, // Include extracted status
       };
     });
 
-    // Return the processed contacts and total count as JSON
-    return NextResponse.json({ 
-      success: true,
+    // Return standardized success response
+    const responseData = {
       data: processedContacts,
-      totalCount
-    });
+      totalCount,
+      page,
+      pageSize,
+      totalPages: Math.ceil(totalCount / pageSize),
+    };
+    console.log(`[API /contacts/list] Response summary: totalCount=${totalCount}, processedContacts=${processedContacts.length}`);
+
+    const { response } = createApiResponse(true, responseData);
+    return NextResponse.json(response);
 
   } catch (error) {
-    console.error('API - Error fetching contacts:', error);
-    return NextResponse.json({ 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
-    }, { status: 500 });
+    console.error('[API /contacts/list ERROR]', error);
+    const { response, status } = createApiResponse(
+      false,
+      undefined,
+      error instanceof Error ? error.message : 'Unknown error fetching contacts',
+      500
+    );
+    console.error('[API /contacts/list ERROR RESPONSE]', JSON.stringify(response));
+    return NextResponse.json(response, { status });
   }
 }

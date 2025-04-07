@@ -61,23 +61,75 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async session({ session, token }) {
+      if (!session.user) {
+        console.log('No user object in session during callback');
+        session.user = { id: '', email: '', role: 'user' };
+      }
+      
+      console.log('Session callback called with token:', { 
+        tokenSub: token.sub,
+        tokenEmail: token.email,
+        tokenName: token.name,
+        tokenRole: token.role,
+        tokenOrgId: token.organizationId,
+      });
+
+      // Always ensure user.id is set from token.sub
       if (token.sub) {
+        session.user.id = token.sub;
+        
+        // Fetch fresh user data from database 
         const user = await prisma.user.findUnique({
           where: { id: token.sub },
-          select: { organizationId: true, role: true },
+          select: { id: true, organizationId: true, role: true, email: true },
         });
 
+        console.log('User data from database:', user);
+
         if (user) {
+          session.user.id = user.id;  // Ensure ID is set
           session.user.organizationId = user.organizationId || undefined;
           session.user.role = user.role;
+          
+          // If email is missing, use the one from database
+          if (!session.user.email && user.email) {
+            session.user.email = user.email;
+          }
+        } else {
+          console.log('User not found in database with ID:', token.sub);
         }
+      } else {
+        console.log('No token.sub available in session callback');
       }
+      
+      console.log('Session after updates:', { 
+        userId: session.user?.id,
+        email: session.user?.email,
+        name: session.user?.name,
+        role: session.user?.role,
+        orgId: session.user?.organizationId
+      });
+      
       return session;
     },
     async jwt({ token, user }) {
+      console.log('JWT callback called with:', { 
+        tokenSub: token.sub, 
+        userId: user?.id,
+        userEmail: user?.email
+      });
+      
       if (user) {
+        // Make sure token.sub is set from user.id
+        token.sub = user.id;
         token.role = user.role;
         token.organizationId = user.organizationId;
+        
+        console.log('JWT updated with user data:', { 
+          tokenSub: token.sub,
+          tokenRole: token.role,
+          tokenOrgId: token.organizationId
+        });
       }
       return token;
     }
@@ -99,4 +151,4 @@ export async function getOrganization() {
   });
 
   return organization;
-} 
+}

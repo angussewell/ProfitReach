@@ -10,6 +10,7 @@ import FilterBar from '@/components/filters/FilterBar';
 import SavedFiltersTabs from '@/components/filters/SavedFiltersTabs';
 import EnhancedContactsTable from './enhanced-contacts-table';
 import SearchBar from '@/components/contacts/SearchBar';
+import { useOrganization } from '@/contexts/OrganizationContext';
 
 // Loading state component
 function ContactsTableSkeleton() {
@@ -119,15 +120,26 @@ export default function ContactsPageClient({ initialOrganizationId, searchParams
         url += `?${params.toString()}`;
       }
       
+      console.log('Fetching contacts from URL:', url);
       const response = await fetch(url);
       const result = await response.json();
+      
+      console.log('Contacts API response:', {
+        status: response.status,
+        success: result.success,
+        totalCount: result.totalCount,
+        dataLength: result.data?.length || 0
+      });
       
       if (!response.ok || !result.success) {
         throw new Error(result.error || 'Failed to fetch contacts');
       }
       
-      setContacts(result.data || []);
-      setTotalMatchingCount(result.totalCount || 0);
+      // Correctly access nested data property from createApiResponse structure
+      const responseData = result.data; 
+      console.log('Setting contacts state with data:', responseData?.data?.length || 0, 'items');
+      setContacts(responseData?.data || []); 
+      setTotalMatchingCount(responseData?.totalCount || 0);
     } catch (err: any) {
       console.error('Error fetching contacts:', err);
       setError(err.message || 'An error occurred while fetching contacts');
@@ -179,10 +191,23 @@ export default function ContactsPageClient({ initialOrganizationId, searchParams
     setRefreshTabsCounter(prev => prev + 1); // Increment counter to trigger tab refresh
   }, []);
 
-  // Initial data fetch and setup effect
+  // Get current organization
+  const { currentOrganization } = useOrganization();
+  
+  // Log organization info for debugging
   useEffect(() => {
-    fetchContacts(currentFilterState, searchTerm);
-  }, [currentFilterState, searchTerm, fetchContacts]);
+    console.log('Current organization in ContactsPageClient:', currentOrganization);
+  }, [currentOrganization]);
+  
+  // Initial data fetch and setup effect - add currentOrganization to dependencies
+  useEffect(() => {
+    if (currentOrganization) {
+      console.log(`Fetching contacts for organization: ${currentOrganization.name} (${currentOrganization.id})`);
+      fetchContacts(currentFilterState, searchTerm);
+    } else {
+      console.log('No current organization, waiting before fetching contacts');
+    }
+  }, [currentFilterState, searchTerm, fetchContacts, currentOrganization]);
 
   return (
     <PageContainer>

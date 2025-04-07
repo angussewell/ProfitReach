@@ -4,11 +4,12 @@ import { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { FilterState } from '@/types/filters';
+import { buildCombinedWhereClause, createApiResponse } from '@/lib/filters';
 
 // Constants
 // Use the provided Neon DB connection
 const PLACEHOLDER_ORG_ID = 'org_test_alpha'; // Fallback for testing
-// Actual DB connection handled by Prisma
+const MAX_BULK_LIMIT = 1000; // Maximum number of contacts to delete at once
 
 // Expected request body type
 type BulkDeleteRequest = {
@@ -106,28 +107,32 @@ export async function POST(request: NextRequest) {
     const isSelectAllMode = isSelectAllMatchingActive === true;
     
     if (!isSelectAllMode && (!Array.isArray(contactIds) || contactIds.length === 0)) {
-      return NextResponse.json(
-        { message: 'Contact IDs array is required and must not be empty when not in "Select All Matching" mode' },
-        { status: 400 }
+      const { response, status } = createApiResponse(
+        false, 
+        undefined,
+        'Contact IDs array is required and must not be empty when not in "Select All Matching" mode',
+        400
       );
+      return NextResponse.json(response, { status });
+    }
+    
+    // Enforce batch size limit for direct contact IDs
+    if (!isSelectAllMode && contactIds && contactIds.length > MAX_BULK_LIMIT) {
+      const { response, status } = createApiResponse(
+        false, 
+        undefined,
+        `Batch size exceeds limit. Maximum ${MAX_BULK_LIMIT} contacts can be deleted at once.`,
+        400
+      );
+      return NextResponse.json(response, { status });
     }
     
     // Get organization ID from session
     const session = await getServerSession(authOptions);
     const organizationId = session?.user?.organizationId || PLACEHOLDER_ORG_ID;
     
-    console.log(`Using organization ID for bulk contact deletion: ${organizationId}`);
-    
     try {
-      // Log detailed information for debugging
-      if (isSelectAllMode) {
-        console.log(`Received request to delete all contacts matching filters`);
-        console.log(`Filter state: ${JSON.stringify(filterState)}`);
-        console.log(`Search term: ${searchTerm}`);
-      } else {
-        console.log(`Received request to delete contacts: ${JSON.stringify(contactIds)}`);
-      }
-      console.log(`Organization ID: ${organizationId}`);
+      // Process deletion request based on mode
       
       // Find valid contacts within a transaction
       const result = await prisma.$transaction(async (tx) => {
@@ -179,8 +184,6 @@ export async function POST(request: NextRequest) {
           const matchingContacts = await tx.$queryRawUnsafe<{id: string}[]>(idQuery, ...finalWhereClause.params);
           validContactIds = matchingContacts.map(c => c.id);
           
-          console.log(`Found ${validContactIds.length} matching contacts for deletion.`);
-          
           if (validContactIds.length === 0) {
             throw new Error('No matching contacts found for deletion');
           }
@@ -205,28 +208,20 @@ export async function POST(request: NextRequest) {
           );
           
           if (contactsWithWorkflows.length > 0) {
-            console.log(`${contactsWithWorkflows.length} contacts have related workflow states`);
-            
             if (force) {
               // Force delete mode - delete workflow states first
-              console.log(`Force mode: Deleting related workflow states first`);
               
               // Collect all workflow state IDs that need to be deleted
               const workflowStateIds = contactsWithWorkflows.flatMap(
                 contact => contact.ContactWorkflowState.map(state => state.stateId)
               );
               
-              // Log the workflow states being deleted
-              console.log(`Deleting ${workflowStateIds.length} workflow states: ${workflowStateIds.join(', ')}`);
-              
-              // Delete the workflow states
-              const deleteWorkflowResult = await tx.contactWorkflowState.deleteMany({
+              // Delete the workflow states first
+              await tx.contactWorkflowState.deleteMany({
                 where: {
                   stateId: { in: workflowStateIds }
                 }
               });
-              
-              console.log(`Deleted ${deleteWorkflowResult.count} workflow states`);
             } else {
               // Standard mode - return error for contacts with workflows
               throw new Error(`Cannot delete contacts with active workflows: ${contactsWithWorkflows.map(c => c.id).join(', ')}`);
@@ -241,11 +236,8 @@ export async function POST(request: NextRequest) {
         
         // Calculate invalid contacts for non-selectAll mode
         const invalidCount = isSelectAllMode ? 0 : contactIds!.length - validContactIds.length;
-      
-        // Log before attempting delete
-        console.log(`Attempting to delete ${validContactIds.length} contacts with IDs: ${validContactIds.join(', ')}`);
         
-        // Use a simpler approach with Prisma's native API
+        // Use Prisma's native API for the deletion
         // This uses proper typing and parameter binding
         const deleteResult = await tx.contacts.deleteMany({
           where: {
@@ -253,8 +245,6 @@ export async function POST(request: NextRequest) {
             organizationId
           }
         });
-        
-        console.log(`Delete result: ${JSON.stringify(deleteResult)}`);
         
         return {
           deletedCount: deleteResult.count,

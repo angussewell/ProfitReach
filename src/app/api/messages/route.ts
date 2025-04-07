@@ -2,10 +2,37 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
-import { EmailMessage, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { formatDateInCentralTime } from '@/lib/date-utils';
 
 type MessageType = 'REAL_REPLY' | 'BOUNCE' | 'AUTO_REPLY' | 'OUT_OF_OFFICE' | 'OTHER';
+type MessageSource = 'EMAIL' | 'LINKEDIN';
+type ConversationStatus = 'MEETING_BOOKED' | 'NOT_INTERESTED' | 'FOLLOW_UP_NEEDED' | 'NO_ACTION_NEEDED' | 'WAITING_FOR_REPLY';
+
+// Define a type that matches the EmailMessage model since we can't import it directly
+interface EmailMessage {
+  id: string;
+  messageId: string;
+  threadId: string;
+  organizationId: string;
+  emailAccountId: string;
+  subject: string;
+  sender: string;
+  recipientEmail: string;
+  content: string;
+  receivedAt: Date;
+  messageType: MessageType;
+  isRead: boolean;
+  classificationScores?: any;
+  unipileEmailId?: string;
+  status: ConversationStatus;
+  messageSource: MessageSource;
+  socialAccountId?: string;
+  statusChangedAt?: Date;
+  aiSuggestion1?: string;
+  aiSuggestion2?: string;
+  aiSuggestion3?: string;
+}
 
 // Type for our formatted response
 interface FormattedEmailMessage extends Omit<EmailMessage, 'receivedAt'> {
@@ -41,33 +68,33 @@ export async function GET(request: Request) {
     const includeFiltered = url.searchParams.get('includeFiltered') === 'true';
     console.log('Query params:', { includeFiltered });
 
-    // First check if there are any messages at all for this organization
-    const messageCount = await prisma.emailMessage.count({
-      where: {
-        organizationId: session.user.organizationId
-      }
-    });
+    // Use raw SQL queries since EmailMessage is marked with @ignore in the schema
+    // First count the messages
+    const countResult = await prisma.$queryRaw<[{ count: number }]>`
+      SELECT COUNT(*) as count 
+      FROM "EmailMessage" 
+      WHERE "organizationId" = ${session.user.organizationId}
+    `;
+    
+    const messageCount = Number(countResult[0]?.count) || 0;
 
     console.log('Total messages in database:', {
       organizationId: session.user.organizationId,
       count: messageCount
     });
 
-    // Use Prisma ORM instead of raw SQL
-    const messages = await prisma.emailMessage.findMany({
-      where: {
-        organizationId: session.user.organizationId
-      },
-      orderBy: {
-        receivedAt: 'desc'
-      },
-      take: 100
-    });
+    // Then fetch the messages
+    const messages = await prisma.$queryRaw<EmailMessage[]>`
+      SELECT * FROM "EmailMessage" 
+      WHERE "organizationId" = ${session.user.organizationId}
+      ORDER BY "receivedAt" DESC
+      LIMIT 100
+    `;
 
     console.log('Found messages:', {
       count: messages.length,
       sampleMessageId: messages[0]?.id || 'no messages',
-      statuses: messages.map(m => m.status)
+      statuses: messages.map((m: EmailMessage) => m.status)
     });
 
     // Format messages for frontend display
@@ -104,11 +131,30 @@ export async function PATCH(request: Request) {
       );
     }
 
-    // Update message status
-    const updatedMessage = await prisma.emailMessage.update({
-      where: { id: messageId },
-      data: { status }
-    });
+    // Update message status using raw SQL
+    const currentTimestamp = new Date().toISOString();
+    
+    // First update the status
+    await prisma.$executeRaw`
+      UPDATE "EmailMessage"
+      SET "status" = ${status}, "statusChangedAt" = ${currentTimestamp}
+      WHERE "id" = ${messageId}
+    `;
+    
+    // Then retrieve the updated message
+    const updatedMessages = await prisma.$queryRaw<EmailMessage[]>`
+      SELECT * FROM "EmailMessage" 
+      WHERE "id" = ${messageId}
+    `;
+    
+    if (!updatedMessages || updatedMessages.length === 0) {
+      return NextResponse.json(
+        { error: 'Message not found after update' },
+        { status: 404 }
+      );
+    }
+
+    const updatedMessage = updatedMessages[0];
 
     // Format the updated message for frontend display
     const formattedMessage = formatMessageForResponse(updatedMessage);

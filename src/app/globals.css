@@ -5,203 +5,49 @@
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
+    --foreground: 224 71.4% 4.1%;
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
+    --card-foreground: 224 71.4% 4.1%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
+    --popover-foreground: 224 71.4% 4.1%;
+    --primary: 220.9 39.3% 11%;
+    --primary-foreground: 210 20% 98%;
+    --secondary: 220 14.3% 95.9%;
+    --secondary-foreground: 220.9 39.3% 11%;
+    --muted: 220 14.3% 95.9%;
+    --muted-foreground: 220 8.9% 46.1%;
+    --accent: 220 14.3% 95.9%;
+    --accent-foreground: 220.9 39.3% 11%;
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
+    --destructive-foreground: 210 20% 98%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 224 71.4% 4.1%;
     --radius: 0.5rem;
-    --brand-primary: #EF4444;
-    --brand-primary-dark: #DC2626;
-    --brand-secondary: #EF4444;
-    --brand-secondary-dark: #DC2626;
-    --brand-accent: #EF4444;
-    --brand-accent-dark: #DC2626;
-    --brand-light: #FEF2F2;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
   }
 
   .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
+    --background: 224 71.4% 4.1%;
+    --foreground: 210 20% 98%;
+    --card: 224 71.4% 4.1%;
+    --card-foreground: 210 20% 98%;
+    --popover: 224 71.4% 4.1%;
+    --popover-foreground: 210 20% 98%;
+    --primary: 210 20% 98%;
+    --primary-foreground: 220.9 39.3% 11%;
+    --secondary: 215 27.9% 16.9%;
+    --secondary-foreground: 210 20% 98%;
+    --muted: 215 27.9% 16.9%;
+    --muted-foreground: 217.9 10.6% 64.9%;
+    --accent: 215 27.9% 16.9%;
+    --accent-foreground: 210 20% 98%;
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
-  }
-
-  * {
-    @apply border-border;
-  }
-
-  body {
-    @apply bg-background text-foreground antialiased;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    --destructive-foreground: 210 20% 98%;
+    --border: 215 27.9% 16.9%;
+    --input: 215 27.9% 16.9%;
+    --ring: 216 12.2% 83.9%;
   }
 }
-
-@layer components {
-  /* Base Card */
-  .technical-card {
-    @apply relative p-4 bg-card rounded-lg border border-border/50 shadow-sm hover:shadow-md transition-shadow duration-200;
-  }
-
-  /* Card Variants */
-  .technical-card-primary {
-    @apply technical-card bg-gradient-to-br from-primary/90 to-primary text-primary-foreground;
-  }
-
-  .technical-card-accent {
-    @apply technical-card bg-gradient-to-br from-primary/90 to-primary text-primary-foreground;
-  }
-
-  /* Typography */
-  .technical-header {
-    @apply text-2xl font-semibold tracking-tight text-foreground;
-  }
-
-  .technical-subheader {
-    @apply text-sm text-muted-foreground;
-  }
-
-  .technical-value {
-    @apply text-4xl font-bold text-primary;
-  }
-
-  .technical-label {
-    @apply text-sm font-medium text-muted-foreground;
-  }
-
-  /* Form Elements */
-  .technical-input {
-    @apply px-4 py-2 bg-card border border-border/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/30 transition-all duration-200;
-  }
-
-  .technical-button {
-    @apply px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors duration-200 shadow-sm hover:shadow;
-  }
-
-  .technical-badge {
-    @apply inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-primary/10 text-primary;
-  }
-
-  /* Progress Elements */
-  .technical-progress {
-    @apply h-2 w-full bg-muted rounded-full overflow-hidden;
-  }
-
-  .technical-progress-fill {
-    @apply h-full bg-gradient-to-r from-primary to-primary/80 transition-all duration-300 ease-in-out;
-  }
-
-  /* Layout Elements */
-  .technical-divider {
-    @apply h-px bg-border my-4;
-  }
-
-  .technical-grid {
-    @apply grid gap-4;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  }
-
-  /* Scrollbar */
-  .technical-scrollbar {
-    scrollbar-width: thin;
-    scrollbar-color: hsl(var(--border)) transparent;
-  }
-
-  .technical-scrollbar::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-
-  .technical-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .technical-scrollbar::-webkit-scrollbar-thumb {
-    background-color: hsl(var(--border));
-    border-radius: 3px;
-  }
-
-  .technical-scrollbar::-webkit-scrollbar-corner {
-    background: transparent;
-  }
-}
-
-/* Code Elements */
-.line-numbers {
-  @apply pl-8 relative font-mono text-sm;
-}
-
-.line-numbers::before {
-  @apply absolute left-0 w-6 text-right pr-2 text-muted-foreground font-mono text-xs;
-  content: attr(data-line);
-}
-
-.code-block {
-  @apply font-mono text-sm bg-muted/30 rounded-lg p-4;
-}
-
-/* Status Indicators */
-.status-dot {
-  @apply w-2 h-2 rounded-full;
-}
-
-.status-dot.active {
-  @apply bg-accent;
-}
-
-.status-dot.inactive {
-  @apply bg-muted-foreground/30;
-}
-
-/* Subject Line Editor */
-.subject-line-editor .monaco-editor .monaco-editor-background,
-.subject-line-editor .monaco-editor .margin {
-  background-color: transparent !important;
-}
-
-.subject-line-editor .monaco-editor .lines-content {
-  padding-left: 32px !important;
-}
-
-
 
 @layer base {
   * {
