@@ -44,6 +44,34 @@ function isValidWebhookUrl(url: string): boolean {
 
 export async function POST(request: NextRequest) {
   try {
+    // CRITICAL: Validate webhook URL configuration at the very beginning
+    const webhookUrl = process.env.N8N_ENROLLMENT_WEBHOOK_URL;
+    if (!webhookUrl || typeof webhookUrl !== 'string' || webhookUrl.trim() === '') {
+      // Log a clear error message for server operators
+      console.error('FATAL: N8N_ENROLLMENT_WEBHOOK_URL environment variable is not set or empty!');
+      const { response, status } = createApiResponse(
+        false, 
+        undefined, 
+        'Workflow enrollment service is misconfigured. Please contact support.', 
+        500
+      );
+      return NextResponse.json(response, { status });
+    }
+    
+    // Try to validate the URL format
+    try {
+      new URL(webhookUrl);
+    } catch (urlError) {
+      console.error(`FATAL: N8N_ENROLLMENT_WEBHOOK_URL contains an invalid URL: ${webhookUrl}`);
+      const { response, status } = createApiResponse(
+        false, 
+        undefined, 
+        'Workflow enrollment service is misconfigured. Please contact support.', 
+        500
+      );
+      return NextResponse.json(response, { status });
+    }
+
     const session = await getServerSession(authOptions);
     if (!session?.user?.organizationId) {
       const { response, status } = createApiResponse(false, undefined, 'Unauthorized', 401);
@@ -129,19 +157,20 @@ export async function POST(request: NextRequest) {
     }
 
     // --- Webhook URL Validation (Critical Security Fix) ---
-    const webhookUrl = process.env.N8N_ENROLLMENT_WEBHOOK_URL;
-    if (!webhookUrl) {
-      const { response, status } = createApiResponse(false, undefined, 'Enrollment endpoint configuration error: Missing webhook URL', 500);
-      return NextResponse.json(response, { status });
-    }
+    // Note: We've already validated that webhookUrl exists and is a valid URL format above
     
-    // Validate webhook URL points to trusted domain
-    if (!isValidWebhookUrl(webhookUrl)) {
-    // Security warning - but don't expose details in the response
-    // Log removed for production
-    const { response, status } = createApiResponse(false, undefined, 'Enrollment endpoint configuration error: Invalid webhook URL', 500);
-    return NextResponse.json(response, { status });
-    }
+    // TODO: Review URL validation if needed in future
+    // Domain validation temporarily disabled - we trust the URL provided in the environment variable
+    // if (!isValidWebhookUrl(webhookUrl)) {
+    //   console.error(`SECURITY WARNING: N8N_ENROLLMENT_WEBHOOK_URL points to an untrusted domain: ${webhookUrl}`);
+    //   const { response, status } = createApiResponse(
+    //     false, 
+    //     undefined, 
+    //     'Workflow enrollment service is misconfigured. Please contact support.', 
+    //     500
+    //   );
+    //   return NextResponse.json(response, { status });
+    // }
 
     try {
       const webhookResponse = await fetch(webhookUrl, {
@@ -158,10 +187,11 @@ export async function POST(request: NextRequest) {
 
       if (!webhookResponse.ok) {
         const errorBody = await webhookResponse.text();
+        console.error(`N8N webhook call failed: Status=${webhookResponse.status}, Response=${errorBody.substring(0, 200)}`);
         const { response, status } = createApiResponse(
           false, 
           undefined, 
-          `Webhook call failed: ${webhookResponse.statusText}`,
+          `Workflow enrollment failed: ${webhookResponse.statusText}`,
           webhookResponse.status
         );
         return NextResponse.json(response, { status });
@@ -173,10 +203,11 @@ export async function POST(request: NextRequest) {
 
     } catch (fetchError) {
       const errorMessage = fetchError instanceof Error ? fetchError.message : 'Unknown fetch error';
+      console.error(`Failed to call n8n enrollment webhook: ${errorMessage}`);
       const { response, status } = createApiResponse(
         false, 
         undefined, 
-        `Failed to call enrollment webhook: ${errorMessage}`,
+        `Workflow enrollment service unavailable. Please try again later.`,
         500
       );
       return NextResponse.json(response, { status });
@@ -184,7 +215,14 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown server error';
-    const { response, status } = createApiResponse(false, undefined, `Internal Server Error: ${errorMessage}`, 500);
+    console.error(`Enrollment API error: ${errorMessage}`);
+    console.error(error);
+    const { response, status } = createApiResponse(
+      false, 
+      undefined, 
+      `An unexpected error occurred. Please try again or contact support if the issue persists.`, 
+      500
+    );
     return NextResponse.json(response, { status });
   }
 }

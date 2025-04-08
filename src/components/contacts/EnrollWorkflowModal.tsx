@@ -60,8 +60,16 @@ export function EnrollWorkflowModal({
       if (!response.ok) {
         throw new Error('Failed to fetch active workflows');
       }
-      const data: ActiveWorkflow[] = await response.json();
-      setActiveWorkflows(data);
+      
+      // Log raw response for debugging
+      const responseData = await response.json();
+      console.log('EnrollModal: Received API Response Data:', responseData);
+      
+      // Extract the actual workflows array from the response
+      const workflows = responseData.data || [];
+      console.log('EnrollModal: Extracted workflows:', workflows);
+      
+      setActiveWorkflows(workflows);
       // Reset selection when workflows are reloaded
       setSelectedWorkflowId(null);
     } catch (error) {
@@ -169,10 +177,10 @@ export function EnrollWorkflowModal({
               value={selectedWorkflowId ?? undefined} // Handle null state for Select
               disabled={isEnrolling}
             >
-              <SelectTrigger>
+              <SelectTrigger className="bg-white text-foreground">
                 <SelectValue placeholder="Select a workflow..." />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="bg-white text-foreground">
                 {activeWorkflows.map((wf) => (
                   <SelectItem key={wf.workflowId} value={wf.workflowId}>
                     {wf.name}

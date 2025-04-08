@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import TagSelector from '@/components/filters/TagSelector';
 import { format } from 'date-fns';
 
+
 // Field options for bulk editing
 const FIELD_OPTIONS = [
   { value: 'title', label: 'Title' },
@@ -51,12 +52,14 @@ export default function BulkEditModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // New form state for dynamic field selection
+  // Form state for dynamic field selection
   const [selectedField, setSelectedField] = useState('');
   const [textValue, setTextValue] = useState('');
   const [leadStatusValue, setLeadStatusValue] = useState('');
   const [dateValue, setDateValue] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  // New state to track if "Clear Field Value" is active
+  const [isClearingField, setIsClearingField] = useState(false);
 
   // Don't render if modal is not open or no contacts selected/matched
   if (!isOpen || (contactIds.length === 0 && !isSelectAllMatchingActive)) return null;
@@ -71,6 +74,7 @@ export default function BulkEditModal({
     setLeadStatusValue('');
     setDateValue('');
     setSelectedTags([]);
+    setIsClearingField(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -85,44 +89,50 @@ export default function BulkEditModal({
       return;
     }
 
-    // Get the field value based on the selected field type
+    // Get the field value based on the selected field type and clearing status
     let fieldValue: any;
     
-    switch (selectedField) {
-      case 'leadStatus':
-        if (!leadStatusValue) {
-          setError('Please select a lead status');
-          setIsSubmitting(false);
-          return;
-        }
-        fieldValue = leadStatusValue;
-        break;
-        
-      case 'lastActivityAt':
-        if (!dateValue) {
-          setError('Please select a date');
-          setIsSubmitting(false);
-          return;
-        }
-        fieldValue = new Date(dateValue).toISOString();
-        break;
-        
-      case 'tags':
-        if (!selectedTags.length) {
-          setError('Please select at least one tag');
-          setIsSubmitting(false);
-          return;
-        }
-        fieldValue = selectedTags;
-        break;
-        
-      default: // Text fields
-        if (!textValue) {
-          setError('Please enter a value');
-          setIsSubmitting(false);
-          return;
-        }
-        fieldValue = textValue;
+    // If clearing field mode is active, set value to null
+    if (isClearingField) {
+      fieldValue = null;
+    } else {
+      // Otherwise, use the value from the appropriate input
+      switch (selectedField) {
+        case 'leadStatus':
+          if (!leadStatusValue) {
+            setError('Please select a lead status');
+            setIsSubmitting(false);
+            return;
+          }
+          fieldValue = leadStatusValue;
+          break;
+          
+        case 'lastActivityAt':
+          if (!dateValue) {
+            setError('Please select a date');
+            setIsSubmitting(false);
+            return;
+          }
+          fieldValue = new Date(dateValue).toISOString();
+          break;
+          
+        case 'tags':
+          if (!selectedTags.length) {
+            setError('Please select at least one tag');
+            setIsSubmitting(false);
+            return;
+          }
+          fieldValue = selectedTags;
+          break;
+          
+        default: // Text fields
+          if (!textValue) {
+            setError('Please enter a value');
+            setIsSubmitting(false);
+            return;
+          }
+          fieldValue = textValue;
+      }
     }
 
     try {
@@ -191,7 +201,7 @@ export default function BulkEditModal({
               id="fieldToUpdate"
               value={selectedField}
               onChange={(e) => handleFieldChange(e.target.value)}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+              className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm bg-white text-foreground"
             >
               <option value="">Select a field</option>
               {FIELD_OPTIONS.map(option => (
@@ -211,55 +221,149 @@ export default function BulkEditModal({
               
               {/* Text input for text fields */}
               {['title', 'currentCompanyName', 'country', 'state', 'city'].includes(selectedField) && (
-                <input
-                  type="text"
-                  id="fieldValue"
-                  value={textValue}
-                  onChange={(e) => setTextValue(e.target.value)}
-                  placeholder={`Enter ${FIELD_OPTIONS.find(f => f.value === selectedField)?.label}`}
-                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                />
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    id="fieldValue"
+                    value={textValue}
+                    onChange={(e) => {
+                      setTextValue(e.target.value);
+                      setIsClearingField(false);
+                    }}
+                    placeholder={`Enter ${FIELD_OPTIONS.find(f => f.value === selectedField)?.label}`}
+                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm bg-white text-foreground"
+                    disabled={isClearingField}
+                  />
+                  
+                  <button 
+                    type="button"
+                    className={`w-full mt-2 px-4 py-2 rounded-md ${
+                      isClearingField 
+                        ? "bg-red-600 hover:bg-red-700 text-white" 
+                        : "bg-gray-200 hover:bg-gray-300 text-gray-700"
+                    }`}
+                    onClick={() => {
+                      setIsClearingField(!isClearingField);
+                      if (!isClearingField) {
+                        setTextValue('');
+                      }
+                    }}
+                  >
+                    {isClearingField ? "Clear Mode Active" : "Clear Field Value"}
+                  </button>
+                </div>
               )}
               
               {/* Lead status dropdown */}
               {selectedField === 'leadStatus' && (
-                <select
-                  id="fieldValue"
-                  value={leadStatusValue}
-                  onChange={(e) => setLeadStatusValue(e.target.value)}
-                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                >
-                  <option value="">Select a status</option>
-                  {LEAD_STATUS_OPTIONS.map(option => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                <div className="space-y-2">
+                  <select
+                    id="fieldValue"
+                    value={leadStatusValue}
+                    onChange={(e) => {
+                      setLeadStatusValue(e.target.value);
+                      setIsClearingField(false);
+                    }}
+                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm bg-white text-foreground"
+                    disabled={isClearingField}
+                  >
+                    <option value="">Select a status</option>
+                    {LEAD_STATUS_OPTIONS.map(option => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  
+                  <button 
+                    type="button"
+                    className={`w-full mt-2 px-4 py-2 rounded-md ${
+                      isClearingField 
+                        ? "bg-red-600 hover:bg-red-700 text-white" 
+                        : "bg-gray-200 hover:bg-gray-300 text-gray-700"
+                    }`}
+                    onClick={() => {
+                      setIsClearingField(!isClearingField);
+                      if (!isClearingField) {
+                        setLeadStatusValue('');
+                      }
+                    }}
+                  >
+                    {isClearingField ? "Clear Mode Active" : "Clear Field Value"}
+                  </button>
+                </div>
               )}
               
               {/* Date picker for lastActivityAt */}
               {selectedField === 'lastActivityAt' && (
-                <input
-                  type="date"
-                  id="fieldValue"
-                  value={dateValue}
-                  onChange={(e) => setDateValue(e.target.value)}
-                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                />
+                <div className="space-y-2">
+                  <input
+                    type="date"
+                    id="fieldValue"
+                    value={dateValue}
+                    onChange={(e) => {
+                      setDateValue(e.target.value);
+                      setIsClearingField(false);
+                    }}
+                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm bg-white text-foreground"
+                    disabled={isClearingField}
+                  />
+                  
+                  <button 
+                    type="button"
+                    className={`w-full mt-2 px-4 py-2 rounded-md ${
+                      isClearingField 
+                        ? "bg-red-600 hover:bg-red-700 text-white" 
+                        : "bg-gray-200 hover:bg-gray-300 text-gray-700"
+                    }`}
+                    onClick={() => {
+                      setIsClearingField(!isClearingField);
+                      if (!isClearingField) {
+                        setDateValue('');
+                      }
+                    }}
+                  >
+                    {isClearingField ? "Clear Mode Active" : "Clear Field Value"}
+                  </button>
+                </div>
               )}
               
               {/* Tag selector for tags */}
               {selectedField === 'tags' && (
-                <div>
-                  <TagSelector
-                    selectedTags={selectedTags}
-                    onChange={setSelectedTags}
-                    placeholder="Select or create tags..."
-                  />
-                  <p className="mt-1 text-xs text-gray-500">
-                    Selected tags will replace any existing tags for all selected contacts.
-                  </p>
+                <div className="space-y-2">
+                  <div className={isClearingField ? "opacity-50 pointer-events-none" : ""}>
+                    <TagSelector
+                      selectedTags={selectedTags}
+                      onChange={(tags) => {
+                        setSelectedTags(tags);
+                        setIsClearingField(false);
+                      }}
+                      placeholder="Select or create tags..."
+                      disabled={isClearingField}
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      {isClearingField 
+                        ? "All tags will be removed from selected contacts."
+                        : "Selected tags will replace any existing tags for all selected contacts."}
+                    </p>
+                  </div>
+                  
+                  <button 
+                    type="button"
+                    className={`w-full mt-2 px-4 py-2 rounded-md ${
+                      isClearingField 
+                        ? "bg-red-600 hover:bg-red-700 text-white" 
+                        : "bg-gray-200 hover:bg-gray-300 text-gray-700"
+                    }`}
+                    onClick={() => {
+                      setIsClearingField(!isClearingField);
+                      if (!isClearingField) {
+                        setSelectedTags([]);
+                      }
+                    }}
+                  >
+                    {isClearingField ? "Clear Mode Active" : "Clear All Tags"}
+                  </button>
                 </div>
               )}
               

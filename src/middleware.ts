@@ -103,7 +103,18 @@ export async function middleware(request: NextRequest) {
       req: request,
       secret: process.env.NEXTAUTH_SECRET,
     });
-    console.log('[Middleware] Token:', token ? `Role: ${token.role}` : 'No token');
+    
+    // Enhanced logging to trace organization context
+    if (token) {
+      console.log('[Middleware] Token:', {
+        role: token.role,
+        userId: token.sub,
+        email: token.email,
+        orgId: token.organizationId,
+      });
+    } else {
+      console.log('[Middleware] No token available');
+    }
 
     // If there's no token and we're not on a public path, redirect to login
     if (!token && !PUBLIC_PATHS.includes(pathname)) {
@@ -139,4 +150,4 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
-}; 
+};

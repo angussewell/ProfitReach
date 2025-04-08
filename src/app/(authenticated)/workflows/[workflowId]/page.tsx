@@ -21,30 +21,33 @@ import { Button } from '@/components/ui/button';
 
 // Import our refactored/new components
 import { WorkflowBuilder } from '@/components/workflows/WorkflowBuilder';
-import { WorkflowStepConfigModal } from '@/components/workflows/WorkflowStepConfigModal';
+// WorkflowStepConfigModal is rendered inside WorkflowBuilder, no need to import here
 import { WorkflowEditorHeader } from '@/components/workflows/WorkflowEditorHeader';
 import { WorkflowSettings } from '@/components/workflows/WorkflowSettings';
-import { ActionChooserModal } from '@/components/workflows/flow/ActionChooserModal'; // Import Action Chooser
-import { getDefaultConfigForAction } from '@/components/workflows/flow/workflowActionsConfig'; // Import helper
+// ActionChooserModal and getDefaultConfigForAction imports already removed
 
 import {
   WorkflowStep,
   WorkflowMetadataFormData,
-  ActionType,
-  BranchConfig
+  ActionType
+  // BranchConfig removed
 } from '@/types/workflow';
 
 // Helper function to fetch workflow data (client-side) - Keep simulation for now
 // TODO: Replace with actual API call
 async function getWorkflowDefinition(id: string): Promise<(WorkflowDefinition & { steps?: WorkflowStep[] }) | null> {
-  console.warn("Direct DB fetch simulation from client component - replace with secure API call");
-  // Replace this with your actual API endpoint fetch
-  const response = await fetch(`/api/workflows/${id}`); // Example API route
+  console.log("Fetching workflow data from API");
+  const response = await fetch(`/api/workflows/${id}`);
   if (!response.ok) {
     if (response.status === 404) return null;
     throw new Error(`Failed to fetch workflow: ${response.statusText}`);
   }
-  const data = await response.json();
+  const apiResponse = await response.json();
+  
+  // Handle the new API response format that uses createApiResponse
+  if (apiResponse.success && apiResponse.data) {
+    console.log('Successfully fetched workflow data');
+    const data = apiResponse.data;
 
   // --- SIMULATED FETCHED DATA (Fallback if API fails/not implemented) ---
   // const simulatedData: WorkflowDefinition & { steps?: any[] } = {
@@ -75,16 +78,24 @@ async function getWorkflowDefinition(id: string): Promise<(WorkflowDefinition & 
   // const data = simulatedData;
   // --- END SIMULATION ---
 
-  // Parse and add client IDs to steps
-  const parsedSteps = (data.steps || []).map((step: any, index: number) => ({
-    ...step,
-    clientId: uuidv4(), // Ensure client ID for React Flow
-    order: step.order ?? index + 1,
-    config: step.config || {},
-    // Add explicit types to sort parameters
-  })).sort((a: { order: number }, b: { order: number }) => a.order - b.order);
+    // Parse and add client IDs to steps
+    const parsedSteps = (data.steps || []).map((step: any, index: number) => ({
+      ...step,
+      clientId: uuidv4(), // Ensure client ID for React Flow
+      order: step.order ?? index + 1,
+      config: step.config || {},
+      // Add explicit types to sort parameters
+    })).sort((a: { order: number }, b: { order: number }) => a.order - b.order);
 
-  return { ...data, steps: parsedSteps };
+    console.log('Steps data updated:', parsedSteps);
+    return { ...data, steps: parsedSteps };
+  } else {
+    // Handle case when success is false or data is missing
+    if (apiResponse.error) {
+      throw new Error(`API Error: ${apiResponse.error}`);
+    }
+    return null;
+  }
 }
 
 // Helper to format Prisma Time (DateTime) to HH:mm string
@@ -118,13 +129,9 @@ export default function WorkflowEditPage() {
   const [workflowName, setWorkflowName] = useState(''); // State for header input
   const [initialSettingsData, setInitialSettingsData] = useState<Partial<WorkflowMetadataFormData>>({});
 
-  // State for Step Configuration Modal
-  const [isStepModalOpen, setIsStepModalOpen] = useState(false);
-  const [editingStepIndex, setEditingStepIndex] = useState<number | null>(null);
-  const [currentStepData, setCurrentStepData] = useState<Partial<WorkflowStep> | null>(null);
+  // State tracking is now handled by the WorkflowBuilder component via useWorkflowState
 
-  // Action Chooser Modal state is now managed within WorkflowBuilder
-  // const [actionChooserState, setActionChooserState] = useState<{ ... }> ...
+  // Action Chooser Modal state removed
 
   // State for Settings Panel (Sheet)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -132,207 +139,7 @@ export default function WorkflowEditPage() {
   // State to hold the WorkflowSettings form instance
   const [settingsFormInstance, setSettingsFormInstance] = useState<UseFormReturn<WorkflowMetadataFormData> | null>(null);
 
-  // --- Helper Functions for Steps (largely unchanged) ---
-
-  const generateClientId = () => uuidv4();
-
-  const recalculateOrder = (currentSteps: WorkflowStep[]): WorkflowStep[] => {
-    return currentSteps.map((step, index) => ({
-      ...step,
-      order: index + 1,
-    }));
-  };
-
-  // Updated handleAddStep to accept actionType (as string from modal) and optional preceding node ID
-  const handleAddStep = (actionType: string, afterNodeId?: string) => {
-    console.log(`handleAddStep called: actionType=${actionType}, afterNodeId=${afterNodeId}`);
-    let insertAtIndex: number;
-    let newStepOrder: number;
-
-    if (afterNodeId === 'trigger' || !afterNodeId) {
-      // Adding as the first step (after trigger) or if no specific node is given (shouldn't happen with edge click)
-      insertAtIndex = 0;
-      newStepOrder = 1;
-    } else {
-      // Find the index and order of the step we're adding after
-      const sourceStepIndex = steps.findIndex(step => step.clientId === afterNodeId);
-      if (sourceStepIndex === -1) {
-        console.error("Source step not found for ID:", afterNodeId);
-        toast.error("Could not find the source step to add after.");
-        return;
-      }
-      insertAtIndex = sourceStepIndex + 1;
-      newStepOrder = steps[sourceStepIndex].order + 1;
-    }
-
-    // Ensure actionType is valid before proceeding (optional but good practice)
-    const defaultConfig = getDefaultConfigForAction(actionType as ActionType); // Cast to ActionType if needed by helper
-    if (!defaultConfig) {
-        console.error(`Invalid action type received: ${actionType}`);
-        toast.error(`Invalid action type selected.`);
-        return;
-    }
-    const newStep: WorkflowStep = {
-      clientId: generateClientId(),
-      actionType: actionType as ActionType, // Store as ActionType
-      config: defaultConfig,
-      order: newStepOrder, // Temporary order, will be recalculated
-    };
-
-    // Create a new steps array with the new step inserted
-    let updatedSteps = [...steps];
-    updatedSteps.splice(insertAtIndex, 0, newStep);
-
-    // Recalculate order for all steps
-    updatedSteps = recalculateOrder(updatedSteps);
-
-    setSteps(updatedSteps);
-
-    // Find the index of the newly added step in the *updated* array for editing
-    const newStepIndex = updatedSteps.findIndex(step => step.clientId === newStep.clientId);
-
-    if (newStepIndex !== -1) {
-      // Open the config modal for the newly added step
-      setCurrentStepData({ ...updatedSteps[newStepIndex] });
-      setEditingStepIndex(newStepIndex); // Set index for potential save
-      setIsStepModalOpen(true);
-    } else {
-      console.error("Could not find newly added step to open config modal.");
-      toast.error("Step added, but could not open configuration.");
-    }
-  };
-
-  // handleEdgeAddClick and handleActionSelected are no longer needed here,
-  // WorkflowBuilder handles the modal trigger and passes data to handleAddStep.
-
-  const handleEditStep = (index: number) => {
-    setCurrentStepData({ ...steps[index] });
-    setEditingStepIndex(index);
-    setIsStepModalOpen(true);
-  };
-
-  const handleDeleteStep = (index: number) => {
-    const deletedStep = steps[index];
-    const updatedSteps = steps.filter((_, i) => i !== index);
-
-    // Recalculate order first
-    let stepsCopy = recalculateOrder(updatedSteps);
-
-    // Update branch paths that point to steps after the deleted one
-    stepsCopy = stepsCopy.map(step => {
-      if (step.actionType === 'branch') {
-        const config = step.config as BranchConfig;
-        if (config.type === 'percentage_split' && Array.isArray(config.paths)) {
-          const updatedPaths = config.paths.map(path => {
-            if (path.nextStepOrder > deletedStep.order) {
-              // Decrement order if it pointed after the deleted step
-              return { ...path, nextStepOrder: path.nextStepOrder - 1 };
-            } else if (path.nextStepOrder === deletedStep.order) {
-              // If pointing to the deleted step, point to the *new* step at that order
-              // This assumes the next step in sequence takes its place.
-              // More robust logic might be needed depending on desired behavior (e.g., point to end?)
-              return { ...path, nextStepOrder: deletedStep.order }; // Point to the step that now has this order
-            }
-            return path;
-          });
-          return { ...step, config: { ...config, paths: updatedPaths } };
-        }
-      }
-      return step;
-    });
-
-    setSteps(stepsCopy);
-    toast.info('Step removed.');
-  };
-
-
-  const handleMoveStep = (index: number, direction: 'up' | 'down') => {
-    if (direction === 'up' && index === 0) return;
-    if (direction === 'down' && index === steps.length - 1) return;
-
-    const newSteps = [...steps];
-    const stepToMove = newSteps[index];
-    const swapIndex = direction === 'up' ? index - 1 : index + 1;
-    const stepToSwapWith = newSteps[swapIndex];
-
-    // Direct order swap
-    const oldOrder = stepToMove.order;
-    const swapOrder = stepToSwapWith.order;
-    stepToMove.order = swapOrder;
-    stepToSwapWith.order = oldOrder;
-
-    // Swap positions in the array
-    newSteps[index] = stepToSwapWith;
-    newSteps[swapIndex] = stepToMove;
-
-    // Update branch path references globally after the swap
-    const updatedStepsWithRefs = newSteps.map(step => {
-        if (step.actionType === 'branch') {
-            const config = step.config as BranchConfig;
-            if (config.type === 'percentage_split' && Array.isArray(config.paths)) {
-                const updatedPaths = config.paths.map(path => {
-                    if (path.nextStepOrder === oldOrder) {
-                        return { ...path, nextStepOrder: swapOrder };
-                    } else if (path.nextStepOrder === swapOrder) {
-                        return { ...path, nextStepOrder: oldOrder };
-                    }
-                    return path;
-                });
-                return { ...step, config: { ...config, paths: updatedPaths } };
-            }
-        }
-        return step;
-    });
-
-
-    setSteps(updatedStepsWithRefs.sort((a, b) => a.order - b.order)); // Ensure sorted by order
-  };
-
-
-  const handleSaveStep = (stepData: WorkflowStep) => {
-    let updatedSteps;
-
-    if (editingStepIndex !== null) {
-      // Update existing step - More explicit merge
-      updatedSteps = steps.map((step, index) => {
-        if (index === editingStepIndex) {
-          // Explicitly merge only actionType and config from modal data (stepData)
-          // onto the existing step from the state array. Preserve original clientId.
-          return {
-            ...step, // Start with the original step from the array
-            actionType: stepData.actionType, // Update with actionType from modal
-            config: stepData.config,         // Update with config from modal
-            clientId: step.clientId,         // Ensure original clientId is kept
-            // order might also be in stepData, but recalculateOrder handles it later
-          };
-        }
-        return step; // Return other steps unchanged
-      });
-      toast.success('Step updated.');
-    } else {
-      // This case should ideally not be hit if adding always goes through handleAddStep first,
-      // which sets up the modal. If it *is* hit, it means the modal was opened without
-      // a preceding add action, which is unexpected. Log a warning.
-      // --- Removed duplicated 'else' block content here ---
-      console.warn("handleSaveStep called without editingStepIndex - unexpected add flow.");
-      // Fallback: Add to end (might be incorrect sequence)
-      const newStepWithId = {
-        ...stepData,
-        clientId: generateClientId(),
-        order: steps.length + 1, // Simple append order
-      };
-      updatedSteps = [...steps, newStepWithId];
-      toast.success('Step added (fallback).');
-    }
-
-    // Recalculate all step orders to ensure consistency after potential manual order changes in modal
-    const reorderedSteps = recalculateOrder(updatedSteps.sort((a, b) => a.order - b.order));
-
-    setSteps(reorderedSteps);
-    setIsStepModalOpen(false);
-    setEditingStepIndex(null);
-    setCurrentStepData(null);
-  };
+  // --- Helper Functions for Steps Removed (Now handled within WorkflowBuilder/useWorkflowState) ---
 
   // --- Data Loading Effect ---
 
@@ -417,12 +224,18 @@ export default function WorkflowEditPage() {
     const apiUrl = isCreating ? '/api/workflows' : `/api/workflows/${workflowId}`;
     const method = isCreating ? 'POST' : 'PUT';
 
-    // Prepare payload: Combine validated settings and steps
-    // Remove clientId before sending to backend
-    const stepsForPayload = steps.map(({ clientId, ...rest }) => rest);
+      // Prepare payload: Combine validated settings and steps from the builder
+      // The `steps` state here might be slightly behind the builder's internal state
+      // if `onSaveChanges` hasn't fired yet. Rely on the builder's state for the save.
+      // We need a way for the builder to expose its current steps for saving.
+      // Let's modify `onSaveChanges` in WorkflowBuilder to pass the steps.
 
-    const payload = {
-      ...finalSettingsData,
+      // For now, we'll use the page's `steps` state, but this needs refinement.
+      // TODO: Refactor WorkflowBuilder to pass its current steps via onSaveChanges
+      const stepsForPayload = steps.map(({ clientId, ...rest }) => rest);
+
+      const payload = {
+        ...finalSettingsData,
       // Ensure nulls are sent correctly if fields are empty
       description: finalSettingsData.description || null,
       dailyContactLimit: finalSettingsData.dailyContactLimit || null,
@@ -431,6 +244,19 @@ export default function WorkflowEditPage() {
       timezone: finalSettingsData.timezone || null,
       steps: stepsForPayload,
     };
+
+    // --- DEBUG LOGGING ---
+    console.log(
+      'DEBUG: Attempting to Save Workflow:',
+      {
+        workflowId: workflowId, // Log the actual ID from params
+        isCreating: isCreating, // Log the boolean flag result
+        determinedMethod: method, // Log the method chosen
+        determinedApiUrl: apiUrl, // Log the URL chosen
+        payloadBeingSent: payload // Log the data payload
+      }
+    );
+    // --- END DEBUG LOGGING ---
 
     try {
       const response = await fetch(apiUrl, {
@@ -495,17 +321,22 @@ export default function WorkflowEditPage() {
       />
 
       {/* Main Content Area - Builder takes remaining space */}
-      {/* Added key to WorkflowBuilder to potentially help React Flow re-render on step changes if needed */}
-      <div className="flex-1 overflow-hidden p-1 md:p-2"> {/* Reduced padding, builder handles internal */}
-        <WorkflowBuilder
-          key={steps.map(s => s.clientId).join('-')} // Force re-render on step changes
-          steps={steps}
-          onAddStep={handleAddStep}
-          onEditStep={handleEditStep}
-          onDeleteStep={handleDeleteStep}
-          onMoveStep={handleMoveStep}
-          // Pass the updated onAddStep handler (duplicate removed)
-        />
+      {/* Pass workflowId and simplified props to WorkflowBuilder */}
+      <div className="flex-1 overflow-hidden p-1 md:p-2">
+        {/* Render WorkflowBuilder only when not loading */}
+        {!isLoading && (
+          <WorkflowBuilder
+            workflowId={workflowId} // Pass the workflowId
+            steps={steps} // Pass initial/current steps
+            onSaveChanges={setSteps} // Update page state when builder saves internally
+          />
+        )}
+        {/* Optional: Show a loader inside the builder area while loading */}
+        {isLoading && (
+           <div className="flex justify-center items-center h-full">
+             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+           </div>
+        )}
       </div>
 
       {/* Settings Panel (Sheet) */}
@@ -533,17 +364,8 @@ export default function WorkflowEditPage() {
         </SheetContent>
       </Sheet>
 
-      {/* Step Configuration Modal (remains the same) */}
-      <WorkflowStepConfigModal
-        isOpen={isStepModalOpen}
-        onOpenChange={setIsStepModalOpen}
-        stepData={currentStepData}
-        onSave={handleSaveStep}
-        existingSteps={steps}
-        editingIndex={editingStepIndex}
-      />
-
-      {/* ActionChooserModal is now rendered inside WorkflowBuilder */}
+      {/* Step Configuration Modal is rendered within the WorkflowBuilder component */}
+      {/* ActionChooserModal removed */}
     </div>
   );
 }

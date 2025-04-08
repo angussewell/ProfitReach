@@ -8,7 +8,7 @@ datasource db {
 }
 
 model Account {
-  id                String  @id @default(cuid())
+  id                String  @id
   userId            String
   type              String
   provider          String
@@ -20,417 +20,9 @@ model Account {
   scope             String?
   id_token          String?
   session_state     String?
-  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  User              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
-}
-
-model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model Organization {
-  id                   String                    @id @default(cuid())
-  name                 String                    @unique
-  createdAt            DateTime                  @default(now())
-  updatedAt            DateTime                  @updatedAt
-  webhookUrl           String                    @unique @default(uuid())
-  outboundWebhookUrl   String?
-  stripeCustomerId     String?
-  billingPlan          String?                   @default("unlimited")
-  creditBalance        Int?                      @default(0)
-  lastBillingSync      DateTime?
-  nextBillingDate      DateTime?
-  stripeTestCustomerId String?
-  location_id          String?                   @unique
-  attachments          Attachment[]
-  billingEvents        BillingEvent[]
-  chatConversations    ChatConversation[]
-  connectedAccounts    ConnectedAccountBilling[]
-  ContactWorkflowState ContactWorkflowState[]
-  Contacts             Contacts[]
-  creditUsage          CreditUsage[]
-  CrmInfo              CrmInfo?
-  emailAccounts        EmailAccount[]
-  emailMessages        EmailMessage[]            @relation("OrganizationToEmailMessage") @ignore
-  metrics              Metric[]
-  prompts              Prompt[]
-  replyLogs            ReplyLog[]
-  researchResults      ResearchResult[]
-  SavedFilters         SavedFilters[]
-  scenarios            Scenario[]
-  snippets             Snippet[]
-  socialAccounts       SocialAccount[]
-  subscriptions        Subscription[]
-  Tags                 Tags[]
-  users                User[]
-  webhookLogs          WebhookLog[]
-  WorkflowDefinition   WorkflowDefinition[]
-
-  @@index([stripeTestCustomerId], map: "organization_stripe_test_customer_idx")
-}
-
-model User {
-  id                String             @id @default(cuid())
-  name              String?
-  email             String?            @unique
-  password          String?
-  emailVerified     DateTime?
-  image             String?
-  role              String             @default("user")
-  organizationId    String?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  accounts          Account[]
-  chatConversations ChatConversation[]
-  SavedFilters      SavedFilters[]
-  sessions          Session[]
-  organization      Organization?      @relation(fields: [organizationId], references: [id])
-}
-
-model VerificationToken {
-  identifier String
-  token      String   @unique
-  expires    DateTime
-
-  @@unique([identifier, token])
-}
-
-model Metric {
-  id             String       @id @default(cuid())
-  accountId      String
-  organizationId String
-  scenarioName   String
-  enrollments    Int          @default(0)
-  replies        Int          @default(0)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime
-  organization   Organization @relation(fields: [organizationId], references: [id])
-
-  @@unique([accountId, scenarioName])
-  @@index([scenarioName])
-}
-
-model Signature {
-  id        String     @id @default(cuid())
-  name      String     @unique
-  content   String
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  scenarios Scenario[]
-}
-
-model Scenario {
-  id                  String             @id @default(cuid())
-  name                String
-  description         String?
-  status              String             @default("active")
-  signatureId         String?
-  customizationPrompt String?
-  emailExamplesPrompt String?
-  organizationId      String
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
-  attachmentId        String?
-  isFollowUp          Boolean            @default(false)
-  snippetId           String?
-  subjectLine         String?
-  touchpointType      String             @default("email")
-  filters             Json?              @default("[]")
-  testEmail           String?
-  testMode            Boolean            @default(false)
-  isHighPerforming    Boolean            @default(false)
-  attachment          Attachment?        @relation(fields: [attachmentId], references: [id])
-  organization        Organization       @relation(fields: [organizationId], references: [id])
-  signature           Signature?         @relation(fields: [signatureId], references: [id])
-  snippet             Snippet?           @relation(fields: [snippetId], references: [id])
-  messages            ScenarioMessage[]
-  responses           ScenarioResponse[]
-
-  @@unique([name, organizationId])
-  @@index([organizationId])
-}
-
-model Prompt {
-  id             String        @id @default(cuid())
-  name           String
-  content        String
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  organizationId String?
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-
-  @@unique([name, organizationId])
-  @@index([organizationId])
-}
-
-model FieldMapping {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  description String?
-  mapping     Json
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
-
-model Attachment {
-  id             String       @id @default(cuid())
-  name           String
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  content        String
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  scenarios      Scenario[]
-
-  @@unique([name, organizationId])
-  @@index([organizationId])
-}
-
-model WebhookField {
-  id           String   @id @default(cuid())
-  name         String   @unique
-  description  String?
-  required     Boolean  @default(false)
-  type         String   @default("string")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  originalName String
-}
-
-model WebhookLog {
-  id               String        @id @default(cuid())
-  accountId        String
-  organizationId   String
-  createdAt        DateTime      @default(now())
-  status           String        @default("received")
-  scenarioName     String        @default("Unknown")
-  contactEmail     String        @default("Unknown")
-  contactName      String        @default("Unknown")
-  company          String        @default("Unknown")
-  requestBody      Json
-  responseBody     Json          @default("{}")
-  ghlIntegrationId String?
-  updatedAt        DateTime      @default(now())
-  emailSubject     String?
-  emailHtmlBody    String?
-  creditUsages     CreditUsage[]
-  organization     Organization  @relation(fields: [organizationId], references: [id])
-
-  @@index([accountId])
-  @@index([createdAt])
-  @@index([scenarioName])
-  @@index([ghlIntegrationId])
-  @@index([organizationId, status], map: "webhook_log_org_status_idx")
-  @@index([status, createdAt], map: "webhook_log_status_created_at_idx")
-}
-
-model PlayingWithNeon {
-  id    Int    @id @default(autoincrement())
-  name  String
-  value Float? @db.Real
-}
-
-model ResearchResult {
-  id             String       @id
-  query          String
-  result         String
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
-
-  @@index([organizationId])
-}
-
-model Snippet {
-  id             String        @id @default(cuid())
-  name           String
-  content        String
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  organizationId String?
-  scenarios      Scenario[]
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-
-  @@unique([name, organizationId])
-  @@index([organizationId])
-}
-
-model EmailAccount {
-  id               String          @id @default(cuid())
-  email            String          @unique
-  name             String
-  organizationId   String
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
-  isActive         Boolean         @default(true)
-  unipileAccountId String?
-  dailySendLimit   Int             @default(50)
-  dailySendCount   Int             @default(0)
-  lastResetDate    DateTime?       @db.Date
-  organization     Organization    @relation(fields: [organizationId], references: [id])
-  socialAccounts   SocialAccount[]
-
-  @@unique([email, organizationId])
-  @@index([organizationId])
-  @@index([organizationId, isActive], map: "idx_emailaccount_organizationid_isactive")
-}
-
-/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
-model EmailMessage {
-  id                   String             @default(cuid())
-  messageId            String
-  threadId             String
-  organizationId       String
-  emailAccountId       String
-  subject              String
-  sender               String
-  recipientEmail       String
-  content              String
-  receivedAt           DateTime
-  messageType          MessageType
-  isRead               Boolean            @default(false)
-  classificationScores Json?
-  unipileEmailId       String?
-  status               ConversationStatus @default(FOLLOW_UP_NEEDED)
-  messageSource        MessageSource      @default(EMAIL)
-  socialAccountId      String?
-  statusChangedAt      DateTime?          @default(now()) @db.Timestamptz(6)
-  aiSuggestion1        String?
-  aiSuggestion2        String?
-  aiSuggestion3        String?
-  organization         Organization       @relation("OrganizationToEmailMessage", fields: [organizationId], references: [id])
-  socialAccount        SocialAccount?     @relation("SocialAccountToEmailMessage", fields: [socialAccountId], references: [id])
-
-  @@index([organizationId])
-  @@index([emailAccountId])
-  @@index([threadId])
-  @@index([socialAccountId])
-  @@ignore
-}
-
-model ScenarioMessage {
-  id         String   @id @default(cuid())
-  scenarioId String
-  threadId   String
-  sender     String?
-  hasReplied Boolean  @default(false)
-  createdAt  DateTime @default(now())
-  messageId  String
-  updatedAt  DateTime @default(now()) @updatedAt
-  scenario   Scenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
-
-  @@unique([scenarioId, threadId, sender])
-  @@index([messageId])
-  @@index([threadId])
-  @@index([sender])
-  @@index([scenarioId])
-}
-
-model SocialAccount {
-  id               String         @id @default(cuid())
-  username         String
-  name             String
-  provider         String
-  organizationId   String
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
-  isActive         Boolean        @default(true)
-  unipileAccountId String?        @unique
-  emailAccountId   String?
-  providerId       String?
-  messages         EmailMessage[] @relation("SocialAccountToEmailMessage") @ignore
-  emailAccount     EmailAccount?  @relation(fields: [emailAccountId], references: [id])
-  organization     Organization   @relation(fields: [organizationId], references: [id])
-
-  @@index([organizationId])
-  @@index([provider])
-  @@index([emailAccountId])
-}
-
-model CreditUsage {
-  id             String       @id @default(cuid())
-  organizationId String
-  amount         Int
-  description    String?
-  createdAt      DateTime     @default(now())
-  webhookLogId   String?
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  webhookLog     WebhookLog?  @relation(fields: [webhookLogId], references: [id], onUpdate: NoAction)
-
-  @@index([createdAt], map: "credit_usage_created_at_idx")
-  @@index([organizationId], map: "credit_usage_org_id_idx")
-}
-
-model Subscription {
-  id                   String       @id @default(cuid())
-  organizationId       String
-  stripeSubscriptionId String
-  status               String
-  currentPeriodStart   DateTime
-  currentPeriodEnd     DateTime
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
-  subscriptionItemId   String?
-  priceId              String?
-  quantity             Int?         @default(1)
-  isTestMode           Boolean      @default(false)
-  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-
-  @@index([organizationId], map: "subscription_org_id_idx")
-  @@index([status], map: "subscription_status_idx")
-  @@index([stripeSubscriptionId], map: "subscription_stripe_id_idx")
-  @@index([isTestMode], map: "subscription_test_mode_idx")
-}
-
-model BillingEvent {
-  id             String       @id
-  organizationId String
-  type           String
-  status         String
-  amount         Int?
-  description    String?
-  metadata       Json?        @default("{}")
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  isTestMode     Boolean      @default(false)
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-
-  @@index([createdAt], map: "billing_event_created_at_idx")
-  @@index([organizationId], map: "billing_event_org_id_idx")
-  @@index([type], map: "billing_event_type_idx")
-  @@index([isTestMode], map: "billing_event_test_mode_idx")
-}
-
-model ConnectedAccountBilling {
-  id                       String       @id @default(cuid())
-  organizationId           String
-  accountType              String
-  accountId                String
-  stripeSubscriptionItemId String?
-  createdAt                DateTime     @default(now())
-  updatedAt                DateTime     @updatedAt
-  organization             Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-
-  @@unique([organizationId, accountType, accountId], map: "connected_account_billing_unique")
-}
-
-model ScenarioResponse {
-  id         String   @id @default(cuid())
-  scenarioId String
-  source     String
-  threadId   String?  @unique(map: "unique_thread_id")
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  scenario   Scenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
-
-  @@index([scenarioId])
-  @@index([source])
 }
 
 model Appointment {
@@ -446,8 +38,197 @@ model Appointment {
   fromEmail           String?
   recipients          Json?
 
-  @@index([organizationId])
   @@index([createdAt])
+  @@index([organizationId])
+}
+
+model Attachment {
+  id             String       @id
+  name           String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime
+  content        String
+  organizationId String
+  Organization   Organization @relation(fields: [organizationId], references: [id])
+  Scenario       Scenario[]
+
+  @@unique([name, organizationId])
+  @@index([organizationId])
+}
+
+model BillingEvent {
+  id             String       @id
+  organizationId String
+  type           String
+  status         String
+  amount         Int?
+  description    String?
+  metadata       Json?        @default("{}")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime
+  isTestMode     Boolean      @default(false)
+  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([createdAt], map: "billing_event_created_at_idx")
+  @@index([organizationId], map: "billing_event_org_id_idx")
+  @@index([isTestMode], map: "billing_event_test_mode_idx")
+  @@index([type], map: "billing_event_type_idx")
+}
+
+model ChatConversation {
+  id             String        @id
+  title          String?
+  createdAt      DateTime      @default(now()) @db.Timestamp(6)
+  updatedAt      DateTime      @default(now()) @db.Timestamp(6)
+  userId         String
+  organizationId String
+  Organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_organization")
+  User           User          @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_user")
+  ChatMessage    ChatMessage[]
+
+  @@index([organizationId], map: "idx_chat_conversation_org")
+  @@index([updatedAt], map: "idx_chat_conversation_updated")
+  @@index([userId], map: "idx_chat_conversation_user")
+}
+
+model ChatMessage {
+  id               String           @id
+  content          String
+  role             String
+  createdAt        DateTime         @default(now()) @db.Timestamp(6)
+  conversationId   String
+  ChatConversation ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_conversation")
+
+  @@index([conversationId], map: "idx_chat_message_conversation")
+  @@index([createdAt], map: "idx_chat_message_created")
+}
+
+model ConnectedAccountBilling {
+  id                       String       @id
+  organizationId           String
+  accountType              String
+  accountId                String
+  stripeSubscriptionItemId String?
+  createdAt                DateTime     @default(now())
+  updatedAt                DateTime
+  Organization             Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([organizationId, accountType, accountId], map: "connected_account_billing_unique")
+}
+
+model ContactTags {
+  contactId String   @db.VarChar(50)
+  tagId     String   @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  Contacts  Contacts @relation(fields: [contactId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  Tags      Tags     @relation(fields: [tagId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([contactId, tagId])
+  @@index([contactId], map: "idx_contacttags_contactid")
+  @@index([tagId], map: "idx_contacttags_tagid")
+}
+
+model ContactWorkflowState {
+  stateId              String                 @id
+  contactId            String
+  workflowId           String
+  organizationId       String
+  currentStepOrder     Int
+  status               String
+  nextActionTime       DateTime?              @db.Timestamptz(6)
+  scheduledDate        DateTime?              @db.Date
+  stateData            Json?
+  errorMessage         String?
+  attempts             Int                    @default(0)
+  enrolledAt           DateTime               @default(now()) @db.Timestamptz(6)
+  lastProcessedAt      DateTime?              @db.Timestamptz(6)
+  Contacts             Contacts               @relation(fields: [contactId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Organization         Organization           @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  WorkflowDefinition   WorkflowDefinition     @relation(fields: [workflowId], references: [workflowId], onDelete: NoAction, onUpdate: NoAction)
+  WorkflowExecutionLog WorkflowExecutionLog[]
+
+  @@unique([contactId, workflowId], map: "unique_contact_in_workflow")
+  @@index([contactId], map: "idx_contactworkflowstate_contactid")
+  @@index([status, nextActionTime], map: "idx_contactworkflowstate_status_nextactiontime")
+  @@index([workflowId, scheduledDate], map: "idx_contactworkflowstate_workflowid_scheduleddate")
+  @@index([workflowId, status], map: "idx_contactworkflowstate_workflowid_status")
+}
+
+model Contacts {
+  id                         String                 @id(map: "apolloContacts_pkey") @db.VarChar(50)
+  firstName                  String?                @db.VarChar(100)
+  lastName                   String?                @db.VarChar(100)
+  fullName                   String?                @db.VarChar(200)
+  linkedinUrl                String?
+  title                      String?                @db.VarChar(200)
+  email                      String                 @db.VarChar(255)
+  emailStatus                String?                @db.VarChar(50)
+  photoUrl                   String?
+  headline                   String?
+  state                      String?                @db.VarChar(100)
+  city                       String?                @db.VarChar(100)
+  country                    String?                @db.VarChar(100)
+  currentCompanyName         String?                @db.VarChar(255)
+  currentCompanyId           String?                @db.VarChar(50)
+  twitterUrl                 String?
+  facebookUrl                String?
+  githubUrl                  String?
+  companyLinkedinUrl         String?
+  companyWebsiteUrl          String?
+  employmentHistory          Json?
+  phoneNumbers               Json?
+  contactEmails              Json?
+  additionalData             Json?
+  createdAt                  DateTime?              @default(now()) @db.Timestamptz(6)
+  updatedAt                  DateTime?              @default(now()) @db.Timestamptz(6)
+  organizationId             String?
+  leadStatus                 String?
+  lastActivityAt             DateTime?              @db.Timestamptz(6)
+  scenarioName               String?
+  prospectResearch           String?
+  companyResearch            String?
+  previousMessageCopy        String?
+  previousMessageSubjectLine String?
+  previousMessageId          String?
+  threadId                   String?
+  emailSender                String?
+  originalOutboundRepName    String?
+  dateOfResearch             DateTime?              @db.Timestamptz(6)
+  allEmployees               String?
+  linkedInPosts              String?
+  linkedInProfilePhoto       String?
+  initialLinkedInMessageCopy String?
+  providerId                 String?
+  mutualConnections          String?
+  additionalResearch         String?
+  currentScenario            String?
+  outboundRepName            String?
+  phone                      String?
+  seoDescription             String?
+  ContactTags                ContactTags[]
+  ContactWorkflowState       ContactWorkflowState[]
+  Organization               Organization?          @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_contacts_organization")
+
+  @@index([currentCompanyName], map: "idx_apolloContacts_company")
+  @@index([email], map: "idx_apolloContacts_email")
+  @@index([linkedinUrl], map: "idx_apolloContacts_linkedin")
+  @@index([leadStatus], map: "idx_contacts_leadstatus")
+  @@index([organizationId], map: "idx_contacts_organizationid")
+  @@index([scenarioName], map: "idx_contacts_scenarioname")
+}
+
+model CreditUsage {
+  id             String       @id
+  organizationId String
+  amount         Int
+  description    String?
+  createdAt      DateTime     @default(now())
+  webhookLogId   String?
+  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  WebhookLog     WebhookLog?  @relation(fields: [webhookLogId], references: [id], onUpdate: NoAction)
+
+  @@index([createdAt], map: "credit_usage_created_at_idx")
+  @@index([organizationId], map: "credit_usage_org_id_idx")
 }
 
 model CrmInfo {
@@ -483,36 +264,303 @@ model CrmInfo {
   @@index([organizationId], map: "crm_info_organization_id_idx")
 }
 
-model ChatConversation {
-  id             String        @id @default(cuid())
-  title          String?
-  createdAt      DateTime      @default(now()) @db.Timestamp(6)
-  updatedAt      DateTime      @default(now()) @updatedAt @db.Timestamp(6)
-  userId         String
-  organizationId String
-  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_organization")
-  user           User          @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_user")
-  messages       ChatMessage[]
+model EmailAccount {
+  id               String          @id
+  email            String          @unique
+  name             String
+  organizationId   String
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime
+  isActive         Boolean         @default(true)
+  unipileAccountId String?
+  dailySendLimit   Int             @default(50)
+  dailySendCount   Int             @default(0)
+  lastResetDate    DateTime?       @db.Date
+  Organization     Organization    @relation(fields: [organizationId], references: [id])
+  SocialAccount    SocialAccount[]
 
-  @@index([organizationId], map: "idx_chat_conversation_org")
-  @@index([updatedAt], map: "idx_chat_conversation_updated")
-  @@index([userId], map: "idx_chat_conversation_user")
+  @@unique([email, organizationId])
+  @@index([organizationId])
+  @@index([organizationId, isActive], map: "idx_emailaccount_organizationid_isactive")
 }
 
-model ChatMessage {
-  id             String           @id @default(cuid())
-  content        String
-  role           String
-  createdAt      DateTime         @default(now()) @db.Timestamp(6)
-  conversationId String
-  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_conversation")
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model EmailMessage {
+  id                   String
+  messageId            String
+  threadId             String
+  organizationId       String
+  emailAccountId       String
+  subject              String
+  sender               String
+  recipientEmail       String
+  content              String
+  receivedAt           DateTime
+  messageType          MessageType
+  isRead               Boolean            @default(false)
+  classificationScores Json?
+  unipileEmailId       String?
+  status               ConversationStatus @default(FOLLOW_UP_NEEDED)
+  messageSource        MessageSource      @default(EMAIL)
+  socialAccountId      String?
+  statusChangedAt      DateTime?          @default(now()) @db.Timestamptz(6)
+  aiSuggestion1        String?
+  aiSuggestion2        String?
+  aiSuggestion3        String?
+  Organization         Organization       @relation(fields: [organizationId], references: [id])
+  SocialAccount        SocialAccount?     @relation(fields: [socialAccountId], references: [id])
 
-  @@index([conversationId], map: "idx_chat_message_conversation")
-  @@index([createdAt], map: "idx_chat_message_created")
+  @@index([emailAccountId])
+  @@index([organizationId])
+  @@index([socialAccountId])
+  @@index([threadId])
+  @@ignore
+}
+
+model FieldMapping {
+  id          String   @id
+  name        String   @unique
+  description String?
+  mapping     Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime
+}
+
+model Metric {
+  id             String       @id
+  accountId      String
+  organizationId String
+  scenarioName   String
+  enrollments    Int          @default(0)
+  replies        Int          @default(0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime
+  Organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([accountId, scenarioName])
+  @@index([scenarioName])
+}
+
+model Organization {
+  id                      String                    @id
+  name                    String                    @unique
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime
+  webhookUrl              String                    @unique
+  outboundWebhookUrl      String?
+  stripeCustomerId        String?
+  billingPlan             String?                   @default("unlimited")
+  creditBalance           Int?                      @default(0)
+  lastBillingSync         DateTime?
+  nextBillingDate         DateTime?
+  stripeTestCustomerId    String?
+  location_id             String?                   @unique
+  Attachment              Attachment[]
+  BillingEvent            BillingEvent[]
+  ChatConversation        ChatConversation[]
+  ConnectedAccountBilling ConnectedAccountBilling[]
+  ContactWorkflowState    ContactWorkflowState[]
+  Contacts                Contacts[]
+  CreditUsage             CreditUsage[]
+  CrmInfo                 CrmInfo?
+  EmailAccount            EmailAccount[]
+  EmailMessage            EmailMessage[]            @ignore
+  Metric                  Metric[]
+  Prompt                  Prompt[]
+  ReplyLog                ReplyLog[]
+  ResearchResult          ResearchResult[]
+  SavedFilters            SavedFilters[]
+  Scenario                Scenario[]
+  Snippet                 Snippet[]
+  SocialAccount           SocialAccount[]
+  Subscription            Subscription[]
+  Tags                    Tags[]
+  User                    User[]
+  WebhookLog              WebhookLog[]
+  WorkflowDefinition      WorkflowDefinition[]
+
+  @@index([stripeTestCustomerId], map: "organization_stripe_test_customer_idx")
+}
+
+model PlayingWithNeon {
+  id    Int    @id @default(autoincrement())
+  name  String
+  value Float? @db.Real
+}
+
+model Prompt {
+  id             String        @id
+  name           String
+  content        String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime
+  organizationId String?
+  Organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@unique([name, organizationId])
+  @@index([organizationId])
+}
+
+model ReplyLog {
+  id             String       @id
+  userEmail      String
+  messageId      String
+  threadId       String
+  repliedAt      DateTime     @default(now())
+  organizationId String
+  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+  @@index([organizationId])
+  @@index([repliedAt])
+  @@index([threadId])
+  @@index([userEmail])
+}
+
+model ResearchResult {
+  id             String       @id
+  query          String
+  result         String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime
+  organizationId String
+  Organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+}
+
+model SavedFilters {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String
+  userId         String?
+  name           String
+  filters        Json
+  isDefault      Boolean      @default(false)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime     @default(now()) @db.Timestamptz(6)
+  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  User           User?        @relation(fields: [userId], references: [id], onUpdate: NoAction)
+
+  @@index([organizationId], map: "idx_savedfilters_organizationid")
+  @@index([userId], map: "idx_savedfilters_userid")
+}
+
+model Scenario {
+  id                  String             @id
+  name                String
+  description         String?
+  status              String             @default("active")
+  signatureId         String?
+  customizationPrompt String?
+  emailExamplesPrompt String?
+  organizationId      String
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime
+  attachmentId        String?
+  isFollowUp          Boolean            @default(false)
+  snippetId           String?
+  subjectLine         String?
+  touchpointType      String             @default("email")
+  filters             Json?              @default("[]")
+  testEmail           String?
+  testMode            Boolean            @default(false)
+  isHighPerforming    Boolean            @default(false)
+  Attachment          Attachment?        @relation(fields: [attachmentId], references: [id])
+  Organization        Organization       @relation(fields: [organizationId], references: [id])
+  Signature           Signature?         @relation(fields: [signatureId], references: [id])
+  Snippet             Snippet?           @relation(fields: [snippetId], references: [id])
+  ScenarioMessage     ScenarioMessage[]
+  ScenarioResponse    ScenarioResponse[]
+
+  @@unique([name, organizationId])
+  @@index([organizationId])
+}
+
+model ScenarioMessage {
+  id         String   @id
+  scenarioId String
+  threadId   String
+  sender     String?
+  hasReplied Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  messageId  String
+  updatedAt  DateTime @default(now())
+  Scenario   Scenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+
+  @@unique([scenarioId, threadId, sender])
+  @@index([messageId])
+  @@index([scenarioId])
+  @@index([sender])
+  @@index([threadId])
+}
+
+model ScenarioResponse {
+  id         String   @id
+  scenarioId String
+  source     String
+  threadId   String?  @unique(map: "unique_thread_id")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime
+  Scenario   Scenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+
+  @@index([scenarioId])
+  @@index([source])
+}
+
+model Session {
+  id           String   @id
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  User         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Signature {
+  id        String     @id
+  name      String     @unique
+  content   String
+  createdAt DateTime   @default(now())
+  updatedAt DateTime
+  Scenario  Scenario[]
+}
+
+model Snippet {
+  id             String        @id
+  name           String
+  content        String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime
+  organizationId String?
+  Scenario       Scenario[]
+  Organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@unique([name, organizationId])
+  @@index([organizationId])
+}
+
+model SocialAccount {
+  id               String         @id
+  username         String
+  name             String
+  provider         String
+  organizationId   String
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime
+  isActive         Boolean        @default(true)
+  unipileAccountId String?        @unique
+  emailAccountId   String?
+  providerId       String?
+  EmailMessage     EmailMessage[] @ignore
+  EmailAccount     EmailAccount?  @relation(fields: [emailAccountId], references: [id])
+  Organization     Organization   @relation(fields: [organizationId], references: [id])
+
+  @@index([emailAccountId])
+  @@index([organizationId])
+  @@index([provider])
 }
 
 model StatusChangeLog {
-  id              String             @id @default(cuid())
+  id              String             @id
   messageId       String
   threadId        String
   organizationId  String
@@ -528,87 +576,102 @@ model StatusChangeLog {
   @@index([organizationId], map: "status_change_log_organization_id_idx")
 }
 
-model ReplyLog {
-  id             String       @id @default(cuid())
-  userEmail      String
-  messageId      String
-  threadId       String
-  repliedAt      DateTime     @default(now())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  @@index([userEmail])
-  @@index([messageId])
-  @@index([threadId])
-  @@index([repliedAt])
-  @@index([organizationId])
-}
-
-model ContactWorkflowState {
-  stateId              String                 @id
-  contactId            String
-  workflowId           String
+model Subscription {
+  id                   String       @id
   organizationId       String
-  currentStepOrder     Int
+  stripeSubscriptionId String
   status               String
-  nextActionTime       DateTime?              @db.Timestamptz(6)
-  scheduledDate        DateTime?              @db.Date
-  stateData            Json?
-  errorMessage         String?
-  attempts             Int                    @default(0)
-  enrolledAt           DateTime               @default(now()) @db.Timestamptz(6)
-  lastProcessedAt      DateTime?              @db.Timestamptz(6)
-  Contacts             Contacts               @relation(fields: [contactId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  Organization         Organization           @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  WorkflowDefinition   WorkflowDefinition     @relation(fields: [workflowId], references: [workflowId], onDelete: NoAction, onUpdate: NoAction)
-  WorkflowExecutionLog WorkflowExecutionLog[]
+  currentPeriodStart   DateTime
+  currentPeriodEnd     DateTime
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime
+  subscriptionItemId   String?
+  priceId              String?
+  quantity             Int?         @default(1)
+  isTestMode           Boolean      @default(false)
+  Organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@unique([contactId, workflowId], map: "unique_contact_in_workflow")
-  @@index([contactId], map: "idx_contactworkflowstate_contactid")
-  @@index([status, nextActionTime], map: "idx_contactworkflowstate_status_nextactiontime")
-  @@index([workflowId, scheduledDate], map: "idx_contactworkflowstate_workflowid_scheduleddate")
-  @@index([workflowId, status], map: "idx_contactworkflowstate_workflowid_status")
+  @@index([organizationId], map: "subscription_org_id_idx")
+  @@index([status], map: "subscription_status_idx")
+  @@index([stripeSubscriptionId], map: "subscription_stripe_id_idx")
+  @@index([isTestMode], map: "subscription_test_mode_idx")
 }
 
-model Contacts {
-  id                   String                 @id(map: "apolloContacts_pkey") @db.VarChar(50)
-  firstName            String?                @db.VarChar(100)
-  lastName             String?                @db.VarChar(100)
-  fullName             String?                @db.VarChar(200)
-  linkedinUrl          String?
-  title                String?                @db.VarChar(200)
-  email                String                 @db.VarChar(255)
-  emailStatus          String?                @db.VarChar(50)
-  photoUrl             String?
-  headline             String?
-  state                String?                @db.VarChar(100)
-  city                 String?                @db.VarChar(100)
-  country              String?                @db.VarChar(100)
-  currentCompanyName   String?                @db.VarChar(255)
-  currentCompanyId     String?                @db.VarChar(50)
-  twitterUrl           String?
-  facebookUrl          String?
-  githubUrl            String?
-  companyLinkedinUrl   String?
-  companyWebsiteUrl    String?
-  employmentHistory    Json?
-  phoneNumbers         Json?
-  contactEmails        Json?
-  additionalData       Json?
-  createdAt            DateTime?              @default(now()) @db.Timestamptz(6)
-  updatedAt            DateTime?              @default(now()) @db.Timestamptz(6)
-  organizationId       String?
-  leadStatus           String?
-  lastActivityAt       DateTime?              @db.Timestamptz(6)
-  ContactTags          ContactTags[]
-  ContactWorkflowState ContactWorkflowState[]
-  Organization         Organization?          @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_contacts_organization")
+model Tags {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String
+  name           String
+  createdAt      DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime      @default(now()) @db.Timestamptz(6)
+  ContactTags    ContactTags[]
+  Organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@index([currentCompanyName], map: "idx_apolloContacts_company")
-  @@index([email], map: "idx_apolloContacts_email")
-  @@index([linkedinUrl], map: "idx_apolloContacts_linkedin")
-  @@index([organizationId], map: "idx_contacts_organizationid")
-  @@index([leadStatus], map: "idx_contacts_leadstatus")
+  @@unique([organizationId, name])
+  @@index([organizationId], map: "idx_tags_organizationid")
+}
+
+model User {
+  id               String             @id
+  name             String?
+  email            String?            @unique
+  password         String?
+  emailVerified    DateTime?
+  image            String?
+  role             String             @default("user")
+  organizationId   String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime
+  Account          Account[]
+  ChatConversation ChatConversation[]
+  SavedFilters     SavedFilters[]
+  Session          Session[]
+  Organization     Organization?      @relation(fields: [organizationId], references: [id])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model WebhookField {
+  id           String   @id
+  name         String   @unique
+  description  String?
+  required     Boolean  @default(false)
+  type         String   @default("string")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime
+  originalName String
+}
+
+model WebhookLog {
+  id               String        @id
+  accountId        String
+  organizationId   String
+  createdAt        DateTime      @default(now())
+  status           String        @default("received")
+  scenarioName     String        @default("Unknown")
+  contactEmail     String        @default("Unknown")
+  contactName      String        @default("Unknown")
+  company          String        @default("Unknown")
+  requestBody      Json
+  responseBody     Json          @default("{}")
+  ghlIntegrationId String?
+  updatedAt        DateTime      @default(now())
+  emailSubject     String?
+  emailHtmlBody    String?
+  CreditUsage      CreditUsage[]
+  Organization     Organization  @relation(fields: [organizationId], references: [id])
+
+  @@index([accountId])
+  @@index([createdAt])
+  @@index([ghlIntegrationId])
+  @@index([scenarioName])
+  @@index([organizationId, status], map: "webhook_log_org_status_idx")
+  @@index([status, createdAt], map: "webhook_log_status_created_at_idx")
 }
 
 model WorkflowDefinition {
@@ -646,59 +709,15 @@ model WorkflowExecutionLog {
   @@index([timestamp], map: "idx_workflowexecutionlog_timestamp")
 }
 
-model ContactTags {
-  contactId String   @db.VarChar(50)
-  tagId     String   @db.Uuid
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
-  Contacts  Contacts @relation(fields: [contactId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  Tags      Tags     @relation(fields: [tagId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-
-  @@id([contactId, tagId])
-  @@index([contactId], map: "idx_contacttags_contactid")
-  @@index([tagId], map: "idx_contacttags_tagid")
-}
-
-model SavedFilters {
-  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId String
-  userId         String?
-  name           String
-  filters        Json
-  isDefault      Boolean      @default(false)
-  createdAt      DateTime     @default(now()) @db.Timestamptz(6)
-  updatedAt      DateTime     @default(now()) @db.Timestamptz(6)
-  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  User           User?        @relation(fields: [userId], references: [id], onDelete: SetNull, onUpdate: NoAction) // Added onDelete: SetNull
-
-  @@unique([organizationId, userId, name], map: "unique_filter_name_org_user") // Added unique constraint
-  @@index([organizationId], map: "idx_savedfilters_organizationid")
-  @@index([userId], map: "idx_savedfilters_userid")
-}
-
-model Tags {
-  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId String
-  name           String
-  createdAt      DateTime      @default(now()) @db.Timestamptz(6)
-  updatedAt      DateTime      @default(now()) @db.Timestamptz(6)
-  ContactTags    ContactTags[]
-  Organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-
-  @@unique([organizationId, name])
-  @@index([organizationId], map: "idx_tags_organizationid")
-}
-
-enum MessageType {
-  REAL_REPLY
-  BOUNCE
-  AUTO_REPLY
-  OUT_OF_OFFICE
-  OTHER
-}
-
-enum MessageSource {
-  EMAIL
-  LINKEDIN
+enum AppointmentStatus {
+  appointment_booked
+  webinar_booked
+  appointment_no_showed
+  appointment_showed
+  appointment_unqualified
+  appointment_paid
+  invoice_sent
+  invoice_paid
 }
 
 enum ConversationStatus {
@@ -709,13 +728,15 @@ enum ConversationStatus {
   WAITING_FOR_REPLY
 }
 
-enum AppointmentStatus {
-  appointment_booked
-  webinar_booked
-  appointment_no_showed
-  appointment_showed
-  appointment_unqualified
-  appointment_paid
-  invoice_sent
-  invoice_paid
+enum MessageSource {
+  EMAIL
+  LINKEDIN
+}
+
+enum MessageType {
+  REAL_REPLY
+  BOUNCE
+  AUTO_REPLY
+  OUT_OF_OFFICE
+  OTHER
 }

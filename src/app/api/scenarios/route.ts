@@ -1,228 +1,35 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { Prisma, Scenario } from '@prisma/client';
 
-export const dynamic = 'force-dynamic';
+export async function GET(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.organizationId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
-interface PropertyOption {
-  label: string;
-  value: string;
-  description?: string;
-}
+  const { searchParams } = new URL(request.url);
+  const simple = searchParams.get('simple') === 'true';
 
-interface Property {
-  name: string;
-  label: string;
-  type: string;
-  fieldType: string;
-  options: PropertyOption[];
-}
-
-// Helper function for logging
-function log(level: 'error' | 'info', message: string, data?: any) {
-  console[level](JSON.stringify({
-    timestamp: new Date().toISOString(),
-    level,
-    message,
-    environment: process.env.VERCEL_ENV || 'development',
-    ...data
-  }));
-}
-
-export async function GET() {
   try {
-    log('info', 'Fetching scenarios - start');
-    const session = await getServerSession(authOptions);
-    
-    if (!session) {
-      log('error', 'No session found');
-      return NextResponse.json({ error: 'Unauthorized - No session' }, { status: 401 });
-    }
-
-    if (!session.user) {
-      log('error', 'No user in session', { session });
-      return NextResponse.json({ error: 'Unauthorized - No user' }, { status: 401 });
-    }
-
-    if (!session.user.organizationId) {
-      log('error', 'No organization ID in session', { session });
-      return NextResponse.json({ error: 'Unauthorized - No organization' }, { status: 401 });
-    }
-
-    log('info', 'Fetching scenarios from database', { organizationId: session.user.organizationId });
-
+    const organizationId = session.user.organizationId;
     const scenarios = await prisma.scenario.findMany({
-      where: { organizationId: session.user.organizationId },
-      include: {
-        signature: {
-          select: {
-            id: true,
-            name: true,
-            content: true
-          }
-        },
-        attachment: {
-          select: {
-            id: true,
-            name: true
-          }
-        }
-      },
-      orderBy: { createdAt: 'desc' }
-    });
-
-    log('info', 'Successfully fetched scenarios', { count: scenarios.length });
-
-    const formattedScenarios = scenarios.map(scenario => ({
-      ...scenario,
-      createdAt: scenario.createdAt.toISOString(),
-      updatedAt: scenario.updatedAt.toISOString()
-    }));
-
-    return NextResponse.json(formattedScenarios);
-  } catch (error) {
-    log('error', 'Error fetching scenarios', { 
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined
-    });
-    return NextResponse.json({ 
-      error: 'Failed to fetch scenarios',
-      details: error instanceof Error ? error.message : String(error)
-    }, { status: 500 });
-  }
-}
-
-export async function POST(req: Request) {
-  try {
-    const data = await req.json();
-    const { name, touchpointType, isFollowUp, testMode, testEmail, customizationPrompt, emailExamplesPrompt, subjectLine, filters } = data;
-
-    // Get organization ID from session
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.organizationId) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
-    }
-
-    const scenario = await prisma.scenario.create({
-      data: {
-        name,
-        touchpointType,
-        isFollowUp: Boolean(isFollowUp),
-        testMode: Boolean(testMode),
-        testEmail: testEmail || null,
-        customizationPrompt,
-        emailExamplesPrompt,
-        subjectLine,
-        filters,
-        organizationId: session.user.organizationId
-      }
-    });
-
-    return NextResponse.json(scenario);
-  } catch (error) {
-    console.error('Error creating scenario:', error);
-    return NextResponse.json({ 
-      error: 'Failed to create scenario',
-      details: error instanceof Error ? error.message : String(error)
-    }, { status: 500 });
-  }
-}
-
-export async function PUT(req: Request) {
-  try {
-    log('info', 'Updating scenario - start');
-    
-    // Get organization ID from session
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.organizationId) {
-      log('error', 'No organization ID in session', { session });
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
-    }
-
-    const data = await req.json();
-    log('info', 'Received update data', { data });
-    
-    const { id, name, touchpointType, isFollowUp, testMode, testEmail, customizationPrompt, emailExamplesPrompt, subjectLine, filters, snippetId, attachmentId, isHighPerforming } = data;
-
-    // First verify the scenario belongs to this organization
-    const existingScenario = await prisma.scenario.findFirst({
       where: {
-        id,
-        organizationId: session.user.organizationId
-      }
+        organizationId,
+      },
+      select: simple ? {
+        id: true,
+        name: true,
+      } : undefined,
+      orderBy: {
+        name: 'asc',
+      },
     });
 
-    if (!existingScenario) {
-      log('error', 'Scenario not found or unauthorized', { id, organizationId: session.user.organizationId });
-      return NextResponse.json({ error: 'Scenario not found' }, { status: 404 });
-    }
-
-    log('info', 'Updating scenario in database', { id });
-    
-    // Convert filters to JSON string for PostgreSQL
-    const filtersJson = JSON.stringify(filters);
-    
-    // Use queryRaw to update and return the scenario
-    const [updatedScenario] = await prisma.$queryRaw<Scenario[]>`
-      UPDATE "Scenario"
-      SET 
-        name = ${name},
-        "touchpointType" = ${touchpointType},
-        "isFollowUp" = ${Boolean(isFollowUp)},
-        "testMode" = ${Boolean(testMode)},
-        "testEmail" = ${testEmail || null},
-        "customizationPrompt" = ${customizationPrompt},
-        "emailExamplesPrompt" = ${emailExamplesPrompt},
-        "subjectLine" = ${subjectLine},
-        filters = ${filtersJson}::jsonb,
-        "snippetId" = ${snippetId || null},
-        "attachmentId" = ${attachmentId || null},
-        "isHighPerforming" = ${Boolean(isHighPerforming)},
-        "updatedAt" = NOW()
-      WHERE id = ${id}
-      AND "organizationId" = ${session.user.organizationId}
-      RETURNING *
-    `;
-
-    if (!updatedScenario) {
-      throw new Error('Failed to update scenario');
-    }
-
-    // Fetch relations separately
-    const relations = await prisma.scenario.findUnique({
-      where: { id },
-      select: {
-        snippet: {
-          select: {
-            id: true,
-            name: true
-          }
-        },
-        attachment: {
-          select: {
-            id: true,
-            name: true
-          }
-        }
-      }
-    });
-
-    log('info', 'Successfully updated scenario', { id });
-    return NextResponse.json({
-      ...updatedScenario,
-      snippet: relations?.snippet || null,
-      attachment: relations?.attachment || null
-    });
+    return NextResponse.json(scenarios);
   } catch (error) {
-    log('error', 'Error updating scenario', { 
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined
-    });
-    return NextResponse.json({ 
-      error: 'Failed to update scenario',
-      details: error instanceof Error ? error.message : String(error)
-    }, { status: 500 });
+    console.error('Error fetching scenarios:', error);
+    return NextResponse.json({ error: 'Failed to fetch scenarios' }, { status: 500 });
   }
-} 
+}

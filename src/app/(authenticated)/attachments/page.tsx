@@ -4,12 +4,20 @@ import React from 'react';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label'; // Add Label import
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'; // Import Dialog components
 import { Plus, X, Search, FileCode } from 'lucide-react';
 import { PageContainer } from '@/components/layout/PageContainer';
-import PageHeader from '@/components/layout/PageHeader';
+import { PageHeader } from '@/components/ui/page-header'; // Correct import path
 import { CodeEditor } from '@/components/ui/code-editor';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -148,98 +156,89 @@ export default function AttachmentsPage(): JSX.Element {
   return (
     <PageContainer>
       <div className="space-y-6">
-        <div className="bg-gradient-to-r from-slate-800 to-slate-900 mx-0 px-8 py-8 rounded-xl shadow-lg">
-          <h1 className="text-3xl font-bold text-white mb-2">Attachments</h1>
-          <p className="text-slate-300">Manage your attachments for use in scenarios</p>
-          <div className="mt-4">
-            <Button
-              onClick={() => setEditingAttachment({})}
-              className="bg-red-500 hover:bg-red-600 transition-all duration-200 shadow-sm hover:shadow-md text-white border-0 rounded-lg px-6"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              New Attachment
-            </Button>
-          </div>
-        </div>
+        {/* Use PageHeader component */}
+        <PageHeader 
+          title="Attachments"
+          description="Manage your attachments for use in scenarios"
+        >
+          <Button
+            onClick={() => setEditingAttachment({})}
+            className="bg-red-500 hover:bg-red-600 transition-all duration-200 shadow-sm hover:shadow-md text-white border-0 rounded-lg px-6"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            New Attachment
+          </Button>
+        </PageHeader>
 
-        <div className="flex items-center gap-4">
-          <div className="relative flex-1">
+        <div className="flex items-center gap-4"> {/* Search bar row */}
+          <div className="relative max-w-md flex-1"> {/* Adjusted max-width */}
+             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /> {/* Standard icon style */}
             <Input
               placeholder="Search attachments..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-12 border-2 border-slate-200 focus:border-red-500 focus:ring-red-100 transition-all rounded-lg"
+              className="pl-9" // Standard padding for icon
             />
           </div>
         </div>
 
-        {editingAttachment && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <Card className="w-full max-w-[90%] max-h-[90vh] lg:max-w-6xl overflow-hidden">
-              <CardHeader className="pb-4 border-b border-gray-100 sticky top-0 bg-white z-10">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-xl font-semibold text-slate-800">
+        {/* Attachment Editor Dialog */}
+        <Dialog open={!!editingAttachment} onOpenChange={(open) => { if (!open) setEditingAttachment(null); }}>
+          <DialogContent className="sm:max-w-[80%] lg:max-w-4xl max-h-[90vh] flex flex-col">
+            {editingAttachment && (
+              <>
+                <DialogHeader>
+                  <DialogTitle>
                     {editingAttachment.id ? 'Edit Attachment' : 'Create New Attachment'}
-                  </CardTitle>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={() => setEditingAttachment(null)}
-                    className="text-gray-500 hover:text-gray-700 hover:bg-gray-100/80 rounded-lg"
-                  >
-                    <X className="w-5 h-5" />
-                  </Button>
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="p-6 space-y-6 overflow-y-auto flex-1">
+                  <form onSubmit={handleSave} className="space-y-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="attachment-name">Name</Label>
+                      <Input
+                        id="attachment-name"
+                        value={editingAttachment.name || ''}
+                        onChange={(e) => setEditingAttachment({
+                          ...editingAttachment,
+                          name: e.target.value
+                        })}
+                        placeholder="Enter attachment name"
+                        className="bg-background text-foreground" // Add explicit background and text colors
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="attachment-content">Content</Label>
+                      <PromptInput
+                        value={editingAttachment.content || ''}
+                        onChange={(value) => setEditingAttachment({
+                          ...editingAttachment,
+                          content: value
+                        })}
+                        placeholder="Enter attachment content"
+                        className="min-h-[40vh] border rounded-md" // Adjust height, add border
+                      />
+                    </div>
+                  </form>
                 </div>
-              </CardHeader>
-              <CardContent className="p-6 overflow-y-auto max-h-[calc(90vh-8rem)]">
-                <form onSubmit={handleSave} className="space-y-6">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-800">Name</label>
-                    <Input
-                      value={editingAttachment.name || ''}
-                      onChange={(e) => setEditingAttachment({
-                        ...editingAttachment,
-                        name: e.target.value
-                      })}
-                      placeholder="Enter attachment name"
-                      className="h-12 border-2 border-slate-200 focus:border-red-500 focus:ring-red-100 transition-all rounded-lg"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-800">Content</label>
-                    <PromptInput
-                      value={editingAttachment.content || ''}
-                      onChange={(value) => setEditingAttachment({
-                        ...editingAttachment,
-                        content: value
-                      })}
-                      placeholder="Enter attachment content"
-                      className="min-h-[60vh]"
-                      rows={4}
-                    />
-                  </div>
-                  <div className="flex justify-end gap-3 pt-4">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setEditingAttachment(null)}
-                      className="px-6 h-12 border-2 border-slate-200 hover:bg-slate-50 text-slate-800 hover:border-red-500 transition-all rounded-lg"
-                    >
-                      Cancel
-                    </Button>
-                    <Button 
-                      type="submit"
-                      className="px-6 h-12 bg-red-500 hover:bg-red-600 text-white transition-all rounded-lg"
-                    >
-                      {editingAttachment.id ? 'Update' : 'Create'}
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => setEditingAttachment(null)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleSave}
+                  >
+                    {editingAttachment.id ? 'Update' : 'Create'}
+                  </Button>
+                </DialogFooter>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
 
         <div className="technical-grid">
           {filteredAttachments.map((attachment) => (
@@ -286,4 +285,4 @@ export default function AttachmentsPage(): JSX.Element {
       </div>
     </PageContainer>
   );
-} 
+}

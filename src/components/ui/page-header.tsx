@@ -23,17 +23,17 @@ export function PageHeader({
       variant === 'analytics' && "bg-gradient-to-br from-primary/5 to-primary/10 p-8 rounded-lg border border-primary/10",
       className
     )}>
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"> {/* Adjusted flex for responsiveness */}
         <div className="space-y-1.5">
           <h1 className={cn(
-            "technical-header",
-            variant === 'analytics' && "text-primary"
+            "text-2xl font-bold tracking-tight", // Standard heading style
+            variant === 'analytics' ? "text-primary" : "text-foreground" // Use theme colors
           )}>
             {title}
           </h1>
           {description && (
             <p className={cn(
-              "technical-subheader max-w-2xl",
+              "text-sm text-muted-foreground max-w-2xl", // Standard subheader style
               variant === 'analytics' && "text-primary/60"
             )}>
               {description}
@@ -48,4 +48,4 @@ export function PageHeader({
       </div>
     </div>
   );
-} 
+}

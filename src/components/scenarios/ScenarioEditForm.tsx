@@ -63,9 +63,9 @@ export function ScenarioEditForm({ scenario, fields, snippets, attachments }: Sc
         filters: formData.filters
       };
 
-      console.log('Sending PUT request to /api/scenarios with data:', requestData);
+      console.log(`Sending PUT request to /api/scenarios/${formData.id} with data:`, requestData);
       
-      const response = await fetch('/api/scenarios', {
+      const response = await fetch(`/api/scenarios/${formData.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -320,4 +320,4 @@ export function ScenarioEditForm({ scenario, fields, snippets, attachments }: Sc
       </form>
     </div>
   );
-} 
+}

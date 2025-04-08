@@ -3,8 +3,16 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label'; // Add Label import
 import { useToast } from '@/components/ui/use-toast';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'; // Import Dialog components
 import { Plus, X, Search, Code2 } from 'lucide-react';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { CodeEditor } from '@/components/ui/code-editor';
@@ -148,83 +156,73 @@ export default function SnippetsPage(): JSX.Element {
           </Button>
         </PageHeader>
 
-        <div className="relative max-w-2xl">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+        <div className="relative max-w-md"> {/* Adjusted max-width */}
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /> {/* Standard icon style */}
           <Input
-            className="technical-input pl-10"
+            className="pl-9" // Standard padding for icon
             placeholder="Search snippets..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
 
-        {editingSnippet && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <Card className="w-full max-w-[90%] max-h-[90vh] lg:max-w-6xl overflow-hidden">
-              <CardHeader className="pb-4 border-b border-gray-100 sticky top-0 bg-white z-10">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-xl font-semibold text-slate-800">
+        {/* Snippet Editor Dialog */}
+        <Dialog open={!!editingSnippet} onOpenChange={(open) => { if (!open) setEditingSnippet(null); }}>
+          <DialogContent className="sm:max-w-[80%] lg:max-w-4xl max-h-[90vh] flex flex-col">
+            {editingSnippet && (
+              <>
+                <DialogHeader>
+                  <DialogTitle>
                     {editingSnippet.id ? 'Edit Snippet' : 'New Snippet'}
-                  </CardTitle>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={() => setEditingSnippet(null)}
-                    className="text-gray-500 hover:text-gray-700 hover:bg-gray-100/80 rounded-lg"
-                  >
-                    <X className="w-5 h-5" />
-                  </Button>
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="p-6 space-y-6 overflow-y-auto flex-1">
+                  <form onSubmit={(e) => { e.preventDefault(); handleSave(); }} className="space-y-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="snippet-name">Name</Label>
+                      <Input
+                        id="snippet-name"
+                        value={editingSnippet.name}
+                        onChange={(e) => setEditingSnippet({
+                          ...editingSnippet,
+                          name: e.target.value
+                        })}
+                        placeholder="Enter snippet name"
+                        className="bg-background text-foreground" // Add explicit background and text colors
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="snippet-content">Content (HTML supported)</Label>
+                      <PromptInput
+                        value={editingSnippet.content}
+                        onChange={(value) => setEditingSnippet({
+                          ...editingSnippet,
+                          content: value
+                        })}
+                        placeholder="Enter snippet content"
+                        className="min-h-[40vh] border rounded-md" // Adjust height, add border
+                      />
+                    </div>
+                  </form>
                 </div>
-              </CardHeader>
-              <CardContent className="p-6 overflow-y-auto max-h-[calc(90vh-8rem)]">
-                <form onSubmit={handleSave} className="space-y-6">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-800">Name</label>
-                    <Input
-                      value={editingSnippet.name}
-                      onChange={(e) => setEditingSnippet({
-                        ...editingSnippet,
-                        name: e.target.value
-                      })}
-                      placeholder="Enter snippet name"
-                      className="h-12 border-2 border-slate-200 focus:border-red-500 focus:ring-red-100 transition-all rounded-lg"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-800">Content (HTML supported)</label>
-                    <PromptInput
-                      value={editingSnippet.content}
-                      onChange={(value) => setEditingSnippet({
-                        ...editingSnippet,
-                        content: value
-                      })}
-                      placeholder="Enter snippet content"
-                      className="min-h-[60vh]"
-                      rows={4}
-                    />
-                  </div>
-                  <div className="flex gap-3 pt-4">
-                    <Button 
-                      type="submit"
-                      className="px-6 h-12 bg-red-500 hover:bg-red-600 text-white transition-all rounded-lg"
-                    >
-                      {editingSnippet.id ? 'Update' : 'Create'}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setEditingSnippet(null)}
-                      className="px-6 h-12 border-2 border-slate-200 hover:bg-slate-50 text-slate-800 hover:border-red-500 transition-all rounded-lg"
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => setEditingSnippet(null)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleSave}
+                  >
+                    {editingSnippet.id ? 'Update' : 'Create'}
+                  </Button>
+                </DialogFooter>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
 
         <div className="technical-grid">
           {filteredSnippets.map((snippet) => (
@@ -275,4 +273,4 @@ export default function SnippetsPage(): JSX.Element {
       </div>
     </PageContainer>
   );
-} 
+}

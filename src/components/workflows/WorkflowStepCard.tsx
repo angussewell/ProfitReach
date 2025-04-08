@@ -55,6 +55,13 @@ export interface WorkflowStepCardProps {
   isLast: boolean;
   isBranchTarget?: boolean;
   branchLevel?: number;
+  allSteps?: WorkflowStep[]; // Add allSteps for step reference lookup
+  branchRelationship?: {
+    sourceStepId: string;
+    pathIndex: number;
+    indentationLevel: number;
+    branchColor?: string;
+  };
 }
 
 export function WorkflowStepCard({
@@ -68,9 +75,20 @@ export function WorkflowStepCard({
   isLast,
   isBranchTarget = false,
   branchLevel = 0,
+  allSteps = [], // Default to empty array
+  branchRelationship,
 }: WorkflowStepCardProps) {
   const { actionType, order, config } = step;
   const colors = actionTypeColors[actionType];
+  
+  // Helper function to get step reference by ID
+  const getStepReferenceById = (stepId: string): string => {
+    if (!stepId) return "None";
+    const targetStep = allSteps.find(s => s.clientId === stepId);
+    if (!targetStep) return "Unknown";
+    
+    return `Step #${targetStep.order}${targetStep.customName ? ` (${targetStep.customName})` : ''}`;
+  };
   
   // Generate config summary
   const getConfigSummary = (): string => {
@@ -88,7 +106,9 @@ export function WorkflowStepCard({
         return `Call Webhook: ${conf.method || '?'} ${conf.url ? conf.url.substring(0, 25) + '...' : '?'}`;
       case 'branch':
         if (conf.type === 'percentage_split') {
-          return `Split: ${conf.paths.map((p: any, i: number) => `${p.weight}% to Step #${p.nextStepOrder}`).join(', ')}`;
+          return `Split: ${conf.paths.map((p: any, i: number) => 
+            `${p.weight}% to ${getStepReferenceById(p.nextStepId)}`
+          ).join(', ')}`;
         }
         return 'Branch: Configure percentage split';
       case 'remove_from_workflow':
@@ -98,16 +118,33 @@ export function WorkflowStepCard({
     }
   };
 
+  // Determine indentation class based on branch relationship
+  const indentationClass = branchRelationship 
+    ? `pl-${branchRelationship.indentationLevel * 6}` 
+    : '';
+  
+  // Get branch line style based on branch relationship
+  const getBranchLineStyle = () => {
+    if (!branchRelationship) return {};
+    
+    const color = branchRelationship.branchColor || 
+      ['border-orange-300', 'border-blue-300', 'border-green-300', 'border-purple-300'][
+        branchRelationship.pathIndex % 4
+      ];
+    
+    return { borderColor: color };
+  };
+
   return (
-    <div className={cn("relative mb-2", branchLevel > 0 && "ml-8")}>
-      {/* Step connector line (coming from above) */}
-      {!isFirst && !isBranchTarget && (
-        <div className="absolute top-0 left-6 w-0.5 h-4 -mt-4 bg-gray-300 z-0"></div>
+    <div className={cn("relative mb-2", indentationClass)}>
+      {/* Branch relationship visual indicators */}
+      {branchRelationship && (
+        <div className="absolute top-0 bottom-0 left-0 w-0.5 border-l-2" style={getBranchLineStyle()}></div>
       )}
       
       {/* Branch connector (horizontal line for branch targets) */}
       {isBranchTarget && (
-        <div className="absolute top-1/2 -left-8 w-8 h-0.5 bg-gray-300"></div>
+        <div className="absolute top-1/2 -left-6 w-6 h-0.5 border-t-2" style={getBranchLineStyle()}></div>
       )}
       
       {/* Add step button above */}
@@ -141,7 +178,9 @@ export function WorkflowStepCard({
               <span className={cn(colors.text)}>
                 {actionTypeIcons[actionType]}
               </span>
-              <span className="font-medium">{actionTypeLabels[actionType]}</span>
+              <span className="font-medium">
+                {step.customName || actionTypeLabels[actionType]}
+              </span>
             </div>
             
             <div className="flex-grow"></div>

@@ -7,18 +7,15 @@ import { authOptions } from '@/lib/auth';
 import { v4 as uuidv4 } from 'uuid';
 import { createApiResponse } from '@/lib/filters';
 
-// Define the valid action types as a union
-const ActionTypeEnum = z.enum([
-  'send_email',
-  'wait',
-  'branch',
-  'tag',
-  'update_field',
-  'webhook',
-  'task'
-]);
+// ActionTypeEnum and related code removed
 
 // Define specific config schemas for each action type
+// Scenario configuration
+const scenarioConfigSchema = z.object({
+  assignmentType: z.enum(['single', 'random_pool']),
+  scenarioIds: z.array(z.string()).min(1, { message: 'At least one scenario ID is required' }),
+});
+
 // Email configuration
 const emailConfigSchema = z.object({
   templateId: z.string().optional(),
@@ -34,37 +31,20 @@ const waitConfigSchema = z.object({
   unit: z.enum(['minutes', 'hours', 'days']),
 });
 
-// Branch percentage split configuration
-const branchConfigSchema = z.object({
-  type: z.literal('percentage_split'),
-  paths: z.array(
-    z.object({
-      weight: z.number().int().min(1).max(100),
-      nextStepOrder: z.number().int().positive()
-    })
-  ).min(2).refine(
-    paths => {
-      // Validate that the total weight is exactly 100%
-      const totalWeight = paths.reduce((sum, path) => sum + path.weight, 0);
-      return totalWeight === 100;
-    },
-    {
-      message: "Path weights must sum to exactly 100%",
-      path: ["paths"]
-    }
-  )
-});
+// Branch config schema removed
 
-// Tag action configuration
+// Tag action configuration (Assuming this might still be needed or was missed in the prompt, keeping for now)
+// If 'tag' action is not used, this can be removed later.
 const tagConfigSchema = z.object({
   action: z.enum(['add', 'remove']),
   tags: z.array(z.string()),
 });
 
-// Update field configuration
+// Updated Update field configuration schema
 const updateFieldConfigSchema = z.object({
   fieldPath: z.string().min(1, { message: 'Field path is required' }),
-  value: z.union([z.string(), z.number(), z.boolean()]),
+  assignmentType: z.enum(['single', 'random_pool']),
+  values: z.array(z.string()).min(1, { message: 'At least one value is required' }),
 });
 
 // Webhook configuration
@@ -87,40 +67,63 @@ const taskConfigSchema = z.object({
 const stepSchema = z.discriminatedUnion('actionType', [
   z.object({
     order: z.number().int().positive(),
+    actionType: z.literal('scenario'),
+    config: scenarioConfigSchema,
+    customName: z.string().optional(),
+  }),
+  z.object({
+    order: z.number().int().positive(),
     actionType: z.literal('send_email'),
     config: emailConfigSchema,
+    customName: z.string().optional(),
   }),
   z.object({
     order: z.number().int().positive(),
     actionType: z.literal('wait'),
     config: waitConfigSchema,
-  }),
+    customName: z.string().optional(),
+  }), // Added closing parenthesis and comma
+  // 'branch' literal removed from discriminated union
   z.object({
     order: z.number().int().positive(),
-    actionType: z.literal('branch'),
-    config: branchConfigSchema,
-  }),
-  z.object({
-    order: z.number().int().positive(),
-    actionType: z.literal('tag'),
+    actionType: z.literal('tag'), // Assuming 'tag' action type exists and is needed
     config: tagConfigSchema,
-  }),
+    customName: z.string().optional(),
+  }), // Added closing parenthesis and comma
   z.object({
     order: z.number().int().positive(),
     actionType: z.literal('update_field'),
     config: updateFieldConfigSchema,
-  }),
+    customName: z.string().optional(),
+  }), // Added closing parenthesis and comma
   z.object({
     order: z.number().int().positive(),
     actionType: z.literal('webhook'),
     config: webhookConfigSchema,
-  }),
+    customName: z.string().optional(),
+  }), // Added closing parenthesis and comma
   z.object({
     order: z.number().int().positive(),
     actionType: z.literal('task'),
     config: taskConfigSchema,
-  }),
-]);
+    customName: z.string().optional(),
+  }), // Added closing parenthesis and comma
+  // Added 'clear_field' and 'remove_from_workflow' which were missing
+  z.object({
+    order: z.number().int().positive(),
+    actionType: z.literal('clear_field'),
+    config: z.object({
+      fieldPath: z.string().min(1, { message: 'Field path is required' }),
+    }),
+    customName: z.string().optional(),
+  }), // Added closing parenthesis and comma
+  z.object({
+    order: z.number().int().positive(),
+    actionType: z.literal('remove_from_workflow'),
+    config: z.object({}).optional(),
+    customName: z.string().optional(),
+  }), // Added closing parenthesis
+]); // Keep closing bracket for discriminatedUnion array
 
 // Zod schema for workflow validation
 const workflowCreateSchema = z.object({
@@ -159,7 +162,16 @@ export async function GET(request: NextRequest) {
           name: 'asc',
         },
       });
+      
+      // Log what we found from database for debugging
+      console.log('API /api/workflows?active=true - DB Result:', JSON.stringify(activeWorkflows));
+      console.log('API /api/workflows?active=true - Found active workflows count:', activeWorkflows.length);
+      
       const { response } = createApiResponse(true, activeWorkflows);
+      
+      // Log the actual response structure
+      console.log('API /api/workflows?active=true - Response structure:', JSON.stringify(response));
+      
       return NextResponse.json(response);
     }
 
@@ -239,7 +251,7 @@ export async function POST(request: Request) {
           "updatedAt"
         ) VALUES (
           ${newWorkflowId}::uuid, 
-          ${organizationId}::uuid, 
+          ${organizationId}, 
           ${name}, 
           ${description}, 
           ${dailyContactLimit}, 
@@ -258,13 +270,29 @@ export async function POST(request: Request) {
     return NextResponse.json(response, { status: 201 });
 
   } catch (error) {
-    console.error('Failed to create workflow:', error);
+    // --- CRITICAL: Enhanced Error Logging ---
+    console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+    console.error("!!! Critical Error inserting workflow:", error); 
+    console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
     
-    const errorMsg = error instanceof Prisma.PrismaClientKnownRequestError 
-      ? 'Database error creating workflow.' 
-      : (error instanceof Error ? error.message : 'Internal Server Error');
-    
-    const { response, status } = createApiResponse(false, undefined, errorMsg, 500);
+    // Log specific details if it's a known Prisma error
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      console.error("Prisma Error Code:", error.code);
+      console.error("Prisma Meta:", error.meta);
+    }
+    // Log validation errors separately if they occur during data processing
+    if (error instanceof z.ZodError) {
+       console.error("Zod Validation Error during processing:", error.format());
+       // Should ideally return 400 here, but keeping 500 for now as per original logic
+    }
+
+    // Return a generic error to the client, but keep detailed logs server-side
+    const { response, status } = createApiResponse(
+        false, 
+        undefined, 
+        'Database error creating workflow. Check server logs for details.', // More informative generic message
+        500
+    );
     return NextResponse.json(response, { status });
   }
 }

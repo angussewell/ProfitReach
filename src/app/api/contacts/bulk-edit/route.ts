@@ -153,7 +153,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Validate field-specific values
-    if (fieldToUpdate === 'leadStatus' && !VALID_LEAD_STATUSES.includes(newValue)) {
+    if (fieldToUpdate === 'leadStatus' && newValue !== null && !VALID_LEAD_STATUSES.includes(newValue)) {
       return NextResponse.json(
         { 
           message: 'Invalid lead status', 
@@ -259,22 +259,31 @@ export async function POST(request: NextRequest) {
         
         // Process updates based on field type
         if (fieldToUpdate === 'tags') {
-          if (!Array.isArray(newValue)) {
-            throw new Error('Tags value must be an array');
-          }
-          
-          // Filter out empty tag names
-          const validTagNames = newValue
-            .map(tag => tag.trim())
-            .filter(tag => tag.length > 0);
-          
-          if (validTagNames.length === 0) {
+          // For tags, either clear all tags or update with new ones
+          if (newValue === null || (Array.isArray(newValue) && newValue.length === 0)) {
             // If no valid tags, just delete existing tags for all contacts
             await tx.$executeRaw`
               DELETE FROM "ContactTags"
               WHERE "contactId" = ANY(${validContactIds}::text[])
             `;
-          } else {
+          } else if (Array.isArray(newValue)) {
+            // Filter out empty tag names
+            const validTagNames = newValue
+              .map((tag: string) => tag.trim())
+              .filter((tag: string) => tag.length > 0);
+
+            if (validTagNames.length === 0) {
+              // If no valid tags after filtering, just delete existing tags
+              await tx.$executeRaw`
+                DELETE FROM "ContactTags"
+                WHERE "contactId" = ANY(${validContactIds}::text[])
+              `;
+              return {
+                updatedCount: validContactIds.length,
+                invalidCount
+              };
+            }
+            
             // First get or create all necessary tags in a single batch
             // This approach reduces the number of database operations
             
@@ -292,12 +301,12 @@ export async function POST(request: NextRequest) {
             );
             
             // 2. Create any tags that don't exist yet
-            const tagsToCreate = validTagNames.filter(name => !existingTagMap.has(name));
+            const tagsToCreate = validTagNames.filter((name: string) => !existingTagMap.has(name));
             
             if (tagsToCreate.length > 0) {
               // Prepare values for a batch insert of multiple tags
               const tagInsertValues = tagsToCreate
-                .map(tagName => `(gen_random_uuid(), ${organizationId}, '${tagName.replace(/'/g, "''")}', NOW(), NOW())`)
+                .map((tagName: string) => `(gen_random_uuid(), ${organizationId}, '${tagName.replace(/'/g, "''")}', NOW(), NOW())`)
                 .join(', ');
               
               // Execute batch insert for new tags
@@ -351,76 +360,158 @@ export async function POST(request: NextRequest) {
           }
         } else if (fieldToUpdate === 'lastActivityAt') {
           // Handle date field
-          await tx.$executeRaw`
-            UPDATE "Contacts"
-            SET "lastActivityAt" = ${newValue}::timestamptz,
-                "updatedAt" = NOW()
-            WHERE id = ANY(${validContactIds}::text[])
-            AND "organizationId" = ${organizationId}
-          `;
+          if (newValue === null) {
+            // Clear the lastActivityAt field
+            await tx.$executeRaw`
+              UPDATE "Contacts"
+              SET "lastActivityAt" = NULL,
+                  "updatedAt" = NOW()
+              WHERE id = ANY(${validContactIds}::text[])
+              AND "organizationId" = ${organizationId}
+            `;
+          } else {
+            // Set to the provided date value
+            await tx.$executeRaw`
+              UPDATE "Contacts"
+              SET "lastActivityAt" = ${newValue}::timestamptz,
+                  "updatedAt" = NOW()
+              WHERE id = ANY(${validContactIds}::text[])
+              AND "organizationId" = ${organizationId}
+            `;
+          }
         } else if (fieldToUpdate === 'leadStatus') {
-          // Update both leadStatus and additionalData.status for compatibility
-          await tx.$executeRaw`
-            UPDATE "Contacts"
-            SET "leadStatus" = ${newValue},
-                "additionalData" = jsonb_set(
-                  COALESCE("additionalData", '{}'),
-                  '{status}',
-                  ${JSON.stringify(newValue)}::jsonb
-                ),
-                "updatedAt" = NOW()
-            WHERE id = ANY(${validContactIds}::text[])
-            AND "organizationId" = ${organizationId}
-          `;
+          if (newValue === null) {
+            // Clear both leadStatus and additionalData.status
+            await tx.$executeRaw`
+              UPDATE "Contacts"
+              SET "leadStatus" = NULL,
+                  "additionalData" = CASE 
+                    WHEN "additionalData" IS NULL THEN NULL
+                    WHEN "additionalData" ? 'status' THEN "additionalData" - 'status'
+                    ELSE "additionalData"
+                  END,
+                  "updatedAt" = NOW()
+              WHERE id = ANY(${validContactIds}::text[])
+              AND "organizationId" = ${organizationId}
+            `;
+          } else {
+            // Update both leadStatus and additionalData.status for compatibility
+            await tx.$executeRaw`
+              UPDATE "Contacts"
+              SET "leadStatus" = ${newValue},
+                  "additionalData" = jsonb_set(
+                    COALESCE("additionalData", '{}'),
+                    '{status}',
+                    ${JSON.stringify(newValue)}::jsonb
+                  ),
+                  "updatedAt" = NOW()
+              WHERE id = ANY(${validContactIds}::text[])
+              AND "organizationId" = ${organizationId}
+            `;
+          }
         } else {
-          // Use a switch statement with hardcoded column names for safety
-          // This prevents SQL injection by avoiding dynamic field names
+          // Handle other standard fields with null checks
           switch (fieldToUpdate) {
             case 'title':
-              await tx.$executeRaw`
-                UPDATE "Contacts"
-                SET "title" = ${newValue},
-                    "updatedAt" = NOW()
-                WHERE id = ANY(${validContactIds}::text[])
-                AND "organizationId" = ${organizationId}
-              `;
+              if (newValue === null) {
+                await tx.$executeRaw`
+                  UPDATE "Contacts"
+                  SET "title" = NULL,
+                      "updatedAt" = NOW()
+                  WHERE id = ANY(${validContactIds}::text[])
+                  AND "organizationId" = ${organizationId}
+                `;
+              } else {
+                await tx.$executeRaw`
+                  UPDATE "Contacts"
+                  SET "title" = ${newValue},
+                      "updatedAt" = NOW()
+                  WHERE id = ANY(${validContactIds}::text[])
+                  AND "organizationId" = ${organizationId}
+                `;
+              }
               break;
+              
             case 'currentCompanyName':
-              await tx.$executeRaw`
-                UPDATE "Contacts"
-                SET "currentCompanyName" = ${newValue},
-                    "updatedAt" = NOW()
-                WHERE id = ANY(${validContactIds}::text[])
-                AND "organizationId" = ${organizationId}
-              `;
+              if (newValue === null) {
+                await tx.$executeRaw`
+                  UPDATE "Contacts"
+                  SET "currentCompanyName" = NULL,
+                      "updatedAt" = NOW()
+                  WHERE id = ANY(${validContactIds}::text[])
+                  AND "organizationId" = ${organizationId}
+                `;
+              } else {
+                await tx.$executeRaw`
+                  UPDATE "Contacts"
+                  SET "currentCompanyName" = ${newValue},
+                      "updatedAt" = NOW()
+                  WHERE id = ANY(${validContactIds}::text[])
+                  AND "organizationId" = ${organizationId}
+                `;
+              }
               break;
+              
             case 'country':
-              await tx.$executeRaw`
-                UPDATE "Contacts"
-                SET "country" = ${newValue},
-                    "updatedAt" = NOW()
-                WHERE id = ANY(${validContactIds}::text[])
-                AND "organizationId" = ${organizationId}
-              `;
+              if (newValue === null) {
+                await tx.$executeRaw`
+                  UPDATE "Contacts"
+                  SET "country" = NULL,
+                      "updatedAt" = NOW()
+                  WHERE id = ANY(${validContactIds}::text[])
+                  AND "organizationId" = ${organizationId}
+                `;
+              } else {
+                await tx.$executeRaw`
+                  UPDATE "Contacts"
+                  SET "country" = ${newValue},
+                      "updatedAt" = NOW()
+                  WHERE id = ANY(${validContactIds}::text[])
+                  AND "organizationId" = ${organizationId}
+                `;
+              }
               break;
+              
             case 'state':
-              await tx.$executeRaw`
-                UPDATE "Contacts"
-                SET "state" = ${newValue},
-                    "updatedAt" = NOW()
-                WHERE id = ANY(${validContactIds}::text[])
-                AND "organizationId" = ${organizationId}
-              `;
+              if (newValue === null) {
+                await tx.$executeRaw`
+                  UPDATE "Contacts"
+                  SET "state" = NULL,
+                      "updatedAt" = NOW()
+                  WHERE id = ANY(${validContactIds}::text[])
+                  AND "organizationId" = ${organizationId}
+                `;
+              } else {
+                await tx.$executeRaw`
+                  UPDATE "Contacts"
+                  SET "state" = ${newValue},
+                      "updatedAt" = NOW()
+                  WHERE id = ANY(${validContactIds}::text[])
+                  AND "organizationId" = ${organizationId}
+                `;
+              }
               break;
+              
             case 'city':
-              await tx.$executeRaw`
-                UPDATE "Contacts"
-                SET "city" = ${newValue},
-                    "updatedAt" = NOW()
-                WHERE id = ANY(${validContactIds}::text[])
-                AND "organizationId" = ${organizationId}
-              `;
+              if (newValue === null) {
+                await tx.$executeRaw`
+                  UPDATE "Contacts"
+                  SET "city" = NULL,
+                      "updatedAt" = NOW()
+                  WHERE id = ANY(${validContactIds}::text[])
+                  AND "organizationId" = ${organizationId}
+                `;
+              } else {
+                await tx.$executeRaw`
+                  UPDATE "Contacts"
+                  SET "city" = ${newValue},
+                      "updatedAt" = NOW()
+                  WHERE id = ANY(${validContactIds}::text[])
+                  AND "organizationId" = ${organizationId}
+                `;
+              }
               break;
+              
             default:
               throw new Error(`Update for field '${fieldToUpdate}' not implemented`);
           }
@@ -432,11 +523,19 @@ export async function POST(request: NextRequest) {
         };
       });
       
+      // Default result if transaction didn't return one
+      const defaultResult = {
+        updatedCount: 0,
+        invalidCount: 0
+      };
+
+      const finalResult = result || defaultResult;
+      
       return NextResponse.json(
         { 
-          message: `${result.updatedCount} contacts updated successfully`,
-          updatedCount: result.updatedCount,
-          invalidCount: result.invalidCount
+          message: `${finalResult.updatedCount} contacts updated successfully`,
+          updatedCount: finalResult.updatedCount,
+          invalidCount: finalResult.invalidCount
         },
         { status: 200 }
       );

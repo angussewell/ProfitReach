@@ -1,9 +1,12 @@
 'use client';
 
+'use client'; // Ensure this is a client component
+
 import React from 'react';
+import { useRouter } from 'next/navigation'; // Import useRouter
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Settings, Loader2 } from 'lucide-react';
+import { Settings, Loader2, ArrowLeft } from 'lucide-react'; // Added ArrowLeft
 import { cn } from '@/lib/utils';
 
 interface WorkflowEditorHeaderProps {
@@ -22,15 +25,32 @@ export function WorkflowEditorHeader({
   onWorkflowNameChange,
   onToggleSettings,
   onSave,
-  onCancel,
+  onCancel, // Keep this if it has specific unsaved changes logic
   isSaving,
   isLoading,
   isCreating,
 }: WorkflowEditorHeaderProps) {
+  const router = useRouter(); // Initialize router
+
+  const handleGoBack = () => {
+    router.push('/workflows'); // Navigate to the workflows list page
+  };
+
   return (
     <header className="sticky top-0 z-10 flex h-[57px] items-center gap-4 border-b bg-background px-4">
+      {/* Back Button */}
+      <Button 
+        variant="ghost" 
+        size="icon" 
+        onClick={handleGoBack} 
+        aria-label="Back to Workflows"
+        disabled={isSaving} // Disable if saving
+      >
+        <ArrowLeft className="h-5 w-5" />
+      </Button>
+
       {/* Workflow Name Input */}
-      <div className="flex-1">
+      <div className="flex-1 ml-2"> {/* Added margin for spacing */}
         <Input
           type="text"
           placeholder="Enter Workflow Name..."
@@ -47,11 +67,12 @@ export function WorkflowEditorHeader({
 
       {/* Action Buttons */}
       <div className="flex items-center gap-2">
+        {/* Settings Button - Kept as is */}
         <Button
           variant="outline"
           size="sm"
           onClick={onToggleSettings}
-          disabled={isLoading || isSaving} // Allow opening settings even when creating
+          disabled={isLoading || isSaving}
           className="gap-1"
           aria-label="Workflow Settings"
         >
@@ -59,15 +80,18 @@ export function WorkflowEditorHeader({
           <span className="hidden sm:inline">Settings</span>
         </Button>
 
+        {/* Cancel Button - Kept as is, assuming it might handle unsaved changes */}
+        {/* If not, it could be removed or merged with the Back button logic */}
         <Button
           variant="outline"
           size="sm"
-          onClick={onCancel}
+          onClick={onCancel} 
           disabled={isSaving}
         >
-          Cancel
+          Cancel 
         </Button>
 
+        {/* Save Button - Kept as is */}
         <Button
           size="sm"
           onClick={onSave}

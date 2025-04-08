@@ -447,7 +447,6 @@ export function AppointmentsList({ appointments }: AppointmentsListProps) {
                         <SelectItem value="webinar_booked">Webinar Booked</SelectItem>
                         <SelectItem value="appointment_no_showed">No Show</SelectItem>
                         <SelectItem value="appointment_showed">Showed</SelectItem>
-                        <SelectItem value="appointment_unqualified">Unqualified</SelectItem>
                         <SelectItem value="invoice_sent">Invoice Sent</SelectItem>
                         <SelectItem value="invoice_paid">Invoice Paid</SelectItem>
                       </SelectContent>

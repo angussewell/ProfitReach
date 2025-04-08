@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { z } from 'zod';
-// import { auth } from '@/lib/auth'; // Uncomment when ready to implement authentication
+import { getServerSession } from 'next-auth'; 
+import { authOptions } from '@/lib/auth';
 
 // Define the expected shape of the request body
 const updateStatusSchema = z.object({
@@ -13,15 +14,13 @@ export async function PUT(
   { params }: { params: { workflowId: string } }
 ) {
   try {
-    // TODO: Implement proper authentication and authorization
-    // const session = await auth();
-    // if (!session?.user?.organizationId) {
-    //   return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    // }
-    // const organizationId = session.user.organizationId;
-
-    // Placeholder organizationId - replace with actual auth when ready
-    const organizationId = 'org_test_alpha';
+    // Get the authenticated user's session
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.organizationId) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+    const organizationId = session.user.organizationId;
+    
     const { workflowId } = params;
 
     if (!workflowId) {

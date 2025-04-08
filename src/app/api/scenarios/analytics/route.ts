@@ -135,11 +135,15 @@ export async function GET(request: Request): Promise<NextResponse> {
       // Get responses from the ScenarioResponse table
       console.log('Fetching scenario responses...');
       try {
-        // Try with the expected schema first
+        // Skip the relation query since it's causing issues
+        // Get all scenario IDs first
+        const scenarioIds = scenarios.map(s => s.id);
+        
+        // Then query responses directly by scenario IDs
         scenarioResponses = await prisma.scenarioResponse.findMany({
           where: {
-            scenario: {
-              organizationId: session.user.organizationId
+            scenarioId: {
+              in: scenarioIds
             },
             ...(from && to ? {
               createdAt: {
@@ -149,7 +153,7 @@ export async function GET(request: Request): Promise<NextResponse> {
             } : {})
           }
         });
-        console.log(`Successfully fetched ${scenarioResponses.length} scenario responses`);
+        console.log(`Successfully fetched ${scenarioResponses.length} scenario responses with direct query`);
       } catch (responseError) {
         console.error('Error fetching scenario responses with relation:', responseError);
         

@@ -90,6 +90,8 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
       setSwitching(true);
       setError(null);
 
+      console.log(`Starting organization switch to: ${orgId}`);
+
       // Make the API call to switch organizations
       const res = await fetch('/api/organizations/switch', {
         method: 'POST',
@@ -106,14 +108,40 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
       // Show feedback before session update
       toast.success(`Switching to ${data.organizationName}...`);
 
+      console.log(`Database updated successfully with organization: ${data.organizationId}. Updating session...`);
+
       // Update session and wait for it to complete
       await updateSession({
         organizationId: data.organizationId,
         organizationName: data.organizationName
       });
+      
+      // Verify session update with a status check call
+      try {
+        const verifyResponse = await fetch('/api/auth/session');
+        const sessionData = await verifyResponse.json();
+        console.log('Session after update:', {
+          session: sessionData,
+          organizationId: sessionData?.user?.organizationId
+        });
+        
+        // Verify the update was successful
+        if (sessionData?.user?.organizationId !== data.organizationId) {
+          console.warn('Session update verification failed. Session has not been properly updated!', {
+            expected: data.organizationId,
+            actual: sessionData?.user?.organizationId
+          });
+          
+          // Add a small delay to ensure session has time to update
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      } catch (verifyError) {
+        console.error('Error verifying session update:', verifyError);
+      }
 
-      // Force a full page refresh to get fresh server-side data
-      window.location.href = '/scenarios';
+      // Use a complete page reload rather than a client-side navigation
+      // This ensures the server re-renders everything with the new session data
+      window.location.href = '/';
     } catch (err) {
       console.error('Failed to switch organization:', err);
       setError(err instanceof Error ? err.message : 'Failed to switch organization');

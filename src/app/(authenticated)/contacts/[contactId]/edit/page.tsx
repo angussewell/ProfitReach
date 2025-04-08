@@ -17,13 +17,14 @@ async function getContact(contactId: string) {
     
     console.log('Fetching contact with ID:', contactId, 'for organization:', organizationId);
 
-    // Fetch the contact 
+    // Fetch the contact with all fields, including the newly added ones
     const contact = await prisma.contacts.findUnique({
       where: {
         id: contactId,
         organizationId, // Security check: ensure the contact belongs to this organization
       },
-    });
+      // No need to explicitly select fields since findUnique automatically fetches all fields
+    }) as any; // Cast to any to avoid TypeScript errors with new fields
     
     // Fetch the contact's tags using a raw query
     const contactTags = await prisma.$queryRaw`
@@ -38,12 +39,11 @@ async function getContact(contactId: string) {
       return null;
     }
 
-    // Get lead status from additionalData for now, until Prisma client is refreshed
-    let status = '';
+    // Get lead status from the new leadStatus field, or fall back to additionalData
+    let status = contact.leadStatus || '';
     
-    // Try to get leadStatus from database via SQL directly (not currently possible through Prisma)
-    // For now we'll fall back to additionalData
-    if (contact.additionalData && typeof contact.additionalData === 'object') {
+    // If no leadStatus, try to get it from additionalData for backward compatibility
+    if (!status && contact.additionalData && typeof contact.additionalData === 'object') {
       const additionalData = contact.additionalData as any;
       status = additionalData.status || '';
     }
@@ -51,17 +51,41 @@ async function getContact(contactId: string) {
     // Extract tags from the query result
     const tags = Array.isArray(contactTags) ? contactTags.map((tag: any) => tag.name) : [];
 
-    return {
+    // Create an enhanced contact object with all fields
+    const enhancedContact = {
       ...contact,
       status,
-      leadStatus: null, // Add this to match the Contact type requirements
-      // Handle social media fields that might not exist yet in database
+      tags,
+      
+      // Ensure fields have fallbacks
       twitterUrl: contact?.twitterUrl || null,
       facebookUrl: contact?.facebookUrl || null,
       githubUrl: contact?.githubUrl || null,
-      // Add tags to the contact object
-      tags
+      
+      // These are the new fields - they exist in the database but TypeScript doesn't know about them yet
+      phone: contact?.phone || null,
+      prospectResearch: contact?.prospectResearch || null,
+      companyResearch: contact?.companyResearch || null,
+      previousMessageCopy: contact?.previousMessageCopy || null,
+      previousMessageSubjectLine: contact?.previousMessageSubjectLine || null,
+      previousMessageId: contact?.previousMessageId || null, 
+      threadId: contact?.threadId || null,
+      emailSender: contact?.emailSender || null,
+      originalOutboundRepName: contact?.originalOutboundRepName || null,
+      dateOfResearch: contact?.dateOfResearch || null,
+      allEmployees: contact?.allEmployees || null,
+      linkedInPosts: contact?.linkedInPosts || null,
+      linkedInProfilePhoto: contact?.linkedInProfilePhoto || null,
+      initialLinkedInMessageCopy: contact?.initialLinkedInMessageCopy || null,
+      providerId: contact?.providerId || null,
+      mutualConnections: contact?.mutualConnections || null,
+      additionalResearch: contact?.additionalResearch || null,
+      currentScenario: contact?.currentScenario || null,
+      outboundRepName: contact?.outboundRepName || null,
+      seoDescription: contact?.seoDescription || null
     };
+    
+    return enhancedContact;
   } catch (error) {
     console.error('Error fetching contact:', error);
     throw error;

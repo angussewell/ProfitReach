@@ -22,13 +22,17 @@ export async function GET(request: Request) {
       role: session.user.role 
     });
 
+    // Create an include object dynamically based on requested includes
+    const includeObj: any = {};
+    if (includeEmailAccounts) {
+      includeObj.EmailAccount = true;
+    }
+
     // Admin users can see all organizations
     // Regular users and managers can only see their organization
     const organizations = session.user.role === 'admin'
       ? await prisma.organization.findMany({
-          include: {
-            emailAccounts: includeEmailAccounts
-          },
+          include: includeObj,
           orderBy: { name: 'asc' }
         })
       : await prisma.organization.findMany({
@@ -37,9 +41,7 @@ export async function GET(request: Request) {
               some: { id: session.user.id }
             }
           },
-          include: {
-            emailAccounts: includeEmailAccounts
-          },
+          include: includeObj,
           orderBy: { name: 'asc' }
         });
 

@@ -42,7 +42,7 @@ const SearchBar = ({
         placeholder={placeholder}
         value={searchTerm}
         onChange={handleChange}
-        className="h-10 rounded-md border border-input bg-background shadow-sm"
+        className="h-10 rounded-md border border-input bg-white shadow-sm"
       />
     </div>
   );

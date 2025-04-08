@@ -5,49 +5,26 @@ import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { validate as validateUUID } from 'uuid';
+import { ActionType } from '@/types/workflow'; // Import ActionType
+import { createApiResponse } from '@/lib/filters'; // Import createApiResponse
 
 // Define or import shared types/schemas if applicable
-// Basic Step Schema for validation
+
+// Updated Update field configuration schema for validation within PUT
+const updateFieldConfigSchemaPUT = z.object({
+  fieldPath: z.string().min(1).optional(), // Optional for PUT
+  assignmentType: z.enum(['single', 'random_pool']).optional(), // Optional for PUT
+  values: z.array(z.string()).min(1).optional(), // Optional for PUT
+}).optional(); // Config itself is optional
+
+// Basic Step Schema for validation (simplified for PUT, branch removed)
 const stepSchema = z.object({
+  clientId: z.string().uuid().optional(), // Keep clientId if present
   order: z.number().int().positive(),
-  actionType: z.string().min(1), // Basic check
-  config: z.preprocess((val) => {
-    // Special validation for branch percentage split configuration
-    if (
-      typeof val === 'object' && 
-      val !== null && 
-      'actionType' in val && 
-      val.actionType === 'branch' && 
-      'type' in val && 
-      val.type === 'percentage_split' && 
-      'paths' in val
-    ) {
-      // Validate that all path weights sum to 100%
-      const paths = Array.isArray(val.paths) ? val.paths : [];
-      
-      // Validate that all paths have nextStepOrder
-      const missingNextStepOrder = paths.some(path => 
-        typeof path !== 'object' || 
-        path === null || 
-        typeof path.nextStepOrder !== 'number' ||
-        path.nextStepOrder <= 0
-      );
-      
-      if (missingNextStepOrder) {
-        throw new Error('All branch paths must have a valid nextStepOrder value');
-      }
-      
-      const totalWeight = paths.reduce((sum, path) => {
-        return sum + (typeof path.weight === 'number' ? path.weight : 0);
-      }, 0);
-      
-      if (totalWeight !== 100) {
-        throw new Error('Branch path weights must sum to exactly 100%');
-      }
-    }
-    
-    return val;
-  }, z.record(z.any()).optional()),
+  actionType: z.string().min(1), // Basic check, could refine with ActionType enum
+  customName: z.string().optional(),
+  config: z.record(z.any()).optional(), // Keep config flexible for PUT, specific validation removed
+  // Branch preprocess removed
 });
 
 // Zod schema for validation (all fields optional for update, including steps)
@@ -61,6 +38,68 @@ const workflowUpdateSchema = z.object({
   steps: z.array(stepSchema).optional(), // Add optional steps validation
 });
 
+export async function GET(
+  request: Request,
+  { params }: { params: { workflowId: string } }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.organizationId) {
+      const { response, status } = createApiResponse(false, undefined, 'Unauthorized', 401);
+      return NextResponse.json(response, { status });
+    }
+    
+    // Extract force parameter from URL
+    const url = new URL(request.url);
+    const forceView = url.searchParams.get('force') === 'true';
+    
+    const organizationId = session.user.organizationId;
+    const { workflowId } = params;
+
+    // Validate UUID unless force view is enabled
+    if (!forceView && !validateUUID(workflowId)) {
+      const { response, status } = createApiResponse(false, undefined, 'Invalid Workflow ID format.', 400);
+      return NextResponse.json(response, { status });
+    }
+
+    console.log(`Fetching workflow: ${workflowId}, Force: ${forceView}`);
+
+    // Fetch the workflow from database, using findFirst for non-standard IDs
+    const workflow = forceView ? 
+      await prisma.workflowDefinition.findFirst({
+        where: {
+          workflowId: workflowId,
+          organizationId: organizationId,
+        },
+      }) : 
+      await prisma.workflowDefinition.findUnique({
+        where: {
+          workflowId: workflowId,
+          organizationId: organizationId,
+        },
+      });
+
+    if (!workflow) {
+      const { response, status } = createApiResponse(false, undefined, 'Workflow not found.', 404);
+      return NextResponse.json(response, { status });
+    }
+
+    // Return the workflow data
+    const { response } = createApiResponse(true, workflow);
+    return NextResponse.json(response);
+
+  } catch (error) {
+    console.error(`Failed to fetch workflow ${params.workflowId}:`, error);
+    const { response, status } = createApiResponse(
+      false, 
+      undefined,
+      error instanceof Error ? error.message : 'Internal Server Error',
+      500
+    );
+    return NextResponse.json(response, { status });
+  }
+}
+
 export async function DELETE(
   request: Request,
   { params }: { params: { workflowId: string } }
@@ -70,25 +109,46 @@ export async function DELETE(
     if (!session?.user?.organizationId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    
+    // Extract force parameter from URL
+    const url = new URL(request.url);
+    const forceDelete = url.searchParams.get('force') === 'true';
+    
     const organizationId = session.user.organizationId;
     const { workflowId } = params;
 
-    // Validate UUID
-    if (!validateUUID(workflowId)) {
+    // Validate UUID unless force delete is enabled
+    if (!forceDelete && !validateUUID(workflowId)) {
       return NextResponse.json({ error: 'Invalid Workflow ID format.' }, { status: 400 });
     }
 
-    // Use Prisma.$executeRaw for the DELETE operation with parameterized query
-    const deleteCount = await prisma.$executeRaw(
-      Prisma.sql`
-        DELETE FROM "WorkflowDefinition" 
-        WHERE "workflowId" = ${workflowId}::uuid AND "organizationId" = ${organizationId}::uuid;
-      `
-    );
+    console.log(`Attempting to delete workflow: ${workflowId}, Force: ${forceDelete}`);
+
+    let deleteCount;
+    
+    // Use different deletion strategy based on whether it's a force delete or not
+    if (forceDelete) {
+      // For force deletion, use deleteMany which is more forgiving with non-standard IDs
+      const result = await prisma.workflowDefinition.deleteMany({
+        where: {
+          workflowId: workflowId,
+          organizationId: organizationId
+        }
+      });
+      deleteCount = result.count;
+    } else {
+      // For standard deletion, use the original raw SQL approach
+      deleteCount = await prisma.$executeRaw(
+        Prisma.sql`
+          DELETE FROM "WorkflowDefinition" 
+          WHERE "workflowId" = ${workflowId} AND "organizationId" = ${organizationId};
+        `
+      );
+    }
 
     if (deleteCount === 0) {
       // Check if the workflow exists for this organization
-      const workflow = await prisma.workflowDefinition.findUnique({
+      const workflow = await prisma.workflowDefinition.findFirst({
         where: {
           workflowId: workflowId,
         },
@@ -107,11 +167,23 @@ export async function DELETE(
 
     return NextResponse.json({ 
       success: true, 
-      message: 'Workflow deleted successfully.' 
+      message: `Workflow ${forceDelete ? 'force ' : ''}deleted successfully.` 
     }, { status: 200 });
 
   } catch (error) {
     console.error(`Failed to delete workflow ${params.workflowId}:`, error);
+    
+    // Enhanced error logging with type checking
+    if (error && typeof error === 'object') {
+      const err = error as Error;
+      console.error('Error details:', {
+        workflowId: params.workflowId,
+        errorName: err.name,
+        errorMessage: err.message,
+        errorStack: err.stack
+      });
+    }
+    
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       if (error.code === 'P2003') {
         // Foreign key constraint failed
@@ -119,9 +191,22 @@ export async function DELETE(
           error: 'Cannot delete workflow that has active contacts enrolled.' 
         }, { status: 409 });
       }
-      return NextResponse.json({ error: 'Database error deleting workflow.' }, { status: 500 });
+      // More specific error message for database errors
+      return NextResponse.json({ 
+        error: `Database error deleting workflow. Error code: ${error.code}`,
+        details: error.message
+      }, { status: 500 });
     }
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    
+    // Generic error response with more details
+    const errorMessage = error && typeof error === 'object' && 'message' in error 
+      ? String(error.message) 
+      : 'Unknown error occurred during workflow deletion';
+      
+    return NextResponse.json({ 
+      error: 'Internal Server Error',
+      message: errorMessage
+    }, { status: 500 });
   }
 }
 
@@ -131,13 +216,20 @@ export async function PUT(request: Request, { params }: { params: { workflowId: 
     if (!session?.user?.organizationId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    
+    // Extract force parameter from URL
+    const url = new URL(request.url);
+    const forceUpdate = url.searchParams.get('force') === 'true';
+    
     const organizationId = session.user.organizationId;
     const { workflowId } = params;
 
-    // Validate UUID
-    if (!validateUUID(workflowId)) {
+    // Validate UUID unless force update is enabled
+    if (!forceUpdate && !validateUUID(workflowId)) {
         return NextResponse.json({ error: 'Invalid Workflow ID format.' }, { status: 400 });
     }
+
+    console.log(`Attempting to update workflow: ${workflowId}, Force: ${forceUpdate}`);
 
     const json = await request.json();
     const validatedData = workflowUpdateSchema.safeParse(json);
@@ -161,29 +253,71 @@ export async function PUT(request: Request, { params }: { params: { workflowId: 
     // Stringify steps only if they were provided
     const stepsJson = steps ? JSON.stringify(steps) : null;
 
-    // Use Prisma.$executeRaw for the UPDATE operation
-    const updateCount = await prisma.$executeRaw(
-      Prisma.sql`
-        UPDATE "WorkflowDefinition" 
-        SET 
-          "name" = COALESCE(${name}, "name"), 
-          "description" = COALESCE(${description}, "description"), 
-          "dailyContactLimit" = COALESCE(${dailyContactLimit}, "dailyContactLimit"), 
-          "dripStartTime" = COALESCE(${dripStartTime}::time, "dripStartTime"),
-          "dripEndTime" = COALESCE(${dripEndTime}::time, "dripEndTime"),
-          "timezone" = COALESCE(${timezone}, "timezone"),
-          -- Update steps using COALESCE with the potentially null stringified JSON
-          "steps" = COALESCE(${stepsJson}::jsonb, "steps"),
-          "updatedAt" = NOW()
-        WHERE "workflowId" = ${workflowId}::uuid AND "organizationId" = ${organizationId}::uuid;
-      `
-    );
+    let updateCount;
+
+    // Use different update strategy based on whether it's a force update or not
+    if (forceUpdate) {
+      // For force update, use update ORM method which is more forgiving with non-standard IDs
+      try {
+        // First fetch the current workflow to get values we want to preserve
+        const currentWorkflow = await prisma.workflowDefinition.findFirst({
+          where: {
+            workflowId: workflowId,
+            organizationId: organizationId
+          }
+        });
+
+        if (!currentWorkflow) {
+          return NextResponse.json({ error: 'Workflow not found.' }, { status: 404 });
+        }
+
+        // Update with Prisma ORM
+        const result = await prisma.workflowDefinition.updateMany({
+          where: {
+            workflowId: workflowId,
+            organizationId: organizationId
+          },
+          data: {
+            name: name || currentWorkflow.name,
+            description: description !== null ? description : currentWorkflow.description,
+            dailyContactLimit: dailyContactLimit !== null ? dailyContactLimit : currentWorkflow.dailyContactLimit,
+            dripStartTime: dripStartTime ? new Date(`1970-01-01T${dripStartTime}:00Z`) : currentWorkflow.dripStartTime,
+            dripEndTime: dripEndTime ? new Date(`1970-01-01T${dripEndTime}:00Z`) : currentWorkflow.dripEndTime,
+            timezone: timezone !== null ? timezone : currentWorkflow.timezone,
+            steps: stepsJson ? JSON.parse(stepsJson) : currentWorkflow.steps,
+            updatedAt: new Date()
+          }
+        });
+        updateCount = result.count;
+      } catch (updateError) {
+        console.error('Error during force update:', updateError);
+        throw updateError;
+      }
+    } else {
+      // For standard update, use the original raw SQL approach
+      updateCount = await prisma.$executeRaw(
+        Prisma.sql`
+          UPDATE "WorkflowDefinition" 
+          SET 
+            "name" = COALESCE(${name}, "name"), 
+            "description" = COALESCE(${description}, "description"), 
+            "dailyContactLimit" = COALESCE(${dailyContactLimit}, "dailyContactLimit"), 
+            "dripStartTime" = COALESCE(${dripStartTime}::time, "dripStartTime"),
+            "dripEndTime" = COALESCE(${dripEndTime}::time, "dripEndTime"),
+            "timezone" = COALESCE(${timezone}, "timezone"),
+            -- Update steps using COALESCE with the potentially null stringified JSON
+            "steps" = COALESCE(${stepsJson}::jsonb, "steps"),
+            "updatedAt" = NOW()
+          WHERE "workflowId" = ${workflowId} AND "organizationId" = ${organizationId};
+        `
+      );
+    }
 
     if (updateCount === 0) {
         // Check if the workflow actually exists for this organization before returning 404
-        const workflow = await prisma.workflowDefinition.findUnique({
+        const workflow = await prisma.workflowDefinition.findFirst({
             where: {
-                workflowId: workflowId, // Use the primary ID for findUnique
+                workflowId: workflowId,
             },
             select: { organizationId: true } // Select orgId to verify ownership
         });
@@ -205,10 +339,34 @@ export async function PUT(request: Request, { params }: { params: { workflowId: 
 
   } catch (error) {
     console.error(`Failed to update workflow ${params.workflowId}:`, error);
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        // Handle specific Prisma errors
-        return NextResponse.json({ error: 'Database error updating workflow.' }, { status: 500 });
+    
+    // Enhanced error logging with type checking
+    if (error && typeof error === 'object') {
+      const err = error as Error;
+      console.error('Error details:', {
+        workflowId: params.workflowId,
+        errorName: err.name,
+        errorMessage: err.message,
+        errorStack: err.stack
+      });
     }
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      // Handle specific Prisma errors
+      return NextResponse.json({ 
+        error: `Database error updating workflow. Error code: ${error.code}`,
+        details: error.message
+      }, { status: 500 });
+    }
+    
+    // Generic error response with more details
+    const errorMessage = error && typeof error === 'object' && 'message' in error 
+      ? String(error.message) 
+      : 'Unknown error occurred during workflow update';
+      
+    return NextResponse.json({ 
+      error: 'Internal Server Error',
+      message: errorMessage
+    }, { status: 500 });
   }
 }

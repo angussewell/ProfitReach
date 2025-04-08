@@ -56,4 +56,31 @@
   body {
     @apply bg-background text-foreground;
   }
+  
+  /* Enforce light theme styling for form elements */
+  input, 
+  select, 
+  textarea, 
+  .select-container,
+  [role="combobox"],
+  [role="listbox"] {
+    @apply bg-white !important;
+    background-color: white !important;
+    color: hsl(var(--foreground)) !important;
+  }
+  
+  /* Specific fix for dropdowns and popups */
+  [data-radix-popper-content-wrapper],
+  [role="dialog"],
+  [role="menu"],
+  .bg-popover {
+    @apply bg-white !important;
+    background-color: white !important;
+  }
+  
+  /* Ensure select options and dropdown items have light backgrounds */
+  option,
+  [role="option"] {
+    @apply bg-white text-foreground !important;
+  }
 }

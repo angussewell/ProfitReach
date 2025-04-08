@@ -7,8 +7,9 @@ export type ActionType =
   | 'update_field'
   | 'clear_field'
   | 'webhook'
-  | 'branch'
-  | 'remove_from_workflow';
+  // 'branch' removed
+  | 'remove_from_workflow'
+  | 'scenario';
 
 // Config Types
 export interface WaitConfig {
@@ -21,9 +22,11 @@ export interface SendEmailConfig {
   scenarioId?: string | null;
 }
 
+// Updated UpdateFieldConfig for single value or random pool
 export interface UpdateFieldConfig {
   fieldPath: string;
-  value: string;
+  assignmentType: 'single' | 'random_pool';
+  values: string[]; // Always an array, even for single assignment
 }
 
 export interface ClearFieldConfig {
@@ -35,17 +38,16 @@ export interface WebhookConfig {
   method: 'POST'; // Only POST method is supported
 }
 
-export type BranchOperator =
-  | 'eq' | 'neq' | 'gt' | 'lt' | 'gte' | 'lte' | 'contains' | 'not_contains' | 'is_empty' | 'is_not_empty';
-
-// Branch config for percentage split
-export interface BranchConfig {
-  type: 'percentage_split';
-  paths: { weight: number; nextStepOrder: number }[];
-}
+// Branch types removed
 
 export interface RemoveFromWorkflowConfig {
   // No specific config needed
+}
+
+// ScenarioConfig type
+export interface ScenarioConfig {
+  assignmentType: 'single' | 'random_pool';
+  scenarioIds: string[]; // Array of scenario IDs
 }
 
 // Union type for all possible configs
@@ -55,8 +57,9 @@ export type StepConfig =
   | UpdateFieldConfig
   | ClearFieldConfig
   | WebhookConfig
-  | BranchConfig
-  | RemoveFromWorkflowConfig;
+  // BranchConfig removed
+  | RemoveFromWorkflowConfig
+  | ScenarioConfig;
 
 // Workflow Step Type
 export interface WorkflowStep {
@@ -64,6 +67,7 @@ export interface WorkflowStep {
   order: number; // 1-based index/order
   actionType: ActionType;
   config: StepConfig | {}; // Use empty object for types with no config
+  customName?: string; // Optional custom name for the step
 }
 
 // Full workflow definition
@@ -92,9 +96,4 @@ export interface WorkflowMetadataFormData {
   timezone?: string | null;
 }
 
-// Utility type to represent a branch path relation in the UI
-export interface BranchPathRelation {
-  fromStep: number; // Order of the branch step
-  toStep: number;   // Order of the target step
-  weight: number;   // Percentage weight
-}
+// BranchPathRelation removed

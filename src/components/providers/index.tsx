@@ -4,6 +4,7 @@ import { SessionProvider } from 'next-auth/react';
 import { OrganizationProvider } from '@/contexts/OrganizationContext';
 import { PropsWithChildren, ReactNode } from 'react';
 import { StripeProvider } from './StripeProvider';
+import { ThemeProvider } from './ThemeProvider'; // Import ThemeProvider
 
 interface ProvidersProps {
   children: ReactNode;
@@ -11,12 +12,14 @@ interface ProvidersProps {
 
 export function Providers({ children }: ProvidersProps) {
   return (
-    <SessionProvider refetchInterval={0} refetchOnWindowFocus={false}>
-      <OrganizationProvider>
-        <StripeProvider>
-          {children}
-        </StripeProvider>
-      </OrganizationProvider>
-    </SessionProvider>
+    <ThemeProvider> {/* Wrap with ThemeProvider */}
+      <SessionProvider refetchInterval={0} refetchOnWindowFocus={false}>
+        <OrganizationProvider>
+          <StripeProvider>
+            {children}
+          </StripeProvider>
+        </OrganizationProvider>
+      </SessionProvider>
+    </ThemeProvider>
   );
-} 
+}
