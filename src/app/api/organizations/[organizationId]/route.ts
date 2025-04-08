@@ -24,45 +24,12 @@ export async function GET(
 
     console.log("Fetching organization data for:", organizationId);
 
+    // Execute a simple query without relations first, 
+    // then manually fetch relationships to avoid TypeScript errors
     const organization = await prisma.organization.findUnique({
       where: {
         id: params.organizationId,
-      },
-      select: {
-        id: true,
-        name: true,
-        webhookUrl: true,
-        outboundWebhookUrl: true,
-        stripeCustomerId: true,
-        billingPlan: true,
-        creditBalance: true,
-        createdAt: true,
-        updatedAt: true,
-        emailAccounts: {
-          where: { isActive: true },
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            unipileAccountId: true
-          }
-        },
-        socialAccounts: {
-          where: { isActive: true },
-          select: {
-            id: true,
-            username: true,
-            name: true,
-            provider: true
-          }
-        },
-        prompts: {
-          select: {
-            name: true,
-            content: true
-          }
-        }
-      },
+      }
     });
 
     if (!organization) {
@@ -73,8 +40,55 @@ export async function GET(
       );
     }
 
+    // Separately fetch related email accounts
+    const emailAccounts = await prisma.emailAccount.findMany({
+      where: {
+        organizationId: params.organizationId,
+        isActive: true
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        unipileAccountId: true
+      }
+    });
+
+    // Separately fetch related social accounts
+    const socialAccounts = await prisma.socialAccount.findMany({
+      where: {
+        organizationId: params.organizationId,
+        isActive: true
+      },
+      select: {
+        id: true,
+        username: true,
+        name: true,
+        provider: true
+      }
+    });
+
+    // Separately fetch related prompts
+    const prompts = await prisma.prompt.findMany({
+      where: {
+        organizationId: params.organizationId
+      },
+      select: {
+        name: true,
+        content: true
+      }
+    });
+
+    // Combine all data
+    const result = {
+      ...organization,
+      emailAccounts,
+      socialAccounts,
+      prompts
+    };
+
     console.log("Successfully fetched organization data");
-    return NextResponse.json(organization);
+    return NextResponse.json(result);
   } catch (error) {
     console.error("Error fetching organization:", error);
     return NextResponse.json(

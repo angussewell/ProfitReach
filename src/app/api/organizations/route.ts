@@ -22,17 +22,9 @@ export async function GET(request: Request) {
       role: session.user.role 
     });
 
-    // Create an include object dynamically based on requested includes
-    const includeObj: any = {};
-    if (includeEmailAccounts) {
-      includeObj.EmailAccount = true;
-    }
-
-    // Admin users can see all organizations
-    // Regular users and managers can only see their organization
+    // Fetch organizations based on user role
     const organizations = session.user.role === 'admin'
       ? await prisma.organization.findMany({
-          include: includeObj,
           orderBy: { name: 'asc' }
         })
       : await prisma.organization.findMany({
@@ -41,13 +33,43 @@ export async function GET(request: Request) {
               some: { id: session.user.id }
             }
           },
-          include: includeObj,
           orderBy: { name: 'asc' }
         });
-
-    console.log('Returning organizations:', organizations.length);
+        
+    // If email accounts were requested, fetch them separately
+    let results = organizations;
+    if (includeEmailAccounts) {
+      // Get all organization IDs
+      const orgIds = organizations.map(org => org.id);
+      
+      // Fetch all email accounts for these organizations
+      const emailAccounts = await prisma.emailAccount.findMany({
+        where: {
+          organizationId: {
+            in: orgIds
+          },
+          isActive: true
+        }
+      });
+      
+      // Group email accounts by organization ID
+      const emailAccountsByOrgId = emailAccounts.reduce((acc, account) => {
+        if (!acc[account.organizationId]) {
+          acc[account.organizationId] = [];
+        }
+        acc[account.organizationId].push(account);
+        return acc;
+      }, {} as Record<string, any[]>);
+      
+      // Add email accounts to each organization
+      results = organizations.map(org => ({
+        ...org,
+        emailAccounts: emailAccountsByOrgId[org.id] || []
+      }));
+    }
     
-    return NextResponse.json(organizations);
+    console.log('Returning organizations:', results.length);
+    return NextResponse.json(results);
   } catch (error) {
     console.error('Error fetching organizations:', error);
     return NextResponse.json({ 
