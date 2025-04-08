@@ -32,7 +32,29 @@ type Contact = {
   organizationId: string | null;
   leadStatus: string | null;
   status: string; // Combined status from leadStatus or additionalData.status
-tags?: string[]; // Array of tag names
+  tags?: string[]; // Array of tag names
+  
+  // Newly added fields
+  phone: string | null;
+  prospectResearch: string | null;
+  companyResearch: string | null;
+  previousMessageCopy: string | null;
+  previousMessageSubjectLine: string | null;
+  previousMessageId: string | null;
+  threadId: string | null;
+  emailSender: string | null;
+  originalOutboundRepName: string | null;
+  dateOfResearch: Date | null;
+  allEmployees: string | null;
+  linkedInPosts: string | null;
+  linkedInProfilePhoto: string | null;
+  initialLinkedInMessageCopy: string | null;
+  providerId: string | null;
+  mutualConnections: string | null;
+  additionalResearch: string | null;
+  currentScenario: string | null;
+  outboundRepName: string | null;
+  seoDescription: string | null;
 };
 
 type ContactFormData = {
@@ -54,6 +76,28 @@ type ContactFormData = {
   phoneNumber: string;
   additionalDataJson: string;
   tags: string[];
+  
+  // Newly added fields
+  phone: string;
+  prospectResearch: string;
+  companyResearch: string;
+  previousMessageCopy: string;
+  previousMessageSubjectLine: string;
+  previousMessageId: string;
+  threadId: string;
+  emailSender: string;
+  originalOutboundRepName: string;
+  dateOfResearch: string;
+  allEmployees: string;
+  linkedInPosts: string;
+  linkedInProfilePhoto: string;
+  initialLinkedInMessageCopy: string;
+  providerId: string;
+  mutualConnections: string;
+  additionalResearch: string;
+  currentScenario: string;
+  outboundRepName: string;
+  seoDescription: string;
 };
 
 type EditContactFormProps = {
@@ -104,6 +148,28 @@ export default function EditContactForm({ contact }: EditContactFormProps) {
     phoneNumber: contact.phoneNumbers?.main || '',
     additionalDataJson: formattedAdditionalData,
     tags: contact.tags || [],
+    
+    // Newly added fields with fallbacks to empty strings
+    phone: contact.phone || '',
+    prospectResearch: contact.prospectResearch || '',
+    companyResearch: contact.companyResearch || '',
+    previousMessageCopy: contact.previousMessageCopy || '',
+    previousMessageSubjectLine: contact.previousMessageSubjectLine || '',
+    previousMessageId: contact.previousMessageId || '',
+    threadId: contact.threadId || '',
+    emailSender: contact.emailSender || '',
+    originalOutboundRepName: contact.originalOutboundRepName || '',
+    dateOfResearch: contact.dateOfResearch ? new Date(contact.dateOfResearch).toISOString().slice(0, 16) : '',
+    allEmployees: contact.allEmployees || '',
+    linkedInPosts: contact.linkedInPosts || '',
+    linkedInProfilePhoto: contact.linkedInProfilePhoto || '',
+    initialLinkedInMessageCopy: contact.initialLinkedInMessageCopy || '',
+    providerId: contact.providerId || '',
+    mutualConnections: contact.mutualConnections || '',
+    additionalResearch: contact.additionalResearch || '',
+    currentScenario: contact.currentScenario || '',
+    outboundRepName: contact.outboundRepName || '',
+    seoDescription: contact.seoDescription || '',
   });
   
   const [errors, setErrors] = useState<Partial<ContactFormData>>({});
@@ -198,26 +264,59 @@ export default function EditContactForm({ contact }: EditContactFormProps) {
         headers: {
           'Content-Type': 'application/json',
         },
-          body: JSON.stringify({
-            firstName: formData.firstName,
-            lastName: formData.lastName,
-            email: formData.email,
-            title: formData.title,
-            currentCompanyName: formData.currentCompanyName,
-            companyWebsiteUrl: formData.companyWebsiteUrl,
-            companyLinkedinUrl: formData.companyLinkedinUrl,
-            leadStatus: formData.leadStatus,
-            linkedinUrl: formData.linkedinUrl,
-            twitterUrl: formData.twitterUrl,
-            facebookUrl: formData.facebookUrl,
-            githubUrl: formData.githubUrl,
-            country: formData.country,
-            city: formData.city,
-            state: formData.state,
-            phoneNumbers: phoneNumbers,
-            additionalData: parsedAdditionalData,
-            tags: formData.tags, // Include tags in the request
-          }),
+        body: JSON.stringify({
+          // Basic information
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+          title: formData.title,
+          currentCompanyName: formData.currentCompanyName,
+          companyWebsiteUrl: formData.companyWebsiteUrl,
+          companyLinkedinUrl: formData.companyLinkedinUrl,
+          leadStatus: formData.leadStatus,
+          linkedinUrl: formData.linkedinUrl,
+          twitterUrl: formData.twitterUrl,
+          facebookUrl: formData.facebookUrl,
+          githubUrl: formData.githubUrl,
+          country: formData.country,
+          city: formData.city,
+          state: formData.state,
+          phoneNumbers: phoneNumbers,
+          additionalData: parsedAdditionalData,
+          tags: formData.tags,
+          
+          // New dedicated phone field (separate from phoneNumbers object)
+          phone: formData.phone,
+          
+          // Research information
+          prospectResearch: formData.prospectResearch,
+          companyResearch: formData.companyResearch,
+          dateOfResearch: formData.dateOfResearch || null,
+          additionalResearch: formData.additionalResearch,
+          allEmployees: formData.allEmployees,
+          
+          // Message history
+          previousMessageCopy: formData.previousMessageCopy,
+          previousMessageSubjectLine: formData.previousMessageSubjectLine,
+          previousMessageId: formData.previousMessageId,
+          threadId: formData.threadId,
+          emailSender: formData.emailSender,
+          
+          // LinkedIn information
+          linkedInPosts: formData.linkedInPosts,
+          linkedInProfilePhoto: formData.linkedInProfilePhoto,
+          initialLinkedInMessageCopy: formData.initialLinkedInMessageCopy,
+          providerId: formData.providerId,
+          mutualConnections: formData.mutualConnections,
+          
+          // Sales information
+          originalOutboundRepName: formData.originalOutboundRepName,
+          outboundRepName: formData.outboundRepName,
+          currentScenario: formData.currentScenario,
+          
+          // SEO
+          seoDescription: formData.seoDescription,
+        }),
       });
 
       if (!response.ok) {
@@ -347,13 +446,13 @@ export default function EditContactForm({ contact }: EditContactFormProps) {
         </div>
 
         {/* Tags Card */}
-        <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+        <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
           <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
             <h3 className="text-lg font-medium text-gray-900">Tags</h3>
           </div>
           
-          <div className="p-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+          <div className="p-4 pb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               Contact Tags
             </label>
             <TagSelector 
@@ -361,7 +460,7 @@ export default function EditContactForm({ contact }: EditContactFormProps) {
               onChange={handleTagsChange} 
               placeholder="Select or create tags..."
             />
-            <p className="mt-1 text-xs text-gray-500">
+            <p className="mt-2 text-xs text-gray-500">
               Add tags to categorize and filter your contacts. Click to select existing tags or type to create new ones.
             </p>
           </div>
@@ -578,6 +677,349 @@ export default function EditContactForm({ contact }: EditContactFormProps) {
                   value={formData.city}
                   onChange={handleChange}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Research Information Card */}
+        <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
+            <h3 className="text-lg font-medium text-gray-900">Prospect Research</h3>
+          </div>
+          
+          <div className="p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="mb-4">
+                <label htmlFor="prospectResearch" className="block text-sm font-medium text-gray-700 mb-1">
+                  Prospect Research
+                </label>
+                <textarea
+                  id="prospectResearch"
+                  name="prospectResearch"
+                  value={formData.prospectResearch}
+                  onChange={handleChange}
+                  rows={4}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Research notes about this prospect..."
+                />
+              </div>
+
+              <div className="mb-4">
+                <label htmlFor="additionalResearch" className="block text-sm font-medium text-gray-700 mb-1">
+                  Additional Research
+                </label>
+                <textarea
+                  id="additionalResearch"
+                  name="additionalResearch"
+                  value={formData.additionalResearch}
+                  onChange={handleChange}
+                  rows={4}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Any additional research notes..."
+                />
+              </div>
+
+              <div className="mb-4">
+                <label htmlFor="companyResearch" className="block text-sm font-medium text-gray-700 mb-1">
+                  Company Research
+                </label>
+                <textarea
+                  id="companyResearch"
+                  name="companyResearch"
+                  value={formData.companyResearch}
+                  onChange={handleChange}
+                  rows={4}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Research notes about the company..."
+                />
+              </div>
+
+              <div className="mb-4">
+                <label htmlFor="allEmployees" className="block text-sm font-medium text-gray-700 mb-1">
+                  All Employees
+                </label>
+                <textarea
+                  id="allEmployees"
+                  name="allEmployees"
+                  value={formData.allEmployees}
+                  onChange={handleChange}
+                  rows={4}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="List of known employees..."
+                />
+              </div>
+
+              <div className="mb-4">
+                <label htmlFor="dateOfResearch" className="block text-sm font-medium text-gray-700 mb-1">
+                  Date of Research
+                </label>
+                <input
+                  type="datetime-local"
+                  id="dateOfResearch"
+                  name="dateOfResearch"
+                  value={formData.dateOfResearch}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="mb-4">
+                <label htmlFor="seoDescription" className="block text-sm font-medium text-gray-700 mb-1">
+                  SEO Description
+                </label>
+                <textarea
+                  id="seoDescription"
+                  name="seoDescription"
+                  value={formData.seoDescription}
+                  onChange={handleChange}
+                  rows={4}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="SEO description from website..."
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* LinkedIn Information Card */}
+        <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
+            <h3 className="text-lg font-medium text-gray-900">LinkedIn Details</h3>
+          </div>
+          
+          <div className="p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="mb-4">
+                <label htmlFor="linkedInPosts" className="block text-sm font-medium text-gray-700 mb-1">
+                  LinkedIn Posts
+                </label>
+                <textarea
+                  id="linkedInPosts"
+                  name="linkedInPosts"
+                  value={formData.linkedInPosts}
+                  onChange={handleChange}
+                  rows={4}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Recent LinkedIn posts..."
+                />
+              </div>
+
+              <div className="mb-4">
+                <label htmlFor="initialLinkedInMessageCopy" className="block text-sm font-medium text-gray-700 mb-1">
+                  Initial LinkedIn Message Copy
+                </label>
+                <textarea
+                  id="initialLinkedInMessageCopy"
+                  name="initialLinkedInMessageCopy"
+                  value={formData.initialLinkedInMessageCopy}
+                  onChange={handleChange}
+                  rows={4}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Copy of initial LinkedIn message..."
+                />
+              </div>
+
+              <div className="mb-4">
+                <label htmlFor="linkedInProfilePhoto" className="block text-sm font-medium text-gray-700 mb-1">
+                  LinkedIn Profile Photo URL
+                </label>
+                <input
+                  type="url"
+                  id="linkedInProfilePhoto"
+                  name="linkedInProfilePhoto"
+                  value={formData.linkedInProfilePhoto}
+                  onChange={handleChange}
+                  placeholder="https://example.com/profile-photo.jpg"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="mb-4">
+                <label htmlFor="providerId" className="block text-sm font-medium text-gray-700 mb-1">
+                  Provider ID
+                </label>
+                <input
+                  type="text"
+                  id="providerId"
+                  name="providerId"
+                  value={formData.providerId}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="LinkedIn provider ID..."
+                />
+              </div>
+
+              <div className="mb-4">
+                <label htmlFor="mutualConnections" className="block text-sm font-medium text-gray-700 mb-1">
+                  Mutual Connections
+                </label>
+                <textarea
+                  id="mutualConnections"
+                  name="mutualConnections"
+                  value={formData.mutualConnections}
+                  onChange={handleChange}
+                  rows={4}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="List of mutual connections..."
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Message History Card */}
+        <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
+            <h3 className="text-lg font-medium text-gray-900">Message History</h3>
+          </div>
+          
+          <div className="p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="mb-4">
+                <label htmlFor="previousMessageCopy" className="block text-sm font-medium text-gray-700 mb-1">
+                  Previous Message Copy
+                </label>
+                <textarea
+                  id="previousMessageCopy"
+                  name="previousMessageCopy"
+                  value={formData.previousMessageCopy}
+                  onChange={handleChange}
+                  rows={4}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Copy of previous message..."
+                />
+              </div>
+
+              <div className="mb-4">
+                <label htmlFor="previousMessageSubjectLine" className="block text-sm font-medium text-gray-700 mb-1">
+                  Previous Message Subject Line
+                </label>
+                <input
+                  type="text"
+                  id="previousMessageSubjectLine"
+                  name="previousMessageSubjectLine"
+                  value={formData.previousMessageSubjectLine}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Subject line of previous message..."
+                />
+              </div>
+
+              <div className="mb-4">
+                <label htmlFor="previousMessageId" className="block text-sm font-medium text-gray-700 mb-1">
+                  Previous Message ID
+                </label>
+                <input
+                  type="text"
+                  id="previousMessageId"
+                  name="previousMessageId"
+                  value={formData.previousMessageId}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="ID of previous message..."
+                />
+              </div>
+
+              <div className="mb-4">
+                <label htmlFor="threadId" className="block text-sm font-medium text-gray-700 mb-1">
+                  Thread ID
+                </label>
+                <input
+                  type="text"
+                  id="threadId"
+                  name="threadId"
+                  value={formData.threadId}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Thread ID..."
+                />
+              </div>
+
+              <div className="mb-4">
+                <label htmlFor="emailSender" className="block text-sm font-medium text-gray-700 mb-1">
+                  Email Sender
+                </label>
+                <input
+                  type="text"
+                  id="emailSender"
+                  name="emailSender"
+                  value={formData.emailSender}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Email address of sender..."
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Sales Information Card */}
+        <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
+            <h3 className="text-lg font-medium text-gray-900">Sales Information</h3>
+          </div>
+          
+          <div className="p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="mb-4">
+                <label htmlFor="originalOutboundRepName" className="block text-sm font-medium text-gray-700 mb-1">
+                  Original Outbound Rep Name
+                </label>
+                <input
+                  type="text"
+                  id="originalOutboundRepName"
+                  name="originalOutboundRepName"
+                  value={formData.originalOutboundRepName}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Name of original outbound rep..."
+                />
+              </div>
+
+              <div className="mb-4">
+                <label htmlFor="outboundRepName" className="block text-sm font-medium text-gray-700 mb-1">
+                  Current Outbound Rep Name
+                </label>
+                <input
+                  type="text"
+                  id="outboundRepName"
+                  name="outboundRepName"
+                  value={formData.outboundRepName}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Name of current outbound rep..."
+                />
+              </div>
+
+              <div className="mb-4">
+                <label htmlFor="currentScenario" className="block text-sm font-medium text-gray-700 mb-1">
+                  Current Scenario
+                </label>
+                <input
+                  type="text"
+                  id="currentScenario"
+                  name="currentScenario"
+                  value={formData.currentScenario}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Current sales scenario..."
+                />
+              </div>
+
+              <div className="mb-4">
+                <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
+                  Direct Phone
+                </label>
+                <input
+                  type="tel"
+                  id="phone"
+                  name="phone"
+                  value={formData.phone}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Direct phone number..."
                 />
               </div>
             </div>

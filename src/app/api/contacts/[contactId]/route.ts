@@ -42,6 +42,28 @@ type UpdateContactRequest = {
     [key: string]: any;
   };
   tags?: string[]; // Array of tag names
+  
+  // Newly added fields
+  phone?: string;
+  prospectResearch?: string;
+  companyResearch?: string;
+  previousMessageCopy?: string;
+  previousMessageSubjectLine?: string;
+  previousMessageId?: string;
+  threadId?: string;
+  emailSender?: string;
+  originalOutboundRepName?: string;
+  dateOfResearch?: string | Date;
+  allEmployees?: string;
+  linkedInPosts?: string;
+  linkedInProfilePhoto?: string;
+  initialLinkedInMessageCopy?: string;
+  providerId?: string;
+  mutualConnections?: string;
+  additionalResearch?: string;
+  currentScenario?: string;
+  outboundRepName?: string;
+  seoDescription?: string;
 };
 
 export async function PUT(
@@ -89,7 +111,28 @@ export async function PUT(
       state,
       phoneNumbers,
       additionalData,
-      tags
+      tags,
+      // Newly added fields
+      phone,
+      prospectResearch,
+      companyResearch,
+      previousMessageCopy,
+      previousMessageSubjectLine,
+      previousMessageId,
+      threadId,
+      emailSender,
+      originalOutboundRepName,
+      dateOfResearch,
+      allEmployees,
+      linkedInPosts,
+      linkedInProfilePhoto,
+      initialLinkedInMessageCopy,
+      providerId,
+      mutualConnections,
+      additionalResearch,
+      currentScenario,
+      outboundRepName,
+      seoDescription
     } = body as UpdateContactRequest;
     
     // Email is required
@@ -200,6 +243,29 @@ export async function PUT(
             state = ${state ?? null},
             "phoneNumbers" = ${phoneNumbersJson ? `${phoneNumbersJson}::jsonb` : null},
             "additionalData" = ${jsonbData}::jsonb,
+            
+            /* Newly added fields */
+            "phone" = ${phone ?? null},
+            "prospectResearch" = ${prospectResearch ?? null},
+            "companyResearch" = ${companyResearch ?? null},
+            "previousMessageCopy" = ${previousMessageCopy ?? null},
+            "previousMessageSubjectLine" = ${previousMessageSubjectLine ?? null},
+            "previousMessageId" = ${previousMessageId ?? null},
+            "threadId" = ${threadId ?? null},
+            "emailSender" = ${emailSender ?? null},
+            "originalOutboundRepName" = ${originalOutboundRepName ?? null},
+            "dateOfResearch" = ${dateOfResearch ? new Date(dateOfResearch) : null},
+            "allEmployees" = ${allEmployees ?? null},
+            "linkedInPosts" = ${linkedInPosts ?? null},
+            "linkedInProfilePhoto" = ${linkedInProfilePhoto ?? null},
+            "initialLinkedInMessageCopy" = ${initialLinkedInMessageCopy ?? null},
+            "providerId" = ${providerId ?? null},
+            "mutualConnections" = ${mutualConnections ?? null},
+            "additionalResearch" = ${additionalResearch ?? null},
+            "currentScenario" = ${currentScenario ?? null},
+            "outboundRepName" = ${outboundRepName ?? null},
+            "seoDescription" = ${seoDescription ?? null},
+            
             "updatedAt" = NOW()
           WHERE 
             id = ${contactId}
@@ -260,7 +326,7 @@ export async function PUT(
             // Create the contact-tag relationship
             await prisma.$executeRaw`
               INSERT INTO "ContactTags" ("contactId", "tagId", "createdAt")
-              VALUES (${contactId}, ${tagId}, NOW())
+              VALUES (${contactId}, ${tagId}::uuid, NOW())
               ON CONFLICT ("contactId", "tagId") DO NOTHING
             `;
           }

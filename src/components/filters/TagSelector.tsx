@@ -12,9 +12,10 @@ interface TagSelectorProps {
   selectedTags: string[];
   onChange: (tags: string[]) => void;
   placeholder?: string;
+  disabled?: boolean;
 }
 
-export default function TagSelector({ selectedTags, onChange, placeholder = 'Select tags...' }: TagSelectorProps) {
+export default function TagSelector({ selectedTags, onChange, placeholder = 'Select tags...', disabled = false }: TagSelectorProps) {
   const [inputValue, setInputValue] = useState('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   
@@ -103,15 +104,15 @@ export default function TagSelector({ selectedTags, onChange, placeholder = 'Sel
     <div className="relative">
       {/* Selected tags display */}
       <div 
-        onClick={() => setIsMenuOpen(!isMenuOpen)}
-        className="min-h-9 w-full flex flex-wrap gap-1 items-center border border-gray-300 rounded-md py-1 px-2 cursor-pointer"
+        onClick={() => !disabled && setIsMenuOpen(!isMenuOpen)}
+        className={`min-h-[36px] w-full flex flex-wrap gap-1.5 items-center border border-gray-300 rounded-md py-1.5 px-3 ${disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:border-gray-400'}`}
       >
         {selectedTags.length > 0 ? (
-          <>
+          <div className="flex flex-wrap gap-1.5 w-full">
             {selectedTags.map(tag => (
               <span 
                 key={tag} 
-                className="bg-blue-100 text-blue-800 text-xs font-medium rounded-full px-2.5 py-0.5 flex items-center"
+                className="bg-blue-100 text-blue-800 text-xs font-medium rounded-full px-2.5 py-1 flex items-center"
               >
                 {tag}
                 <button 
@@ -120,13 +121,14 @@ export default function TagSelector({ selectedTags, onChange, placeholder = 'Sel
                     e.stopPropagation();
                     removeTag(tag);
                   }}
-                  className="ml-1 text-blue-500 hover:text-blue-700"
+                  className="ml-1.5 text-blue-500 hover:text-blue-700 focus:outline-none"
+                  aria-label={`Remove ${tag} tag`}
                 >
                   ×
                 </button>
               </span>
             ))}
-          </>
+          </div>
         ) : (
           <span className="text-gray-500">{placeholder}</span>
         )}
@@ -134,15 +136,16 @@ export default function TagSelector({ selectedTags, onChange, placeholder = 'Sel
       
       {/* Dropdown for tag selection */}
       {isMenuOpen && (
-        <div className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
-          <div className="px-3 py-2">
+        <div className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
+          <div className="sticky top-0 px-3 py-2 bg-white border-b border-gray-100">
             <input
               type="text"
-              className="w-full border border-gray-300 rounded-md py-1 px-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full border border-gray-300 rounded-md py-1.5 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="Search or create tag..."
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
+              autoFocus
             />
           </div>
           
