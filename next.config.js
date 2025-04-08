@@ -11,11 +11,20 @@ const nextConfig = {
       bodySizeLimit: '2mb'
     },
     esmExternals: true,
-    serverComponentsExternalPackages: []
+    serverComponentsExternalPackages: [],
+    // Disable static optimization for all API routes to prevent DYNAMIC_SERVER_USAGE errors
+    disableOptimizedLoading: true
   },
   // Configure for dynamic routes and avoid static generation issues
   output: 'standalone',
   staticPageGenerationTimeout: 300,
+  // Set default export condition for serverless functions
+  serverRuntimeConfig: {
+    unstable_allowDynamic: [
+      '**/node_modules/lodash/**/*.js',
+      '**/node_modules/uuid/**/*.js',
+    ],
+  },
   compiler: {
     removeConsole: process.env.NODE_ENV === 'production' ? {
       exclude: ['error', 'warn'],

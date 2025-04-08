@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { log } from '@/lib/utils';
 
+// Mark route as dynamic to prevent static generation issues
+export const dynamic = 'force-dynamic';
+
 // Standard GHL fields that should always be available
 const standardFields = [
   'lifecycle_stage',
@@ -91,4 +94,4 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
-} 
+}
