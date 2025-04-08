@@ -6,6 +6,9 @@ import { FilterState } from '@/types/filters';
 import { buildCombinedWhereClause, createApiResponse } from '@/lib/filters'; // Ensure buildCombinedWhereClause is imported
 import { Prisma } from '@prisma/client'; // Import Prisma types if needed
 
+// Mark route as dynamic to prevent static generation issues
+export const dynamic = 'force-dynamic';
+
 // Constants
 const MAX_ITEMS_PER_PAGE = 500; // Safety limit for pagination
 

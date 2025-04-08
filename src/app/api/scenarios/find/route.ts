@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
+// Mark route as dynamic to prevent static generation issues
+export const dynamic = 'force-dynamic';
+
 // TODO: Add authentication before production use
 // This endpoint is temporarily open for n8n testing
 export async function GET(request: Request) {
@@ -43,4 +46,4 @@ export async function GET(request: Request) {
       { status: 500 }
     );
   }
-} 
+}

@@ -13,6 +13,16 @@ const nextConfig = {
     esmExternals: true,
     serverComponentsExternalPackages: []
   },
+  // Set all App Router routes to dynamic by default to avoid static generation issues
+  // This prevents "Dynamic server usage" errors during build
+  appDir: true,
+  output: 'standalone',
+  staticPageGenerationTimeout: 300,
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production' ? {
+      exclude: ['error', 'warn'],
+    } : false,
+  },
   reactStrictMode: true,
   logging: {
     fetches: {

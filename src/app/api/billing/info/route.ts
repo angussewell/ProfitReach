@@ -3,6 +3,9 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
+// Mark route as dynamic to prevent static generation issues
+export const dynamic = 'force-dynamic';
+
 // Add this interface at the top of the file (after the imports)
 interface BillingOrganization {
   billingPlan: string;
@@ -62,4 +65,4 @@ export async function GET() {
     console.error('Error fetching billing info:', error);
     return new NextResponse('Internal Server Error', { status: 500 });
   }
-} 
+}

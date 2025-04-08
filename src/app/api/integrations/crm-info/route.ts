@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
+// Mark route as dynamic to prevent static generation issues
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request) {
   try {
     // Get organizationId from the query string
@@ -44,4 +47,4 @@ export async function GET(request: Request) {
       details: error instanceof Error ? error.message : String(error) 
     }, { status: 500 });
   }
-} 
+}

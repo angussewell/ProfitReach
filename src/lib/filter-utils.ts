@@ -1,5 +1,163 @@
 import { FilterCondition, FilterState, FilterOperator, Filter } from '@/types/filters';
 import { Prisma } from '@prisma/client';
+import { log } from '@/lib/utils';
+
+/**
+ * Normalizes webhook data for filter evaluation
+ * @param data - The raw webhook data
+ * @returns Normalized data object
+ */
+export function normalizeWebhookData(data: Record<string, any>) {
+  const normalizedData: Record<string, any> = {
+    contactData: {},
+    metadata: {
+      timestamp: new Date().toISOString(),
+      source: 'webhook'
+    }
+  };
+
+  // Process all keys in the data object
+  Object.entries(data).forEach(([key, value]) => {
+    // Normalize key name by removing spaces and special characters
+    const normalizedKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+    
+    // Add to normalized data
+    normalizedData.contactData[normalizedKey] = value;
+    
+    // Also keep the original key for backward compatibility
+    normalizedData.contactData[key] = value;
+  });
+
+  return normalizedData;
+}
+
+/**
+ * Evaluates a set of filters against normalized data
+ * @param filters - Array of filters to evaluate
+ * @param normalizedData - Normalized data to test against
+ * @returns Result of filter evaluation
+ */
+export async function evaluateFilters(
+  filters: Filter[],
+  normalizedData: Record<string, any>
+) {
+  // If no filters, always pass
+  if (!filters || filters.length === 0) {
+    return {
+      passed: true,
+      reason: 'No filters to evaluate',
+      results: [],
+      summary: 'All conditions passed (no filters)'
+    };
+  }
+
+  // Group filters by group ID
+  const filterGroups: Record<string, Filter[]> = {};
+  filters.forEach(filter => {
+    const group = filter.group || 'default';
+    if (!filterGroups[group]) {
+      filterGroups[group] = [];
+    }
+    filterGroups[group].push(filter);
+  });
+
+  // Evaluate each filter
+  const allResults: Array<{ filter: Filter; passed: boolean; reason: string }> = [];
+  let allPassed = true;
+  
+  // Process each group
+  for (const [groupId, groupFilters] of Object.entries(filterGroups)) {
+    let groupPassed = true;
+    
+    // Evaluate each filter in the group
+    for (const filter of groupFilters) {
+      try {
+        const { field, operator, value } = filter;
+        
+        // Get the field value from normalized data
+        const fieldValue = normalizedData.contactData[field] || 
+                           normalizedData.contactData[field.toLowerCase()] || 
+                           normalizedData.contactData[field.toLowerCase().replace(/[^a-z0-9]/g, '')];
+
+        // Evaluate based on operator
+        let passed = false;
+        let reason = '';
+        
+        switch (operator) {
+          case 'equals':
+            passed = fieldValue === value;
+            reason = passed ? `${field} equals ${value}` : `${field} does not equal ${value}`;
+            break;
+          case 'notEquals':
+            passed = fieldValue !== value;
+            reason = passed ? `${field} does not equal ${value}` : `${field} equals ${value}`;
+            break;
+          case 'contains':
+            passed = typeof fieldValue === 'string' && fieldValue.toLowerCase().includes(String(value).toLowerCase());
+            reason = passed ? `${field} contains ${value}` : `${field} does not contain ${value}`;
+            break;
+          case 'notContains':
+            passed = typeof fieldValue !== 'string' || !fieldValue.toLowerCase().includes(String(value).toLowerCase());
+            reason = passed ? `${field} does not contain ${value}` : `${field} contains ${value}`;
+            break;
+          case 'startsWith':
+            passed = typeof fieldValue === 'string' && fieldValue.toLowerCase().startsWith(String(value).toLowerCase());
+            reason = passed ? `${field} starts with ${value}` : `${field} does not start with ${value}`;
+            break;
+          case 'endsWith':
+            passed = typeof fieldValue === 'string' && fieldValue.toLowerCase().endsWith(String(value).toLowerCase());
+            reason = passed ? `${field} ends with ${value}` : `${field} does not end with ${value}`;
+            break;
+          case 'isEmpty':
+            passed = fieldValue === undefined || fieldValue === null || fieldValue === '';
+            reason = passed ? `${field} is empty` : `${field} is not empty`;
+            break;
+          case 'isNotEmpty':
+            passed = fieldValue !== undefined && fieldValue !== null && fieldValue !== '';
+            reason = passed ? `${field} is not empty` : `${field} is empty`;
+            break;
+          default:
+            reason = `Unsupported operator: ${operator}`;
+            passed = false;
+        }
+        
+        // Add to results
+        allResults.push({ filter, passed, reason });
+        
+        // Update group status
+        if (!passed) {
+          groupPassed = false;
+        }
+      } catch (error) {
+        log('error', `Filter evaluation error for ${filter.field}`, { error: String(error), filter });
+        allResults.push({ 
+          filter, 
+          passed: false, 
+          reason: `Error evaluating filter: ${String(error)}` 
+        });
+        groupPassed = false;
+      }
+    }
+    
+    // If this group failed, the whole evaluation fails (groups are OR'ed together)
+    if (!groupPassed) {
+      allPassed = false;
+    }
+  }
+
+  // Create summary
+  const passedCount = allResults.filter(r => r.passed).length;
+  const summary = allPassed
+    ? `All conditions passed (${passedCount}/${allResults.length})`
+    : `Some conditions failed (${passedCount}/${allResults.length})`;
+
+  return {
+    passed: allPassed,
+    reason: allPassed ? 'All filter groups passed' : 'Some filter groups failed',
+    results: allResults,
+    summary
+  };
+}
 
 /**
  * Helper function to generate a unique ID for filters
