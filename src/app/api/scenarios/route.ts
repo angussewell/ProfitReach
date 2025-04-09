@@ -88,6 +88,25 @@ export async function POST(request: Request) {
     return NextResponse.json(scenario, { status: 201 });
   } catch (error) {
     console.error('Error creating scenario:', error);
+    
+    // Check for Prisma unique constraint violation error
+    if (error && 
+        typeof error === 'object' && 
+        'code' in error && 
+        error.code === 'P2002' && 
+        'meta' in error && 
+        error.meta && 
+        typeof error.meta === 'object' && 
+        'target' in error.meta && 
+        Array.isArray(error.meta.target) && 
+        error.meta.target.includes('name') && 
+        error.meta.target.includes('organizationId')) {
+      return NextResponse.json(
+        { error: 'A scenario with this name already exists. Please use a different name.' }, 
+        { status: 400 }
+      );
+    }
+    
     return NextResponse.json({ error: 'Failed to create scenario' }, { status: 500 });
   }
 }
