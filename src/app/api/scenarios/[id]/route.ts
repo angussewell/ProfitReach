@@ -49,7 +49,26 @@ export async function PUT(
     }
 
     const data = await request.json();
-    const { customizationPrompt, emailExamplesPrompt, signatureId, subjectLine, filters } = data;
+    console.log("API PUT /api/scenarios/[id] - Received Body:", data);
+
+    // Destructure all fields from the request body that match the Scenario model
+    const { 
+      name, 
+      description, 
+      status, 
+      signatureId, 
+      customizationPrompt, 
+      emailExamplesPrompt, 
+      attachmentId, 
+      isFollowUp, 
+      snippetId, 
+      subjectLine, 
+      touchpointType, 
+      filters, 
+      testEmail, 
+      testMode,
+      isHighPerforming 
+    } = data;
 
     const scenario = await prisma.scenario.findFirst({
       where: {
@@ -62,13 +81,34 @@ export async function PUT(
       return NextResponse.json({ error: 'Scenario not found' }, { status: 404 });
     }
 
+    // Build the update data object with all possible fields to update
     const updateData: any = {};
+    
+    // Text/string fields
+    if (name !== undefined) updateData.name = name;
+    if (description !== undefined) updateData.description = description;
+    if (status !== undefined) updateData.status = status;
     if (customizationPrompt !== undefined) updateData.customizationPrompt = customizationPrompt;
     if (emailExamplesPrompt !== undefined) updateData.emailExamplesPrompt = emailExamplesPrompt;
-    if (signatureId !== undefined) updateData.signatureId = signatureId || null;
     if (subjectLine !== undefined) updateData.subjectLine = subjectLine;
+    if (touchpointType !== undefined) updateData.touchpointType = touchpointType;
+    if (testEmail !== undefined) updateData.testEmail = testEmail;
+    
+    // Reference fields (potentially null)
+    if (signatureId !== undefined) updateData.signatureId = signatureId || null;
+    if (attachmentId !== undefined) updateData.attachmentId = attachmentId || null;
+    if (snippetId !== undefined) updateData.snippetId = snippetId || null;
+    
+    // Boolean fields - ensure they are handled as booleans
+    if (isFollowUp !== undefined) updateData.isFollowUp = Boolean(isFollowUp);
+    if (testMode !== undefined) updateData.testMode = Boolean(testMode);
+    if (isHighPerforming !== undefined) updateData.isHighPerforming = Boolean(isHighPerforming);
+    
+    // JSON field
     if (filters !== undefined) updateData.filters = filters;
 
+    console.log("API PUT /api/scenarios/[id] - Data passed to prisma.update:", updateData);
+    
     const updatedScenario = await prisma.scenario.update({
       where: { id: params.id },
       data: updateData
@@ -123,4 +163,4 @@ export async function DELETE(
       { status: 500 }
     );
   }
-} 
+}
