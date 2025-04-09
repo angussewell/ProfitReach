@@ -14,6 +14,7 @@ type CreateContactRequest = {
   firstName?: string;
   lastName?: string;
   email: string;
+  leadStatus?: string;
   additionalData?: {
     status?: string;
     [key: string]: any;
@@ -169,7 +170,7 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    const { firstName, lastName, email, additionalData } = body as CreateContactRequest;
+    const { firstName, lastName, email, leadStatus, additionalData } = body as CreateContactRequest;
     
     // Email is required
     if (!email) {
@@ -212,6 +213,7 @@ export async function POST(request: NextRequest) {
           "lastName", 
           email, 
           "organizationId", 
+          "leadStatus",
           "additionalData", 
           "createdAt", 
           "updatedAt"
@@ -222,6 +224,7 @@ export async function POST(request: NextRequest) {
           ${lastName || null}, 
           ${email}, 
           ${organizationId}, 
+          ${leadStatus},
           ${jsonbData}::jsonb, 
           NOW(), 
           NOW()
