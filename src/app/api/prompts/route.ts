@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma';
 import type { Prisma, Prompt } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { addRequiredModelFields } from '@/lib/model-utils';
+import { randomUUID } from 'crypto';
 
 // Get all prompts
 export async function GET() {
@@ -39,12 +41,27 @@ export async function POST(request: Request) {
     const data = await request.json();
     const { name, content } = data;
 
-    const prompt = await prisma.prompt.create({
-      data: {
-        name,
-        content,
-        organizationId: session.user.organizationId
-      }
+    if (!name || !content) {
+      return NextResponse.json(
+        { error: 'Name and content are required' },
+        { status: 400 }
+      );
+    }
+
+    // Generate UUID and timestamps manually
+    const id = randomUUID();
+    const now = new Date();
+    const organizationId = session.user.organizationId;
+
+    // Use raw SQL to insert the record with all required fields
+    await prisma.$executeRaw`
+      INSERT INTO "Prompt" (id, name, content, "organizationId", "createdAt", "updatedAt")
+      VALUES (${id}, ${name}, ${content}, ${organizationId}, ${now}, ${now})
+    `;
+
+    // Fetch the created prompt to return it
+    const prompt = await prisma.prompt.findUnique({
+      where: { id }
     });
 
     return NextResponse.json(prompt);

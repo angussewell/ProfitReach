@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
+import { addRequiredModelFields } from '@/lib/model-utils';
+import { randomUUID } from 'crypto';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,12 +47,20 @@ export async function POST(req: Request) {
       );
     }
 
-    const attachment = await prisma.attachment.create({
-      data: {
-        name: data.name,
-        content: data.content,
-        organizationId: session.user.organizationId
-      }
+    // Generate UUID and timestamps manually
+    const id = randomUUID();
+    const now = new Date();
+    const organizationId = session.user.organizationId;
+
+    // Use raw SQL to insert the record with all required fields
+    await prisma.$executeRaw`
+      INSERT INTO "Attachment" (id, name, content, "organizationId", "createdAt", "updatedAt")
+      VALUES (${id}, ${data.name}, ${data.content}, ${organizationId}, ${now}, ${now})
+    `;
+
+    // Fetch the created attachment to return it
+    const attachment = await prisma.attachment.findUnique({
+      where: { id }
     });
 
     return NextResponse.json(attachment);
@@ -158,4 +168,4 @@ export async function DELETE(req: Request) {
       { status: 500 }
     );
   }
-} 
+}
