@@ -38,7 +38,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const data = await request.json();
+    // Log the raw incoming request body for debugging
+    const rawBody = await request.clone().json(); // Clone request to read body again later
+    console.log('--- RAW INCOMING BODY /api/prompts ---:', JSON.stringify(rawBody, null, 2));
+
+    const data = rawBody; // Use the already parsed body
     const { name, content } = data;
 
     if (!name || !content) {
