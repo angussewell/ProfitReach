@@ -62,6 +62,9 @@ export async function POST(request: Request) {
 
     // Generate a unique ID for the scenario
     const id = uuidv4();
+    
+    // Current timestamp for createdAt and updatedAt fields
+    const now = new Date();
 
     // Create the scenario
     const scenario = await prisma.scenario.create({
@@ -77,7 +80,8 @@ export async function POST(request: Request) {
         attachmentId: attachmentId || null,
         filters: filters || '[]',
         organizationId: session.user.organizationId,
-        status: 'active'
+        status: 'active',
+        updatedAt: now
       }
     });
 
