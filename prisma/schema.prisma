@@ -472,7 +472,7 @@ model Scenario {
   ScenarioMessage     ScenarioMessage[]
   ScenarioResponse    ScenarioResponse[]
 
-  @@unique([name, organizationId])
+  // Unique constraint on name and organizationId removed to allow duplicate scenario names
   @@index([organizationId])
 }
 
