@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
+import { v4 as uuidv4 } from 'uuid'; // Import uuid
 
 // Force dynamic API route
 export const dynamic = 'force-dynamic';
@@ -27,33 +28,37 @@ const PROVIDER_MAP = {
   LINKEDIN: ['LINKEDIN']
 } as const;
 
-// Function to create a pending email account
+// Function to create a pending email account using $executeRaw
 async function createPendingEmailAccount(organizationId: string): Promise<string> {
+  const newAccountId = uuidv4(); // Generate UUID
+  const pendingEmail = `pending_${Date.now()}@pending.local`;
   const pendingName = `PENDING_EMAIL_${organizationId}_${Date.now()}`;
-  const account = await prisma.emailAccount.create({
-    data: {
-      email: `pending_${Date.now()}@pending.local`,
-      name: pendingName,
-      organizationId,
-      isActive: false
-    }
-  });
-  return account.id;
+  const isActive = false;
+
+  // Use parameterized query with $executeRaw
+  await prisma.$executeRaw`
+    INSERT INTO "EmailAccount" ("id", "email", "name", "organizationId", "isActive", "createdAt", "updatedAt")
+    VALUES (${newAccountId}, ${pendingEmail}, ${pendingName}, ${organizationId}, ${isActive}, NOW(), NOW())
+  `;
+
+  return newAccountId; // Return the generated ID
 }
 
-// Function to create a pending social account
+// Function to create a pending social account using $executeRaw
 async function createPendingSocialAccount(organizationId: string): Promise<string> {
+  const newAccountId = uuidv4(); // Generate UUID
+  const pendingUsername = `pending_${Date.now()}`;
   const pendingName = `PENDING_LINKEDIN_${organizationId}_${Date.now()}`;
-  const account = await prisma.socialAccount.create({
-    data: {
-      username: `pending_${Date.now()}`,
-      name: pendingName,
-      provider: 'LINKEDIN',
-      organizationId,
-      isActive: false
-    }
-  });
-  return account.id;
+  const provider = 'LINKEDIN';
+  const isActive = false;
+
+  // Use parameterized query with $executeRaw
+  await prisma.$executeRaw`
+    INSERT INTO "SocialAccount" ("id", "username", "name", "provider", "organizationId", "isActive", "createdAt", "updatedAt")
+    VALUES (${newAccountId}, ${pendingUsername}, ${pendingName}, ${provider}, ${organizationId}, ${isActive}, NOW(), NOW())
+  `;
+
+  return newAccountId; // Return the generated ID
 }
 
 export async function POST(request: Request) {
@@ -278,4 +283,4 @@ export async function POST(request: Request) {
       details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
   }
-} 
+}
