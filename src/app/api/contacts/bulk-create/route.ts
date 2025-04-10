@@ -412,17 +412,20 @@ export async function POST(request: NextRequest) {
                         for (const tagName of uniqueTagNames) {
                             if (!tagName) continue; // Skip empty tag names just in case
 
-                            const upsertResult = await tx.$queryRaw<Array<{ tagId: string }>>`
-                                INSERT INTO "Tags" ("organizationId", "name", "tagId")
+                            // Corrected to use "id" as the primary key column for Tags
+                            const upsertResult = await tx.$queryRaw<Array<{ id: string }>>`
+                                INSERT INTO "Tags" ("organizationId", "name", "id")
                                 VALUES (${organizationId}, ${tagName}, gen_random_uuid())
                                 ON CONFLICT ("organizationId", "name")
                                 DO UPDATE SET "name" = EXCLUDED."name" -- No-op update needed for RETURNING on conflict
-                                RETURNING "tagId";
+                                RETURNING "id";
                             `;
-                            if (upsertResult && upsertResult.length > 0 && upsertResult[0].tagId) {
-                                tagIdsForContact.push(upsertResult[0].tagId);
+                            // Corrected to check for and use .id
+                            if (upsertResult && upsertResult.length > 0 && upsertResult[0].id) {
+                                tagIdsForContact.push(upsertResult[0].id); // Corrected to push .id
                             } else {
-                                 safePrint.error(`[Contact ${newContactId}] Failed to upsert or retrieve tagId for tag: ${tagName}`, new Error(`Failed to upsert tag: ${tagName}`));
+                                 // Corrected error message to refer to 'id'
+                                 safePrint.error(`[Contact ${newContactId}] Failed to upsert or retrieve id for tag: ${tagName}`, new Error(`Failed to upsert tag: ${tagName}`));
                                  // Log and continue, skipping this tag for this contact.
                             }
                         }
@@ -430,20 +433,18 @@ export async function POST(request: NextRequest) {
 
                         // 2. Link tags to contact (if IDs were found)
                         if (tagIdsForContact.length > 0) {
-                            // Use Prisma's parameter binding for safety
-                            const valuesPlaceholders = tagIdsForContact.map((_, index) => `(${newContactId}::uuid, $${index + 1}::uuid)`).join(', ');
-                            const tagIdParams = tagIdsForContact; // Array of UUIDs
-
-                            const linkQuery = `
-                                INSERT INTO "ContactTags" ("contactId", "tagId")
-                                VALUES ${valuesPlaceholders}
-                                ON CONFLICT ("contactId", "tagId") DO NOTHING;
-                            `;
-
-                            // Execute the raw SQL for linking using parameterized query
-                            const linkResult = await tx.$executeRawUnsafe(linkQuery, ...tagIdParams); // Pass tag IDs as separate arguments
-
-                            safePrint.log(`[Contact ${newContactId}] Linked ${linkResult} tags.`);
+                            // Properly parameterize both contactId and tagId to avoid SQL injection
+                            for (const tagId of tagIdsForContact) {
+                                // Use $executeRaw with proper parameter placeholders
+                                // This approach is safer as it properly parameterizes both values
+                                const linkResult = await tx.$executeRaw`
+                                    INSERT INTO "ContactTags" ("contactId", "tagId")
+                                    VALUES (${newContactId}::uuid, ${tagId}::uuid)
+                                    ON CONFLICT ("contactId", "tagId") DO NOTHING;
+                                `;
+                            }
+                            
+                            safePrint.log(`[Contact ${newContactId}] Linked ${tagIdsForContact.length} tags.`);
                         }
 
                     } catch (tagError) {
