@@ -144,7 +144,7 @@ export const authOptions: AuthOptions = {
                 });
             } else { // Includes 'user' and 'manager' roles
                 organizations = await prisma.organization.findMany({
-                    where: { users: { some: { id: user.id } } },
+                    where: { User: { some: { id: user.id } } },
                     select: { id: true, name: true }
                 });
             }
@@ -232,7 +232,7 @@ export const authOptions: AuthOptions = {
               })
             : await prisma.organization.findMany({
                 where: {
-                  users: { some: { id: user.id } }
+                  User: { some: { id: user.id } }
                 },
                 select: { id: true, name: true }
               });
@@ -307,4 +307,4 @@ if (!isBuildTime && process.env.NODE_ENV !== 'test') {
 }
 
 const handler = NextAuth(authOptions);
-export { handler as GET, handler as POST }; 
+export { handler as GET, handler as POST };

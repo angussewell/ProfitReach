@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { addRequiredOrgFields } from '@/lib/model-utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,7 +30,7 @@ export async function GET(request: Request) {
         })
       : await prisma.organization.findMany({
           where: {
-            users: {
+            User: {
               some: { id: session.user.id }
             }
           },
@@ -98,14 +99,27 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
     }
 
+    // Add required fields for Organization model
+    const orgData = addRequiredOrgFields({ name });
+    
+    // Create the organization with all required fields
     const organization = await prisma.organization.create({
-      data: { name }
+      data: orgData
     });
 
     return NextResponse.json(organization);
   } catch (error: any) {
     if (error.code === 'P2002') {
-      return NextResponse.json({ error: 'Organization name already exists' }, { status: 400 });
+      // Unique constraint violation (likely name or webhookUrl if it wasn't made optional)
+      if (error.meta?.target?.includes('name')) {
+        return NextResponse.json({ error: 'Organization name already exists' }, { status: 400 });
+      }
+      // Add check for webhookUrl if it's required and unique
+      // if (error.meta?.target?.includes('webhookUrl')) {
+      //   return NextResponse.json({ error: 'Webhook URL already exists' }, { status: 400 });
+      // }
+      // Fallback for other unique constraints
+      return NextResponse.json({ error: 'Unique constraint violation' }, { status: 400 });
     }
     
     console.error('Error creating organization:', error);

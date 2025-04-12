@@ -101,32 +101,10 @@ const actionTypeLabels: Record<ActionType, string> = {
   scenario: 'Scenario',
 };
 
-// Define available field paths based on Contacts model
-const availableFieldPaths = [
-  { value: "firstName", label: "First Name" },
-  { value: "lastName", label: "Last Name" },
-  { value: "fullName", label: "Full Name" },
-  { value: "email", label: "Email" },
-  { value: "emailStatus", label: "Email Status" },
-  { value: "title", label: "Title" },
-  { value: "linkedinUrl", label: "LinkedIn URL" },
-  { value: "headline", label: "Headline" },
-  { value: "state", label: "State" },
-  { value: "city", label: "City" },
-  { value: "country", label: "Country" },
-  { value: "currentCompanyName", label: "Company Name" },
-  { value: "leadStatus", label: "Lead Status" },
+import { getSimpleFieldOptions } from '@/lib/field-definitions';
 
-  // Common additionalData fields
-  { value: "additionalData.customTag", label: "Additional Data: Custom Tag" },
-  { value: "additionalData.priorityScore", label: "Additional Data: Priority Score" },
-  { value: "additionalData.source", label: "Additional Data: Source" },
-  { value: "additionalData.notes", label: "Additional Data: Notes" },
-  { value: "additionalData.campaignId", label: "Additional Data: Campaign ID" },
-  { value: "additionalData.lastContactedDate", label: "Additional Data: Last Contacted Date" },
-  { value: "additionalData.customerType", label: "Additional Data: Customer Type" },
-  { value: "additionalData.segment", label: "Additional Data: Segment" },
-];
+// Use field paths from the centralized field definitions
+const availableFieldPaths = getSimpleFieldOptions();
 
 // Form schema
 const stepFormSchema = z.object({

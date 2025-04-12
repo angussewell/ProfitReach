@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import TagSelector from '@/components/filters/TagSelector';
+import { LEAD_STATUS_OPTIONS } from '@/lib/field-definitions';
 
 type Contact = {
   id: string;
@@ -104,16 +105,7 @@ type EditContactFormProps = {
   contact: Contact;
 };
 
-// Lead status options
-const LEAD_STATUS_OPTIONS = [
-  { value: 'New', label: 'New' },
-  { value: 'Contacted', label: 'Contacted' },
-  { value: 'Qualified', label: 'Qualified' },
-  { value: 'Unqualified', label: 'Unqualified' },
-  { value: 'Replied', label: 'Replied' },
-  { value: 'Customer', label: 'Customer' },
-  { value: 'Churned', label: 'Churned' },
-];
+// Format date for display
 
 // Format date for display
 const formatDate = (date: Date | null): string => {

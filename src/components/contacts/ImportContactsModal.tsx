@@ -4,84 +4,32 @@ import { useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Papa, { ParseResult, ParseError } from 'papaparse';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import TagSelector from '@/components/filters/TagSelector'; // Import TagSelector
+import { useOrganization } from '@/contexts/OrganizationContext'; // Import OrganizationContext hook
+
+import { 
+  FIELD_GROUPS, 
+  CONTACT_FIELDS, 
+  getFlattenedFields, 
+  getGroupedFields,
+  FieldOption,
+  LEAD_STATUS_OPTIONS
+} from '@/lib/field-definitions';
 
 // Define the stages of import process
 type ImportStage = 'upload' | 'mapping' | 'preview' | 'importing' | 'complete' | 'error';
 
-// Group labels for field categories
-const FIELD_GROUPS = {
-  PERSONAL: 'Personal Information',
-  CONTACT: 'Contact Information',
-  COMPANY: 'Company Information',
-  SOCIAL: 'Social Media',
-  LOCATION: 'Location',
-  SYSTEM: 'System Fields',
-  CUSTOM: 'Custom Fields',
-  OTHER: 'Other Fields'
-};
-
-// Contact field options for mapping, organized by logical groups
-const CONTACT_FIELDS = [
-  // Personal Information
-  { value: "firstName", label: "First Name", group: FIELD_GROUPS.PERSONAL },
-  { value: "lastName", label: "Last Name", group: FIELD_GROUPS.PERSONAL },
-  { value: "fullName", label: "Full Name", group: FIELD_GROUPS.PERSONAL },
-  { value: "photoUrl", label: "Photo URL", group: FIELD_GROUPS.PERSONAL },
-  { value: "headline", label: "Headline/Bio", group: FIELD_GROUPS.PERSONAL },
-  { value: "title", label: "Job Title", group: FIELD_GROUPS.PERSONAL },
-  
-  // Contact Information
-  { value: "email", label: "Email Address", group: FIELD_GROUPS.CONTACT },
-  { value: "emailStatus", label: "Email Status", group: FIELD_GROUPS.CONTACT },
-  { value: "phoneNumbers.main", label: "Phone Number (Main)", group: FIELD_GROUPS.CONTACT },
-  { value: "phoneNumbers.mobile", label: "Phone Number (Mobile)", group: FIELD_GROUPS.CONTACT },
-  { value: "phoneNumbers.work", label: "Phone Number (Work)", group: FIELD_GROUPS.CONTACT },
-  { value: "phoneNumbers.other", label: "Phone Number (Other)", group: FIELD_GROUPS.CONTACT },
-  
-  // Company Information
-  { value: "currentCompanyName", label: "Company Name", group: FIELD_GROUPS.COMPANY },
-  { value: "currentCompanyId", label: "Company ID", group: FIELD_GROUPS.COMPANY },
-  { value: "companyWebsiteUrl", label: "Company Website", group: FIELD_GROUPS.COMPANY },
-  { value: "companyLinkedinUrl", label: "Company LinkedIn URL", group: FIELD_GROUPS.COMPANY },
-  
-  // Social Media
-  { value: "linkedinUrl", label: "LinkedIn URL", group: FIELD_GROUPS.SOCIAL },
-  { value: "twitterUrl", label: "Twitter URL", group: FIELD_GROUPS.SOCIAL },
-  { value: "facebookUrl", label: "Facebook URL", group: FIELD_GROUPS.SOCIAL },
-  { value: "githubUrl", label: "GitHub URL", group: FIELD_GROUPS.SOCIAL },
-  
-  // Location
-  { value: "city", label: "City", group: FIELD_GROUPS.LOCATION },
-  { value: "state", label: "State/Province", group: FIELD_GROUPS.LOCATION },
-  { value: "country", label: "Country", group: FIELD_GROUPS.LOCATION },
-  
-  // System Fields
-  { value: "leadStatus", label: "Lead Status", group: FIELD_GROUPS.SYSTEM },
-  
-  // JSON/Complex Fields
-  { value: "additionalData.tag", label: "Tag (Custom Field)", group: FIELD_GROUPS.CUSTOM },
-  { value: "additionalData.source", label: "Source (Custom Field)", group: FIELD_GROUPS.CUSTOM },
-  { value: "additionalData.score", label: "Score (Custom Field)", group: FIELD_GROUPS.CUSTOM },
-  { value: "additionalData.notes", label: "Notes (Custom Field)", group: FIELD_GROUPS.CUSTOM },
-  { value: "additionalData.customField", label: "Custom Field", group: FIELD_GROUPS.CUSTOM },
-  
-  // Other Fields
-  { value: "employmentHistory", label: "Employment History", group: FIELD_GROUPS.OTHER },
-  { value: "contactEmails", label: "Additional Emails", group: FIELD_GROUPS.OTHER },
+// Add the "Ignore this column" option that is specific to the import modal
+const IMPORT_CONTACT_FIELDS: FieldOption[] = [
+  ...CONTACT_FIELDS,
   { value: "", label: "Ignore this column", group: FIELD_GROUPS.OTHER }
 ];
 
 // Group contact fields by category for the UI
-const GROUPED_CONTACT_FIELDS = Object.values(FIELD_GROUPS).map(group => ({
-  group,
-  fields: CONTACT_FIELDS.filter(field => field.group === group)
-}));
+const GROUPED_CONTACT_FIELDS = getGroupedFields();
 
 // Flatten the grouped fields for the search
-const FLAT_CONTACT_FIELDS = CONTACT_FIELDS.map(field => ({
-  value: field.value,
-  label: `${field.label} (${field.group})`
-}));
+const FLAT_CONTACT_FIELDS = getFlattenedFields();
 
 // Required fields for validation
 const REQUIRED_FIELDS = ["email"];
@@ -94,6 +42,7 @@ interface ImportContactsModalProps {
 export default function ImportContactsModal({ isOpen, onClose }: ImportContactsModalProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { currentOrganization } = useOrganization(); // Get current organization
   
   // State management
   const [stage, setStage] = useState<ImportStage>('upload');
@@ -101,12 +50,19 @@ export default function ImportContactsModal({ isOpen, onClose }: ImportContactsM
   const [headers, setHeaders] = useState<string[]>([]);
   const [mappings, setMappings] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
+  const [notification, setNotification] = useState<string | null>(null);
+  const [commonTags, setCommonTags] = useState<string[]>([]); // State for common tags
+  // State for import results, now including duplicate info
   const [importResults, setImportResults] = useState<{
-    successCount: number;
-    errorCount: number;
-    errors: any[];
+    successCount: number; // Actually inserted
+    validationErrorCount: number; // Failed initial validation (API)
+    duplicateSkipCount: number; // Skipped due to existing email (API)
+    clientSkippedCount: number; // Skipped client-side due to missing required fields
+    validationErrors: any[]; // Details on validation errors (API)
+    skippedDuplicates: any[]; // Details on duplicate skips (API)
+    databaseErrors?: any[]; // Optional: Track DB errors if returned by API
   } | null>(null);
-  
+
   // Reset state when modal closes
   const handleClose = useCallback(() => {
     setStage('upload');
@@ -114,9 +70,50 @@ export default function ImportContactsModal({ isOpen, onClose }: ImportContactsM
     setHeaders([]);
     setMappings({});
     setError(null);
+    setNotification(null);
+    setCommonTags([]); // Reset common tags on close
     setImportResults(null);
     onClose();
   }, [onClose]);
+
+  // Enhanced mapping change handler to prevent duplicate field mappings
+  const handleMappingChange = useCallback((csvHeader: string, selectedField: string) => {
+    setMappings(prev => {
+      // Create new mappings object for immutability
+      const newMappings = { ...prev };
+      
+      // If selectedField is not empty (not "Ignore this column") and is already used elsewhere
+      if (selectedField !== "" && Object.entries(newMappings).some(
+        ([header, field]) => header !== csvHeader && field === selectedField)
+      ) {
+        // Find which headers use this field
+        const duplicateHeaders = Object.entries(newMappings)
+          .filter(([header, field]) => header !== csvHeader && field === selectedField)
+          .map(([header]) => header);
+        
+        // Reset the mappings for duplicate headers
+        duplicateHeaders.forEach(header => {
+          newMappings[header] = "";
+        });
+        
+        // Show notification to user about the change
+        const fieldLabel = CONTACT_FIELDS.find(f => f.value === selectedField)?.label || selectedField;
+        setNotification(`"${fieldLabel}" was already mapped to ${duplicateHeaders.length === 1 
+          ? `column "${duplicateHeaders[0]}"` 
+          : `columns: ${duplicateHeaders.join(', ')}`}. ${duplicateHeaders.length === 1 
+            ? 'That mapping has' 
+            : 'Those mappings have'} been reset to "Ignore this column".`);
+        
+        // Auto-dismiss notification after 5 seconds
+        setTimeout(() => setNotification(null), 5000);
+      }
+      
+      // Set the new mapping for this header
+      newMappings[csvHeader] = selectedField;
+      
+      return newMappings;
+    });
+  }, []);
   
   // CSV file upload and parsing
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -233,6 +230,16 @@ export default function ImportContactsModal({ isOpen, onClose }: ImportContactsM
     return result;
   };
 
+  // Check if a contact has all required fields
+  const hasRequiredFields = (contact: Record<string, any>) => {
+    // Required fields: email, linkedinUrl, currentCompanyName
+    return (
+      contact.email && 
+      typeof contact.email === 'string' && 
+      contact.email.trim() !== ''
+    );
+  };
+
   // Validate mappings
   const validateMappings = () => {
     // Ensure email is mapped
@@ -253,36 +260,70 @@ export default function ImportContactsModal({ isOpen, onClose }: ImportContactsM
     }
   };
   
-  // Handle the final import
+  // Handle the final import with improved error handling - using n8n webhook
   const handleImport = async () => {
     setStage('importing');
     setError(null);
     
     try {
       // Transform all data according to the mappings
-      const contacts = csvData.map(transformRow);
+      const allTransformedContacts = csvData.map(transformRow);
       
-      // Submit to the API
-      const response = await fetch('/api/contacts/bulk-create', {
+      // Filter contacts to only include those with required fields
+      const validContacts = allTransformedContacts.filter(hasRequiredFields);
+      
+      // Calculate skipped contacts due to missing required fields
+      const missingRequiredFieldsCount = allTransformedContacts.length - validContacts.length;
+      
+      // Get current organization ID from session if available
+      // Note: This may be needed by n8n to properly isolate data
+      // const orgId = currentOrgId || sessionData?.user?.organizationId;
+      
+      console.log(`Sending ${validContacts.length} contacts to n8n webhook...`);
+      
+      // Submit valid contacts directly to the n8n webhook instead of internal API
+      const response = await fetch('https://n8n.srv768302.hstgr.cloud/webhook/contacts-upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contacts }),
+        body: JSON.stringify({ 
+          contacts: validContacts, 
+          commonTags,
+          // Include organization ID for proper data isolation
+          organizationId: currentOrganization?.id
+        }),
       });
+      
+      // Process response from n8n (assuming similar structure to our previous API)
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Import failed: ${errorText || 'The n8n service may be unavailable'}`);
+      }
       
       const result = await response.json();
       
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to import contacts');
-      }
-      
-      setImportResults(result);
+      // Process the results from n8n webhook
+      const processedResults = {
+        successCount: result.successCount || 0,
+        validationErrorCount: result.validationErrorCount || 0,
+        duplicateSkipCount: result.duplicateSkipCount || 0,
+        clientSkippedCount: missingRequiredFieldsCount, // Calculated client-side
+        validationErrors: result.validationErrors || [],
+        skippedDuplicates: result.skippedDuplicates || [],
+        databaseErrors: result.databaseErrors || []
+      };
+
+      // Log detailed results for debugging
+      console.log("n8n Import Response:", result);
+      console.log("Processed Import Results:", processedResults);
+
+      setImportResults(processedResults);
       setStage('complete');
       
       // Refresh the contacts list
       router.refresh();
     } catch (err) {
-      console.error('Error importing contacts:', err);
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
+      console.error('Error importing contacts via n8n:', err);
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred with the import service');
       setStage('error');
     }
   };
@@ -384,15 +425,31 @@ export default function ImportContactsModal({ isOpen, onClose }: ImportContactsM
                       {header}
                     </td>
                     <td className="px-3 py-2">
-                      <SearchableSelect
-                        options={FLAT_CONTACT_FIELDS}
-                        value={mappings[header] || ""}
-                        onChange={(value) => {
-                          setMappings(prev => ({ ...prev, [header]: value }));
-                        }}
-                        placeholder="Select or search for a field..."
-                        emptyMessage="No matching fields found"
-                      />
+                      <div className="flex items-center gap-2">
+                        <div className="flex-grow">
+                          <SearchableSelect
+                            options={FLAT_CONTACT_FIELDS}
+                            value={mappings[header] || ""}
+                            onChange={(value) => handleMappingChange(header, value)}
+                            placeholder="Select or search for a field..."
+                            emptyMessage="No matching fields found"
+                          />
+                        </div>
+                        {mappings[header] && (
+                          <button
+                            type="button"
+                            onClick={() => handleMappingChange(header, "")}
+                            className="h-8 px-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+                            title="Ignore this column"
+                            aria-label="Ignore this column"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                              <line x1="18" y1="6" x2="6" y2="18"></line>
+                              <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                          </button>
+                        )}
+                      </div>
                       {REQUIRED_FIELDS.includes('email') && mappings[header] === 'email' && (
                         <div className="mt-1 text-xs text-red-500 font-medium">* Required field</div>
                       )}
@@ -413,6 +470,17 @@ export default function ImportContactsModal({ isOpen, onClose }: ImportContactsM
           {error && (
             <div className="mb-4 p-3 bg-red-100 border border-red-300 text-red-700 rounded">
               {error}
+            </div>
+          )}
+          
+          {notification && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 text-blue-700 rounded">
+              <div className="flex items-start">
+                <svg className="h-5 w-5 text-blue-400 mr-2 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p>{notification}</p>
+              </div>
             </div>
           )}
           
@@ -514,6 +582,17 @@ export default function ImportContactsModal({ isOpen, onClose }: ImportContactsM
               <li>Required fields: Email {Object.values(mappings).includes('email') ? '✅' : '❌'}</li>
             </ul>
           </div>
+
+          {/* Add Common Tags Section */}
+          <div className="mb-4 p-4 border rounded-md">
+            <h4 className="font-medium mb-2">Apply Additional Tags to ALL Imported Contacts (Optional)</h4>
+            <TagSelector
+              selectedTags={commonTags}
+              onChange={setCommonTags}
+              placeholder="Search or create tags to add to all contacts..."
+              // Note: Ensure TagSelector fetches org-specific tags if needed
+            />
+          </div>
           
           <div className="flex justify-end space-x-3">
             <button
@@ -585,31 +664,76 @@ export default function ImportContactsModal({ isOpen, onClose }: ImportContactsM
               </svg>
               <div className="ml-3">
                 <h3 className="text-sm font-medium text-green-800">Import Successful</h3>
-                <div className="mt-2 text-sm text-green-700">
-                  <p>Successfully imported {importResults.successCount} contacts.</p>
+                <div className="mt-2 text-sm text-green-700 space-y-1">
+                  <p>Successfully imported <strong>{importResults.successCount}</strong> contacts.</p>
+                  {/* Display API-reported duplicate skips */}
+                  {importResults.duplicateSkipCount > 0 && (
+                    <p>Skipped <strong>{importResults.duplicateSkipCount}</strong> contacts because their email address already exists.</p>
+                  )}
+                  {/* Display API-reported validation errors */}
+                  {importResults.validationErrorCount > 0 && (
+                     <p><strong>{importResults.validationErrorCount}</strong> rows failed validation and were not imported.</p>
+                  )}
+                   {/* Display client-side skips (missing required fields) */}
+                  {importResults.clientSkippedCount > 0 && (
+                    <p>Skipped <strong>{importResults.clientSkippedCount}</strong> contacts client-side due to missing required fields (e.g., email).</p>
+                  )}
+                   {/* Display database errors if any */}
+                   {importResults.databaseErrors && importResults.databaseErrors.length > 0 && (
+                     <p className="text-red-600">Encountered <strong>{importResults.databaseErrors.length}</strong> database errors during insertion.</p>
+                   )}
                 </div>
               </div>
             </div>
           </div>
           
-          {importResults.errorCount > 0 && (
-            <div className="bg-yellow-50 p-4 rounded-md mb-4">
+          {/* Combined section for Validation Errors and Duplicate Skips */}
+          {(importResults.validationErrorCount > 0 || importResults.duplicateSkipCount > 0 || (importResults.databaseErrors && importResults.databaseErrors.length > 0)) && (
+            <div className="bg-yellow-50 p-4 rounded-md mb-4 max-h-60 overflow-y-auto">
               <div className="flex">
-                <svg className="h-6 w-6 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="h-6 w-6 text-yellow-400 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-yellow-800">Attention needed</h3>
-                  <div className="mt-2 text-sm text-yellow-700">
-                    <p>{importResults.errorCount} rows had errors and were not imported.</p>
-                    
-                    {importResults.errors.length > 0 && (
-                      <ul className="list-disc pl-5 mt-2 space-y-1">
-                        {importResults.errors.map((error, index) => (
-                          <li key={index}>{error.message || error}</li>
-                        ))}
-                      </ul>
+                <div className="ml-3 flex-1">
+                  <h3 className="text-sm font-medium text-yellow-800">Import Issues</h3>
+                  <div className="mt-2 text-sm text-yellow-700 space-y-2">
+                    {/* Validation Errors */}
+                    {importResults.validationErrorCount > 0 && (
+                      <div>
+                        <p><strong>Validation Errors ({importResults.validationErrorCount}):</strong></p>
+                        <ul className="list-disc pl-5 mt-1 space-y-1 text-xs">
+                          {importResults.validationErrors.slice(0, 10).map((error, index) => ( // Show first 10
+                            <li key={`val-err-${index}`}>Row {error.row}: {error.message}</li>
+                          ))}
+                          {importResults.validationErrors.length > 10 && <li>...and more</li>}
+                        </ul>
+                      </div>
                     )}
+                    {/* Duplicate Skips */}
+                    {importResults.duplicateSkipCount > 0 && (
+                       <div>
+                         <p><strong>Skipped Duplicates ({importResults.duplicateSkipCount}):</strong></p>
+                         <ul className="list-disc pl-5 mt-1 space-y-1 text-xs">
+                           {importResults.skippedDuplicates.slice(0, 10).map((skip, index) => ( // Show first 10
+                             <li key={`dup-skip-${index}`}>Row {skip.row}: Email "{skip.email}" already exists.</li>
+                           ))}
+                           {importResults.skippedDuplicates.length > 10 && <li>...and more</li>}
+                         </ul>
+                       </div>
+                    )}
+                     {/* Database Errors */}
+                    {importResults.databaseErrors && importResults.databaseErrors.length > 0 && (
+                       <div>
+                         <p className="text-red-700"><strong>Database Errors ({importResults.databaseErrors.length}):</strong></p>
+                         <ul className="list-disc pl-5 mt-1 space-y-1 text-xs text-red-600">
+                           {importResults.databaseErrors.slice(0, 10).map((dbError, index) => ( // Show first 10
+                             <li key={`db-err-${index}`}>Batch starting index {dbError.batchStartIndex}: {dbError.message}</li>
+                           ))}
+                           {importResults.databaseErrors.length > 10 && <li>...and more</li>}
+                         </ul>
+                       </div>
+                    )}
+                    {/* Removed extra </ul> tag from here */}
                   </div>
                 </div>
               </div>
@@ -630,6 +754,7 @@ export default function ImportContactsModal({ isOpen, onClose }: ImportContactsM
                 setHeaders([]);
                 setMappings({});
                 setError(null);
+                setCommonTags([]); // Reset common tags
                 setImportResults(null);
               }}
               className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"

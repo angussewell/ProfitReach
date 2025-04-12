@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
 import { WorkflowDefinition } from '@prisma/client';
 import { Loader2 } from 'lucide-react';
+import { prepareWorkflowFormData } from '@/lib/form-data-utils';
 
 // Shadcn UI for Settings Panel
 import {
@@ -234,16 +235,14 @@ export default function WorkflowEditPage() {
       // TODO: Refactor WorkflowBuilder to pass its current steps via onSaveChanges
       const stepsForPayload = steps.map(({ clientId, ...rest }) => rest);
 
-      const payload = {
+      // Use our form-data-utils to handle data type conversions
+      const payload = prepareWorkflowFormData({
         ...finalSettingsData,
-      // Ensure nulls are sent correctly if fields are empty
-      description: finalSettingsData.description || null,
-      dailyContactLimit: finalSettingsData.dailyContactLimit || null,
-      dripStartTime: finalSettingsData.dripStartTime || null,
-      dripEndTime: finalSettingsData.dripEndTime || null,
-      timezone: finalSettingsData.timezone || null,
-      steps: stepsForPayload,
-    };
+        steps: stepsForPayload,
+      });
+      
+      // Additional logging for debugging
+      console.log('DEBUG: Final payload with converted data types:', payload);
 
     // --- DEBUG LOGGING ---
     console.log(

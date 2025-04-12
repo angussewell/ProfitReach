@@ -55,7 +55,8 @@ export function UserManagement() {
     setError(null);
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/organizations/${session?.user?.organizationId}/${session?.user?.organizationId}/users`);
+      // Corrected URL: Removed duplicate organizationId
+      const response = await fetch(`/api/organizations/${session?.user?.organizationId}/users`);
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(errorText || 'Failed to fetch users');
@@ -81,7 +82,8 @@ export function UserManagement() {
 
     setIsCreating(true);
     try {
-      const response = await fetch(`/api/organizations/${session.user.organizationId}/${session.user.organizationId}/users`, {
+      // Corrected URL: Removed duplicate organizationId
+      const response = await fetch(`/api/organizations/${session.user.organizationId}/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newUser)
@@ -97,9 +99,35 @@ export function UserManagement() {
       setNewUser({ name: '', email: '', password: '', role: 'user' });
       toast.success('User created successfully');
     } catch (err) {
-      const error = err as Error;
-      console.error('Error creating user:', error);
-      toast.error(error.message);
+      // Improved error handling to parse JSON response
+      let errorMessage = 'Error creating user';
+      if (err instanceof Error) {
+        // If the error object itself has a message (e.g., network error), use it
+        errorMessage = err.message; 
+      }
+      
+      // Check if the error originated from a failed fetch response
+      if (err instanceof Error && (err as any).response instanceof Response) {
+        const response = (err as any).response as Response;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || `Failed with status: ${response.status}`;
+        } catch (parseError) {
+          // If JSON parsing fails, try getting text
+          try {
+            const errorText = await response.text();
+            errorMessage = errorText || `Failed with status: ${response.status}`;
+          } catch {
+             errorMessage = `Failed with status: ${response.status}`;
+          }
+        }
+      } else if (err instanceof Error) {
+         // Use the error message if it's a generic Error
+         errorMessage = err.message;
+      }
+
+      console.error('Error creating user:', err, 'Processed message:', errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsCreating(false);
     }
@@ -110,8 +138,9 @@ export function UserManagement() {
 
     setIsDeleting(true);
     try {
+      // Corrected URL: Removed duplicate organizationId
       const response = await fetch(
-        `/api/organizations/${session.user.organizationId}/${session.user.organizationId}/users/${userId}`,
+        `/api/organizations/${session.user.organizationId}/users/${userId}`,
         { method: 'DELETE' }
       );
 
@@ -174,8 +203,9 @@ export function UserManagement() {
     }
 
     try {
+      // Corrected URL: Removed duplicate organizationId
       const response = await fetch(
-        `/api/organizations/${session.user.organizationId}/${session.user.organizationId}/users/${currentUserToEdit.id}`,
+        `/api/organizations/${session.user.organizationId}/users/${currentUserToEdit.id}`,
         {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -391,4 +421,4 @@ export function UserManagement() {
       </Dialog>
     </div>
   );
-} 
+}

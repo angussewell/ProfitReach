@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client'; // Import Prisma for error types
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto'; // Import crypto for UUID generation
 
 export const dynamic = 'force-dynamic';
 
@@ -111,35 +113,68 @@ export async function POST(
     });
 
     if (existingUser) {
-      return new NextResponse('Email already in use', { status: 400 });
+      // Return specific JSON error if email already exists
+      return NextResponse.json({ success: false, error: 'Email already in use' }, { status: 400 });
     }
 
-    // Hash password
+    // If email is not in use, proceed with creation attempt
     const hashedPassword = await bcrypt.hash(password, 12);
+    const newUserId = crypto.randomUUID();
+    const now = new Date();
 
-    // Create user
-    const user = await prisma.user.create({
-      data: {
-        name,
-        email,
-        password: hashedPassword,
-        role,
-        organizationId: params.id
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        createdAt: true,
-        updatedAt: true
+    // Inner try specifically for the database operation
+    try {
+      await prisma.$executeRaw`
+        INSERT INTO "User" (
+          "id", "name", "email", "password", "role", "organizationId", "createdAt", "updatedAt"
+        ) VALUES (
+          ${newUserId}, ${name}, ${email}, ${hashedPassword}, ${role}, ${params.id}, ${now}, ${now}
+        )
+      `;
+
+      // Fetch the newly created user to return it
+      const newUser = await prisma.user.findUnique({
+        where: { id: newUserId },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          createdAt: true,
+          updatedAt: true
+        }
+      });
+
+      if (!newUser) {
+        // This should ideally not happen if the insert succeeded
+        console.error('Failed to fetch newly created user with ID:', newUserId);
+        return NextResponse.json({ success: false, error: 'Failed to retrieve created user' }, { status: 500 });
       }
-    });
 
-    return NextResponse.json(user);
-  } catch (error) {
-    console.error('Error creating organization user:', error);
-    return new NextResponse('Internal Server Error', { status: 500 });
+      return NextResponse.json(newUser);
+
+    } catch (dbError) { // Catch specific DB errors from $executeRaw
+      console.error('Database error creating organization user:', dbError);
+
+      // Check for unique constraint violation (email) - More robust check
+      if (
+        dbError instanceof Prisma.PrismaClientKnownRequestError &&
+        dbError.code === 'P2002' &&
+        Array.isArray(dbError.meta?.target) && // Check if target is an array
+        dbError.meta.target.includes('email')
+      ) {
+        // This case might be redundant now due to the initial check, but kept for safety
+        return NextResponse.json({ success: false, error: 'Email already in use' }, { status: 400 });
+      }
+      // Other DB errors
+      return NextResponse.json({ success: false, error: 'Database operation failed' }, { status: 500 });
+    }
+
+  } catch (error) { // Outer catch for general errors (session, validation, etc.)
+    console.error('Error in POST /users handler:', error);
+    // Handle potential non-DB errors from earlier checks if necessary,
+    // otherwise fall through to generic error
+    return NextResponse.json({ success: false, error: 'Internal Server Error' }, { status: 500 });
   }
 }
 
@@ -222,4 +257,4 @@ export async function DELETE(
     console.error('Error deleting organization user:', error);
     return new NextResponse('Internal Server Error', { status: 500 });
   }
-} 
+}

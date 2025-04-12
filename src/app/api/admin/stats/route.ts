@@ -52,11 +52,14 @@ export async function GET(request: Request): Promise<NextResponse> {
       return new NextResponse('Invalid date format', { status: 400 });
     }
 
+    console.log(`[Admin Stats] Received date range: from=${fromParam}, to=${toParam}`);
+
     // Set up date filters if provided
     let dateFilter: { createdAt?: { gte: Date; lte: Date } } = {};
     if (fromParam && toParam) {
       dateFilter = { createdAt: { gte: new Date(fromParam), lte: new Date(toParam) } };
     }
+    console.log('[Admin Stats] Using date filter:', dateFilter);
 
     // === Calculate Overall Stats (Mostly Unchanged) ===
     const overallContactsEnrolled = await prisma.webhookLog.count({
@@ -97,18 +100,19 @@ export async function GET(request: Request): Promise<NextResponse> {
 
     // 3. Fetch ALL Scenario Responses within date range and include Scenario for Org ID
     const allResponses = await prisma.scenarioResponse.findMany({
-      where: dateFilter, 
+      where: dateFilter,
       include: {
-        scenario: {
-          select: { organizationId: true }
-        }
+        Scenario: { // Corrected: Uppercase 'Scenario'
+          select: { organizationId: true },
+        },
       }
     });
 
     // 3b. Group Scenario Responses manually in code
     const groupedResponsesManual = allResponses.reduce((acc, response) => {
-      const orgId = response.scenario?.organizationId;
-      if (orgId) { 
+      // Corrected: Access via Uppercase 'Scenario'
+      const orgId = response.Scenario?.organizationId; 
+      if (orgId) {
         acc[orgId] = (acc[orgId] || 0) + 1;
       }
       return acc;
@@ -166,10 +170,8 @@ export async function GET(request: Request): Promise<NextResponse> {
       },
     });
   } catch (error) {
-    console.error('Error in admin stats API:', error);
-    if (error instanceof Error) {
-        console.error(error.message);
-    }
+    // Updated error logging
+    console.error("!!! API Error fetching admin stats:", error); 
     return new NextResponse('Internal Server Error', { status: 500 });
   }
-} 
+}

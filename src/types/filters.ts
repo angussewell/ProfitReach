@@ -1,3 +1,10 @@
+import { 
+  CONTACT_FIELDS as BASE_CONTACT_FIELDS, 
+  FieldOption, 
+  FIELD_GROUPS,
+  LEAD_STATUS_OPTIONS 
+} from '@/lib/field-definitions';
+
 export type FilterOperator = 
   | 'equals'
   | 'notEquals'
@@ -95,28 +102,42 @@ export const OPERATORS_BY_TYPE: Record<string, { value: FilterOperator; label: s
   ]
 };
 
+// Helper function to determine field type from the new centralized definitions
+function getFieldType(fieldValue: string): 'string' | 'number' | 'date' | 'boolean' | 'select' | 'tags' {
+  // Special cases based on field name
+  if (fieldValue === 'tags') return 'tags';
+  if (fieldValue === 'leadStatus') return 'select';
+  if (['createdAt', 'updatedAt', 'lastActivityAt', 'dateOfResearch'].includes(fieldValue)) return 'date';
+  
+  // Default to string for most fields
+  return 'string';
+}
+
+// Function to check if a field is part of additionalData
+function isJsonField(fieldValue: string): boolean {
+  return fieldValue.startsWith('additionalData.');
+}
+
+// Function to check if a field is a relation
+function isRelationField(fieldValue: string): boolean {
+  return fieldValue === 'tags';
+}
+
 // This represents all available fields that can be filtered on
-export const CONTACT_FIELDS: FieldDefinition[] = [
-  { name: 'firstName', label: 'First Name', type: 'string' },
-  { name: 'lastName', label: 'Last Name', type: 'string' },
-  { name: 'email', label: 'Email', type: 'string' },
-  { name: 'title', label: 'Title', type: 'string' },
-  { name: 'currentCompanyName', label: 'Company', type: 'string' },
-  { name: 'leadStatus', label: 'Lead Status', type: 'select', options: [
-    { label: 'New', value: 'New' },
-    { label: 'Contacted', value: 'Contacted' },
-    { label: 'Qualified', value: 'Qualified' },
-    { label: 'Unqualified', value: 'Unqualified' },
-    { label: 'Replied', value: 'Replied' },
-    { label: 'Customer', value: 'Customer' },
-    { label: 'Churned', value: 'Churned' }
-  ]},
-  { name: 'status', label: 'Status', type: 'string', isJsonField: true },
-  { name: 'city', label: 'City', type: 'string' },
-  { name: 'state', label: 'State', type: 'string' },
-  { name: 'country', label: 'Country', type: 'string' },
-  { name: 'createdAt', label: 'Created At', type: 'date' },
-  { name: 'updatedAt', label: 'Updated At', type: 'date' },
-  { name: 'lastActivityAt', label: 'Last Activity', type: 'date' },
-  { name: 'tags', label: 'Tags', type: 'tags', isRelation: true }
-];
+// Transform the base contact fields to the expected FieldDefinition format
+export const CONTACT_FIELDS: FieldDefinition[] = BASE_CONTACT_FIELDS
+  .filter(field => {
+    // Filter out fields that don't make sense to filter on
+    const excludedFields = ['employmentHistory', 'contactEmails', 'phoneNumbers'];
+    return !excludedFields.includes(field.value);
+  })
+  .map(field => ({
+    name: field.value,
+    label: field.label,
+    type: getFieldType(field.value),
+    isJsonField: isJsonField(field.value),
+    isRelation: isRelationField(field.value),
+    ...(field.value === 'leadStatus' ? {
+      options: LEAD_STATUS_OPTIONS
+    } : {})
+  }));

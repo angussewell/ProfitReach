@@ -8,6 +8,16 @@ interface Tag {
   name: string;
 }
 
+// Type for API response
+interface TagApiResponse {
+  success: boolean;
+  data: {
+    id: string;
+    name: string;
+  }[];
+  message?: string;
+}
+
 interface TagSelectorProps {
   selectedTags: string[];
   onChange: (tags: string[]) => void;
@@ -18,24 +28,47 @@ interface TagSelectorProps {
 export default function TagSelector({ selectedTags, onChange, placeholder = 'Select tags...', disabled = false }: TagSelectorProps) {
   const [inputValue, setInputValue] = useState('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [availableTags, setAvailableTags] = useState<Tag[]>([]);
   
-  // In a real implementation, we'd fetch this from the server
-  // For now, include a mix of example tags and any currently selected tags
-  const [availableTags, setAvailableTags] = useState<Tag[]>([
-    { name: 'VIP' },
-    { name: 'Cold Lead' },
-    { name: 'Warm Lead' },
-    { name: 'Hot Lead' },
-    { name: 'Sales Qualified' },
-    { name: 'Marketing Qualified' },
-    { name: 'Decision Maker' },
-    { name: 'Influencer' },
-    { name: 'Follow Up' },
-    { name: 'Conference 2025' },
-    { name: 'Demo Requested' },
-    { name: 'Demo Completed' },
-    { name: 'Proposal Sent' },
-  ]);
+  // Fetch tags from API when component mounts
+  useEffect(() => {
+    const fetchTags = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        const response = await fetch('/api/tags');
+        
+        if (!response.ok) {
+          throw new Error(`Error fetching tags: ${response.status}`);
+        }
+        
+        const result: TagApiResponse = await response.json();
+        
+        if (result.success) {
+          // Map the API response to match our Tag interface
+          const fetchedTags = result.data.map(tag => ({ 
+            id: tag.id, 
+            name: tag.name 
+          }));
+          setAvailableTags(fetchedTags);
+        } else {
+          throw new Error(result.message || 'Failed to fetch tags');
+        }
+      } catch (err) {
+        console.error('Error fetching tags:', err);
+        setError(err instanceof Error ? err.message : 'An unexpected error occurred');
+        // If we can't fetch tags, initialize with an empty array
+        setAvailableTags([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchTags();
+  }, []); // Empty dependency array means this runs once when component mounts
   
   // Add selected tags to available tags if they're not already there
   useEffect(() => {
@@ -157,26 +190,36 @@ export default function TagSelector({ selectedTags, onChange, placeholder = 'Sel
             </div>
           )}
           
-          <ul className="max-h-40 overflow-auto">
-            {filteredTags.length > 0 ? (
-              filteredTags.map(tag => (
-                <li 
-                  key={tag.name}
-                  className={`px-3 py-2 cursor-pointer hover:bg-gray-100 flex items-center justify-between ${
-                    selectedTags.includes(tag.name) ? 'bg-blue-50' : ''
-                  }`}
-                  onClick={() => toggleTag(tag.name)}
-                >
-                  <span className="text-sm">{tag.name}</span>
-                  {selectedTags.includes(tag.name) && (
-                    <span className="text-blue-500">✓</span>
-                  )}
-                </li>
-              ))
-            ) : (
-              <li className="px-3 py-2 text-sm text-gray-500">No tags found</li>
-            )}
-          </ul>
+          {isLoading ? (
+            <div className="px-3 py-4 text-sm text-gray-500 text-center">
+              <div className="inline-block animate-spin mr-2">⟳</div> Loading tags...
+            </div>
+          ) : error ? (
+            <div className="px-3 py-4 text-sm text-red-500 text-center">
+              Error loading tags. Please try again.
+            </div>
+          ) : (
+            <ul className="max-h-40 overflow-auto">
+              {filteredTags.length > 0 ? (
+                filteredTags.map(tag => (
+                  <li 
+                    key={tag.name}
+                    className={`px-3 py-2 cursor-pointer hover:bg-gray-100 flex items-center justify-between ${
+                      selectedTags.includes(tag.name) ? 'bg-blue-50' : ''
+                    }`}
+                    onClick={() => toggleTag(tag.name)}
+                  >
+                    <span className="text-sm">{tag.name}</span>
+                    {selectedTags.includes(tag.name) && (
+                      <span className="text-blue-500">✓</span>
+                    )}
+                  </li>
+                ))
+              ) : (
+                <li className="px-3 py-2 text-sm text-gray-500">No tags found</li>
+              )}
+            </ul>
+          )}
         </div>
       )}
     </div>

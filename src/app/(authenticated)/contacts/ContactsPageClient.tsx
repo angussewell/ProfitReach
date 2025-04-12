@@ -78,9 +78,8 @@ export default function ContactsPageClient({ initialOrganizationId, searchParams
     return searchParams?.search || '';
   });
   
-  // State to manage the filter state passed down to FilterBar
-  const [currentFilterState, setCurrentFilterState] = useState<FilterState | null>(() => {
-    // Initialize from URL search params on initial render
+  // Initialize filter state from URL params
+  const initialFilterState = (() => {
     const filtersParam = searchParams?.filters;
     if (filtersParam) {
       try {
@@ -90,7 +89,14 @@ export default function ContactsPageClient({ initialOrganizationId, searchParams
       }
     }
     return null;
-  });
+  })();
+  
+  // Split filter state into draft (what user is editing) and applied (what is used for data fetching)
+  const [draftFilterState, setDraftFilterState] = useState<FilterState | null>(initialFilterState);
+  const [appliedFilterState, setAppliedFilterState] = useState<FilterState | null>(initialFilterState);
+  
+  // Track if there are pending changes (draft differs from applied)
+  const [hasPendingChanges, setHasPendingChanges] = useState(false);
 
   // State to trigger refresh of SavedFiltersTabs
   const [refreshTabsCounter, setRefreshTabsCounter] = useState(0);
@@ -163,15 +169,12 @@ export default function ContactsPageClient({ initialOrganizationId, searchParams
     // Update the URL without reloading the page
     router.replace(`${pathname}?${params.toString()}`);
     
-    // Fetch contacts with the current filter state and new search term
-    fetchContacts(currentFilterState, term);
-  }, [currentFilterState, router, pathname, currentSearchParams, fetchContacts]);
+    // Fetch contacts with the applied filter state and new search term
+    fetchContacts(appliedFilterState, term);
+  }, [appliedFilterState, router, pathname, currentSearchParams, fetchContacts]);
 
-  // Callback for when a saved filter tab is selected
-  const handleSelectFilter = useCallback((filterState: FilterState | null) => {
-    setCurrentFilterState(filterState); // Update the state passed to FilterBar
-
-    // Update URL to reflect the selected filter (or clear it) while preserving search
+  // Helper function to update URL with filters
+  const updateURLWithFilters = useCallback((filterState: FilterState | null) => {
     const params = new URLSearchParams(currentSearchParams.toString());
     if (filterState) {
       params.set('filters', encodeURIComponent(JSON.stringify(filterState)));
@@ -181,10 +184,21 @@ export default function ContactsPageClient({ initialOrganizationId, searchParams
     
     // Update the URL (this triggers a re-render but doesn't reload the page)
     router.replace(`${pathname}?${params.toString()}`);
+  }, [router, pathname, currentSearchParams]);
+
+  // Callback for when a saved filter tab is selected
+  const handleSelectFilter = useCallback((filterState: FilterState | null) => {
+    // Update both draft and applied states
+    setDraftFilterState(filterState);
+    setAppliedFilterState(filterState);
+    setHasPendingChanges(false);
+
+    // Update URL to reflect the selected filter
+    updateURLWithFilters(filterState);
     
     // Fetch contacts with the new filter state and current search term
     fetchContacts(filterState, searchTerm);
-  }, [router, pathname, currentSearchParams, fetchContacts, searchTerm]);
+  }, [updateURLWithFilters, fetchContacts, searchTerm]);
 
   // Callback for when a new filter is saved via the modal in FilterBar
   const handleSaveFilterSuccess = useCallback(() => {
@@ -199,15 +213,41 @@ export default function ContactsPageClient({ initialOrganizationId, searchParams
     console.log('Current organization in ContactsPageClient:', currentOrganization);
   }, [currentOrganization]);
   
-  // Initial data fetch and setup effect - add currentOrganization to dependencies
+  // Compare two filter states to see if they're different
+  const areFiltersDifferent = useCallback((a: FilterState | null, b: FilterState | null): boolean => {
+    if (a === null && b === null) return false;
+    if (a === null || b === null) return true;
+    
+    // Check logical operator
+    if (a.logicalOperator !== b.logicalOperator) return true;
+    
+    // Check conditions count
+    if (a.conditions.length !== b.conditions.length) return true;
+    
+    // Deep compare each condition
+    for (const condA of a.conditions) {
+      const condB = b.conditions.find(c => c.id === condA.id);
+      if (!condB) return true;
+      
+      if (condA.field !== condB.field || 
+          condA.operator !== condB.operator || 
+          JSON.stringify(condA.value) !== JSON.stringify(condB.value)) {
+        return true;
+      }
+    }
+    
+    return false;
+  }, []);
+
+  // Initial data fetch and setup effect
   useEffect(() => {
     if (currentOrganization) {
       console.log(`Fetching contacts for organization: ${currentOrganization.name} (${currentOrganization.id})`);
-      fetchContacts(currentFilterState, searchTerm);
+      fetchContacts(appliedFilterState, searchTerm);
     } else {
       console.log('No current organization, waiting before fetching contacts');
     }
-  }, [currentFilterState, searchTerm, fetchContacts, currentOrganization]);
+  }, [appliedFilterState, searchTerm, fetchContacts, currentOrganization]);
 
   return (
     <PageContainer>
@@ -238,22 +278,46 @@ export default function ContactsPageClient({ initialOrganizationId, searchParams
           />
         </div>
         
-        {/* Filter Bar - controlled by parent state */}
+        {/* Filter Bar - with separated draft and applied states */}
         <FilterBar 
-          initialFilterState={currentFilterState} 
+          initialFilterState={draftFilterState} 
           onSaveFilterSuccess={handleSaveFilterSuccess}
-          // Pass selected filter info for update mode
           selectedFilterId={selectedFilter?.id}
           selectedFilterName={selectedFilter?.name}
-          // Optional: handle filter changes within the bar
+          hasPendingChanges={hasPendingChanges}
+          
+          // Handler for draft filter changes (doesn't trigger fetch)
           onFiltersChange={(filters) => {
-            setCurrentFilterState(filters);
-            // Update URL without refreshing
-            const params = new URLSearchParams(currentSearchParams.toString());
-            params.set('filters', encodeURIComponent(JSON.stringify(filters)));
-            router.replace(`${pathname}?${params.toString()}`);
+            setDraftFilterState(filters);
+            
+            // Update pending changes indicator
+            const isDifferent = areFiltersDifferent(filters, appliedFilterState);
+            setHasPendingChanges(isDifferent);
+          }}
+          
+          // Handler for applying filters (triggers fetch)
+          onApplyFilters={(filters) => {
+            setAppliedFilterState(filters);
+            setHasPendingChanges(false);
+            
+            // Update URL
+            updateURLWithFilters(filters);
+            
             // Fetch with new filters and preserve search term
             fetchContacts(filters, searchTerm);
+          }}
+          
+          // Handler for clearing filters
+          onClearFilters={() => {
+            setDraftFilterState(null);
+            setAppliedFilterState(null);
+            setHasPendingChanges(false);
+            
+            // Update URL
+            updateURLWithFilters(null);
+            
+            // Fetch with no filters
+            fetchContacts(null, searchTerm);
           }}
         />
       </div>
@@ -267,7 +331,7 @@ export default function ContactsPageClient({ initialOrganizationId, searchParams
         <EnhancedContactsTable 
           contacts={contacts} 
           totalMatchingCount={totalMatchingCount}
-          currentFilterState={currentFilterState}
+          currentFilterState={appliedFilterState} // Use applied filter state for the table
           searchTerm={searchTerm}
         />
       )}

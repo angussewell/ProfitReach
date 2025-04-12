@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { LEAD_STATUS_OPTIONS } from '@/lib/field-definitions';
 // No need for icon import
 
 type ContactFormData = {
@@ -22,7 +23,7 @@ export default function CreateContactModal({ isOpen, onClose }: CreateContactMod
     firstName: '',
     lastName: '',
     email: '',
-    status: 'Lead',
+    status: '', // Default to empty - no default value
   });
   const [errors, setErrors] = useState<Partial<ContactFormData>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -197,10 +198,11 @@ export default function CreateContactModal({ isOpen, onClose }: CreateContactMod
                 errors.status ? 'border-red-500' : 'border-gray-300'
               }`}
             >
-              <option value="Lead">Lead</option>
-              <option value="Prospect">Prospect</option>
-              <option value="Customer">Customer</option>
-              <option value="Churned">Churned</option>
+              {LEAD_STATUS_OPTIONS.map(option => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
             {errors.status && (
               <p className="mt-1 text-sm text-red-600">{errors.status}</p>
