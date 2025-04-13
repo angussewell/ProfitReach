@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Button } from '@/components/ui/button';
 import ImportContactsModal from './ImportContactsModal';
 
 export default function ImportContactsButton() {
@@ -11,12 +12,13 @@ export default function ImportContactsButton() {
 
   return (
     <>
-      <button
+      <Button
+        variant="outline"
+        size="default"
         onClick={openModal}
-        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center"
       >
         <span className="mr-1">+</span> Import Contacts
-      </button>
+      </Button>
       
       <ImportContactsModal isOpen={isModalOpen} onClose={closeModal} />
     </>

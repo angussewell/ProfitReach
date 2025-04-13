@@ -284,17 +284,19 @@ export default function PromptsPage() {
     <PageContainer>
       <div className="flex flex-col gap-6">
         {/* Replace custom header with PageHeader component */}
-        <PageHeader 
-          title="Prompts"
-          description="Manage your global prompt library"
-        >
-           {/* Keep the New Prompt button within the header actions */}
-           <Button 
-            onClick={() => setIsCreating(true)}
-            className="bg-red-500 hover:bg-red-600 transition-all duration-200 shadow-sm hover:shadow-md text-white border-0 rounded-lg px-6"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            New Prompt
+         <PageHeader 
+           title="Prompts"
+           description="Manage your global prompt library"
+         >
+            {/* Keep the New Prompt button within the header actions */}
+            <Button 
+             variant="default" // Use default variant for primary action
+             size="default" // Use standard size
+             onClick={() => setIsCreating(true)}
+             // Removed custom styling classes
+           >
+             <Plus className="w-4 h-4 mr-2" />
+             New Prompt
           </Button>
         </PageHeader>
 
@@ -341,19 +343,20 @@ export default function PromptsPage() {
               </div>
             </div>
             <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setIsCreating(false)}
-                // Removed custom styling
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleCreate}
-                // Removed custom styling (default primary button style will apply)
-              >
-                Deploy Prompt
-              </Button>
+             <Button
+               variant="secondary" // Use secondary for Cancel
+               size="default" 
+               onClick={() => setIsCreating(false)}
+             >
+               Cancel
+             </Button>
+             <Button
+               variant="default" 
+               size="default" 
+               onClick={handleCreate}
+             >
+               Deploy Prompt
+             </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -395,19 +398,20 @@ export default function PromptsPage() {
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button
-                    variant="outline"
-                    onClick={() => setEditingPrompt(null)}
-                    // Removed custom styling
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={() => handleSave(editingPrompt)}
-                    // Removed custom styling
-                  >
-                    Deploy Changes
-                  </Button>
+                 <Button
+                   variant="secondary" // Use secondary for Cancel
+                   size="default" 
+                   onClick={() => setEditingPrompt(null)}
+                 >
+                   Cancel
+                 </Button>
+                 <Button
+                   variant="default" 
+                   size="default" 
+                   onClick={() => handleSave(editingPrompt)}
+                 >
+                   Deploy Changes
+                 </Button>
                 </DialogFooter>
               </>
             )}
@@ -421,45 +425,42 @@ export default function PromptsPage() {
               className="group relative border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-white rounded-xl overflow-hidden"
             >
               <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => togglePrompt(prompt.id)}
-                  className="bg-white/90 hover:bg-white shadow-sm hover:shadow-md rounded-lg text-gray-600 hover:text-red-500"
-                >
-                  {expandedPrompts.has(prompt.id) ? (
-                    <ChevronUp className="w-5 h-5" />
-                  ) : (
-                    <ChevronDown className="w-5 h-5" />
-                  )}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setPreviewVariables({});
-                    setPreviewPrompt(prompt);
-                  }}
-                  className="bg-white/90 hover:bg-white shadow-sm hover:shadow-md rounded-lg text-gray-600 hover:text-red-500"
-                >
-                  <Eye className="w-5 h-5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setEditingPrompt(prompt)}
-                  className="bg-white/90 hover:bg-white shadow-sm hover:shadow-md rounded-lg text-gray-600 hover:text-red-500"
-                >
-                  <Pencil className="w-5 h-5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleDelete(prompt.id)}
-                  className="bg-white/90 hover:bg-white shadow-sm hover:shadow-md rounded-lg text-gray-600 hover:text-red-500"
-                >
-                  <Trash2 className="w-5 h-5" />
-                </Button>
+                 <Button
+                   variant="ghost" // Keep ghost for subtle actions
+                   size="icon" // Use icon size
+                   onClick={() => togglePrompt(prompt.id)}
+                 >
+                   {expandedPrompts.has(prompt.id) ? (
+                     <ChevronUp className="w-5 h-5" />
+                   ) : (
+                     <ChevronDown className="w-5 h-5" />
+                   )}
+                 </Button>
+                 <Button
+                   variant="ghost" // Keep ghost for subtle actions
+                   size="icon" // Use icon size
+                   onClick={() => {
+                     setPreviewVariables({});
+                     setPreviewPrompt(prompt);
+                   }}
+                 >
+                   <Eye className="w-5 h-5" />
+                 </Button>
+                 <Button
+                   variant="ghost" // Keep ghost for subtle actions
+                   size="icon" // Use icon size
+                   onClick={() => setEditingPrompt(prompt)}
+                 >
+                   <Pencil className="w-5 h-5" />
+                 </Button>
+                 <Button
+                   variant="destructive" // Use subtle destructive
+                   size="icon" // Use icon size
+                   onClick={() => handleDelete(prompt.id)}
+                   className="text-red-600 hover:bg-red-50" // Add specific destructive styling
+                 >
+                   <Trash2 className="w-5 h-5" />
+                 </Button>
               </div>
               <CardHeader className="pb-4">
                 <CardTitle className="text-lg font-semibold text-slate-800 pr-24">{prompt.name}</CardTitle>

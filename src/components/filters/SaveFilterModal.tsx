@@ -146,10 +146,10 @@ export default function SaveFilterModal({
           )}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={isLoading}>
+          <Button variant="secondary" onClick={() => handleOpenChange(false)} disabled={isLoading}>
             Cancel
           </Button>
-          <Button type="submit" onClick={handleSave} disabled={isLoading || !filterName.trim()}>
+          <Button type="submit" variant="default" onClick={handleSave} disabled={isLoading || !filterName.trim()}>
             {isLoading ? 'Saving...' : selectedFilterId ? 'Update Filter' : 'Save Filter'}
           </Button>
         </DialogFooter>

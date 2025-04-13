@@ -19,4 +19,7 @@ export function PageContainer({ children, className }: PageContainerProps) {
       </div>
     </div>
   )
-} 
+}
+
+// Also export as default for flexibility
+export default PageContainer;

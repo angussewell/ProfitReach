@@ -28,9 +28,9 @@ export function ScenarioList({ scenarios }: ScenarioListProps) {
       <div className="text-center py-8">
         <h3 className="text-lg font-medium text-gray-900 mb-2">No scenarios yet</h3>
         <p className="text-gray-500 mb-4">Get started by creating your first scenario</p>
-        <Link href="/settings/scenarios/new">
-          <Button>Create Scenario</Button>
-        </Link>
+<Link href="/settings/scenarios/new">
+  <Button variant="default" size="default">Create Scenario</Button>
+</Link>
       </div>
     );
   }
@@ -64,4 +64,4 @@ export function ScenarioList({ scenarios }: ScenarioListProps) {
       ))}
     </div>
   );
-} 
+}

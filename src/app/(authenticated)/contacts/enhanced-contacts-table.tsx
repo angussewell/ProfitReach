@@ -69,20 +69,15 @@ function DeleteConfirmationModal({
         )}
 
         <div className="flex justify-end space-x-3">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-            disabled={isDeleting}
-          >
-            Cancel
-          </button>
-          <button
+          <Button variant="outline" size="default" onClick={onClose} disabled={isDeleting}>Cancel</Button>
+          <Button
+            variant="destructive"
+            size="default"
             onClick={onConfirm}
-            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-red-400"
             disabled={isDeleting}
           >
             {isDeleting ? 'Deleting...' : 'Delete'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -153,20 +148,17 @@ function BulkDeleteConfirmationModal({
         </div>
 
         <div className="flex justify-end space-x-3">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-            disabled={isDeleting}
-          >
-            Cancel
-          </button>
-          <button
+          {/* Corrected: Removed outer button, kept inner standardized Button */}
+          <Button variant="outline" size="default" onClick={onClose} disabled={isDeleting}>Cancel</Button>
+          {/* Corrected: Removed outer button, kept inner standardized Button */}
+          <Button
+            variant="destructive"
+            size="default"
             onClick={() => onConfirm(forceDelete)}
-            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-red-400"
             disabled={isDeleting}
           >
             {isDeleting ? 'Deleting...' : 'Delete Selected Contacts'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -439,49 +431,53 @@ export default function EnhancedContactsTable({
                   {selectedContactIds.length === contacts.length && totalMatchingCount > contacts.length && (
                     <span className="ml-2 text-blue-600">
                       All {contacts.length} contacts on this page are selected.{' '}
-                      <button 
-                        onClick={() => setIsSelectAllMatchingActive(true)}
-                        className="text-blue-700 hover:text-blue-800 underline"
-                      >
-                        Select all {totalMatchingCount} contacts matching filters
-                      </button>
+                  <Button
+                    variant="link"
+                    onClick={() => setIsSelectAllMatchingActive(true)}
+                    className="text-sm p-0 h-auto" // Adjust link styling
+                  >
+                    Select all {totalMatchingCount} contacts matching filters
+                  </Button>
                     </span>
                   )}
                 </div>
               ) : (
                 <div className="font-medium">
                   All {totalMatchingCount} contacts matching filters are selected.{' '}
-                  <button 
+                  <Button
+                    variant="link"
                     onClick={() => {
                       setIsSelectAllMatchingActive(false);
                       setSelectedContactIds([]);
                     }}
-                    className="text-blue-700 hover:text-blue-800 underline"
+                    className="text-sm p-0 h-auto" // Adjust link styling
                   >
                     Clear selection
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
             <div className="flex gap-2">
-              <button 
-                onClick={openBulkDeleteModal}
-                className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded-md hover:bg-red-200 disabled:opacity-50"
-              >
-                Bulk Delete
-              </button>
-              <button 
-                onClick={openBulkEditModal}
-                className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 disabled:opacity-50"
-              >
-                Bulk Edit
-              </button>
-              {/* Enroll Button */}
               <Button
                 variant="outline"
                 size="sm"
+                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                onClick={openBulkDeleteModal}
+              >
+                Bulk Delete
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={openBulkEditModal}
+              >
+                Bulk Edit
+              </Button>
+              {/* Enroll Button */}
+              <Button
+                variant="secondary" // Changed to secondary
+                size="sm"
                 onClick={openEnrollModal}
-                className="px-3 py-1 text-sm bg-green-100 text-green-700 rounded-md hover:bg-green-200 border-green-200 hover:border-green-300 disabled:opacity-50"
               >
                 Enroll in Workflow
               </Button>
@@ -578,17 +574,19 @@ export default function EnhancedContactsTable({
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="relative inline-block text-left contact-dropdown">
-                      <button
-                        className="px-2 py-1 text-gray-600 hover:text-gray-900 rounded-md hover:bg-gray-100"
+                      {/* Replaced raw button with Button component */}
+                      <Button
+                        variant="ghost"
+                        size="sm" // Using sm for slightly smaller target
                         onClick={(e) => {
                           e.stopPropagation();
                           toggleDropdown(contact.id);
                         }}
                       >
                         •••
-                      </button>
-                      <div 
-                        className={`absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg ${activeDropdown === contact.id ? 'block' : 'hidden'} z-10`}
+                      </Button>
+                      <div
+                        className={`absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg ${activeDropdown === contact.id ? 'block' : 'hidden'} z-10 border border-border`} // Added border
                       >
                         <div className="py-1 border border-gray-200 rounded-md">
                           <a 
@@ -597,9 +595,10 @@ export default function EnhancedContactsTable({
                           >
                             Edit
                           </a>
-                          <button 
-                            onClick={() => openDeleteModal(contact)} 
-                            className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
+                          {/* Ensured destructive text color */}
+                          <button
+                            onClick={() => openDeleteModal(contact)}
+                            className="block w-full text-left px-4 py-2 text-sm text-destructive hover:bg-destructive/10"
                           >
                             Delete
                           </button>
@@ -617,23 +616,25 @@ export default function EnhancedContactsTable({
         <div className="bg-gray-50 px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
           <div className="flex-1 flex justify-between sm:hidden">
             {/* Mobile pagination controls */}
-            <button
+            <Button
+              variant="outline"
+              size="default"
               onClick={() => goToPage(currentPage - 1)}
               disabled={currentPage === 1}
-              className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Previous
-            </button>
-            <span className="text-sm text-gray-700">
+            </Button>
+            <span className="text-sm text-gray-700 self-center"> {/* Added self-center */}
               Page {currentPage} of {totalPages}
             </span>
-            <button
+            <Button
+              variant="outline"
+              size="default"
               onClick={() => goToPage(currentPage + 1)}
               disabled={currentPage === totalPages}
-              className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Next
-            </button>
+            </Button>
           </div>
           
           <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
@@ -670,23 +671,27 @@ export default function EnhancedContactsTable({
               {/* Desktop pagination controls */}
               <div>
                 <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                  <button
+                  <Button
+                    variant="outline"
+                    size="sm" // Changed size
                     onClick={() => goToPage(1)}
                     disabled={currentPage === 1}
-                    className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="rounded-r-none" // Keep left rounding
                   >
                     <span className="sr-only">First Page</span>
                     <span>«</span>
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm" // Changed size
                     onClick={() => goToPage(currentPage - 1)}
                     disabled={currentPage === 1}
-                    className="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="rounded-none" // No rounding
                   >
                     <span className="sr-only">Previous Page</span>
                     <span>‹</span>
-                  </button>
-                  
+                  </Button>
+
                   {/* Page numbers */}
                   {Array.from(
                     { length: Math.min(5, totalPages) },
@@ -708,38 +713,40 @@ export default function EnhancedContactsTable({
                       }
                       
                       return (
-                        <button
+                        <Button
                           key={pageNum}
+                          variant={currentPage === pageNum ? "default" : "outline"} // Conditional variant
+                          size="sm" // Changed size
                           onClick={() => goToPage(pageNum)}
                           aria-current={currentPage === pageNum ? 'page' : undefined}
-                          className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium
-                            ${currentPage === pageNum 
-                              ? 'z-10 bg-blue-50 border-blue-500 text-blue-600' 
-                              : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
-                            }`}
+                          className="rounded-none" // No rounding
                         >
                           {pageNum}
-                        </button>
+                        </Button>
                       );
                     }
                   )}
-                  
-                  <button
+
+                  <Button
+                    variant="outline"
+                    size="sm" // Changed size
                     onClick={() => goToPage(currentPage + 1)}
                     disabled={currentPage === totalPages}
-                    className="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="rounded-none" // No rounding
                   >
                     <span className="sr-only">Next Page</span>
                     <span>›</span>
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm" // Changed size
                     onClick={() => goToPage(totalPages)}
                     disabled={currentPage === totalPages}
-                    className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="rounded-l-none" // Keep right rounding
                   >
                     <span className="sr-only">Last Page</span>
                     <span>»</span>
-                  </button>
+                  </Button>
                 </nav>
               </div>
             </div>

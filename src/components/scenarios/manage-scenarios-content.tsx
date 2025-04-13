@@ -37,7 +37,7 @@ export function ManageScenariosContent({ scenarios }: ManageScenariosContentProp
         <h1 className="text-2xl font-bold text-gray-900">Manage Scenarios</h1>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button className="bg-red-500 hover:bg-red-600 transition-all duration-200 text-white shadow-sm hover:shadow-md">
+            <Button variant="default" size="default"> {/* Keep default for primary page action */}
               <Plus className="w-4 h-4 mr-2" />
               Create Scenario
             </Button>
@@ -84,4 +84,4 @@ export function ManageScenariosContent({ scenarios }: ManageScenariosContentProp
       </div>
     </>
   );
-} 
+}

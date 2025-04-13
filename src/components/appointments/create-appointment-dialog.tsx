@@ -286,7 +286,7 @@ export function CreateAppointmentDialog({
               />
               <Button 
                 type="button" 
-                variant="outline" 
+                variant="secondary" // Use secondary for Add Recipient
                 size="icon"
                 onClick={addRecipient}
               >
@@ -303,7 +303,7 @@ export function CreateAppointmentDialog({
                       type="button" 
                       variant="ghost" 
                       size="icon" 
-                      className="h-5 w-5 ml-1 p-0"
+                      className="ml-1 h-6 w-6 p-1 text-muted-foreground hover:text-foreground" // Adjust size and styling for consistency
                       onClick={() => removeRecipient(email)}
                     >
                       <X className="h-3 w-3" />
@@ -325,10 +325,10 @@ export function CreateAppointmentDialog({
           </div>
 
           <div className="flex justify-end space-x-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}> {/* Use secondary for Cancel */}
               Cancel
             </Button>
-            <Button type="submit">Create Appointment</Button>
+            <Button type="submit" variant="default">Create Appointment</Button> {/* Use default for primary action */}
           </div>
         </form>
       </DialogContent>

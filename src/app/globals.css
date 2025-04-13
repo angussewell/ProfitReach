@@ -24,7 +24,26 @@
     --input: 220 13% 91%;
     --ring: 224 71.4% 4.1%;
     --radius: 0.5rem;
+
+    /* Warm Gradient Stops */
+    --brand-warm-start: #edad52; /* Bottom/Left */
+    --brand-warm-middle: #e93d3d; /* Middle */
+    --brand-warm-end: #ab213e;   /* Top/Right */
+
+    /* Cold Gradient Stops */
+    --brand-cold-start: #53b5d9; /* Bottom/Left */
+    --brand-cold-middle: #1b4f75; /* Middle */
+    --brand-cold-end: #092843;   /* Top/Right */
   }
+
+/* Dedicated Gradient Classes */
+.brand-gradient-warm {
+  background-image: linear-gradient(to top right, var(--brand-warm-start), var(--brand-warm-middle), var(--brand-warm-end));
+}
+
+.brand-gradient-cold {
+  background-image: linear-gradient(to top right, var(--brand-cold-start), var(--brand-cold-middle), var(--brand-cold-end));
+}
 
   .dark {
     --background: 224 71.4% 4.1%;

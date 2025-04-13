@@ -95,7 +95,9 @@ function LoginForm() {
 
             <Button
               type="submit"
-              className="w-full h-11 text-base bg-primary hover:bg-primary/90"
+              variant="default"
+              size="lg"
+              className="w-full"
               disabled={isLoading}
             >
               {isLoading ? 'Signing in...' : 'Sign in'}
@@ -113,4 +115,4 @@ export default function LoginPage() {
       <LoginForm />
     </Suspense>
   );
-} 
+}

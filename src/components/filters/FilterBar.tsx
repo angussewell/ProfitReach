@@ -209,8 +209,8 @@ export default function FilterBar({
     return (
       <div className="mb-4">
         <Button 
-          variant="outline" 
-          size="sm"
+          variant="outline" // Use outline variant for Add Filter when collapsed
+          size="default" // Use default size for better visibility
           onClick={() => setIsExpanded(true)}
           className="flex items-center gap-1"
         >
@@ -275,10 +275,10 @@ export default function FilterBar({
       
       <div className="flex flex-wrap gap-2">
         <Button
-          variant="outline"
+          variant="secondary" // Use secondary for Add Filter inside the expanded bar
           size="sm"
           onClick={addFilterCondition}
-          className="text-xs flex items-center gap-1"
+          className="flex items-center gap-1"
         >
           <Plus className="h-3 w-3" />
           Add Filter
@@ -286,10 +286,9 @@ export default function FilterBar({
         
         {filterState.conditions.length >= 2 && (
           <Button
-            variant="outline"
+            variant="secondary" // Use secondary for AND/OR toggle
             size="sm"
             onClick={toggleLogicalOperator}
-            className="text-xs"
           >
             Match {filterState.logicalOperator === 'AND' ? 'all' : 'any'} (using {filterState.logicalOperator})
           </Button>
@@ -313,9 +312,9 @@ export default function FilterBar({
               selectedFilterName={selectedFilterName}
             >
               <Button
-                variant="outline"
+                variant="secondary" // Use secondary for Save View
                 size="sm"
-                className="text-xs flex items-center gap-1"
+                className="flex items-center gap-1"
                 disabled={activeFilterCount === 0}
               >
                 <Save className="h-3 w-3" />
@@ -324,16 +323,15 @@ export default function FilterBar({
             </SaveFilterModal>
 
             <Button
-              variant="outline"
+              variant="secondary" // Use secondary for Clear Filters
               size="sm"
               onClick={clearFilters}
-              className="text-xs"
             >
               Clear Filters
             </Button>
             
             <Button
-              variant="default"
+              variant="default" // Keep default for Apply Filters
               size="sm"
               onClick={() => {
                 // First update internal state
@@ -344,7 +342,7 @@ export default function FilterBar({
                   onApplyFilters(filterState);
                 }
               }}
-              className="text-xs relative"
+              className="relative"
             >
               {hasPendingChanges && (
                 <span className="absolute -top-1 -right-1 flex h-3 w-3">

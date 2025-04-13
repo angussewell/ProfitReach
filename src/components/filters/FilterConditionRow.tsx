@@ -240,14 +240,16 @@ export default function FilterConditionRow({
 
       {/* Remove button */}
       <div className="flex items-center justify-center">
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={onRemove}
-          className="p-2 text-gray-400 hover:text-gray-500 focus:outline-none text-xl font-bold"
           aria-label="Remove filter"
           title="Remove filter"
+          className="text-gray-400 hover:text-gray-500" // Keep hover color if desired, or remove for default ghost hover
         >
-          ×
-        </button>
+          <span className="text-xl font-bold">×</span> {/* Use span for the 'x' character */}
+        </Button>
       </div>
     </div>
   );

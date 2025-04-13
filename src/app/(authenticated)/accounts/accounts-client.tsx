@@ -400,7 +400,7 @@ export function AccountsClient() {
               ) : (
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-lg">{account.name}</span>
-                  <Button // ClientButton -> Button
+                  <Button 
                     variant="ghost"
                     size="sm"
                     onClick={() => {
@@ -408,7 +408,7 @@ export function AccountsClient() {
                       setAccountName(account.name);
                     }}
                   >
-                    <Pencil className="h-3.5 w-3.5" /> {/* ClientPencilIcon -> Pencil */}
+                    <Pencil className="h-3.5 w-3.5" /> 
                   </Button>
                 </div>
               )}
@@ -425,13 +425,14 @@ export function AccountsClient() {
                   className="data-[state=checked]:bg-green-500"
                 />
               </div>
-              <Button // ClientButton -> Button
-                variant="ghost"
-                size="sm"
+              <Button 
+                variant="ghost" // Changed to ghost with text-destructive class for subtle red
+                size="icon"
+                className="text-destructive hover:bg-destructive/10"
                 onClick={() => handleDelete(account, type)}
-                className="text-gray-400 hover:text-red-500"
+                aria-label="Delete account"
               >
-                <Trash2 className="h-4 w-4" /> {/* ClientTrashIcon -> Trash2 */}
+                <Trash2 className="h-4 w-4" /> 
               </Button>
             </div>
           </div>
@@ -494,21 +495,21 @@ export function AccountsClient() {
               Manage your connected email and LinkedIn accounts
             </p>
           </div>
-          <div className="flex items-center gap-2"> {/* Wrapper div */}
-            <button 
-              type="button"
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="brand-gradient-warm" // Use the specific warm gradient
+              size="default"
               onClick={() => setIsSyncDialogOpen(true)}
-              className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2 rounded hover:from-purple-600 hover:to-pink-600"
             >
               AI Sync New Accounts
-            </button>
-            <button 
-              type="button"
+            </Button>
+            <Button 
+              variant="brand-gradient-cold" // Use the cold gradient for Connect Account
+              size="default"
               onClick={handleConnect}
-              className="bg-gray-200 px-4 py-2 rounded hover:bg-gray-300"
             >
               Connect Account
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -653,32 +654,21 @@ export function AccountsClient() {
               </div>
               
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
-                <button 
+                <Button 
                   type="button"
+                  variant="outline"
+                  size="default"
                   onClick={() => setIsSyncDialogOpen(false)}
-                  style={{
-                    padding: '8px 16px',
-                    backgroundColor: '#f1f1f1',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer'
-                  }}
                 >
                   Cancel
-                </button>
-                <button 
+                </Button>
+                <Button 
                   type="submit"
-                  style={{
-                    padding: '8px 16px',
-                    backgroundColor: '#0070f3',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer'
-                  }}
+                  variant="default"
+                  size="default"
                 >
                   Submit Request
-                </button>
+                </Button>
               </div>
             </form>
           </div>

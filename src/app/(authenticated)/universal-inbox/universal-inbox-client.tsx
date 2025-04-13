@@ -5,7 +5,8 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { PageHeader } from '@/components/ui/page-header';
 import { ClientCard, ClientButton, ClientInput } from '@/components/ui/client-components';
-import { Inbox, Loader2, MessageSquare, Reply, Send, Trash2, X, Calendar, ThumbsDown, Clock, CheckCircle, RefreshCw, Sparkles, XCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Inbox, Loader2, MessageSquare, Reply, Send, Trash2, X, Calendar, ThumbsDown, Clock, CheckCircle, RefreshCw, Sparkles, XCircle, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { LucideProps } from 'lucide-react';
 import { toast } from 'sonner';
@@ -183,6 +184,7 @@ export function UniversalInboxClient() {
   const [selectedThread, setSelectedThread] = useState<string | null>(null);
   const [messages, setMessages] = useState<EmailMessage[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
   const [isReplying, setIsReplying] = useState(false);
   const [replyContent, setReplyContent] = useState('');
   const [replying, setReplying] = useState(false);
@@ -319,12 +321,28 @@ export function UniversalInboxClient() {
 
   // Memoize filtering based on search
   const filteredSortedThreadIds = useMemo(() => {
-    // Need access to enhancedThreadGroups if getThreadStatus uses it
-    // Ensure getThreadStatus is stable or included in dependencies if needed
-    return sortedThreadIds.filter(
-      threadId => statusFilter === 'ALL' || getThreadStatus(threadId) === statusFilter
-    );
-  }, [sortedThreadIds, statusFilter, getThreadStatus]); // Add getThreadStatus dependency
+    return sortedThreadIds.filter(threadId => {
+      // Status filter
+      if (statusFilter !== 'ALL' && getThreadStatus(threadId) !== statusFilter) {
+        return false;
+      }
+      // Search filter
+      if (!searchQuery.trim()) return true;
+      const query = searchQuery.trim().toLowerCase();
+      const messages = enhancedThreadGroups[threadId];
+      return messages.some(msg => {
+        // Gather all fields to search
+        const fields = [
+          msg.sender,
+          msg.recipientEmail,
+          msg.subject,
+        ];
+        return fields.some(field =>
+          field && field.toLowerCase().includes(query)
+        );
+      });
+    });
+  }, [sortedThreadIds, statusFilter, searchQuery, enhancedThreadGroups, getThreadStatus]);
 
   const currentIndex = useMemo(() => {
     if (!selectedThread) return -1;
@@ -852,25 +870,39 @@ export function UniversalInboxClient() {
         {viewMode === 'list' ? (
           // List View (Full Width)
           <ClientCard className="h-[calc(100vh-14rem)] overflow-hidden flex flex-col border-slate-200/60 shadow-lg shadow-slate-200/50">
-            <div className="px-6 py-4 border-b border-slate-200/60 flex items-center justify-between bg-white/95">
-              <div className="flex items-center gap-4">
-                <h2 className="text-lg font-semibold flex items-center gap-2 text-slate-900">
+            <div className="px-6 py-6 border-b border-slate-200/60 bg-white/95">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:gap-x-4 gap-y-4">
+                <h2 className="text-lg font-semibold flex items-center gap-2 text-slate-900 mb-2 sm:mb-0">
                   <InboxIcon className="h-5 w-5 text-slate-500" />
                   <span>Conversations</span>
                 </h2>
-                <select 
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value as ConversationStatus | 'ALL')}
-                  className="px-2 py-1 text-sm border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  aria-label="Filter by status"
-                >
-                  <option value="ALL">All Statuses</option>
-                  <option value="FOLLOW_UP_NEEDED">Follow Up Needed</option>
-                  <option value="WAITING_FOR_REPLY">Waiting for Reply</option>
-                  <option value="MEETING_BOOKED">Meeting Booked</option>
-                  <option value="NOT_INTERESTED">Not Interested</option>
-                  <option value="NO_ACTION_NEEDED">No Action Needed</option>
-                </select>
+                <div className="flex-1 flex flex-col sm:flex-row sm:items-center gap-3">
+                  <div className="relative flex-1 max-w-lg">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5 pointer-events-none" />
+                    <Input
+                      type="text"
+                      placeholder="Search messages…"
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      className="pl-12 pr-4 py-3 w-full rounded-xl border-2 border-slate-200 shadow focus:border-blue-400 text-lg font-medium bg-white transition-all"
+                      aria-label="Search messages"
+                      style={{ minHeight: '3.25rem' }}
+                    />
+                  </div>
+                  <select 
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value as ConversationStatus | 'ALL')}
+                    className="py-3 px-4 rounded-xl border-2 border-slate-200 shadow bg-white text-base font-medium focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all"
+                    aria-label="Filter by status"
+                  >
+                    <option value="ALL">All Statuses</option>
+                    <option value="FOLLOW_UP_NEEDED">Follow Up Needed</option>
+                    <option value="WAITING_FOR_REPLY">Waiting for Reply</option>
+                    <option value="MEETING_BOOKED">Meeting Booked</option>
+                    <option value="NOT_INTERESTED">Not Interested</option>
+                    <option value="NO_ACTION_NEEDED">No Action Needed</option>
+                  </select>
+                </div>
               </div>
             </div>
             

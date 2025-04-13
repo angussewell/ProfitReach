@@ -283,7 +283,7 @@ export function UserManagement() {
               </div>
             </div>
             <div className="flex justify-end">
-              <Button type="submit" disabled={isCreating}>
+              <Button type="submit" variant="default" size="default" disabled={isCreating}>
                 {isCreating ? (<><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Creating...</>) : (<><Plus className="w-4 h-4 mr-2" /> Create User</>)}
               </Button>
             </div>
@@ -338,24 +338,25 @@ export function UserManagement() {
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                         {user.id !== session.user.id && user.role !== 'admin' && (
                           <Button 
-                            variant="outline" 
+                            variant="ghost" // Use ghost for icon-only actions
                             size="icon"
                             title="Edit User"
                             onClick={() => handleOpenEditModal(user)} 
                             disabled={isEditing || isDeleting}
-                            className="text-blue-600 hover:text-blue-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                            // Removed custom styling
                           >
                             <Edit className="w-4 h-4" />
                           </Button>
                         )}
                         {user.id !== session.user.id && (
-                           <Button 
-                            variant="outline" 
+                           <Button
+                            variant="ghost" // Changed from destructive for subtle icon
                             size="icon"
+                            className="text-destructive hover:bg-destructive/10" // Added class for color
                             title="Delete User"
                             onClick={() => handleDeleteUser(user.id)}
                             disabled={isDeleting || isEditing}
-                            className="text-red-600 hover:text-red-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                            // Removed custom styling
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
@@ -410,8 +411,8 @@ export function UserManagement() {
               </div>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsEditModalOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={isEditing}>
+              <Button type="button" variant="outline" size="default" onClick={() => setIsEditModalOpen(false)}>Cancel</Button>
+              <Button type="submit" variant="default" size="default" disabled={isEditing}>
                 {isEditing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
                 Save changes
               </Button>

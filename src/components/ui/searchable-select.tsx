@@ -57,9 +57,10 @@ export function SearchableSelect({
       <Popover.Trigger asChild>
         <Button
           variant="outline"
+          size="default" // Use standard size
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between h-12 border-2 border-slate-200 focus:border-red-500 focus:ring-red-100 transition-all rounded-lg"
+          className="w-full justify-between" // Keep layout classes
         >
           <span className="truncate">{selectedOption?.label || placeholder}</span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -117,4 +118,4 @@ export function SearchableSelect({
       </Popover.Portal>
     </Popover.Root>
   );
-} 
+}

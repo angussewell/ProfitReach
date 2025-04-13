@@ -55,7 +55,7 @@ export default async function WorkflowsPage() {
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold">Workflows</h1>
           <Link href="/workflows/new" passHref>
-            <Button>Create Workflow</Button>
+            <Button variant="default" size="default">Create Workflow</Button> {/* Apply default variant and size */}
           </Link>
         </div>
         <div className="p-8 text-center border rounded-lg">
@@ -74,7 +74,7 @@ export default async function WorkflowsPage() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Workflows</h1>
         <Link href="/workflows/new" passHref>
-          <Button>Create Workflow</Button>
+          <Button variant="default" size="default">Create Workflow</Button> {/* Apply default variant and size */}
         </Link>
       </div>
 
