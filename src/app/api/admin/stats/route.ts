@@ -143,6 +143,14 @@ export async function GET(request: Request): Promise<NextResponse> {
       const orgTotalWebhooks = orgWebhookLogs > 0 ? orgWebhookLogs : 1;
       const orgReplyRate = parseFloat(((orgResponses / orgTotalWebhooks) * 100).toFixed(1));
 
+      // New calculated fields
+      const bookingRate = orgWebhookLogs > 0
+        ? parseFloat(((orgAppointments / orgWebhookLogs) * 100).toFixed(1))
+        : 0;
+      const replyToBookingRate = orgResponses > 0
+        ? parseFloat(((orgAppointments / orgResponses) * 100).toFixed(1))
+        : 0;
+
       return {
         id: org.id,
         name: org.name,
@@ -152,6 +160,8 @@ export async function GET(request: Request): Promise<NextResponse> {
           replyRate: orgReplyRate,
           meetingsBooked: orgAppointments,
           activeScenarios: orgActiveScenarios,
+          bookingRate,
+          replyToBookingRate,
         },
       };
     });

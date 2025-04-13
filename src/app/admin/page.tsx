@@ -17,6 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { 
   Card, 
   CardContent, 
@@ -53,6 +54,8 @@ interface OrgStatsData {
   replyRate: number;
   meetingsBooked: number;
   activeScenarios: number;
+  bookingRate?: number;
+  replyToBookingRate?: number;
 }
 
 interface OrgStats {
@@ -127,6 +130,9 @@ export default function AdminPanelPage() {
   const [setterStats, setSetterStats] = useState<SetterStat[]>([]);
   const [setterStatsLoading, setSetterStatsLoading] = useState(false);
   const [setterStatsError, setSetterStatsError] = useState<string | null>(null);
+
+  // Tab state for Organization Breakdown
+  const [activeTab, setActiveTab] = useState("contacts");
 
   // Add new state for metadata
   const [setterStatsMetadata, setSetterStatsMetadata] = useState<SetterStatsMetadata | null>(null);
@@ -935,76 +941,200 @@ export default function AdminPanelPage() {
           <div className="h-10 w-1 bg-gradient-to-b from-amber-500 to-red-500 rounded mr-3"></div>
           <h2 className="text-xl font-semibold text-slate-800">Organization Breakdown</h2>
         </div>
-        
-        <Card className="border-slate-200 shadow-sm overflow-hidden">
-          <div className="h-1 bg-gradient-to-r from-slate-200 via-slate-300 to-slate-200"></div>
-          <CardContent className="pt-0">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-slate-50 hover:bg-slate-50/80 border-b border-slate-200">
-                  <TableHead className="w-[250px] text-slate-700 pl-4">Organization</TableHead>
-                  <TableHead className="text-right text-slate-700">Contacts Enrolled</TableHead>
-                  <TableHead className="text-right text-slate-700">Total Replies</TableHead>
-                  <TableHead className="text-right text-slate-700">Reply Rate</TableHead>
-                  <TableHead className="text-right text-slate-700">Meetings Booked</TableHead>
-                  <TableHead className="text-right text-slate-700">Active Scenarios</TableHead>
-                  <TableHead className="text-right text-slate-700 pr-4">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  Array.from({ length: 5 }).map((_, index) => (
-                    <TableRow key={`skel-${index}`} className="border-b border-slate-100">
-                      <TableCell className="pl-4"><Skeleton className="h-5 w-3/4" /></TableCell>
-                      <TableCell className="text-right"><Skeleton className="h-5 w-12 inline-block" /></TableCell>
-                      <TableCell className="text-right"><Skeleton className="h-5 w-12 inline-block" /></TableCell>
-                      <TableCell className="text-right"><Skeleton className="h-5 w-12 inline-block" /></TableCell>
-                      <TableCell className="text-right"><Skeleton className="h-5 w-12 inline-block" /></TableCell>
-                      <TableCell className="text-right"><Skeleton className="h-5 w-12 inline-block" /></TableCell>
-                      <TableCell className="text-right pr-4"><Skeleton className="h-8 w-20 inline-block" /></TableCell>
+
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="mb-4">
+            <TabsTrigger value="contacts">Contacts</TabsTrigger>
+            <TabsTrigger value="replies">Replies</TabsTrigger>
+            <TabsTrigger value="bookings">Bookings</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="contacts">
+            <Card className="border-slate-200 shadow-sm overflow-hidden">
+              <div className="h-1 bg-gradient-to-r from-slate-200 via-slate-300 to-slate-200"></div>
+              <CardContent className="pt-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[250px] text-slate-700 pl-4">Organization</TableHead>
+                      <TableHead className="text-right text-slate-700">Contacts Enrolled</TableHead>
+                      <TableHead className="text-right text-slate-700">Active Scenarios</TableHead>
+                      <TableHead className="text-right text-slate-700 pr-4">Actions</TableHead>
                     </TableRow>
-                  ))
-                ) : stats.organizations.length > 0 ? (
-                  stats.organizations.map((org, idx) => (
-                    <TableRow 
-                      key={org.id} 
-                      className={`hover:bg-slate-50 transition-colors duration-150 border-b border-slate-100 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}`}
-                    >
-                      <TableCell className="font-medium py-3 pl-4">{org.name}</TableCell>
-                      <TableCell className="text-right py-3 text-slate-700">{org.stats.contactsEnrolled}</TableCell>
-                      <TableCell className="text-right py-3 text-slate-700">{org.stats.totalResponses}</TableCell>
-                      <TableCell className={`text-right py-3 ${getReplyRateStyle(org.stats.replyRate)}`}>
-                         {org.stats.replyRate === null || org.stats.replyRate === undefined ? '--' : `${org.stats.replyRate.toFixed(1)}%`}
-                      </TableCell>
-                      <TableCell className="text-right py-3 text-slate-700">
-                        {org.stats.meetingsBooked > 0 ? (
-                          <span className="font-medium text-emerald-600">{org.stats.meetingsBooked}</span>
-                        ) : org.stats.meetingsBooked}
-                      </TableCell>
-                      <TableCell className="text-right py-3 text-slate-700">{org.stats.activeScenarios}</TableCell>
-                      <TableCell className="text-right py-3 pr-4">
-                        <Button 
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleViewTasks(org.name)} 
-                          className="h-8 px-3 text-xs"
+                  </TableHeader>
+                  <TableBody>
+                    {loading ? (
+                      Array.from({ length: 5 }).map((_, index) => (
+                        <TableRow key={`skel-contacts-${index}`} className="border-b border-slate-100">
+                          <TableCell className="pl-4"><Skeleton className="h-5 w-3/4" /></TableCell>
+                          <TableCell className="text-right"><Skeleton className="h-5 w-12 inline-block" /></TableCell>
+                          <TableCell className="text-right"><Skeleton className="h-5 w-12 inline-block" /></TableCell>
+                          <TableCell className="text-right pr-4"><Skeleton className="h-8 w-20 inline-block" /></TableCell>
+                        </TableRow>
+                      ))
+                    ) : stats.organizations.length > 0 ? (
+                      stats.organizations.map((org, idx) => (
+                        <TableRow 
+                          key={org.id} 
+                          className={`hover:bg-slate-50 transition-colors duration-150 border-b border-slate-100 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}`}
                         >
-                          <Eye className="mr-1 h-3 w-3" /> View Tasks
-                        </Button>
-                      </TableCell>
+                          <TableCell className="font-medium py-3 pl-4">{org.name}</TableCell>
+                          <TableCell className="text-right py-3 text-slate-700">{org.stats?.contactsEnrolled ?? '--'}</TableCell>
+                          <TableCell className="text-right py-3 text-slate-700">{org.stats?.activeScenarios ?? '--'}</TableCell>
+                          <TableCell className="text-right py-3 pr-4">
+                            <Button 
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleViewTasks(org.name)} 
+                              className="h-8 px-3 text-xs"
+                            >
+                              <Eye className="mr-1 h-3 w-3" /> View Tasks
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={4} className="h-24 text-center text-muted-foreground bg-slate-50/30 border-b border-slate-100">
+                          No organization data available for the selected period.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="replies">
+            <Card className="border-slate-200 shadow-sm overflow-hidden">
+              <div className="h-1 bg-gradient-to-r from-slate-200 via-slate-300 to-slate-200"></div>
+              <CardContent className="pt-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[250px] text-slate-700 pl-4">Organization</TableHead>
+                      <TableHead className="text-right text-slate-700">Total Replies</TableHead>
+                      <TableHead className="text-right text-slate-700">Reply Rate (%)</TableHead>
+                      <TableHead className="text-right text-slate-700 pr-4">Actions</TableHead>
                     </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground bg-slate-50/30 border-b border-slate-100">
-                      No organization data available for the selected period.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                  </TableHeader>
+                  <TableBody>
+                    {loading ? (
+                      Array.from({ length: 5 }).map((_, index) => (
+                        <TableRow key={`skel-replies-${index}`} className="border-b border-slate-100">
+                          <TableCell className="pl-4"><Skeleton className="h-5 w-3/4" /></TableCell>
+                          <TableCell className="text-right"><Skeleton className="h-5 w-12 inline-block" /></TableCell>
+                          <TableCell className="text-right"><Skeleton className="h-5 w-12 inline-block" /></TableCell>
+                          <TableCell className="text-right pr-4"><Skeleton className="h-8 w-20 inline-block" /></TableCell>
+                        </TableRow>
+                      ))
+                    ) : stats.organizations.length > 0 ? (
+                      stats.organizations.map((org, idx) => (
+                        <TableRow 
+                          key={org.id} 
+                          className={`hover:bg-slate-50 transition-colors duration-150 border-b border-slate-100 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}`}
+                        >
+                          <TableCell className="font-medium py-3 pl-4">{org.name}</TableCell>
+                          <TableCell className="text-right py-3 text-slate-700">{org.stats?.totalResponses ?? '--'}</TableCell>
+                          <TableCell className="text-right py-3 text-slate-700">
+                            {org.stats?.replyRate !== undefined && org.stats?.replyRate !== null
+                              ? `${org.stats.replyRate.toFixed(1)}%`
+                              : '--'}
+                          </TableCell>
+                          <TableCell className="text-right py-3 pr-4">
+                            <Button 
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleViewTasks(org.name)} 
+                              className="h-8 px-3 text-xs"
+                            >
+                              <Eye className="mr-1 h-3 w-3" /> View Tasks
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={4} className="h-24 text-center text-muted-foreground bg-slate-50/30 border-b border-slate-100">
+                          No organization data available for the selected period.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="bookings">
+            <Card className="border-slate-200 shadow-sm overflow-hidden">
+              <div className="h-1 bg-gradient-to-r from-slate-200 via-slate-300 to-slate-200"></div>
+              <CardContent className="pt-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[250px] text-slate-700 pl-4">Organization</TableHead>
+                      <TableHead className="text-right text-slate-700">Meetings Booked</TableHead>
+                      <TableHead className="text-right text-slate-700">Booking Rate (%)</TableHead>
+                      <TableHead className="text-right text-slate-700">Reply-to-Booking Rate (%)</TableHead>
+                      <TableHead className="text-right text-slate-700 pr-4">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {loading ? (
+                      Array.from({ length: 5 }).map((_, index) => (
+                        <TableRow key={`skel-bookings-${index}`} className="border-b border-slate-100">
+                          <TableCell className="pl-4"><Skeleton className="h-5 w-3/4" /></TableCell>
+                          <TableCell className="text-right"><Skeleton className="h-5 w-12 inline-block" /></TableCell>
+                          <TableCell className="text-right"><Skeleton className="h-5 w-12 inline-block" /></TableCell>
+                          <TableCell className="text-right"><Skeleton className="h-5 w-12 inline-block" /></TableCell>
+                          <TableCell className="text-right pr-4"><Skeleton className="h-8 w-20 inline-block" /></TableCell>
+                        </TableRow>
+                      ))
+                    ) : stats.organizations.length > 0 ? (
+                      stats.organizations.map((org, idx) => (
+                        <TableRow 
+                          key={org.id} 
+                          className={`hover:bg-slate-50 transition-colors duration-150 border-b border-slate-100 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}`}
+                        >
+                          <TableCell className="font-medium py-3 pl-4">{org.name}</TableCell>
+                          <TableCell className="text-right py-3 text-slate-700">{org.stats?.meetingsBooked ?? '--'}</TableCell>
+                          <TableCell className="text-right py-3 text-slate-700">
+                            {org.stats?.bookingRate !== undefined && org.stats?.bookingRate !== null
+                              ? `${org.stats.bookingRate.toFixed(1)}%`
+                              : '--'}
+                          </TableCell>
+                          <TableCell className="text-right py-3 text-slate-700">
+                            {org.stats?.replyToBookingRate !== undefined && org.stats?.replyToBookingRate !== null
+                              ? `${org.stats.replyToBookingRate.toFixed(1)}%`
+                              : '--'}
+                          </TableCell>
+                          <TableCell className="text-right py-3 pr-4">
+                            <Button 
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleViewTasks(org.name)} 
+                              className="h-8 px-3 text-xs"
+                            >
+                              <Eye className="mr-1 h-3 w-3" /> View Tasks
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={5} className="h-24 text-center text-muted-foreground bg-slate-50/30 border-b border-slate-100">
+                          No organization data available for the selected period.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Add a section to display the raw received data */}
