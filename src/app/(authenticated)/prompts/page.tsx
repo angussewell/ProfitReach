@@ -18,7 +18,8 @@ import {
   DialogClose, // Useful for explicit close buttons if needed
 } from '@/components/ui/dialog'; // Import Dialog components
 import { useToast } from '@/components/ui/use-toast';
-import { Plus, Pencil, Trash2, X, ChevronDown, ChevronUp, Search, Eye } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, ChevronDown, ChevronUp, Search, Eye, Copy } from 'lucide-react';
+import { DuplicatePromptDialog } from '@/components/prompts/DuplicatePromptDialog';
 // import { replaceVariables } from '@/lib/utils'; // Removed unused import
 import { PageContainer } from '@/components/layout/PageContainer';
 import { PageHeader } from '@/components/ui/page-header'; // Import PageHeader
@@ -42,6 +43,8 @@ export default function PromptsPage() {
   const [expandedPrompts, setExpandedPrompts] = React.useState<Set<string>>(new Set());
   const [previewPrompt, setPreviewPrompt] = React.useState<Prompt | null>(null);
   const [previewVariables, setPreviewVariables] = React.useState<Record<string, string>>({});
+  const [promptToDuplicate, setPromptToDuplicate] = React.useState<Prompt | null>(null);
+  const [isDuplicateModalOpen, setIsDuplicateModalOpen] = React.useState(false);
   const { toast } = useToast();
 
   const fetchPrompts = async () => {
@@ -426,8 +429,8 @@ export default function PromptsPage() {
             >
               <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                  <Button
-                   variant="ghost" // Keep ghost for subtle actions
-                   size="icon" // Use icon size
+                   variant="ghost"
+                   size="icon"
                    onClick={() => togglePrompt(prompt.id)}
                  >
                    {expandedPrompts.has(prompt.id) ? (
@@ -437,27 +440,28 @@ export default function PromptsPage() {
                    )}
                  </Button>
                  <Button
-                   variant="ghost" // Keep ghost for subtle actions
-                   size="icon" // Use icon size
+                   variant="ghost"
+                   size="icon"
                    onClick={() => {
-                     setPreviewVariables({});
-                     setPreviewPrompt(prompt);
+                     setPromptToDuplicate(prompt);
+                     setIsDuplicateModalOpen(true);
                    }}
+                   aria-label="Duplicate"
                  >
-                   <Eye className="w-5 h-5" />
+                   <Copy className="w-5 h-5" />
                  </Button>
                  <Button
-                   variant="ghost" // Keep ghost for subtle actions
-                   size="icon" // Use icon size
+                   variant="ghost"
+                   size="icon"
                    onClick={() => setEditingPrompt(prompt)}
                  >
                    <Pencil className="w-5 h-5" />
                  </Button>
                  <Button
-                   variant="destructive" // Use subtle destructive
-                   size="icon" // Use icon size
+                   variant="destructive"
+                   size="icon"
                    onClick={() => handleDelete(prompt.id)}
-                   className="text-red-600 hover:bg-red-50" // Add specific destructive styling
+                   className="text-red-600 hover:bg-red-50"
                  >
                    <Trash2 className="w-5 h-5" />
                  </Button>
@@ -481,6 +485,12 @@ export default function PromptsPage() {
 
       {/* Render Preview Modal outside the main layout flow if it's controlled by state */}
       {previewPrompt && <PreviewModal prompt={previewPrompt} />}
+      <DuplicatePromptDialog
+        isOpen={isDuplicateModalOpen}
+        onClose={() => setIsDuplicateModalOpen(false)}
+        prompt={promptToDuplicate}
+        refreshPrompts={fetchPrompts}
+      />
     </PageContainer>
   );
 }

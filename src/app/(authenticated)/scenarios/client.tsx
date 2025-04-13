@@ -4,7 +4,8 @@ import * as React from 'react';
 import { useState, useEffect, useMemo } from 'react';
 import type { DateRange as DayPickerDateRange } from 'react-day-picker';
 import dynamic from 'next/dynamic';
-import { Users, MessageSquare, TrendingUp, BarChart, Calendar, Plus, Minus, Loader2 } from 'lucide-react';
+import { Users, MessageSquare, TrendingUp, BarChart, Calendar, Plus, Minus, Loader2, Copy } from 'lucide-react';
+import { DuplicateScenarioDialog } from '@/components/scenarios/DuplicateScenarioDialog';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -171,6 +172,7 @@ export function ScenariosPage() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const { toast } = useToast();
   const [researchContactsCount, setResearchContactsCount] = useState<number>(0);
+  // Removed duplication modal state from dashboard page
 
   const fetchData = async () => {
     try {
@@ -708,10 +710,9 @@ export function ScenariosPage() {
                 transition={{ duration: 0.3 }}
               >
                 <div className={cn(
-                  "technical-card technical-card group border shadow-lg hover:shadow-xl transition-all duration-300",
-                  "rounded-xl overflow-hidden",
+                  "technical-card technical-card group border-2 border-neutral-300 shadow-lg hover:shadow-xl transition-all duration-300",
+                  "rounded-lg overflow-hidden",
                   config.bgColor,
-                  config.accentColor,
                   config.hoverBg,
                   "min-h-[250px] flex flex-col"
                 )}>
@@ -781,6 +782,7 @@ export function ScenariosPage() {
                     </div>
                   </div>
                   <div className="flex justify-center gap-2 mt-4">
+                    {/* Removed Duplicate button from dashboard page */}
                     <ClientButton
                       variant="ghost"
                       size="icon"
@@ -820,6 +822,7 @@ export function ScenariosPage() {
         onOpenChange={setShowAppointmentModal}
         onSubmit={handleCreateAppointment}
       />
+      {/* Removed DuplicateScenarioDialog from dashboard page */}
     </PageContainer>
   );
 }

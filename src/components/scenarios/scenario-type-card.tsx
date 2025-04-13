@@ -2,7 +2,8 @@
 
 import * as React from 'react';
 import { type LucideProps } from 'lucide-react';
-import { Edit, Paperclip, FileText, MessageSquare, Clock } from 'lucide-react';
+import { Edit, Paperclip, FileText, MessageSquare, Clock, Copy } from 'lucide-react';
+import { DuplicateScenarioDialog } from './DuplicateScenarioDialog';
 import NextImage from 'next/image';
 import NextLink from 'next/link';
 import { cn } from '@/lib/utils';
@@ -51,6 +52,8 @@ const ScenarioTypeCard: React.FC<ScenarioTypeCardProps> = ({
   attachment,
   className 
 }) => {
+  const [isDuplicateModalOpen, setIsDuplicateModalOpen] = React.useState(false);
+
   const getTypeConfig = (type: string) => {
     switch (type.toLowerCase()) {
       case 'linkedin':
@@ -107,95 +110,114 @@ const ScenarioTypeCard: React.FC<ScenarioTypeCardProps> = ({
   const config = getTypeConfig(type);
 
   return (
-    <div
-      className={cn(
-        'group relative rounded-xl border bg-white shadow-sm transition-all duration-200',
-        config.bgColor,
-        config.accentColor,
-        config.hoverBg,
-        'hover:shadow-md',
-        className
-      )}
-    >
-      <div className="p-6">
-        <div className="flex items-start justify-between">
-          <div className="flex items-start gap-4">
-            <div className={cn('rounded-xl p-3', config.iconBg, 'bg-opacity-10')}>
-              <Image
-                src={config.icon}
-                alt={`${config.label} icon`}
-                width={40}
-                height={40}
-                className="aspect-square object-contain"
-                priority
-              />
-            </div>
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <h3 className="font-semibold text-gray-900">{name}</h3>
-                <div className="flex gap-2">
-                  {testMode && (
-                    <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
-                      Test Mode
-                    </Badge>
-                  )}
-                  {isFollowUp && (
-                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                      Follow-up
-                    </Badge>
-                  )}
-                </div>
+    <>
+      <div
+        className={cn(
+          'group relative rounded-lg border-2 border-neutral-300 bg-white shadow-sm transition-all duration-200',
+          config.bgColor,
+          config.hoverBg,
+          'hover:shadow-md',
+          className
+        )}
+      >
+        <div className="p-6">
+          <div className="flex items-start justify-between">
+            <div className="flex items-start gap-4">
+              <div className={cn('rounded-xl p-3', config.iconBg, 'bg-opacity-10')}>
+                <Image
+                  src={config.icon}
+                  alt={`${config.label} icon`}
+                  width={40}
+                  height={40}
+                  className="aspect-square object-contain"
+                  priority
+                />
               </div>
-              <p className="text-sm font-medium text-gray-500">{config.label}</p>
-              {description && (
-                <p className="text-sm text-gray-600 mt-2 line-clamp-2">{description}</p>
-              )}
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold text-gray-900">{name}</h3>
+                  <div className="flex gap-2">
+                    {testMode && (
+                      <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
+                        Test Mode
+                      </Badge>
+                    )}
+                    {isFollowUp && (
+                      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                        Follow-up
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                <p className="text-sm font-medium text-gray-500">{config.label}</p>
+                {description && (
+                  <p className="text-sm text-gray-600 mt-2 line-clamp-2">{description}</p>
+                )}
+              </div>
+            </div>
+            
+            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsDuplicateModalOpen(true)}
+                aria-label="Duplicate"
+              >
+                <Copy className="w-4 h-4" />
+              </Button>
+              <Link 
+                href={`/settings/scenarios/${id}`} 
+              >
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="gap-2 shadow-sm hover:shadow-md transition-shadow"
+                >
+                  <IconWrapper icon={Edit} className="w-4 h-4" />
+                  Edit
+                </Button>
+              </Link>
             </div>
           </div>
-          
-          <Link 
-            href={`/settings/scenarios/${id}`} 
-            className="opacity-0 group-hover:opacity-100 transition-opacity"
-          >
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="gap-2 shadow-sm hover:shadow-md transition-shadow"
-            >
-              <IconWrapper icon={Edit} className="w-4 h-4" />
-              Edit
-            </Button>
-          </Link>
-        </div>
 
-        <div className="mt-6 flex flex-wrap items-center gap-4 text-sm text-gray-500 border-t pt-4">
-          {createdAt && (
-            <div className="flex items-center gap-2">
-              <IconWrapper icon={Clock} className="w-4 h-4" />
-              <span className="font-medium">Created {format(new Date(createdAt), 'MMM d, yyyy')}</span>
-            </div>
-          )}
-          {signature && (
-            <div className="flex items-center gap-2">
-              <IconWrapper icon={MessageSquare} className="w-4 h-4" />
-              <span className="font-medium">{signature.name}</span>
-            </div>
-          )}
-          {snippet && (
-            <div className="flex items-center gap-2">
-              <IconWrapper icon={FileText} className="w-4 h-4" />
-              <span className="font-medium">{snippet.name}</span>
-            </div>
-          )}
-          {attachment && (
-            <div className="flex items-center gap-2">
-              <IconWrapper icon={Paperclip} className="w-4 h-4" />
-              <span className="font-medium">{attachment.name}</span>
-            </div>
-          )}
+          <div className="mt-6 flex flex-wrap items-center gap-4 text-sm text-gray-500 border-t pt-4">
+            {createdAt && (
+              <div className="flex items-center gap-2">
+                <IconWrapper icon={Clock} className="w-4 h-4" />
+                <span className="font-medium">Created {format(new Date(createdAt), 'MMM d, yyyy')}</span>
+              </div>
+            )}
+            {signature && (
+              <div className="flex items-center gap-2">
+                <IconWrapper icon={MessageSquare} className="w-4 h-4" />
+                <span className="font-medium">{signature.name}</span>
+              </div>
+            )}
+            {snippet && (
+              <div className="flex items-center gap-2">
+                <IconWrapper icon={FileText} className="w-4 h-4" />
+                <span className="font-medium">{snippet.name}</span>
+              </div>
+            )}
+            {attachment && (
+              <div className="flex items-center gap-2">
+                <IconWrapper icon={Paperclip} className="w-4 h-4" />
+                <span className="font-medium">{attachment.name}</span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+      
+      {isDuplicateModalOpen && (
+        <DuplicateScenarioDialog
+          isOpen={isDuplicateModalOpen}
+          onClose={() => setIsDuplicateModalOpen(false)}
+          scenario={{ id, name }}
+          refreshScenarios={() => window.location.reload()} // Replace with a prop if you want a smarter refresh
+        />
+      )}
+    </>
   );
 };
 

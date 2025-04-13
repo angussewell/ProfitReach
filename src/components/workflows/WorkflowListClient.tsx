@@ -28,9 +28,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Pencil, MoreVertical, Trash } from 'lucide-react';
+import { Pencil, MoreVertical, Trash, Copy } from 'lucide-react'; // Added Copy icon
 import Link from 'next/link';
 import { toast } from 'sonner';
+// Assuming a generic duplicate dialog exists or we adapt Scenario one
+import { DuplicateScenarioDialog } from '@/components/scenarios/DuplicateScenarioDialog'; // Adapt this path/component if needed
 
 // Define the type for the workflow data passed as props
 // This should match the type defined in the page component
@@ -51,7 +53,24 @@ export default function WorkflowListClient({ initialWorkflows }: WorkflowListCli
   const [isDeleting, setIsDeleting] = useState(false);
   const [isForceDeleting, setIsForceDeleting] = useState(false);
   const [workflowToDelete, setWorkflowToDelete] = useState<WorkflowData | null>(null);
+  const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
+  const [currentWorkflowToDuplicate, setCurrentWorkflowToDuplicate] = useState<WorkflowData | null>(null);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Function to open the duplicate modal
+  const handleOpenDuplicateModal = (workflow: WorkflowData) => {
+    setCurrentWorkflowToDuplicate(workflow);
+    setIsDuplicateModalOpen(true);
+  };
+
+  // Placeholder for refresh logic - replace with actual refresh mechanism if different
+  const refreshWorkflows = () => {
+    // In a real app, this would likely re-fetch data or use SWR mutate
+    console.log("Refreshing workflows list...");
+    // Example: window.location.reload(); // Simple but not ideal UX
+    // Or trigger a re-fetch if using a data fetching hook
+  };
+
 
   const handleStatusChange = async (workflowId: string, newStatus: boolean) => {
     // Optimistic update for good UX
@@ -160,7 +179,7 @@ export default function WorkflowListClient({ initialWorkflows }: WorkflowListCli
   };
 
   return (
-    <div className="border rounded-lg overflow-hidden">
+    <div className="border-2 border-neutral-300 rounded-lg shadow-sm overflow-hidden">
       {/* Delete confirmation dialog */}
       {/* Standard delete confirmation dialog */}
       <AlertDialog 
@@ -289,7 +308,16 @@ export default function WorkflowListClient({ initialWorkflows }: WorkflowListCli
                           <Trash className="mr-2 h-4 w-4" />
                           Delete
                         </DropdownMenuItem>
-                        <DropdownMenuItem 
+                        {/* Duplicate Menu Item */}
+                        <DropdownMenuItem
+                          className="cursor-pointer"
+                          onSelect={(e) => e.preventDefault()} // Prevent closing menu immediately
+                          onClick={() => handleOpenDuplicateModal(workflow)}
+                        >
+                          <Copy className="mr-2 h-4 w-4" />
+                          <span>Duplicate</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
                           className="text-red-600 focus:bg-red-50 cursor-pointer"
                           onClick={() => {
                             setIsForceDeleting(true);
@@ -308,6 +336,20 @@ export default function WorkflowListClient({ initialWorkflows }: WorkflowListCli
           )}
         </TableBody>
       </Table>
+
+      {/* Conditionally render the Duplicate Modal */}
+      {isDuplicateModalOpen && currentWorkflowToDuplicate && (
+        <DuplicateScenarioDialog // Use the actual generic/adapted dialog component
+          isOpen={isDuplicateModalOpen}
+          onClose={() => setIsDuplicateModalOpen(false)}
+          // Pass workflow data mapped to the 'scenario' prop structure
+          scenario={{ id: currentWorkflowToDuplicate.workflowId, name: currentWorkflowToDuplicate.name }}
+          // The DuplicateScenarioDialog needs modification or replacement to handle different entity types/endpoints
+          // For now, this will pass the correct ID/Name, but the API call inside the dialog might be wrong.
+          // We will address the dialog's internal logic if needed in a later step.
+          refreshScenarios={refreshWorkflows} // Assuming this prop triggers refresh
+        />
+      )}
     </div>
   );
 }
