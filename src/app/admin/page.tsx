@@ -3,9 +3,11 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Users, Percent, CalendarCheck, ClipboardList, TrendingUp, Eye, Loader2, Mail, InfoIcon } from 'lucide-react';
-import { subDays } from 'date-fns';
+import { ArrowLeft, Users, Percent, CalendarCheck, ClipboardList, TrendingUp, Eye, Loader2, Mail, InfoIcon, Calendar as CalendarIcon } from 'lucide-react'; // Added CalendarIcon
+import { subDays, startOfDay, endOfDay, format } from 'date-fns'; // Added format
 import { DateRangeFilter } from '@/components/filters/date-range-filter';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { useSession } from 'next-auth/react';
 import {
   Table,
@@ -36,10 +38,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from 'react-hot-toast';
 
-type DateRange = {
-  from: Date;
-  to: Date;
-};
+import type { DateRange } from "react-day-picker";
 
 interface OverallStats {
   contactsEnrolled: number;
@@ -110,8 +109,17 @@ export default function AdminPanelPage() {
   const { data: session, status } = useSession();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<CombinedStats>({ overall: null, organizations: [] });
+
+  // New: Preset filter state
+  type Preset = 'today' | '7d' | '14d' | '30d' | 'year' | 'all' | 'custom';
+  const [selectedPreset, setSelectedPreset] = useState<Preset>('7d');
+  const [customRange, setCustomRange] = useState<DateRange | undefined>(undefined);
+  const [customRangePopoverOpen, setCustomRangePopoverOpen] = useState(false);
+
+  // Main date range state (drives data fetching)
+  // For "all time", set to undefined
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: subDays(new Date(), 29),
+    from: subDays(new Date(), 6),
     to: new Date(),
   });
   
@@ -329,12 +337,19 @@ export default function AdminPanelPage() {
 
   useEffect(() => {
     const fetchAdminStats = async () => {
-      if (!dateRange?.from || !dateRange?.to) return;
+      // Handle "All Time" case where dateRange is undefined
+      // Also handle initial load where dateRange might be undefined before preset is applied
+      if (selectedPreset !== 'all' && (!dateRange?.from || !dateRange?.to)) {
+        console.log("Skipping fetch: dateRange not fully defined for non-'all' preset.");
+        return;
+      }
       setLoading(true);
       try {
         const url = new URL('/api/admin/stats', window.location.origin);
-        url.searchParams.set('from', dateRange.from.toISOString());
-        url.searchParams.set('to', dateRange.to.toISOString());
+        if (dateRange?.from && dateRange?.to) {
+          url.searchParams.set('from', dateRange.from.toISOString());
+          url.searchParams.set('to', dateRange.to.toISOString());
+        }
         const response = await fetch(url, { credentials: 'include' });
         if (!response.ok) {
           throw new Error(`Failed to fetch admin stats: ${response.statusText}`);
@@ -351,14 +366,20 @@ export default function AdminPanelPage() {
     
     // Add new function to fetch setter stats
     const fetchSetterStats = async () => {
-      if (!dateRange?.from || !dateRange?.to) return;
+      // Handle "All Time" case where dateRange is undefined
+      if (selectedPreset !== 'all' && (!dateRange?.from || !dateRange?.to)) {
+        console.log("Skipping setter stats fetch: dateRange not fully defined for non-'all' preset.");
+        return;
+      }
       setSetterStatsLoading(true);
       setSetterStatsError(null);
       
       try {
         const url = new URL('/api/admin/setter-stats', window.location.origin);
-        url.searchParams.set('startDate', dateRange.from.toISOString());
-        url.searchParams.set('endDate', dateRange.to.toISOString());
+        if (dateRange?.from && dateRange?.to) {
+          url.searchParams.set('startDate', dateRange.from.toISOString());
+          url.searchParams.set('endDate', dateRange.to.toISOString());
+        }
         
         // Add the bypass parameter if enabled
         if (bypassDateFilter) {
@@ -414,7 +435,7 @@ export default function AdminPanelPage() {
     
     fetchAdminStats();
     fetchSetterStats(); // Call the new fetch function
-  }, [dateRange, session, bypassDateFilter]);
+  }, [dateRange, selectedPreset, session, bypassDateFilter]); // Add selectedPreset dependency
 
   // useEffect for handling modal opening
   useEffect(() => {
@@ -451,7 +472,56 @@ export default function AdminPanelPage() {
   }, []); // Run only on mount
 
   const handleBack = () => router.back();
-  const handleDateRangeChange = (newRange: DateRange | undefined) => setDateRange(newRange);
+  // Handle preset selection
+  const handlePresetSelect = (preset: Preset) => {
+    setSelectedPreset(preset);
+    if (preset === 'custom') {
+      setCustomRangePopoverOpen(true);
+      return;
+    }
+    setCustomRangePopoverOpen(false);
+    setCustomRange(undefined);
+
+    const today = new Date();
+    let from: Date | null = null, to: Date | null = null;
+    switch (preset) {
+      case 'today':
+        from = startOfDay(today);
+        to = endOfDay(today);
+        break;
+      case '7d':
+        from = startOfDay(subDays(today, 6));
+        to = endOfDay(today);
+        break;
+      case '14d':
+        from = startOfDay(subDays(today, 13));
+        to = endOfDay(today);
+        break;
+      case '30d':
+        from = startOfDay(subDays(today, 29));
+        to = endOfDay(today);
+        break;
+      case 'year':
+        from = startOfDay(subDays(today, 364));
+        to = endOfDay(today);
+        break;
+      case 'all':
+        // All time: set dateRange to undefined
+        setDateRange(undefined);
+        return;
+      default:
+        from = startOfDay(today);
+        to = endOfDay(today);
+    }
+    setDateRange({ from, to }); // Use react-day-picker's DateRange type
+  };
+
+  // Simplified calendar selection handler
+  const handleCalendarSelect = (range: DateRange | undefined) => {
+    // Simply update the customRange state with whatever the calendar provides
+    setCustomRange(range);
+  };
+
 
   const handleViewTasks = (orgName: string) => {
     setSelectedOrgName(orgName);
@@ -661,39 +731,114 @@ export default function AdminPanelPage() {
       </div>
 
       <div className="flex justify-between items-center">
-        <div className="flex justify-end">
-          <DateRangeFilter value={dateRange} onChange={handleDateRangeChange} />
-        </div>
-        
-        <div className="flex space-x-3">
-          <Button 
-            variant="outline" 
-            onClick={() => fetchTasksFromServer("Scale Your Cause")} 
-            className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
-          >
-            Fetch Tasks
-          </Button>
-          
-          <Button 
-            variant="outline" 
-            onClick={() => {
-              setReceivedTaskData([]);
-              setTasks([]);
-              setTaskError("Cleared displayed tasks");
-              setShowReceivedData(false);
-            }}
-            className="bg-red-50 text-red-700 border-red-200 hover:bg-red-100"
-          >
-            Clear Display
-          </Button>
-          
-          <Button 
-            variant="outline" 
-            onClick={runApiTest} 
-            className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
-          >
-            Run API Test
-          </Button>
+        <div className="flex flex-col gap-2 justify-end">
+          {/* Preset Button Group */}
+          <div className="flex gap-2 mb-1 flex-wrap">
+            <Button
+              variant={selectedPreset === 'today' ? 'default' : 'outline'}
+              onClick={() => handlePresetSelect('today')}
+            >
+              Today
+            </Button>
+            <Button
+              variant={selectedPreset === '7d' ? 'default' : 'outline'}
+              onClick={() => handlePresetSelect('7d')}
+            >
+              Last 7 days
+            </Button>
+            <Button
+              variant={selectedPreset === '14d' ? 'default' : 'outline'}
+              onClick={() => handlePresetSelect('14d')}
+            >
+              Last 14 days
+            </Button>
+            <Button
+              variant={selectedPreset === '30d' ? 'default' : 'outline'}
+              onClick={() => handlePresetSelect('30d')}
+            >
+              Last 30 days
+            </Button>
+            <Button
+              variant={selectedPreset === 'year' ? 'default' : 'outline'}
+              onClick={() => handlePresetSelect('year')}
+            >
+              Last Year
+            </Button>
+            <Button
+              variant={selectedPreset === 'all' ? 'default' : 'outline'}
+              onClick={() => handlePresetSelect('all')}
+            >
+              All Time
+            </Button>
+            <Popover open={customRangePopoverOpen} onOpenChange={setCustomRangePopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  id="date"
+                  variant={selectedPreset === 'custom' ? 'default' : 'outline'}
+                  className={cn(
+                    "w-[280px] justify-start text-left font-normal",
+                    !dateRange && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {selectedPreset === 'custom' && dateRange?.from && dateRange?.to ? (
+                    <>
+                      {format(dateRange.from, "LLL dd, y")} - {format(dateRange.to, "LLL dd, y")}
+                    </>
+                  ) : (
+                    <span>Custom Range</span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <div className="p-4">
+                  <Calendar
+                    mode="range"
+                    selected={customRange}
+                    onSelect={handleCalendarSelect}
+                    numberOfMonths={2}
+                    initialFocus
+                  />
+                  
+                  {/* Text preview of selected range */}
+                  {customRange?.from && customRange?.to && (
+                    <div className="text-sm text-center py-2 px-2 mt-2 bg-slate-50 rounded border border-slate-200">
+                      <span className="font-medium">Selected:</span> {format(customRange.from, "PPP")} - {format(customRange.to, "PPP")}
+                    </div>
+                  )}
+                  
+                  {/* Updated button row with Clear and Apply buttons */}
+                  <div className="flex justify-between mt-3">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCustomRange(undefined)}
+                      disabled={!customRange?.from && !customRange?.to}
+                    >
+                      Clear
+                    </Button>
+                    
+                    <Button
+                      onClick={() => {
+                        if (customRange?.from && customRange?.to) {
+                          setDateRange({
+                            from: startOfDay(customRange.from),
+                            to: endOfDay(customRange.to),
+                          });
+                          setSelectedPreset('custom');
+                          setCustomRangePopoverOpen(false);
+                        }
+                      }}
+                      disabled={!customRange?.from || !customRange?.to}
+                      size="sm"
+                    >
+                      Apply
+                    </Button>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
         </div>
       </div>
 
@@ -1085,7 +1230,7 @@ export default function AdminPanelPage() {
           </div>
           <DialogFooter className="flex justify-between sm:justify-between">
             <Button 
-              variant="secondary"
+               variant="secondary"
               onClick={() => selectedOrgName && triggerAndPollForTasks(selectedOrgName)}
               disabled={tasksLoading}
             >
