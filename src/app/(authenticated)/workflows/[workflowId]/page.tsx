@@ -44,54 +44,25 @@ async function getWorkflowDefinition(id: string): Promise<(WorkflowDefinition & 
     throw new Error(`Failed to fetch workflow: ${response.statusText}`);
   }
   const apiResponse = await response.json();
-  
-  // Handle the new API response format that uses createApiResponse
-  if (apiResponse.success && apiResponse.data) {
-    console.log('Successfully fetched workflow data');
-    const data = apiResponse.data;
 
-  // --- SIMULATED FETCHED DATA (Fallback if API fails/not implemented) ---
-  // const simulatedData: WorkflowDefinition & { steps?: any[] } = {
-  //   workflowId: id,
-  //   name: `Existing Workflow ${id.substring(0, 4)}`,
-  //   description: 'This is an existing workflow description.',
-  //   dailyContactLimit: 100,
-  //   dripStartTime: new Date('1970-01-01T09:00:00Z'),
-  //   dripEndTime: new Date('1970-01-01T17:00:00Z'),
-  //   timezone: 'America/Chicago',
-  //   organizationId: 'simulated-org-id',
-  //   createdAt: new Date(),
-  //   updatedAt: new Date(),
-  //   isActive: true,
-  //   steps: [
-  //     { order: 1, actionType: 'wait', config: { duration: 1, unit: 'days' } },
-  //     { order: 2, actionType: 'send_email', config: { scenarioId: 'initial-email-scenario' } },
-  //     { order: 3, actionType: 'branch', config: { type: 'percentage_split', paths: [
-  //       { weight: 60, nextStepOrder: 4 },
-  //       { weight: 40, nextStepOrder: 6 }
-  //     ]}},
-  //     { order: 4, actionType: 'update_field', config: { fieldPath: 'leadStatus', value: 'High Priority' } },
-  //     { order: 5, actionType: 'send_email', config: { scenarioId: 'priority-email' } },
-  //     { order: 6, actionType: 'update_field', config: { fieldPath: 'leadStatus', value: 'Standard' } },
-  //     { order: 7, actionType: 'webhook', config: { url: 'https://webhook.example.com', method: 'POST' } },
-  //   ]
-  // };
-  // const data = simulatedData;
-  // --- END SIMULATION ---
+  // Support both { success, data } and direct workflow object responses
+  const data = apiResponse && typeof apiResponse === "object" && "data" in apiResponse
+    ? apiResponse.data
+    : apiResponse;
 
+  if (data && typeof data === "object" && "workflowId" in data) {
     // Parse and add client IDs to steps
     const parsedSteps = (data.steps || []).map((step: any, index: number) => ({
       ...step,
       clientId: uuidv4(), // Ensure client ID for React Flow
       order: step.order ?? index + 1,
       config: step.config || {},
-      // Add explicit types to sort parameters
     })).sort((a: { order: number }, b: { order: number }) => a.order - b.order);
 
     console.log('Steps data updated:', parsedSteps);
     return { ...data, steps: parsedSteps };
   } else {
-    // Handle case when success is false or data is missing
+    // Handle case when error or missing workflow
     if (apiResponse.error) {
       throw new Error(`API Error: ${apiResponse.error}`);
     }
@@ -325,6 +296,7 @@ export default function WorkflowEditPage() {
         {/* Render WorkflowBuilder only when not loading */}
         {!isLoading && (
           <WorkflowBuilder
+            key={workflowId + ':' + steps.length}
             workflowId={workflowId} // Pass the workflowId
             steps={steps} // Pass initial/current steps
             onSaveChanges={setSteps} // Update page state when builder saves internally
