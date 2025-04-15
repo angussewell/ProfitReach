@@ -55,25 +55,143 @@ export async function GET(request: Request) {
       }
     }
 
-    // *** FIX: Build the combined WHERE clause using the utility function ***
-    const whereClause: Prisma.ContactsWhereInput = buildCombinedWhereClause(
+    // --- START: Tag Filter Processing ---
+
+    // 1. Separate tag conditions and non-tag conditions
+    const tagConditions = parsedFilterState?.conditions.filter(c => c.field === 'tags') || [];
+    const nonTagConditions = parsedFilterState?.conditions.filter(c => c.field !== 'tags') || [];
+
+    // 2. Create FilterState for non-tag filters only
+    const nonTagFilterState: FilterState | null = nonTagConditions.length > 0 ? {
+      conditions: nonTagConditions,
+      logicalOperator: parsedFilterState?.logicalOperator || 'AND'
+    } : null;
+
+    // 3. Build base WHERE clause for non-tag filters + search term
+    // This now correctly ignores 'tags' field as per the updated buildPrismaWhereFromFilters
+    let combinedWhere = buildCombinedWhereClause(
       organizationId,
-      parsedFilterState,
+      nonTagFilterState,
       searchParam
     );
+    console.log('[CONTACTS API] Base WHERE clause (non-tags + search):', JSON.stringify(combinedWhere, null, 2));
 
-    console.log('[CONTACTS API] Generated Prisma WHERE clause:', JSON.stringify(whereClause, null, 2));
 
-    // *** FIX: Use the combined whereClause for counting ***
+    // 4. Process tag conditions: Lookup IDs and build tag-specific clauses
+    let tagWhereClauses: Prisma.ContactsWhereInput[] = [];
+    if (tagConditions.length > 0) {
+      const tagNamesToLookup = new Set<string>();
+      tagConditions.forEach(cond => {
+        // Ensure value is an array and contains strings
+        if (Array.isArray(cond.value)) {
+          cond.value.forEach(name => typeof name === 'string' && tagNamesToLookup.add(name));
+        }
+      });
+
+      const tagNameMap = new Map<string, string>();
+      if (tagNamesToLookup.size > 0) {
+        try {
+          console.log(`[CONTACTS API] Looking up tag IDs for names: ${Array.from(tagNamesToLookup).join(', ')}`);
+          const foundTags = await prisma.tags.findMany({
+            where: {
+              organizationId,
+              name: { in: Array.from(tagNamesToLookup) }
+            },
+            select: { id: true, name: true }
+          });
+          foundTags.forEach(tag => tagNameMap.set(tag.name, tag.id));
+          console.log(`[CONTACTS API] Found ${tagNameMap.size} matching tag IDs.`);
+        } catch (tagLookupError) {
+           console.error('[CONTACTS API] Error looking up tag IDs:', tagLookupError);
+           // Decide how to handle: proceed without tag filters, return error?
+           // For now, proceed without tag filters if lookup fails.
+           tagWhereClauses = []; // Clear any potentially built clauses
+        }
+      }
+
+      // Build clauses only if lookup didn't error out
+      if (tagWhereClauses.length === 0) { // Check if cleared due to error
+          tagConditions.forEach(cond => {
+            const operator = cond.operator;
+            // Ensure value is an array of strings before mapping
+            const tagNames = Array.isArray(cond.value) ? cond.value.filter((v): v is string => typeof v === 'string') : [];
+            // Map names to IDs, filtering out names not found in the map
+            const tagIds = tagNames.map(name => tagNameMap.get(name)).filter((id): id is string => !!id);
+
+            // Skip operators requiring IDs if no valid IDs were found for this condition
+            if (tagIds.length === 0 && operator !== 'hasNoTags') {
+              console.warn(`[CONTACTS API] No valid tag IDs found for condition, skipping: ${JSON.stringify(cond)}`);
+              return; // Skip this specific condition
+            }
+
+            let clause: Prisma.ContactsWhereInput | null = null;
+            switch (operator) {
+              case 'hasAnyTags':
+                clause = { ContactTags: { some: { tagId: { in: tagIds } } } };
+                break;
+              case 'hasAllTags':
+                // Only add clause if there are IDs to check for
+                if (tagIds.length > 0) {
+                   clause = { AND: tagIds.map(id => ({ ContactTags: { some: { tagId: id } } })) };
+                }
+                break;
+              case 'hasNoneOfTheTags':
+                 // Only add clause if there are IDs to check against
+                 if (tagIds.length > 0) {
+                    clause = { ContactTags: { none: { tagId: { in: tagIds } } } };
+                 }
+                break;
+              case 'hasNoTags': // This one doesn't need IDs
+                clause = { ContactTags: { none: {} } };
+                break;
+              default:
+                 console.warn(`[CONTACTS API] Unsupported tag operator in route: ${operator}`);
+            }
+            if (clause) {
+                tagWhereClauses.push(clause);
+            }
+          });
+      }
+    }
+    console.log('[CONTACTS API] Generated tag WHERE clauses:', JSON.stringify(tagWhereClauses, null, 2));
+
+
+    // 5. Merge tagWhereClauses into combinedWhere respecting the main logicalOperator
+    if (tagWhereClauses.length > 0) {
+      const logicalOp = parsedFilterState?.logicalOperator || 'AND'; // Default to AND
+
+      if (logicalOp === 'OR') {
+        // Ensure OR array exists
+        if (!Array.isArray(combinedWhere.OR)) combinedWhere.OR = [];
+        // Add the tag conditions to the main OR array
+        combinedWhere.OR.push(...tagWhereClauses);
+        console.log('[CONTACTS API] Merged tag clauses using OR');
+
+      } else { // AND (default)
+        // Ensure AND array exists
+        if (!Array.isArray(combinedWhere.AND)) combinedWhere.AND = [];
+         // Add the tag conditions to the main AND array
+        combinedWhere.AND.push(...tagWhereClauses);
+        console.log('[CONTACTS API] Merged tag clauses using AND');
+      }
+    }
+
+    // --- END: Tag Filter Processing ---
+
+    const finalWhereClause = combinedWhere; // Use the potentially modified combinedWhere
+
+    console.log('[CONTACTS API] Final generated Prisma WHERE clause:', JSON.stringify(finalWhereClause, null, 2));
+
+    // Use the finalWhereClause for counting
     const totalCount = await prisma.contacts.count({
-      where: whereClause,
+      where: finalWhereClause,
     });
 
     console.log(`[CONTACTS API] Found ${totalCount} contacts matching criteria for organization ${organizationId}`);
 
-    // *** FIX: Use the combined whereClause for fetching ***
+    // Use the finalWhereClause for fetching
     const contacts = await prisma.contacts.findMany({
-      where: whereClause, // Apply combined filters and search
+      where: finalWhereClause, // Apply combined filters and search
       select: {
         id: true,
         firstName: true,

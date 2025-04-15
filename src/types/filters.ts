@@ -19,11 +19,14 @@ export type FilterOperator =
   | 'isAfter'
   | 'isBefore'
   | 'between'
+  // Tag Operators
   | 'hasAllTags'
   | 'hasAnyTags'
-  | 'hasNoneTags'
-  | 'exists' // Added for webhook filters
-  | 'not exists'; // Added for webhook filters
+  | 'hasNoneOfTheTags' // Corrected from hasNoneTags and matches backend
+  | 'hasNoTags' // Added to match backend
+  // Webhook Operators (Keep if used elsewhere)
+  | 'exists' 
+  | 'not exists'; 
 
 // Represents a single filter condition in the UI/state
 export type Filter = {
@@ -60,9 +63,9 @@ export interface FieldDefinition {
 export const OPERATORS_BY_TYPE: Record<string, { value: FilterOperator; label: string }[]> = {
   string: [
     { value: 'equals', label: 'is exactly' },
-    { value: 'notEquals', label: 'is not' },
+    { value: 'notEquals', label: 'is not' }, // Maps to 'isNot' in UI?
     { value: 'contains', label: 'contains' },
-    { value: 'notContains', label: 'does not contain' },
+    { value: 'notContains', label: 'does not contain' }, // Maps to 'doesNotContain' in UI?
     { value: 'startsWith', label: 'starts with' },
     { value: 'endsWith', label: 'ends with' },
     { value: 'isEmpty', label: 'is empty' },
@@ -85,11 +88,14 @@ export const OPERATORS_BY_TYPE: Record<string, { value: FilterOperator; label: s
     { value: 'isNotEmpty', label: 'is not empty' }
   ],
   tags: [
-    { value: 'hasAllTags', label: 'has all tags' },
     { value: 'hasAnyTags', label: 'has any tags' },
-    { value: 'hasNoneTags', label: 'has none of the tags' },
-    { value: 'isEmpty', label: 'has no tags' },
-    { value: 'isNotEmpty', label: 'has any tag' }
+    { value: 'hasAllTags', label: 'has all tags' },
+    { value: 'hasNoneOfTheTags', label: 'has none of the tags' }, // Corrected operator value
+    { value: 'hasNoTags', label: 'has no tags' }, // Added operator value
+    // Note: 'isEmpty'/'isNotEmpty' for tags might be confusing. 
+    // 'hasNoTags' and 'hasAnyTags' seem clearer. Consider removing isEmpty/isNotEmpty for tags if not used.
+    // { value: 'isEmpty', label: 'is empty' }, // Example if needed
+    // { value: 'isNotEmpty', label: 'is not empty' } // Example if needed
   ],
   boolean: [
     { value: 'equals', label: 'is' }
