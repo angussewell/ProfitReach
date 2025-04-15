@@ -40,7 +40,7 @@ export function DataSettings({ organization }: DataSettingsProps) {
 
     setIsEnriching(true);
     try {
-      const response = await fetch('https://n8n.srv768302.hstgr.cloud/webhook/enrich', {
+      const response = await fetch('https://n8n.srv768302.hstgr.cloud/webhook/contact-enrichment', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -135,4 +135,4 @@ export function DataSettings({ organization }: DataSettingsProps) {
       </div>
     </div>
   );
-} 
+}
