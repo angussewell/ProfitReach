@@ -225,7 +225,7 @@ export function StepCard({
             {generateStepSummary(step, allSteps)}
           </div>
           
-          {/* Action buttons row */}
+          {/* Action buttons row - Reverted to size="icon" */}
           <div className="flex justify-end gap-1 mt-2"> {/* Added margin-top */}
             <Button
               variant="ghost"
