@@ -21,7 +21,7 @@ type Contact = {
   id: string;
   firstName: string | null;
   lastName: string | null;
-  email: string;
+  email: string | null;
   photoUrl: string | null;
   title: string | null;
   currentCompanyName: string | null;
@@ -539,7 +539,8 @@ export default function EnhancedContactsTable({
                       ) : (
                         <div className="flex-shrink-0 h-10 w-10 bg-gray-200 rounded-full flex items-center justify-center">
                           <span className="text-gray-500">
-                            {contact.firstName?.charAt(0) || contact.email.charAt(0).toUpperCase()}
+                            {contact.firstName?.charAt(0) ||
+                              (contact.email ? contact.email.charAt(0).toUpperCase() : '?')}
                           </span>
                         </div>
                       )}
@@ -553,7 +554,9 @@ export default function EnhancedContactsTable({
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap overflow-hidden">
-                    <div className="text-sm text-gray-900 truncate" title={contact.email}>{contact.email}</div>
+                    <div className="text-sm text-gray-900 truncate" title={contact.email || 'No email'}>
+                      {contact.email || <span className="text-gray-400 italic">No email</span>}
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap overflow-hidden">
                     <div className="text-sm text-gray-900 truncate" title={contact.title || '-'}>{contact.title || '-'}</div>

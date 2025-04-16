@@ -161,7 +161,7 @@ model Contacts {
   fullName                   String?                @db.VarChar(200)
   linkedinUrl                String?
   title                      String?                @db.VarChar(200)
-  email                      String                 @db.VarChar(255)
+  email                      String?                @db.VarChar(255)
   emailStatus                String?                @db.VarChar(50)
   photoUrl                   String?
   headline                   String?
