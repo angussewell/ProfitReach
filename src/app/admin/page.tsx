@@ -39,6 +39,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from 'react-hot-toast';
 import { EmailInventoryStats } from '@/components/admin/EmailInventoryStats'; // Import the new component
+import { OrganizationSettingsModal } from '@/components/admin/OrganizationSettingsModal'; // Import the new settings modal
 
 import type { DateRange } from "react-day-picker";
 
@@ -138,13 +139,18 @@ export default function AdminPanelPage() {
   // Add new state for metadata
   const [setterStatsMetadata, setSetterStatsMetadata] = useState<SetterStatsMetadata | null>(null);
 
-  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
-  const [selectedOrgName, setSelectedOrgName] = useState<string | null>(null);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [tasksLoading, setTasksLoading] = useState(false);
-  const [taskError, setTaskError] = useState<string | null>(null);
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false); // This will be removed later
+  // const [selectedOrgName, setSelectedOrgName] = useState<string | null>(null); // REMOVED duplicate declaration
+  const [tasks, setTasks] = useState<Task[]>([]); // State for tasks data (used within the new modal)
+  const [tasksLoading, setTasksLoading] = useState(false); // Loading state for tasks (used within the new modal)
+  const [taskError, setTaskError] = useState<string | null>(null); // Error state for tasks (will be used within the new modal)
 
-  // Add a new state to store the raw received data for testing
+  // State for the new Organization Settings Modal
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null); // Store ID for potential future use in modal
+  const [selectedOrgName, setSelectedOrgName] = useState<string | null>(null); // Store Name for modal title and task fetching
+
+  // Add a new state to store the raw received data for testing (will be used within the new modal)
   const [receivedTaskData, setReceivedTaskData] = useState<any[]>([]);
   const [showReceivedData, setShowReceivedData] = useState(false);
   
@@ -529,10 +535,12 @@ export default function AdminPanelPage() {
     setCustomRange(range);
   };
 
-
-  const handleViewTasks = (orgName: string) => {
-    setSelectedOrgName(orgName);
-    setIsTaskModalOpen(true);
+  // Renamed function to open the new settings modal
+  const handleOpenOrgSettingsModal = (orgId: string, orgName: string) => {
+    setSelectedOrgId(orgId); // Store the ID
+    setSelectedOrgName(orgName); // Store the name
+    setIsSettingsModalOpen(true); // Open the new modal
+    // We will trigger task fetching inside the new modal component itself
   };
 
   // Update the runApiTest function to also check the tasks-receive endpoint
@@ -986,10 +994,10 @@ export default function AdminPanelPage() {
                             <Button 
                               variant="outline"
                               size="sm"
-                              onClick={() => handleViewTasks(org.name)} 
+                              onClick={() => handleOpenOrgSettingsModal(org.id, org.name)}
                               className="h-8 px-3 text-xs"
                             >
-                              <Eye className="mr-1 h-3 w-3" /> View Tasks
+                              <Eye className="mr-1 h-3 w-3" /> Settings
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -1047,10 +1055,10 @@ export default function AdminPanelPage() {
                             <Button 
                               variant="outline"
                               size="sm"
-                              onClick={() => handleViewTasks(org.name)} 
+                              onClick={() => handleOpenOrgSettingsModal(org.id, org.name)}
                               className="h-8 px-3 text-xs"
                             >
-                              <Eye className="mr-1 h-3 w-3" /> View Tasks
+                              <Eye className="mr-1 h-3 w-3" /> Settings
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -1115,10 +1123,10 @@ export default function AdminPanelPage() {
                             <Button 
                               variant="outline"
                               size="sm"
-                              onClick={() => handleViewTasks(org.name)} 
+                              onClick={() => handleOpenOrgSettingsModal(org.id, org.name)}
                               className="h-8 px-3 text-xs"
                             >
-                              <Eye className="mr-1 h-3 w-3" /> View Tasks
+                              <Eye className="mr-1 h-3 w-3" /> Settings
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -1301,84 +1309,25 @@ export default function AdminPanelPage() {
         </Card>
       </div>
 
-      <Dialog open={isTaskModalOpen} onOpenChange={setIsTaskModalOpen}>
-        <DialogContent className="sm:max-w-[800px]">
-          <DialogHeader>
-            <DialogTitle>Tasks for: {selectedOrgName}</DialogTitle>
-            <DialogDescription>
-              Current tasks associated with this organization.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="mt-4 max-h-[60vh] overflow-y-auto pr-2">
-            {tasksLoading ? (
-              <div className="flex items-center justify-center py-10">
-                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-                <p className="ml-3 text-slate-600">Loading tasks...</p>
-              </div>
-            ) : taskError ? (
-              <div className="text-center py-10 text-red-600 bg-red-50 border border-red-200 rounded-md px-4">
-                <p><strong>Error:</strong> {taskError}</p>
-                {(taskError.includes("No real tasks found") || taskError.includes("No tasks found")) && (
-                  <p className="text-sm mt-2">If you just triggered the webhook, try refreshing in a few seconds.</p>
-                )}
-              </div>
-            ) : tasks.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Task Name</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Assigned To</TableHead>
-                    <TableHead>Due Date</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {tasks.map((task, index) => (
-                    <TableRow key={index}>
-                      <TableCell className="font-medium">
-                        {getTaskField(task, 'taskName', 'Task Name')}
-                      </TableCell>
-                      <TableCell>
-                        <Badge 
-                          variant="outline" 
-                          className={cn("border", getStatusBadgeClasses(getTaskField(task, 'status', 'Status')))}
-                        >
-                          {getTaskField(task, 'status', 'Status')}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{getTaskField(task, 'assignedTo', 'Assigned To')}</TableCell>
-                      <TableCell>
-                        {getTaskField(task, 'dueDate', 'Due Date') ? 
-                          new Date(getTaskField(task, 'dueDate', 'Due Date')).toLocaleDateString() : 
-                          'No date'
-                        }
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <div className="text-center py-10 text-slate-500 bg-slate-50 border border-slate-100 rounded-md">
-                No tasks found for this organization.
-                <p className="text-sm mt-2">If you recently triggered the webhook, wait a few seconds and try refreshing.</p>
-              </div>
-            )}
-          </div>
-          <DialogFooter className="flex justify-between sm:justify-between">
-            <Button 
-               variant="secondary"
-              onClick={() => selectedOrgName && triggerAndPollForTasks(selectedOrgName)}
-              disabled={tasksLoading}
-            >
-              {tasksLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Refresh Tasks
-            </Button>
-            <DialogClose asChild>
-              <Button type="button" variant="outline">Close</Button>
-            </DialogClose>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Render the new Organization Settings Modal */}
+      {selectedOrgId && selectedOrgName && (
+        <OrganizationSettingsModal
+          isOpen={isSettingsModalOpen}
+          onClose={() => setIsSettingsModalOpen(false)}
+          organizationId={selectedOrgId}
+          organizationName={selectedOrgName}
+          // Pass task-related state and functions needed inside the modal
+          tasks={tasks}
+          tasksLoading={tasksLoading}
+          taskError={taskError}
+          triggerAndPollForTasks={triggerAndPollForTasks}
+          receivedTaskData={receivedTaskData}
+          showReceivedData={showReceivedData}
+          setShowReceivedData={setShowReceivedData}
+          getStatusBadgeClasses={getStatusBadgeClasses} // Pass helper if needed inside
+          getTaskField={getTaskField} // Pass helper if needed inside
+        />
+      )}
     </div>
   );
 }

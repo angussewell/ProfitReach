@@ -1,18 +1,32 @@
-import { useState } from 'react';
+'use client'; // Add 'use client' directive
+
+import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
+import { Switch } from "@/components/ui/switch"; // Import Switch component
+import { Label } from "@/components/ui/label"; // Import Label component
 
 interface Organization {
   id: string;
+  hideFromAdminStats?: boolean; // Add the new field
 }
 
 interface DataSettingsProps {
-  organization: Organization | null;
+  organization: Organization | null; // Keep organization prop
 }
 
 export function DataSettings({ organization }: DataSettingsProps) {
   const [linkedInUrl, setLinkedInUrl] = useState('');
   const [tags, setTags] = useState('');
   const [isEnriching, setIsEnriching] = useState(false);
+  const [hideStats, setHideStats] = useState(false); // State for the toggle
+  const [isSavingHideStats, setIsSavingHideStats] = useState(false); // Loading state for saving toggle
+
+  // Effect to set initial toggle state when organization data loads
+  useEffect(() => {
+    if (organization) {
+      setHideStats(organization.hideFromAdminStats ?? false);
+    }
+  }, [organization]);
 
   const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setLinkedInUrl(e.target.value);
@@ -67,8 +81,43 @@ export function DataSettings({ organization }: DataSettingsProps) {
     }
   };
 
+  // Handler for the hideFromAdminStats toggle change
+  const handleHideStatsChange = async (checked: boolean) => {
+    if (!organization) return;
+
+    setIsSavingHideStats(true);
+    setHideStats(checked); // Optimistic update
+
+    try {
+      const response = await fetch(`/api/organizations/${organization.id}`, { // Use specific org ID endpoint
+        method: 'PATCH', // Or PUT if your API uses PUT
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hideFromAdminStats: checked })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
+        throw new Error(errorData.error || 'Failed to update setting');
+      }
+
+      toast.success(`Organization will now be ${checked ? 'hidden from' : 'visible in'} admin stats.`);
+      // Optionally refetch organization data if needed elsewhere, or rely on optimistic update
+      // fetchOrganization(); // Assuming fetchOrganization exists in parent
+    } catch (error) {
+      console.error('Error updating hideFromAdminStats:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to update setting');
+      setHideStats(!checked); // Revert optimistic update on error
+    } finally {
+      setIsSavingHideStats(false);
+    }
+  };
+
+
   return (
     <div className="flex flex-col gap-6">
+      {/* Admin Panel Visibility Setting REMOVED FROM HERE */}
+
+      {/* LinkedIn Enrichment Section */}
       <div className="bg-white rounded-xl shadow-lg p-6">
         <h2 className="text-2xl font-bold text-[#2e475d] mb-4">LinkedIn Sales Navigator Enrichment</h2>
         <div className="space-y-4">

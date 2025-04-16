@@ -355,6 +355,7 @@ model Organization {
   nextBillingDate         DateTime?
   stripeTestCustomerId    String?
   location_id             String?                   @unique
+  hideFromAdminStats      Boolean                   @default(false) // New field for admin stats visibility
   Attachment              Attachment[]
   BillingEvent            BillingEvent[]
   ChatConversation        ChatConversation[]
