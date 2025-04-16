@@ -18,6 +18,7 @@ interface WorkflowStepsViewProps {
   onEditStep: (index: number) => void;
   onDeleteStep: (index: number) => void;
   onMoveStep: (index: number, direction: 'up' | 'down') => void;
+  stepCounts?: Record<number, number>; // Add stepCounts prop
 }
 
 /**
@@ -29,7 +30,8 @@ export function WorkflowStepsView({
   // onAddFirstStep removed
   onEditStep,
   onDeleteStep,
-  onMoveStep
+  onMoveStep,
+  stepCounts = {} // Destructure stepCounts with default
 }: WorkflowStepsViewProps) {
 
   // No complex path analysis needed
@@ -60,6 +62,7 @@ export function WorkflowStepsView({
               step={step}
               isFirst={index === 0}
               isLast={index === steps.length - 1}
+              contactCount={stepCounts[step.order] || 0} // Pass the count for this step's order
               // indentLevel removed
               index={index}
               allSteps={steps} // Pass all steps for context if needed (e.g., move validation)

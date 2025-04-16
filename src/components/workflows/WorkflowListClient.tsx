@@ -11,7 +11,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Switch } from '@/components/ui/switch';
-import { Badge } from '@/components/ui/badge';
+import { Badge, type BadgeProps } from '@/components/ui/badge'; // Import BadgeProps
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -36,12 +36,13 @@ import { toast } from 'sonner';
 import { DuplicateScenarioDialog } from '@/components/scenarios/DuplicateScenarioDialog'; // Adapt this path/component if needed
 
 // Define the type for the workflow data passed as props
-// This should match the type defined in the page component
+// This should match the type defined in the page component (including statusCounts)
 type WorkflowData = {
   workflowId: string;
   name: string;
-  description: string | null;
+  description: string | null; // Keep description in type if needed elsewhere, but won't display in table
   isActive: boolean;
+  statusCounts: Record<string, number> | null; // Added status counts
 };
 
 interface WorkflowListClientProps {
@@ -140,11 +141,54 @@ export default function WorkflowListClient({ initialWorkflows }: WorkflowListCli
     }
   };
 
-  const truncateDescription = (text: string | null, maxLength: number = 100) => {
-    if (!text) return '-';
-    if (text.length <= maxLength) return text;
-    return text.substring(0, maxLength) + '...';
+  // Mappings for Badge Variants and Labels
+  const statusVariantMap: Record<string, BadgeProps['variant']> = {
+    active: 'default', // Using default (often green-ish or primary) for active
+    pending_schedule: 'secondary',
+    waiting_delay: 'secondary',
+    waiting_scenario: 'secondary',
+    completed: 'outline',
+    failed: 'destructive',
+    errored: 'destructive',
+    // Add other statuses as needed
   };
+
+  const statusLabelMap: Record<string, string> = {
+    active: 'Active',
+    pending_schedule: 'Pending Schedule',
+    waiting_delay: 'Waiting Delay',
+    waiting_scenario: 'Waiting Scenario',
+    completed: 'Completed',
+    failed: 'Failed',
+    errored: 'Errored',
+    // Add other statuses as needed
+  };
+
+  // Helper function to render status counts as Badges
+  const renderStatusBadges = (counts: Record<string, number> | null) => {
+    if (!counts || Object.keys(counts).length === 0) {
+      return <span className="text-muted-foreground">-</span>;
+    }
+
+    const badges = Object.entries(counts)
+      .filter(([_, count]) => count > 0) // Only show statuses with count > 0
+      .map(([status, count]) => {
+        const variant = statusVariantMap[status] || 'secondary'; // Default to secondary if status not mapped
+        const label = statusLabelMap[status] || status; // Use raw status if not mapped
+        return (
+          <Badge key={status} variant={variant} className="whitespace-nowrap">
+            {label}: {count}
+          </Badge>
+        );
+      });
+
+    if (badges.length === 0) {
+       return <span className="text-muted-foreground">-</span>; // Handle case where all counts are 0
+    }
+
+    return <div className="flex flex-wrap gap-1">{badges}</div>;
+  };
+
 
   const handleDeleteWorkflow = async (forceDelete = false) => {
     if (!workflowToDelete) return;
@@ -263,7 +307,8 @@ export default function WorkflowListClient({ initialWorkflows }: WorkflowListCli
         <TableHeader>
           <TableRow>
             <TableHead className="w-[250px]">Name</TableHead>
-            <TableHead>Description</TableHead>
+            {/* Replaced Description with Enrollment Status */}
+            <TableHead>Enrollment Status</TableHead> 
             <TableHead className="w-[100px] text-center">Status</TableHead>
             <TableHead className="w-[100px] text-center">Actions</TableHead>
           </TableRow>
@@ -279,8 +324,9 @@ export default function WorkflowListClient({ initialWorkflows }: WorkflowListCli
             workflows.map((workflow) => (
               <TableRow key={workflow.workflowId}>
                 <TableCell className="font-medium">{workflow.name}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {truncateDescription(workflow.description)}
+                {/* Replaced Description cell with Status Counts cell - Now using renderStatusBadges */}
+                <TableCell>
+                  {renderStatusBadges(workflow.statusCounts)}
                 </TableCell>
                 <TableCell className="text-center">
                   <Badge variant={workflow.isActive ? 'default' : 'outline'}

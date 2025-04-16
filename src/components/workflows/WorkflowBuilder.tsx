@@ -10,17 +10,18 @@ import { WorkflowStepConfigModal } from './WorkflowStepConfigModal';
 import { useWorkflowState } from './hooks/useWorkflowState';
 import { getDefaultConfigForAction } from './utils/workflowUtils'; // Import helper
 
-// Simplified Props - remove unused callbacks related to flow/branching
+// Updated Props to include stepCounts
 interface WorkflowBuilderProps {
-  workflowId: string; // Pass workflowId to state hook for better reset logic
+  workflowId: string;
   steps: WorkflowStep[];
+  stepCounts?: Record<number, number>; // Add stepCounts prop
   onSaveChanges?: (steps: WorkflowStep[]) => void;
-  // onAddStep, onEditStep, onDeleteStep, onMoveStep are handled internally now
 }
 
 export function WorkflowBuilder({
-  workflowId, // Use workflowId
+  workflowId,
   steps: initialSteps,
+  stepCounts = {}, // Destructure stepCounts with default value
   onSaveChanges,
 }: WorkflowBuilderProps) {
   // Pass workflowId to the hook
@@ -155,6 +156,7 @@ export function WorkflowBuilder({
             onEditStep={handleEditStep}
             onDeleteStep={handleDeleteStep}
             onMoveStep={handleMoveStep}
+            stepCounts={stepCounts} // Pass stepCounts down to WorkflowStepsView
           />
         </div>
       </div>

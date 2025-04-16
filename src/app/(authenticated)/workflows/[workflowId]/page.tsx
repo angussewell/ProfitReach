@@ -5,7 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { UseFormReturn } from 'react-hook-form';
 import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
-import { WorkflowDefinition } from '@prisma/client';
+// WorkflowDefinition type might not be directly used if we define a custom type below
+// import { WorkflowDefinition } from '@prisma/client'; 
 import { Loader2 } from 'lucide-react';
 import { prepareWorkflowFormData } from '@/lib/form-data-utils';
 
@@ -34,10 +35,27 @@ import {
   // BranchConfig removed
 } from '@/types/workflow';
 
-// Helper function to fetch workflow data (client-side) - Keep simulation for now
-// TODO: Replace with actual API call
-async function getWorkflowDefinition(id: string): Promise<(WorkflowDefinition & { steps?: WorkflowStep[] }) | null> {
-  console.log("Fetching workflow data from API");
+// Define a type for the data expected from the API, including stepCounts
+type WorkflowEditorData = {
+  workflowId: string;
+  name: string;
+  description: string | null;
+  dailyContactLimit: number | null;
+  dripStartTime: Date | string | null; // Allow string for initial fetch
+  dripEndTime: Date | string | null;   // Allow string for initial fetch
+  timezone: string | null;
+  steps: WorkflowStep[];
+  isActive: boolean;
+  organizationId: string;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+  stepCounts?: Record<number, number>; // Optional step counts map
+};
+
+
+// Updated fetch function to expect WorkflowEditorData
+async function getWorkflowDefinition(id: string): Promise<WorkflowEditorData | null> {
+  console.log("Fetching workflow data from API for ID:", id);
   const response = await fetch(`/api/workflows/${id}`);
   if (!response.ok) {
     if (response.status === 404) return null;
@@ -47,22 +65,26 @@ async function getWorkflowDefinition(id: string): Promise<(WorkflowDefinition & 
 
   // Support both { success, data } and direct workflow object responses
   const data = apiResponse && typeof apiResponse === "object" && "data" in apiResponse
-    ? apiResponse.data
-    : apiResponse;
+    ? apiResponse.data // Assuming API returns { success: true, data: {...} }
+    : apiResponse;     // Or just the workflow object directly
 
+  // Check if the core workflow data exists
   if (data && typeof data === "object" && "workflowId" in data) {
-    // Parse and add client IDs to steps
+    // Parse steps and add client IDs
     const parsedSteps = (data.steps || []).map((step: any, index: number) => ({
       ...step,
-      clientId: uuidv4(), // Ensure client ID for React Flow
+      clientId: uuidv4(), // Ensure client ID for React Flow / DND lists
       order: step.order ?? index + 1,
-      config: step.config || {},
-    })).sort((a: { order: number }, b: { order: number }) => a.order - b.order);
+      config: step.config || {}, // Ensure config is at least an empty object
+    })).sort((a: { order: number }, b: { order: number }) => a.order - b.order); // Sort steps by order
 
-    console.log('Steps data updated:', parsedSteps);
-    return { ...data, steps: parsedSteps };
+    console.log('Parsed steps:', parsedSteps);
+    console.log('Received step counts:', data.stepCounts); // Log received counts
+
+    // Return the full data including workflow details, parsed steps, and step counts
+    return { ...data, steps: parsedSteps, stepCounts: data.stepCounts || {} }; // Ensure stepCounts is at least an empty object
   } else {
-    // Handle case when error or missing workflow
+    // Handle error or missing workflow cases
     if (apiResponse.error) {
       throw new Error(`API Error: ${apiResponse.error}`);
     }
@@ -98,8 +120,9 @@ export default function WorkflowEditPage() {
   const [isLoading, setIsLoading] = useState(!isCreating);
   const [isSaving, setIsSaving] = useState(false);
   const [steps, setSteps] = useState<WorkflowStep[]>([]);
-  const [workflowName, setWorkflowName] = useState(''); // State for header input
+  const [workflowName, setWorkflowName] = useState('');
   const [initialSettingsData, setInitialSettingsData] = useState<Partial<WorkflowMetadataFormData>>({});
+  const [stepCounts, setStepCounts] = useState<Record<number, number>>({}); // State for step counts
 
   // State tracking is now handled by the WorkflowBuilder component via useWorkflowState
 
@@ -133,8 +156,9 @@ export default function WorkflowEditPage() {
               dripEndTime: formatTime(data.dripEndTime),
               timezone: data.timezone,
             };
-            setInitialSettingsData(formattedMetadata); // Set data for WorkflowSettings component
+            setInitialSettingsData(formattedMetadata);
             setSteps(data.steps || []);
+            setStepCounts(data.stepCounts || {}); // Set step counts state
           } else {
             toast.error('Workflow not found.');
             router.push('/workflows');
@@ -293,13 +317,14 @@ export default function WorkflowEditPage() {
       {/* Main Content Area - Builder takes remaining space */}
       {/* Pass workflowId and simplified props to WorkflowBuilder */}
       <div className="flex-1 overflow-hidden p-1 md:p-2">
-        {/* Render WorkflowBuilder only when not loading */}
+        {/* Render WorkflowBuilder only when not loading, pass stepCounts */}
         {!isLoading && (
           <WorkflowBuilder
-            key={workflowId + ':' + steps.length}
-            workflowId={workflowId} // Pass the workflowId
-            steps={steps} // Pass initial/current steps
-            onSaveChanges={setSteps} // Update page state when builder saves internally
+            key={workflowId + ':' + steps.length} // Consider a more stable key if needed
+            workflowId={workflowId}
+            steps={steps}
+            stepCounts={stepCounts} // Pass step counts down
+            onSaveChanges={setSteps}
           />
         )}
         {/* Optional: Show a loader inside the builder area while loading */}

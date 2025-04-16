@@ -37,8 +37,37 @@ export async function GET(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // 4. Success: return workflow data
-  return NextResponse.json(workflow);
+  // 4. Fetch contact counts per step for this workflow
+  let stepCountsMap: Record<number, number> = {};
+  try {
+    const stepCountsResult = await prisma.contactWorkflowState.groupBy({
+      by: ['currentStepOrder'],
+      _count: {
+        currentStepOrder: true,
+      },
+      where: {
+        workflowId: params.id,
+        organizationId: workflow.organizationId, // Use orgId from the fetched workflow
+        // Optionally filter by status if needed, e.g., only 'active' or 'waiting' contacts
+        // status: { in: ['active', 'waiting_delay', 'waiting_scenario'] } 
+      },
+    });
+
+    // Process results into a map { stepOrder: count }
+    stepCountsResult.forEach(item => {
+      stepCountsMap[item.currentStepOrder] = item._count.currentStepOrder;
+    });
+
+  } catch (error) {
+    console.error(`Failed to fetch step counts for workflow ${params.id}:`, error);
+    // Non-fatal error, proceed without counts
+  }
+
+  // 5. Success: return workflow data along with step counts
+  return NextResponse.json({
+    ...workflow,
+    stepCounts: stepCountsMap, // Add the counts map to the response
+  });
 }
 
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
