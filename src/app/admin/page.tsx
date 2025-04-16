@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { toast } from 'react-hot-toast';
+import { EmailInventoryStats } from '@/components/admin/EmailInventoryStats'; // Import the new component
 
 import type { DateRange } from "react-day-picker";
 
@@ -1195,6 +1196,11 @@ export default function AdminPanelPage() {
           </Card>
         </div>
       )}
+
+      {/* Email Account Inventory Section */}
+      <div className="mt-8">
+        <EmailInventoryStats />
+      </div>
 
       {/* Setter Statistics Card */}
       <div className="mt-8">
