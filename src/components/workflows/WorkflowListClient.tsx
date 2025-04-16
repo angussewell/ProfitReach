@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useTransition, useRef } from 'react';
+import React, { useState, useTransition, useRef } from 'react'; // Removed useContext
+import { useOrganization } from '@/contexts/OrganizationContext'; // Import the custom hook
 import {
   Table,
   TableBody,
@@ -50,6 +51,7 @@ interface WorkflowListClientProps {
 export default function WorkflowListClient({ initialWorkflows }: WorkflowListClientProps) {
   const [workflows, setWorkflows] = useState<WorkflowData[]>(initialWorkflows);
   const [isPending, startTransition] = useTransition();
+  const { currentOrganization } = useOrganization(); // Use the custom hook
   const [isDeleting, setIsDeleting] = useState(false);
   const [isForceDeleting, setIsForceDeleting] = useState(false);
   const [workflowToDelete, setWorkflowToDelete] = useState<WorkflowData | null>(null);
@@ -81,7 +83,22 @@ export default function WorkflowListClient({ initialWorkflows }: WorkflowListCli
     );
 
     try {
-      const response = await fetch(`/api/workflows/${workflowId}/status`, {
+      const orgId = currentOrganization?.id; // Get org ID
+
+      if (!orgId) {
+        console.error('Organization ID not found, cannot update workflow status.');
+        toast.error('Error: Organization context is missing.');
+        // Revert optimistic update if orgId is missing
+        setWorkflows((prevWorkflows) =>
+          prevWorkflows.map((wf) =>
+            wf.workflowId === workflowId ? { ...wf, isActive: !newStatus } : wf
+          )
+        );
+        return; // Stop execution if orgId is missing
+      }
+      
+      // Use the correct URL including orgId
+      const response = await fetch(`/api/workflows/${orgId}/${workflowId}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
