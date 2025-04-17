@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Switch } from "@/components/ui/switch"; // Import Switch component
 import { Label } from "@/components/ui/label"; // Import Label component
+import { DomainEnrichmentCard } from './DomainEnrichmentCard'; // Import the new component
 
 interface Organization {
   id: string;
@@ -182,6 +183,10 @@ export function DataSettings({ organization }: DataSettingsProps) {
           </div>
         </div>
       </div>
+
+      {/* Domain Enrichment Section */}
+      <DomainEnrichmentCard />
+
     </div>
   );
 }
