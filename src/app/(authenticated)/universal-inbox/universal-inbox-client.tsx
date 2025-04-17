@@ -1326,8 +1326,8 @@ export function UniversalInboxClient() {
                                       }
                                     }}>
                                       <DropdownMenuTrigger asChild>
-                                        {/* Slightly larger button/icon, significant negative margin */}
-                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-slate-700 hover:bg-slate-100 flex-shrink-0 ml-[-8px]">
+                                        {/* Slightly larger button/icon, more negative margin */}
+                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-slate-700 hover:bg-slate-100 flex-shrink-0 ml-[-12px]">
                                           <ChevronDown className="h-5 w-5" />
                                           <span className="sr-only">Show all recipients</span>
                                         </Button>
