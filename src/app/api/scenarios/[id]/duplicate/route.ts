@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { v4 as uuidv4 } from 'uuid';
+import { Prisma } from '@prisma/client'; // Import Prisma namespace for types
 
 /**
  * Finds a unique name for a duplicated scenario within a target organization.
@@ -34,6 +35,7 @@ async function findUniqueName(baseName: string, orgId: string): Promise<string> 
             where: { name: finalName, organizationId: orgId },
         });
         i++;
+        // Safety break to prevent infinite loops in edge cases
         if (i > 1000) {
             console.error(`Could not find unique name for ${baseName} in org ${orgId} after 1000 attempts.`);
             throw new Error(`Failed to generate a unique name for scenario duplication.`);
@@ -49,102 +51,115 @@ export async function POST(
     try {
         // 1. Authentication & Basic Input Validation
         const session = await getServerSession(authOptions);
-        if (!session?.user?.id) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        // Access organizationId from session.user as defined in next-auth.d.ts
+        if (!session?.user?.id || !session.user.organizationId) { // Ensure session.user.organizationId exists
+            return NextResponse.json({ error: 'Unauthorized or session missing organization context' }, { status: 401 });
         }
-        const userId = session.user.id;
+        const userId = session.user.id; // Keep userId for potential logging, though not used for auth checks here
+        const sessionOrgId = session.user.organizationId; // Correct path to orgId
 
-        const { id } = params;
-        if (!id || typeof id !== 'string') {
+        const { id: scenarioIdToDuplicate } = params;
+        if (!scenarioIdToDuplicate || typeof scenarioIdToDuplicate !== 'string') {
             return NextResponse.json({ error: 'Valid Scenario ID parameter is required' }, { status: 400 });
         }
 
-        let targetOrganizationId: string;
+        // 2. Parse Request Body (Optional newName and targetOrgId)
+        let newName: string | undefined;
+        let targetOrgIdFromBody: string | undefined;
         try {
-            const body = await req.json();
-            targetOrganizationId = body.targetOrganizationId;
-            if (!targetOrganizationId || typeof targetOrganizationId !== 'string') {
-                return NextResponse.json({ error: 'targetOrganizationId (string) is required in the request body' }, { status: 400 });
+            // Allow empty body or body without specific keys
+            const textBody = await req.text();
+            const body = textBody ? JSON.parse(textBody) : {};
+            newName = body.newName;
+            targetOrgIdFromBody = body.targetOrgId;
+
+            if (newName !== undefined && typeof newName !== 'string') {
+                 return NextResponse.json({ error: 'If provided, newName must be a string' }, { status: 400 });
             }
+             if (targetOrgIdFromBody !== undefined && typeof targetOrgIdFromBody !== 'string') {
+                 return NextResponse.json({ error: 'If provided, targetOrgId must be a string' }, { status: 400 });
+            }
+
         } catch (error) {
-            return NextResponse.json({ error: 'Invalid or missing JSON request body' }, { status: 400 });
+            return NextResponse.json({ error: 'Invalid JSON request body' }, { status: 400 });
         }
 
-        // 2. Fetch Original Scenario & Authorization Check (Source Org)
-        const original = await prisma.scenario.findUnique({
-            where: { id },
+        // 3. Fetch Original Scenario data needed for copy
+        const originalScenario = await prisma.scenario.findUnique({
+            where: { id: scenarioIdToDuplicate },
+            select: {
+                name: true,
+                description: true,
+                status: true,
+                customizationPrompt: true,
+                emailExamplesPrompt: true,
+                subjectLine: true,
+                touchpointType: true,
+                testEmail: true,
+                testMode: true,
+                isHighPerforming: true,
+                isFollowUp: true,
+                signatureId: true,
+                attachmentId: true,
+                snippetId: true,
+                // filters is intentionally omitted
+            }
         });
 
-        if (!original) {
-            return NextResponse.json({ error: 'Scenario not found' }, { status: 404 });
+        if (!originalScenario) {
+            return NextResponse.json({ error: 'Scenario to duplicate not found' }, { status: 404 });
         }
 
-        if (!original.organizationId) {
-            console.error(`Scenario ${id} does not have an associated organizationId.`);
-            return NextResponse.json({ error: 'Internal Server Error: Scenario is missing organization association.' }, { status: 500 });
-        }
+        // 4. Determine Target Organization ID
+        const targetOrganizationId = targetOrgIdFromBody ?? sessionOrgId;
 
-        // Verify user has access to the *original* scenario's organization
-        const sourceOrgAccess = await prisma.organization.findFirst({
-            where: {
-                id: original.organizationId,
-                User: { some: { id: userId } },
-            },
-            select: { id: true }
-        });
+        // --- SECURITY CHECK REMOVED as per explicit requirement ---
 
-        if (!sourceOrgAccess) {
-            console.warn(`User ${userId} attempted to duplicate scenario ${id} from org ${original.organizationId} without access.`);
-            return NextResponse.json({ error: 'Forbidden: Access denied to the scenario\'s organization' }, { status: 403 });
-        }
+        // 5. Determine Final Name for the New Scenario
+        const baseName = newName ?? originalScenario.name;
+        const finalName = await findUniqueName(baseName, targetOrganizationId);
 
-        // 3. No target org membership check (per simplification)
-
-        // 4. Naming Conflict Resolution
-        const finalName = await findUniqueName(original.name, targetOrganizationId);
-
-        // 5. Generate New ID
+        // 6. Generate New ID
         const newScenarioId = uuidv4();
 
-        // 6. Database Insertion (CRITICAL: Use $executeRaw as requested)
-        // Shallow copy for signatureId, attachmentId, snippetId
-        // All relevant columns included, filters is JSONB
-        const result = await prisma.$executeRaw`
-            INSERT INTO "Scenario" (
-                "id", "name", "organizationId", "description", "status",
-                "customizationPrompt", "emailExamplesPrompt", "subjectLine", "touchpointType",
-                "filters", "testEmail", "testMode", "isHighPerforming", "isFollowUp",
-                "signatureId", "attachmentId", "snippetId", "createdAt", "updatedAt"
-            )
-            VALUES (
-                ${newScenarioId}, ${finalName}, ${targetOrganizationId}, ${original.description}, ${original.status},
-                ${original.customizationPrompt}, ${original.emailExamplesPrompt}, ${original.subjectLine}, ${original.touchpointType},
-                ${original.filters}, ${original.testEmail}, ${original.testMode}, ${original.isHighPerforming}, ${original.isFollowUp},
-                ${original.signatureId}, ${original.attachmentId}, ${original.snippetId}, NOW(), NOW()
-            )
-        `;
+        // 7. Database Insertion using prisma.scenario.create() [Simplification Override]
+        const dataForNewScenario = {
+            id: newScenarioId,
+            name: finalName,
+            organizationId: targetOrganizationId,
+            description: originalScenario.description ?? null,
+            status: originalScenario.status, // Assuming status is non-nullable or has a suitable default copied
+            customizationPrompt: originalScenario.customizationPrompt ?? null,
+            emailExamplesPrompt: originalScenario.emailExamplesPrompt ?? null,
+            subjectLine: originalScenario.subjectLine ?? null,
+            touchpointType: originalScenario.touchpointType ?? null,
+            filters: Prisma.JsonNull, // Explicitly set filters to NULL using Prisma.JsonNull
+            testEmail: originalScenario.testEmail ?? null,
+            testMode: originalScenario.testMode ?? false,
+            isHighPerforming: originalScenario.isHighPerforming ?? false,
+            isFollowUp: originalScenario.isFollowUp ?? false,
+                signatureId: originalScenario.signatureId ?? null,
+                attachmentId: originalScenario.attachmentId ?? null,
+                snippetId: originalScenario.snippetId ?? null,
+                createdAt: new Date(), // Explicitly set createdAt
+                updatedAt: new Date(), // Explicitly set updatedAt
+            };
 
-        if (result !== 1) {
-            console.error(`Failed to insert duplicated scenario. $executeRaw returned ${result}. Data:`, { newScenarioId, finalName, targetOrganizationId });
-            throw new Error('Database insertion failed during scenario duplication.');
-        }
-
-        // 7. Fetch the newly created scenario to return in the response
-        const newScenario = await prisma.scenario.findUnique({
-            where: { id: newScenarioId },
+            const newScenario = await prisma.scenario.create({
+            data: dataForNewScenario,
         });
 
-        if (!newScenario) {
-            console.error(`Failed to fetch newly created scenario with ID: ${newScenarioId} immediately after insertion.`);
-            return NextResponse.json({ error: 'Duplication succeeded but failed to retrieve the new scenario data' }, { status: 500 });
-        }
+        // 8. Fetch is no longer needed as create() returns the object
 
-        // 8. Success Response
+        // 9. Success Response
         return NextResponse.json(newScenario, { status: 201 });
 
     } catch (error) {
-        console.error('Error duplicating scenario:', error);
+        console.error('Error duplicating scenario (using ORM create):', error);
         const message = error instanceof Error ? error.message : 'An unexpected error occurred';
-        return NextResponse.json({ error: 'Internal Server Error', details: message }, { status: 500 });
+        return NextResponse.json({ error: 'Internal Server Error', details: process.env.NODE_ENV === 'development' ? message : undefined }, { status: 500 });
+    } finally {
+        // Optional: Disconnect Prisma client if not using global instance management
+        // await prisma.$disconnect();
     }
 }
