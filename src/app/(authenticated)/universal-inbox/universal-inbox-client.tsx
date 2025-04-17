@@ -6,7 +6,9 @@ import { PageContainer } from '@/components/layout/PageContainer';
 import { PageHeader } from '@/components/ui/page-header';
 import { ClientCard, ClientButton, ClientInput } from '@/components/ui/client-components';
 import { Input } from '@/components/ui/input';
-import { Inbox, Loader2, MessageSquare, Reply, Send, Trash2, X, Calendar, ThumbsDown, Clock, CheckCircle, RefreshCw, Sparkles, XCircle, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { Button } from '@/components/ui/button'; // Import Button
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'; // Import Dropdown components
+import { Inbox, Loader2, MessageSquare, Reply, Send, Trash2, X, Calendar, ThumbsDown, Clock, CheckCircle, RefreshCw, Sparkles, XCircle, ChevronLeft, ChevronRight, Search, ChevronDown } from 'lucide-react'; // Import ChevronDown
 import { cn } from '@/lib/utils';
 import type { LucideProps } from 'lucide-react';
 import { toast } from 'sonner';
@@ -57,6 +59,13 @@ interface SocialAccount {
   provider: string;
   unipileAccountId: string;
   isActive: boolean;
+}
+
+// Add MailReefRecipient interface (Phase 2, Step 1)
+interface MailReefRecipient {
+  recipientEmail: string;
+  recipientType: string; // 'to', 'cc', 'bcc'
+  contactId?: string | null;
 }
 
 const LoaderIcon: React.FC<LucideProps> = Loader2;
@@ -213,6 +222,45 @@ export function UniversalInboxClient() {
   const replyCardRef = useRef<HTMLDivElement>(null);
   // Add ref for textarea
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Add state for recipient details (Phase 2, Step 2)
+  const [recipientDetails, setRecipientDetails] = useState<Record<string, { loading: boolean; data: MailReefRecipient[] | null; error: string | null }>>({});
+
+  // Add fetch function for recipients (Phase 2, Step 3)
+  const fetchRecipients = async (internalMessageId: string, apiMessageId: string, organizationId: string | undefined) => {
+    if (!organizationId) {
+      console.error("Organization ID missing for fetching recipients");
+      setRecipientDetails(prev => ({
+        ...prev,
+        [internalMessageId]: { loading: false, data: null, error: 'Organization ID missing' }
+      }));
+      return;
+    }
+
+    setRecipientDetails(prev => ({
+      ...prev,
+      [internalMessageId]: { loading: true, data: null, error: null }
+    }));
+
+    try {
+      const response = await fetch(`/api/messages/recipients?messageId=${encodeURIComponent(apiMessageId)}&organizationId=${encodeURIComponent(organizationId)}`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to parse error' }));
+        throw new Error(errorData.error || `API Error: ${response.status}`);
+      }
+      const data: MailReefRecipient[] = await response.json();
+      setRecipientDetails(prev => ({
+        ...prev,
+        [internalMessageId]: { loading: false, data: data, error: null }
+      }));
+    } catch (error) {
+      console.error('Error fetching recipients:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to fetch recipients');
+      setRecipientDetails(prev => ({
+        ...prev,
+        [internalMessageId]: { loading: false, data: null, error: error instanceof Error ? error.message : 'Unknown error' }
+      }));
+    }
+  };
 
   // Memoize enhancedThreadGroups to stabilize its identity
   const enhancedThreadGroups = useMemo(() => {
@@ -1258,10 +1306,74 @@ export function UniversalInboxClient() {
                                     : message.sender}
                                   </span>
                                 </p>
+                                {/* Add console log for debugging */}
+                                {(() => {
+                                  if (!isLinkedIn && message.recipientEmail) {
+                                    console.log('Attempting to render recipient dropdown area for message:', message.id);
+                                  }
+                                  return null; // This IIFE is just for the side effect
+                                })()}
+                                {/* Modify "to" display for dropdown (Phase 2, Step 4) */}
                                 {!isLinkedIn && message.recipientEmail && (
-                                  <p className="text-xs text-slate-500 mt-0.5 truncate overflow-hidden text-ellipsis">
-                                    to {message.recipientEmail}
-                                  </p>
+                                  <div className="flex items-center gap-0 mt-0.5"> {/* Removed gap */}
+                                    <p className="text-xs text-slate-500 truncate overflow-hidden text-ellipsis shrink">
+                                      to {message.recipientEmail}
+                                    </p>
+                                    <DropdownMenu onOpenChange={(open) => {
+                                      // Fetch only when opening and if not already loaded/loading for this specific message
+                                      if (open && !recipientDetails[message.id]?.data && !recipientDetails[message.id]?.loading) {
+                                        fetchRecipients(message.id, message.messageId, message.organizationId);
+                                      }
+                                    }}>
+                                      <DropdownMenuTrigger asChild>
+                                        {/* Slightly larger button/icon, significant negative margin */}
+                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-slate-700 hover:bg-slate-100 flex-shrink-0 ml-[-8px]">
+                                          <ChevronDown className="h-5 w-5" />
+                                          <span className="sr-only">Show all recipients</span>
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="start" className="w-64 max-h-60 overflow-y-auto">
+                                        {/* Add check for recipientDetails[message.id] existence and assign to variable */}
+                                        {(() => {
+                                          const details = recipientDetails[message.id];
+                                          if (details) {
+                                            return (
+                                              <>
+                                                {details.loading && (
+                                                  <DropdownMenuItem disabled className="flex justify-center items-center text-slate-500">
+                                                    <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading...
+                                                  </DropdownMenuItem>
+                                                )}
+                                                {details.error && (
+                                                  <DropdownMenuItem disabled className="text-red-600 text-xs">
+                                                    Error: {details.error}
+                                                  </DropdownMenuItem>
+                                                )}
+                                                {/* Check for data being an empty array specifically */}
+                                                {details.data && details.data?.length === 0 && (
+                                                  <DropdownMenuItem disabled className="text-xs text-slate-500">No other recipients found.</DropdownMenuItem>
+                                                )}
+                                                {/* Check for data being a non-empty array */}
+                                                {details.data && details.data?.length > 0 && (
+                                                  <>
+                                                    {details.data?.map((recipient, idx) => (
+                                                      <DropdownMenuItem key={idx} className="text-xs p-1.5">
+                                                        <span className="font-medium w-8 inline-block mr-1 uppercase text-slate-500 flex-shrink-0">{recipient.recipientType}:</span>
+                                                        <span className="text-slate-700 truncate">{recipient.recipientEmail}</span>
+                                                      </DropdownMenuItem>
+                                                    ))}
+                                                  </>
+                                                )}
+                                              </>
+                                            );
+                                          } else {
+                                            // Optional: Render something if the entry doesn't exist yet (e.g., before first open)
+                                            return <DropdownMenuItem disabled className="text-xs text-slate-400">Click trigger to load...</DropdownMenuItem>;
+                                          }
+                                        })()}
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </div>
                                 )}
                                 {isLinkedIn && (
                                   <p className="text-xs text-slate-500 mt-0.5">
