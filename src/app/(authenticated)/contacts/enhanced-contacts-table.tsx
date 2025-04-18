@@ -1,19 +1,26 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react'; // Added useCallback
+'use client';
+
+import React, { useState, useEffect, useRef, useCallback } from 'react'; // Explicitly import React
 import { useRouter } from 'next/navigation';
 import BulkEditModal from '@/components/contacts/BulkEditModal';
 import { EnrollWorkflowModal } from '@/components/contacts/EnrollWorkflowModal'; // Import the new modal
-import { Button } from '@/components/ui/button'; // Import Button if not already used implicitly
+import { ClientButton as Button } from '@/components/ui/client-components'; // Import aliased Button from client-components
 // FilterBar import removed - handled by parent
 import { FilterState } from '@/types/filters';
 
 // Props for the EnhancedContactsTable component
 interface EnhancedContactsTableProps {
   contacts: Contact[];
-  totalMatchingCount?: number;
+  totalMatchingCount: number; // Make non-optional as it's needed for pagination
   currentFilterState?: FilterState | null;
   searchTerm?: string;
+  currentPage: number;
+  pageSize: number;
+  totalPages: number;
+  onPageChange: (newPage: number) => void;
+  isLoading: boolean; // To potentially disable controls or show loading
 }
 
 // Types for our contact data
@@ -170,7 +177,12 @@ export default function EnhancedContactsTable({
   contacts, 
   totalMatchingCount = 0, 
   currentFilterState = null, 
-  searchTerm = '' 
+  searchTerm = '',
+  currentPage,
+  pageSize,
+  totalPages,
+  onPageChange,
+  isLoading
 }: EnhancedContactsTableProps) {
   const router = useRouter();
   const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
@@ -192,45 +204,25 @@ export default function EnhancedContactsTable({
   // Enroll in Workflow state
   const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
 
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(DEFAULT_ITEMS_PER_PAGE);
-  
-  // Dropdown state to fix the issue with dropdowns disappearing when mouse leaves
+  // Dropdown state
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
-  
-  // Calculate pagination values
-  const totalItems = contacts.length;
-  const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
-  
-  // Page change handlers
-  const goToPage = (page: number) => {
-    setCurrentPage(Math.min(Math.max(1, page), totalPages));
-  };
-  
-  const handleItemsPerPageChange = (newItemsPerPage: number) => {
-    setItemsPerPage(newItemsPerPage);
-    // Recalculate current page to ensure it's still valid with new items per page
-    const newTotalPages = Math.ceil(totalItems / newItemsPerPage);
-    if (currentPage > newTotalPages) {
-      setCurrentPage(newTotalPages);
-    }
-  };
-  
-  // Get current page data
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  // Safeguard: Ensure contacts is an array before slicing
-  const safeContacts = Array.isArray(contacts) ? contacts : [];
-  const currentContacts = safeContacts.slice(indexOfFirstItem, indexOfLastItem);
-  
-  // Reset to first page when contacts array changes (e.g., after filtering)
+
+  // Pagination state is now managed by the parent component (ContactsPageClient)
+  // We receive currentPage, pageSize, totalPages, and onPageChange as props.
+
+  // Calculate display range based on props
+  const indexOfFirstItem = (currentPage - 1) * pageSize;
+  const indexOfLastItem = indexOfFirstItem + pageSize;
+
+  // The `contacts` prop now represents the data for the *current page* only.
+  const currentContacts = Array.isArray(contacts) ? contacts : [];
+
+  // Effect to reset selection when filters/search change (indicated by contacts changing)
+  // or when the current page changes.
   useEffect(() => {
-    setCurrentPage(1);
-    // Reset the "Select All Matching" state when filters or search changes
     setIsSelectAllMatchingActive(false);
     setSelectedContactIds([]);
-  }, [contacts.length, currentFilterState, searchTerm]);
+  }, [contacts, currentPage, currentFilterState, searchTerm]); // Depend on contacts and currentPage
   
   // Handle dropdown toggle
   const toggleDropdown = (contactId: string) => {
@@ -270,11 +262,13 @@ export default function EnhancedContactsTable({
     );
   };
 
-  const selectAll = () => {
-    if (selectedContactIds.length === contacts.length) {
+  const selectAllOnPage = () => {
+    if (selectedContactIds.length === currentContacts.length) {
       setSelectedContactIds([]);
+      setIsSelectAllMatchingActive(false); // Ensure this is also reset
     } else {
-      setSelectedContactIds(contacts.map(contact => contact.id));
+      setSelectedContactIds(currentContacts.map(contact => contact.id));
+      // Do not automatically set isSelectAllMatchingActive here
     }
   };
 
@@ -409,12 +403,8 @@ export default function EnhancedContactsTable({
     }
   };
 
-  // Filter state and handlers
-  const handleFiltersChange = (newFilters: FilterState) => {
-    // Filters will be handled by the server component
-    // This is just to handle any client-side effects
-    console.log('Filters changed:', newFilters);
-  };
+  // Helper to get the number of contacts selected on the current page
+  const selectedOnPageCount = currentContacts.filter(c => selectedContactIds.includes(c.id)).length;
 
   return (
     <>
@@ -428,15 +418,20 @@ export default function EnhancedContactsTable({
               {!isSelectAllMatchingActive ? (
                 <div className="font-medium">
                   {selectedContactIds.length} {selectedContactIds.length === 1 ? 'contact' : 'contacts'} selected
-                  {selectedContactIds.length === contacts.length && totalMatchingCount > contacts.length && (
+                  {/* Show "Select all matching" only if all on page are selected AND there are more matching contacts total */}
+                  {selectedOnPageCount === currentContacts.length && totalMatchingCount > currentContacts.length && (
                     <span className="ml-2 text-blue-600">
-                      All {contacts.length} contacts on this page are selected.{' '}
+                      All {currentContacts.length} contacts on this page are selected.{' '}
                   <Button
                     variant="link"
-                    onClick={() => setIsSelectAllMatchingActive(true)}
-                    className="text-sm p-0 h-auto" // Adjust link styling
+                    onClick={() => {
+                      setIsSelectAllMatchingActive(true);
+                      // Optionally clear page selection if needed, or keep them selected
+                      // setSelectedContactIds([]); // Decide if you want to clear page selection
+                    }}
+                    className="text-sm p-0 h-auto"
                   >
-                    Select all {totalMatchingCount} contacts matching filters
+                    Select all {totalMatchingCount} matching contacts
                   </Button>
                     </span>
                   )}
@@ -450,7 +445,7 @@ export default function EnhancedContactsTable({
                       setIsSelectAllMatchingActive(false);
                       setSelectedContactIds([]);
                     }}
-                    className="text-sm p-0 h-auto" // Adjust link styling
+                    className="text-sm p-0 h-auto"
                   >
                     Clear selection
                   </Button>
@@ -491,11 +486,13 @@ export default function EnhancedContactsTable({
               <tr>
                 <th scope="col" className="w-10 px-3 py-3 text-left">
                   <input 
-                    type="checkbox" 
+                    type="checkbox"
                     className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    checked={contacts.length > 0 && selectedContactIds.length === contacts.length}
-                    onChange={selectAll}
-                    aria-label="Select all contacts"
+                    // Checkbox reflects selection state *on the current page*
+                    checked={currentContacts.length > 0 && selectedOnPageCount === currentContacts.length}
+                    onChange={selectAllOnPage}
+                    aria-label="Select all contacts on this page"
+                    disabled={isLoading} // Disable if loading
                   />
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -618,84 +615,88 @@ export default function EnhancedContactsTable({
         {/* Pagination Controls */}
         <div className="bg-gray-50 px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
           <div className="flex-1 flex justify-between sm:hidden">
-            {/* Mobile pagination controls */}
+            {/* Mobile pagination controls - Use onPageChange prop */}
             <Button
               variant="outline"
               size="default"
-              onClick={() => goToPage(currentPage - 1)}
-              disabled={currentPage === 1}
+              onClick={() => onPageChange(currentPage - 1)}
+              disabled={currentPage === 1 || isLoading}
             >
               Previous
             </Button>
-            <span className="text-sm text-gray-700 self-center"> {/* Added self-center */}
+            <span className="text-sm text-gray-700 self-center">
               Page {currentPage} of {totalPages}
             </span>
             <Button
               variant="outline"
               size="default"
-              onClick={() => goToPage(currentPage + 1)}
-              disabled={currentPage === totalPages}
+              onClick={() => onPageChange(currentPage + 1)}
+              disabled={currentPage === totalPages || isLoading}
             >
               Next
             </Button>
           </div>
           
           <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-            {/* Desktop pagination info */}
+            {/* Desktop pagination info - Use totalMatchingCount prop */}
             <div>
               <p className="text-sm text-gray-700">
                 Showing <span className="font-medium">{totalMatchingCount === 0 ? 0 : indexOfFirstItem + 1}</span> to{' '}
                 <span className="font-medium">{Math.min(indexOfLastItem, totalMatchingCount)}</span> of{' '}
-                <span className="font-medium">{totalMatchingCount}</span> contacts
-                {totalMatchingCount === 0 && " (No contacts found)"}
+                <span className="font-medium">{totalMatchingCount}</span> results
               </p>
             </div>
             
             <div className="flex items-center space-x-4">
               {/* Items per page selector */}
               <div className="flex items-center">
+                {/* Items per page selector - This needs to be handled in the parent now */}
+                {/* Consider removing this or passing props to control pageSize in parent */}
+                {/* For now, we'll comment it out as pageSize is fixed in parent */}
+                {/*
                 <label htmlFor="items-per-page" className="text-sm text-gray-600 mr-2">
                   Per page:
                 </label>
                 <select
                   id="items-per-page"
-                  value={itemsPerPage}
-                  onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
+                  value={pageSize} // Use pageSize prop
+                  // onChange={(e) => handlePageSizeChange(Number(e.target.value))} // Need handler prop from parent
                   className="text-sm border-gray-300 rounded-md shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                  disabled={isLoading} // Disable if loading
                 >
                   {ITEMS_PER_PAGE_OPTIONS.map(option => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
+                    <option key={option} value={option}>{option}</option>
                   ))}
                 </select>
+                */}
               </div>
               
               {/* Desktop pagination controls */}
               <div>
                 <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                  {/* Desktop pagination controls - Use onPageChange prop */}
                   <Button
                     variant="outline"
-                    size="sm" // Changed size
-                    onClick={() => goToPage(1)}
-                    disabled={currentPage === 1}
-                    className="rounded-r-none" // Keep left rounding
+                    size="sm"
+                    onClick={() => onPageChange(1)}
+                    disabled={currentPage === 1 || isLoading}
+                    className="rounded-r-none"
                   >
                     <span className="sr-only">First Page</span>
                     <span>«</span>
                   </Button>
                   <Button
                     variant="outline"
-                    size="sm" // Changed size
-                    onClick={() => goToPage(currentPage - 1)}
-                    disabled={currentPage === 1}
-                    className="rounded-none" // No rounding
+                    size="sm"
+                    onClick={() => onPageChange(currentPage - 1)}
+                    disabled={currentPage === 1 || isLoading}
+                    className="rounded-none"
                   >
                     <span className="sr-only">Previous Page</span>
                     <span>‹</span>
                   </Button>
 
-                  {/* Page numbers */}
+                  {/* Page numbers - Use totalPages prop */}
                   {Array.from(
                     { length: Math.min(5, totalPages) },
                     (_, i) => {
@@ -718,11 +719,12 @@ export default function EnhancedContactsTable({
                       return (
                         <Button
                           key={pageNum}
-                          variant={currentPage === pageNum ? "default" : "outline"} // Conditional variant
-                          size="sm" // Changed size
-                          onClick={() => goToPage(pageNum)}
+                          variant={currentPage === pageNum ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => onPageChange(pageNum)}
                           aria-current={currentPage === pageNum ? 'page' : undefined}
-                          className="rounded-none" // No rounding
+                          className="rounded-none"
+                          disabled={isLoading} // Disable if loading
                         >
                           {pageNum}
                         </Button>
@@ -732,20 +734,20 @@ export default function EnhancedContactsTable({
 
                   <Button
                     variant="outline"
-                    size="sm" // Changed size
-                    onClick={() => goToPage(currentPage + 1)}
-                    disabled={currentPage === totalPages}
-                    className="rounded-none" // No rounding
+                    size="sm"
+                    onClick={() => onPageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages || isLoading}
+                    className="rounded-none"
                   >
                     <span className="sr-only">Next Page</span>
                     <span>›</span>
                   </Button>
                   <Button
                     variant="outline"
-                    size="sm" // Changed size
-                    onClick={() => goToPage(totalPages)}
-                    disabled={currentPage === totalPages}
-                    className="rounded-l-none" // Keep right rounding
+                    size="sm"
+                    onClick={() => onPageChange(totalPages)}
+                    disabled={currentPage === totalPages || isLoading}
+                    className="rounded-l-none"
                   >
                     <span className="sr-only">Last Page</span>
                     <span>»</span>
