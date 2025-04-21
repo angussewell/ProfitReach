@@ -795,10 +795,12 @@ export default function EnhancedContactsTable({
         isOpen={isEnrollModalOpen}
         onClose={closeEnrollModal}
         selectedContacts={{
-          contactIds: selectedContactIds,
+          // Only pass contactIds if 'select all matching' is NOT active
+          contactIds: isSelectAllMatchingActive ? undefined : selectedContactIds, 
           isSelectAllMatchingActive: isSelectAllMatchingActive,
-          filters: currentFilterState ?? undefined, // Pass filters if select all is active
-          searchTerm: searchTerm ?? undefined, // Pass search term if select all is active
+          // Pass filters and search term regardless, backend uses them if isSelectAllMatchingActive is true
+          filters: currentFilterState ?? undefined, 
+          searchTerm: searchTerm ?? undefined, 
         }}
         onEnrollmentComplete={handleEnrollmentComplete}
       />
