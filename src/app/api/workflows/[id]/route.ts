@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { URLSearchParams } from 'url'; // Import URLSearchParams
 
 // GET /api/workflows/[id]
 export async function GET(
@@ -156,7 +157,8 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   return NextResponse.json(updated, { status: 200 });
 }
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+// DELETE /api/workflows/[id]?force=true
+export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   // 1. Auth
   const session = await getServerSession(authOptions);
   if (!session || !session.user?.id) {
@@ -190,23 +192,71 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // 4. Delete with raw SQL
-  try {
-    const result = await prisma.$executeRaw`
-      DELETE FROM "WorkflowDefinition"
-      WHERE "workflowId" = ${params.id}
-    `;
+  // 4. Parse 'force' query parameter
+  const { searchParams } = new URL(request.url);
+  const forceDelete = searchParams.get('force') === 'true';
+  const workflowId = params.id;
 
-    // Optional: Check if any row was actually deleted
-    if (result === 0) {
-        // This case might happen if the workflow was deleted between the findUnique and executeRaw calls
-        console.warn(`Workflow with ID ${params.id} not found for deletion, though it existed moments ago.`);
+  try {
+    if (forceDelete) {
+      // Force delete: Remove dependencies first within a transaction
+      await prisma.$transaction(async (tx) => {
+        // Delete execution logs associated with the workflow's states
+        // We need to find the state IDs first
+        const statesToDelete = await tx.contactWorkflowState.findMany({
+          where: { workflowId: workflowId },
+          select: { stateId: true }
+        });
+        const stateIds = statesToDelete.map(s => s.stateId);
+
+        if (stateIds.length > 0) {
+          await tx.workflowExecutionLog.deleteMany({
+            where: { contactWorkflowStateId: { in: stateIds } },
+          });
+        }
+
+        // Delete contact workflow states
+        await tx.contactWorkflowState.deleteMany({
+          where: { workflowId: workflowId },
+        });
+
+        // Finally, delete the workflow definition
+        await tx.workflowDefinition.delete({
+          where: { workflowId: workflowId },
+        });
+      });
+      console.log(`Force deleted workflow ${workflowId} and its dependencies.`);
+
+    } else {
+      // Standard delete: Check for dependencies first
+      const enrolledContactsCount = await prisma.contactWorkflowState.count({
+        where: { workflowId: workflowId },
+      });
+
+      if (enrolledContactsCount > 0) {
+        // Dependencies exist, prevent deletion
+        return NextResponse.json(
+          {
+            error: `Cannot delete workflow because ${enrolledContactsCount} contact(s) are currently enrolled. Use force=true to delete anyway (this will remove contacts from the workflow).`,
+            code: 'WORKFLOW_HAS_ENROLLED_CONTACTS'
+          },
+          { status: 409 } // 409 Conflict is appropriate here
+        );
+      } else {
+        // No dependencies, safe to delete
+        await prisma.workflowDefinition.delete({
+          where: { workflowId: workflowId },
+        });
+         console.log(`Deleted workflow ${workflowId} (no enrolled contacts).`);
+      }
+    }
+  } catch (err: any) {
+    console.error(`Database delete failed for workflow ${workflowId} (force=${forceDelete}):`, err);
+    // Check for Prisma's RecordNotFound error specifically if needed
+    if (err.code === 'P2025') { // Prisma code for "Record to delete does not exist."
         return NextResponse.json({ error: "Workflow not found during delete operation" }, { status: 404 });
     }
-
-  } catch (err) {
-    console.error("Database delete failed:", err);
-    return NextResponse.json({ error: "Database delete failed" }, { status: 500 });
+    return NextResponse.json({ error: "Database delete failed", details: err.message }, { status: 500 });
   }
 
   // 5. Return success response
