@@ -38,8 +38,9 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { toast } from 'react-hot-toast';
-import { EmailInventoryStats } from '@/components/admin/EmailInventoryStats'; // Import the new component
-import { OrganizationSettingsModal } from '@/components/admin/OrganizationSettingsModal'; // Import the new settings modal
+import { EmailInventoryStats } from '@/components/admin/EmailInventoryStats';
+import { OrganizationSettingsModal } from '@/components/admin/OrganizationSettingsModal';
+import { ElvCreditsWidget } from '@/components/admin/ElvCreditsWidget'; // Import the new ELV widget
 
 import type { DateRange } from "react-day-picker";
 
@@ -1307,6 +1308,11 @@ export default function AdminPanelPage() {
             )}
           </CardContent>
         </Card>
+      </div>
+
+      {/* EmailListVerify Credits Widget Section */}
+      <div className="mt-8">
+        <ElvCreditsWidget />
       </div>
 
       {/* Render the new Organization Settings Modal */}
