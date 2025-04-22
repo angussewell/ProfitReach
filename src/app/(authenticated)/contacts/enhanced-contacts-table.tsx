@@ -6,6 +6,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'; // Expl
 import { useRouter } from 'next/navigation';
 import BulkEditModal from '@/components/contacts/BulkEditModal';
 import { EnrollWorkflowModal } from '@/components/contacts/EnrollWorkflowModal'; // Import the new modal
+import SendToOrganizationModal from '@/components/contacts/SendToOrganizationModal'; // Import the new Send to Org modal
 import { ClientButton as Button } from '@/components/ui/client-components'; // Import aliased Button from client-components
 // FilterBar import removed - handled by parent
 import { FilterState } from '@/types/filters';
@@ -204,6 +205,9 @@ export default function EnhancedContactsTable({
   // Enroll in Workflow state
   const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
 
+  // Send to Organization state
+  const [isSendToOrgModalOpen, setIsSendToOrgModalOpen] = useState(false);
+
   // Dropdown state
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
 
@@ -341,6 +345,15 @@ export default function EnhancedContactsTable({
     setIsEnrollModalOpen(false);
   };
 
+  // Send to Org modal handling
+  const openSendToOrgModal = () => {
+    setIsSendToOrgModalOpen(true);
+  };
+
+  const closeSendToOrgModal = () => {
+    setIsSendToOrgModalOpen(false);
+  };
+
   // Callback after successful enrollment
   const handleEnrollmentComplete = useCallback(() => {
     // Clear selection state
@@ -475,6 +488,14 @@ export default function EnhancedContactsTable({
                 onClick={openEnrollModal}
               >
                 Enroll in Workflow
+              </Button>
+              {/* Send to Organization Button */}
+              <Button
+                variant="outline" // Or choose another appropriate variant
+                size="sm"
+                onClick={openSendToOrgModal}
+              >
+                Send to Organization
               </Button>
             </div>
           </div>
@@ -801,8 +822,19 @@ export default function EnhancedContactsTable({
           // Pass filters and search term regardless, backend uses them if isSelectAllMatchingActive is true
           filters: currentFilterState ?? undefined, 
           searchTerm: searchTerm ?? undefined, 
-        }}
+         }}
         onEnrollmentComplete={handleEnrollmentComplete}
+      />
+
+      {/* Send to Organization Modal */}
+      <SendToOrganizationModal
+        isOpen={isSendToOrgModalOpen}
+        onClose={closeSendToOrgModal}
+        contactIds={selectedContactIds}
+        isSelectAllMatchingActive={isSelectAllMatchingActive}
+        totalMatchingCount={totalMatchingCount}
+        currentFilterState={currentFilterState}
+        searchTerm={searchTerm}
       />
     </>
   );

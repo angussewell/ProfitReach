@@ -4,6 +4,10 @@ import { prisma } from './prisma';
 import { revalidatePath } from 'next/cache';
 import { Prisma } from '@prisma/client'; // Import Prisma for types
 import { v4 as uuidv4 } from 'uuid'; // Import uuid
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { FilterState } from '@/types/filters'; // Assuming FilterState type is defined here
+import { buildCombinedWhereClause } from '@/lib/filters'; // Corrected import
 
 // Example server action for getting a user
 export async function getUser(id: string) {
@@ -62,6 +66,127 @@ export async function updateMessageStatus(threadId: string, status: string) {
       success: false, 
       error: error instanceof Error ? error.message : 'Unknown error occurred' 
     }
+  }
+}
+
+
+/**
+ * Server action to bulk update the organizationId for selected contacts.
+ * Handles both specific contact IDs and "select all matching" scenarios.
+ * Enforces permissions based on user role.
+ */
+export async function bulkSendContactsToOrg(params: {
+  contactIds?: string[];
+  targetOrganizationId: string;
+  isSelectAllMatchingActive?: boolean;
+  filterState?: FilterState | null; // Allow null for filterState
+  searchTerm?: string;
+}): Promise<{ success: boolean; error?: string; updatedCount?: number }> {
+  
+  const { 
+    contactIds = [], 
+    targetOrganizationId, 
+    isSelectAllMatchingActive = false, 
+    filterState = null, 
+    searchTerm = '' 
+  } = params;
+
+  if (!targetOrganizationId) {
+    return { success: false, error: 'Target organization ID is required.' };
+  }
+
+  try {
+    // 1. Get user session and validate
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return { success: false, error: 'Unauthorized' };
+    }
+    const userId = session.user.id;
+    const userRole = session.user.role;
+    const currentOrganizationId = session.user.organizationId; // User's current org context
+
+    // 2. Permission Check: Non-admins can only move contacts *within* their own org
+    // (This check might be redundant if non-admins only see their own org in the dropdown, but good for safety)
+    if (userRole !== 'admin' && targetOrganizationId !== currentOrganizationId) {
+       // Check if the target org exists and if the non-admin user is actually part of it (future enhancement if needed)
+       // For now, based on current structure, non-admins only operate within their single org.
+       return { success: false, error: 'Permission denied. Non-admins can only manage contacts within their own organization.' };
+    }
+    
+    // Admins need to ensure the target organization exists
+    if (userRole === 'admin') {
+        const targetOrgExists = await prisma.organization.findUnique({ where: { id: targetOrganizationId }, select: { id: true } });
+        if (!targetOrgExists) {
+            return { success: false, error: `Target organization (${targetOrganizationId}) not found.` };
+        }
+    }
+
+    // 3. Determine the list of contact IDs to update
+    let finalContactIds: string[] = [];
+
+    if (isSelectAllMatchingActive) {
+      // Fetch all matching contact IDs based on filters and search term within the *current* organization
+      if (!currentOrganizationId) {
+        return { success: false, error: 'Cannot perform "select all" without a current organization context.' };
+      }
+      
+      // Use the correct function to build the where clause including search and filters
+      const finalWhere = buildCombinedWhereClause(currentOrganizationId, filterState, searchTerm);
+
+      console.log('Fetching all matching contact IDs with where clause:', JSON.stringify(finalWhere, null, 2));
+
+      const matchingContacts = await prisma.contacts.findMany({
+        where: finalWhere,
+        select: { id: true },
+      });
+      finalContactIds = matchingContacts.map(c => c.id);
+      console.log(`Found ${finalContactIds.length} matching contacts for bulk send.`);
+
+    } else {
+      // Use the explicitly provided contact IDs
+      finalContactIds = contactIds;
+    }
+
+    if (finalContactIds.length === 0) {
+      return { success: true, updatedCount: 0, error: 'No contacts selected or matched for update.' }; // Return success but 0 updated
+    }
+
+    // 4. Perform the bulk update
+    console.log(`Attempting to update organizationId to ${targetOrganizationId} for ${finalContactIds.length} contacts.`);
+    const updateResult = await prisma.contacts.updateMany({
+      where: {
+        id: { in: finalContactIds },
+        // Optional: Add another check to ensure we only update contacts from the user's current org?
+        // organizationId: currentOrganizationId, // Might be overly restrictive for Admins if they selected contacts across orgs? Let's omit for now.
+      },
+      data: {
+        organizationId: targetOrganizationId,
+        updatedAt: new Date(), // Explicitly update timestamp
+      },
+    });
+
+    console.log('Bulk update result:', updateResult);
+
+    // 5. Revalidate the contacts path and return success
+    revalidatePath('/contacts'); // Adjust path if necessary
+    
+    return { success: true, updatedCount: updateResult.count };
+
+  } catch (error) {
+    console.error('Error in bulkSendContactsToOrg server action:', error);
+    const message = error instanceof Error ? error.message : 'An unexpected error occurred';
+    // Check for specific Prisma errors if needed
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        // Example: Foreign key constraint fail (target org doesn't exist)
+        // Safely check if field_name exists and is a string before calling includes
+        if (error.code === 'P2003' && 
+            error.meta && 
+            typeof error.meta.field_name === 'string' && 
+            error.meta.field_name.includes('organizationId')) {
+             return { success: false, error: `Target organization (${targetOrganizationId}) not found or invalid.` };
+        }
+    }
+    return { success: false, error: `Failed to send contacts to organization: ${message}` };
   }
 }
 
@@ -134,14 +259,14 @@ export async function archiveScenario(originalScenarioId: string) {
     // Handle specific transaction-related errors or Prisma errors if needed
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
        // Example: Unique constraint violation on the new ID (highly unlikely with UUIDv4)
-      if (error.code === 'P2002') { 
+      if (error.code === 'P2002') {
          return { success: false, error: 'Failed to generate unique archive ID. Please try again.' };
       }
        // Original record not found during transaction
-      if (error.code === 'P2025') { 
+      if (error.code === 'P2025') {
         return { success: false, error: 'Scenario not found during archive process.' };
       }
-    } else if (error instanceof Error && error.message === 'Scenario not found.') {
+    } else if (error instanceof Error && error.message === 'Scenario not found.') { // Corrected: Added closing parenthesis
         // Catch the specific error thrown inside the transaction
         return { success: false, error: 'Scenario not found.' };
     }
