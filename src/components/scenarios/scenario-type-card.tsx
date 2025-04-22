@@ -1,8 +1,10 @@
 'use client';
 
+'use client';
+
 import * as React from 'react';
 import { type LucideProps } from 'lucide-react';
-import { Edit, Paperclip, FileText, MessageSquare, Clock, Copy } from 'lucide-react';
+import { Edit, Paperclip, FileText, MessageSquare, Clock, Copy, Archive, Loader2 } from 'lucide-react'; // Added Archive, Loader2
 import { DuplicateScenarioDialog } from './DuplicateScenarioDialog';
 import NextImage from 'next/image';
 import NextLink from 'next/link';
@@ -10,6 +12,19 @@ import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
+import { archiveScenario } from '@/lib/server-actions'; // Import the server action
+import { useToast } from '@/components/ui/use-toast'; // Import useToast
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog" // Import AlertDialog components
 
 interface ScenarioTypeCardProps {
   id: string;
@@ -50,9 +65,37 @@ const ScenarioTypeCard: React.FC<ScenarioTypeCardProps> = ({
   signature,
   snippet,
   attachment,
-  className 
+  className
 }) => {
   const [isDuplicateModalOpen, setIsDuplicateModalOpen] = React.useState(false);
+  const [isArchiving, setIsArchiving] = React.useState(false); // Add loading state
+  const { toast } = useToast(); // Initialize toast
+
+  const handleArchive = async () => {
+    setIsArchiving(true);
+    try {
+      const result = await archiveScenario(id);
+      if (result.success) {
+        toast({
+          title: "Scenario Archived",
+          description: `Scenario "${name}" has been successfully archived.`,
+          variant: "default", // Or "success" if you have that variant
+        });
+        // Revalidation should handle UI update, no explicit refresh needed here usually
+      } else {
+        throw new Error(result.error || 'Failed to archive scenario.');
+      }
+    } catch (error) {
+      console.error("Archive error:", error);
+      toast({
+        title: "Archive Failed",
+        description: error instanceof Error ? error.message : "An unexpected error occurred.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsArchiving(false);
+    }
+  };
 
   const getTypeConfig = (type: string) => {
     switch (type.toLowerCase()) {
@@ -156,17 +199,48 @@ const ScenarioTypeCard: React.FC<ScenarioTypeCardProps> = ({
               </div>
             </div>
             
-            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"> {/* Reduced gap slightly */}
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => setIsDuplicateModalOpen(true)}
-                aria-label="Duplicate"
+                aria-label="Duplicate Scenario"
+                title="Duplicate Scenario" // Added title for tooltip
               >
                 <Copy className="w-4 h-4" />
               </Button>
-              <Link 
-                href={`/settings/scenarios/${id}`} 
+              {/* Archive Button with Confirmation Dialog */}
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    disabled={isArchiving}
+                    aria-label="Archive Scenario"
+                    title="Archive Scenario"
+                  >
+                    {isArchiving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Archive className="w-4 h-4" />}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Are you sure you want to archive this scenario?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Scenario "{name}" will be moved to the archive and hidden from the main list. 
+                      It can be accessed later if needed but won't be active.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={isArchiving}>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleArchive} disabled={isArchiving}>
+                      {isArchiving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Archive
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+              <Link
+                href={`/settings/scenarios/${id}`}
               >
                 <Button 
                   variant="outline" 
