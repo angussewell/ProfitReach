@@ -69,6 +69,42 @@ export async function updateMessageStatus(threadId: string, status: string) {
   }
 }
 
+/**
+ * Server action for Admins to purge stale ContactWorkflowState records.
+ * Deletes all records globally where status is 'waiting_scenario'.
+ */
+export async function purgeStaleWorkflowStates(): Promise<{ success: boolean; error?: string; deletedCount?: number }> {
+  'use server'; // Ensure this runs on the server
+
+  try {
+    // 1. Get user session and validate role
+    const session = await getServerSession(authOptions);
+    if (session?.user?.role !== 'admin') {
+      return { success: false, error: 'Unauthorized: Admin role required.' };
+    }
+
+    // 2. Perform the deletion
+    console.log("Admin action: Purging ContactWorkflowState records with status 'waiting_scenario'...");
+    const deleteResult = await prisma.contactWorkflowState.deleteMany({
+      where: {
+        status: 'waiting_scenario',
+      },
+    });
+
+    console.log(`Purged ${deleteResult.count} stale workflow states.`);
+
+    // 3. Optionally revalidate paths if this impacts any cached views (unlikely for admin cleanup)
+    // revalidatePath('/some-relevant-path'); 
+
+    return { success: true, deletedCount: deleteResult.count };
+
+  } catch (error) {
+    console.error('Error in purgeStaleWorkflowStates server action:', error);
+    const message = error instanceof Error ? error.message : 'An unexpected error occurred';
+    return { success: false, error: `Failed to purge stale workflow states: ${message}` };
+  }
+}
+
 
 /**
  * Server action to bulk update the organizationId for selected contacts.

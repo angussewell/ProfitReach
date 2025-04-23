@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useTransition } from 'react'; // Added useTransition
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Users, Percent, CalendarCheck, ClipboardList, TrendingUp, Eye, Loader2, Mail, InfoIcon, Calendar as CalendarIcon } from 'lucide-react'; // Added CalendarIcon
+import { ArrowLeft, Users, Percent, CalendarCheck, ClipboardList, TrendingUp, Eye, Loader2, Mail, InfoIcon, Calendar as CalendarIcon, Trash2, AlertTriangle } from 'lucide-react'; // Added CalendarIcon, Trash2, AlertTriangle
 import { subDays, startOfDay, endOfDay, format } from 'date-fns'; // Added format
 import { DateRangeFilter } from '@/components/filters/date-range-filter';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -18,11 +18,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { 
-  Card, 
-  CardContent, 
-  CardHeader, 
-  CardTitle 
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -36,11 +36,23 @@ import {
   DialogFooter,
   DialogClose
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"; // Added AlertDialog components
 import { cn } from "@/lib/utils";
 import { toast } from 'react-hot-toast';
 import { EmailInventoryStats } from '@/components/admin/EmailInventoryStats';
 import { OrganizationSettingsModal } from '@/components/admin/OrganizationSettingsModal';
 import { ElvCreditsWidget } from '@/components/admin/ElvCreditsWidget'; // Import the new ELV widget
+import { purgeStaleWorkflowStates } from '@/lib/server-actions'; // Import the new server action
 
 import type { DateRange } from "react-day-picker";
 
@@ -128,7 +140,7 @@ export default function AdminPanelPage() {
     from: subDays(new Date(), 6),
     to: new Date(),
   });
-  
+
   // Add new state for setter stats
   const [setterStats, setSetterStats] = useState<SetterStat[]>([]);
   const [setterStatsLoading, setSetterStatsLoading] = useState(false);
@@ -154,7 +166,11 @@ export default function AdminPanelPage() {
   // Add a new state to store the raw received data for testing (will be used within the new modal)
   const [receivedTaskData, setReceivedTaskData] = useState<any[]>([]);
   const [showReceivedData, setShowReceivedData] = useState(false);
-  
+
+  // State for the purge action
+  const [isPurgePending, startPurgeTransition] = useTransition();
+  const [isPurgeDialogOpen, setIsPurgeDialogOpen] = useState(false);
+
   // Define constants inside the component or globally if needed
   const POLLING_INTERVAL_MS = 2000; // Poll every 2 seconds
   const POLLING_TIMEOUT_MS = 15000; // Timeout after 15 seconds
@@ -167,7 +183,7 @@ export default function AdminPanelPage() {
   // Move fetchTasksFromServer inside the component as well, as it uses state setters indirectly now via triggerAndPollForTasks
   const fetchTasksFromServer = async (orgName: string): Promise<Task[]> => {
     console.log(`🔍 FRONTEND (fetcher): Fetching tasks for "${orgName}"...`);
-    
+
     const response = await fetch(`/api/admin/tasks-receive?organizationName=${encodeURIComponent(orgName)}`, {
       method: 'GET',
       headers: {
@@ -176,22 +192,22 @@ export default function AdminPanelPage() {
         'Expires': '0'
       },
     });
-    
+
     console.log(`🔍 FRONTEND (fetcher): Response status: ${response.status}`);
-    
+
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`🔍 FRONTEND (fetcher): Error fetching tasks - Status ${response.status}, Body: ${errorText}`);
       throw new Error(`Failed to fetch tasks: ${response.status} - ${errorText}`);
     }
-    
+
     const fetchedTasks = await response.json();
-    
+
     if (!Array.isArray(fetchedTasks)) {
       console.error(`🔍 FRONTEND (fetcher): Invalid response format - expected array, got ${typeof fetchedTasks}`);
       throw new Error('Invalid response format from server');
     }
-    
+
     console.log(`🔍 FRONTEND (fetcher): Fetched ${fetchedTasks.length} tasks successfully.`);
     return fetchedTasks;
   };
@@ -214,7 +230,7 @@ export default function AdminPanelPage() {
           'Content-Type': 'application/json',
         },
         // Send organization name or any required data to n8n
-        body: JSON.stringify({ organizationName: orgName }), 
+        body: JSON.stringify({ organizationName: orgName }),
       });
 
       if (!n8nResponse.ok) {
@@ -273,30 +289,30 @@ export default function AdminPanelPage() {
       setTasksLoading(false);
     }
   };
-  
+
   // Browser storage utility functions (These can likely stay outside if they don't use component state/props)
   const getTasksFromLocalStorage = (orgName: string): any[] => {
     if (typeof window === 'undefined') return [];
-    
+
     try {
       const key = `tasks_${orgName.replace(/[^a-z0-9]/gi, '_')}`;
       const storedData = localStorage.getItem(key);
-      
+
       if (!storedData) return [];
-      
+
       const parsedData = JSON.parse(storedData);
       console.log(`🔍 FRONTEND: Retrieved ${Array.isArray(parsedData) ? parsedData.length : 0} tasks from localStorage for ${orgName}`);
-      
+
       return Array.isArray(parsedData) ? parsedData : [];
     } catch (error) {
       console.error('Error reading from localStorage:', error);
       return [];
     }
   };
-  
+
   const clearTasksFromLocalStorage = (orgName: string): void => {
     if (typeof window === 'undefined') return;
-    
+
     try {
       const key = `tasks_${orgName.replace(/[^a-z0-9]/gi, '_')}`;
       localStorage.removeItem(key);
@@ -305,7 +321,7 @@ export default function AdminPanelPage() {
       console.error('Error clearing localStorage:', error);
     }
   };
-  
+
   // Revert function name and logic
   // Function to check client-side stored data
   const checkBrowserStorage = async (orgName: string) => {
@@ -377,7 +393,7 @@ export default function AdminPanelPage() {
         setLoading(false);
       }
     };
-    
+
     // Add new function to fetch setter stats
     const fetchSetterStats = async () => {
       // Handle "All Time" case where dateRange is undefined
@@ -387,46 +403,46 @@ export default function AdminPanelPage() {
       }
       setSetterStatsLoading(true);
       setSetterStatsError(null);
-      
+
       try {
         const url = new URL('/api/admin/setter-stats', window.location.origin);
         if (dateRange?.from && dateRange?.to) {
           url.searchParams.set('startDate', dateRange.from.toISOString());
           url.searchParams.set('endDate', dateRange.to.toISOString());
         }
-        
+
         // Add the bypass parameter if enabled
         if (bypassDateFilter) {
           url.searchParams.set('bypass_date_filter', 'true');
         }
-        
+
         const response = await fetch(url, { credentials: 'include' });
-        
+
         // Handle non-OK responses
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
           console.error('Error response from setter-stats API:', errorData);
-          
+
           // Extract detailed error information if available
           const errorMessage = errorData.details?.message || errorData.error || response.statusText;
           throw new Error(`Failed to fetch setter stats: ${errorMessage}`);
         }
-        
+
         // Get the response data with the new structure
         const responseData: SetterStatsResponse = await response.json();
         console.log('Setter stats response:', responseData);
-        
+
         // Check if we have the expected data structure
         if (responseData && 'data' in responseData) {
           setSetterStats(responseData.data || []);
-          
+
           // Store metadata for UI display
           if (responseData.metadata) {
             setSetterStatsMetadata(responseData.metadata);
-            
+
             // Log metadata for debugging
             console.log('Setter stats metadata:', responseData.metadata);
-            
+
             // Optionally show a message if date filtering was bypassed
             if (responseData.metadata.dateFiltered === false) {
               console.log('Note: Date filtering was bypassed, showing all available data');
@@ -446,7 +462,7 @@ export default function AdminPanelPage() {
         setSetterStatsLoading(false);
       }
     };
-    
+
     fetchAdminStats();
     fetchSetterStats(); // Call the new fetch function
   }, [dateRange, selectedPreset, session, bypassDateFilter]); // Add selectedPreset dependency
@@ -544,13 +560,33 @@ export default function AdminPanelPage() {
     // We will trigger task fetching inside the new modal component itself
   };
 
+  // Handler for the purge action
+  const handlePurgeStaleWorkflows = async () => {
+    startPurgeTransition(async () => {
+      const toastId = toast.loading('Purging stale workflow states...');
+      try {
+        const result = await purgeStaleWorkflowStates();
+        if (result.success) {
+          toast.success(`Successfully purged ${result.deletedCount ?? 0} stale workflow states.`, { id: toastId });
+        } else {
+          throw new Error(result.error || 'Unknown error occurred during purge.');
+        }
+      } catch (error) {
+        console.error('Error purging stale workflows:', error);
+        toast.error(`Failed to purge: ${error instanceof Error ? error.message : 'Unknown error'}`, { id: toastId });
+      } finally {
+        setIsPurgeDialogOpen(false); // Close the dialog regardless of outcome
+      }
+    });
+  };
+
   // Update the runApiTest function to also check the tasks-receive endpoint
   const runApiTest = async () => {
     console.log("🔍 FRONTEND: Starting direct API test...");
     setTasksLoading(true);
     setTaskError("Running test...");
     setShowReceivedData(true);
-    
+
     try {
       // Test the test endpoint first
       console.log("🔍 FRONTEND: Testing /api/admin/test endpoint...");
@@ -561,11 +597,11 @@ export default function AdminPanelPage() {
         },
         body: JSON.stringify({ test: true }),
       });
-      
+
       console.log(`🔍 FRONTEND: Test endpoint response status: ${testResponse.status}`);
       const testData = await testResponse.json();
       console.log("🔍 FRONTEND: Test endpoint response data:", testData);
-      
+
       // Now test the actual tasks endpoint
       console.log("🔍 FRONTEND: Testing /api/admin/tasks endpoint...");
       const response = await fetch('/api/admin/tasks', {
@@ -575,28 +611,28 @@ export default function AdminPanelPage() {
         },
         body: JSON.stringify({ organizationName: "Test Organization" }),
       });
-      
+
       console.log(`🔍 FRONTEND: Tasks endpoint response status: ${response.status}`);
-      
+
       // Handle different response statuses
       if (response.status === 403) {
         setTaskError("Authentication error - not authorized as admin");
         console.log("🔍 FRONTEND: Authentication failed - not admin");
         return;
       }
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         console.log(`🔍 FRONTEND: Response error: ${errorText}`);
         setTaskError(`API error: ${response.status} - ${errorText}`);
         return;
       }
-      
+
       // Try to parse the response as JSON
       try {
         const data = await response.json();
         console.log("🔍 FRONTEND: Successfully parsed response JSON:", data);
-        
+
         if (Array.isArray(data)) {
           console.log(`🔍 FRONTEND: Response is an array with ${data.length} items`);
           setTasks(data);
@@ -623,16 +659,16 @@ export default function AdminPanelPage() {
         },
         body: JSON.stringify({ organizationName: "Test Organization" }),
       });
-      
+
       console.log(`🔍 FRONTEND: Mock tasks endpoint response status: ${mockResponse.status}`);
-      
+
       if (!mockResponse.ok) {
         console.log(`🔍 FRONTEND: Mock tasks endpoint error: ${mockResponse.status}`);
       } else {
         try {
           const mockData = await mockResponse.json();
           console.log("🔍 FRONTEND: Successfully parsed mock endpoint JSON:", mockData);
-          
+
           if (Array.isArray(mockData)) {
             console.log(`🔍 FRONTEND: Mock endpoint response is an array with ${mockData.length} items`);
             if (mockData.length > 0) {
@@ -653,20 +689,20 @@ export default function AdminPanelPage() {
       const tasksReceiveResponse = await fetch(`/api/admin/tasks-receive?organizationName=Scale Your Cause`, {
         method: 'GET',
       });
-      
+
       console.log(`🔍 FRONTEND: tasks-receive endpoint response status: ${tasksReceiveResponse.status}`);
-      
+
       if (!tasksReceiveResponse.ok) {
         console.log(`🔍 FRONTEND: tasks-receive endpoint error: ${tasksReceiveResponse.status}`);
       } else {
         try {
           const receiveData = await tasksReceiveResponse.json();
           console.log("🔍 FRONTEND: Successfully parsed tasks-receive endpoint JSON:", receiveData);
-          
+
           if (Array.isArray(receiveData)) {
             console.log(`🔍 FRONTEND: tasks-receive endpoint returned ${receiveData.length} items`);
             setReceivedTaskData(receiveData);
-            
+
             if (receiveData.length > 0) {
               console.log(`🔍 FRONTEND: First received task: ${JSON.stringify(receiveData[0])}`);
               setTasks(receiveData); // Use received data to display
@@ -703,9 +739,9 @@ export default function AdminPanelPage() {
     if (typeof status !== 'string') {
       console.warn(`🔍 FRONTEND: Received invalid status type: ${typeof status}, value: ${status}. Defaulting badge.`);
       // Return default style if status is not a string
-      return 'bg-slate-100 text-slate-700 border-slate-200'; 
+      return 'bg-slate-100 text-slate-700 border-slate-200';
     }
-    
+
     const lowerStatus = status.toLowerCase();
     if (lowerStatus === 'done') {
       return 'bg-emerald-100 text-emerald-700 border-emerald-200';
@@ -721,7 +757,7 @@ export default function AdminPanelPage() {
     }
     // Return default style for any other unknown status string
     console.warn(`🔍 FRONTEND: Received unknown status string: ${status}. Defaulting badge.`);
-    return 'bg-slate-100 text-slate-700 border-slate-200'; 
+    return 'bg-slate-100 text-slate-700 border-slate-200';
   };
 
   if (status === 'loading') {
@@ -815,14 +851,14 @@ export default function AdminPanelPage() {
                     numberOfMonths={2}
                     initialFocus
                   />
-                  
+
                   {/* Text preview of selected range */}
                   {customRange?.from && customRange?.to && (
                     <div className="text-sm text-center py-2 px-2 mt-2 bg-slate-50 rounded border border-slate-200">
                       <span className="font-medium">Selected:</span> {format(customRange.from, "PPP")} - {format(customRange.to, "PPP")}
                     </div>
                   )}
-                  
+
                   {/* Updated button row with Clear and Apply buttons */}
                   <div className="flex justify-between mt-3">
                     <Button
@@ -833,7 +869,7 @@ export default function AdminPanelPage() {
                     >
                       Clear
                     </Button>
-                    
+
                     <Button
                       onClick={() => {
                         if (customRange?.from && customRange?.to) {
@@ -863,7 +899,7 @@ export default function AdminPanelPage() {
           <div className="h-10 w-1 bg-gradient-to-b from-blue-600 to-violet-600 rounded mr-3"></div>
           <h2 className="text-xl font-semibold text-slate-800">Overall Performance</h2>
         </div>
-        
+
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card className="overflow-hidden border-slate-200 shadow-sm transition-all duration-200 hover:shadow-md">
             <div className="h-1 bg-gradient-to-r from-blue-500 to-blue-600"></div>
@@ -881,7 +917,7 @@ export default function AdminPanelPage() {
               )}
             </CardContent>
           </Card>
-          
+
           <Card className="overflow-hidden border-slate-200 shadow-sm transition-all duration-200 hover:shadow-md">
             <div className="h-1 bg-gradient-to-r from-violet-500 to-violet-600"></div>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -898,7 +934,7 @@ export default function AdminPanelPage() {
               )}
             </CardContent>
           </Card>
-          
+
           <Card className="overflow-hidden border-slate-200 shadow-sm transition-all duration-200 hover:shadow-md">
             <div className="h-1 bg-gradient-to-r from-emerald-500 to-emerald-600"></div>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -920,7 +956,7 @@ export default function AdminPanelPage() {
               )}
             </CardContent>
           </Card>
-          
+
           <Card className="overflow-hidden border-slate-200 shadow-sm transition-all duration-200 hover:shadow-md">
             <div className="h-1 bg-gradient-to-r from-amber-500 to-amber-600"></div>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -938,7 +974,7 @@ export default function AdminPanelPage() {
             </CardContent>
           </Card>
         </div>
-        
+
         {!loading && !stats.overall && (
            <div className="text-center py-10 text-gray-500 mt-4 bg-slate-50 border border-slate-100 rounded-md">
               No overall statistics available for the selected period.
@@ -984,15 +1020,15 @@ export default function AdminPanelPage() {
                       ))
                     ) : stats.organizations.length > 0 ? (
                       stats.organizations.map((org, idx) => (
-                        <TableRow 
-                          key={org.id} 
+                        <TableRow
+                          key={org.id}
                           className={`hover:bg-slate-50 transition-colors duration-150 border-b border-slate-100 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}`}
                         >
                           <TableCell className="font-medium py-3 pl-4">{org.name}</TableCell>
                           <TableCell className="text-right py-3 text-slate-700">{org.stats?.contactsEnrolled ?? '--'}</TableCell>
                           <TableCell className="text-right py-3 text-slate-700">{org.stats?.activeScenarios ?? '--'}</TableCell>
                           <TableCell className="text-right py-3 pr-4">
-                            <Button 
+                            <Button
                               variant="outline"
                               size="sm"
                               onClick={() => handleOpenOrgSettingsModal(org.id, org.name)}
@@ -1041,8 +1077,8 @@ export default function AdminPanelPage() {
                       ))
                     ) : stats.organizations.length > 0 ? (
                       stats.organizations.map((org, idx) => (
-                        <TableRow 
-                          key={org.id} 
+                        <TableRow
+                          key={org.id}
                           className={`hover:bg-slate-50 transition-colors duration-150 border-b border-slate-100 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}`}
                         >
                           <TableCell className="font-medium py-3 pl-4">{org.name}</TableCell>
@@ -1053,7 +1089,7 @@ export default function AdminPanelPage() {
                               : '--'}
                           </TableCell>
                           <TableCell className="text-right py-3 pr-4">
-                            <Button 
+                            <Button
                               variant="outline"
                               size="sm"
                               onClick={() => handleOpenOrgSettingsModal(org.id, org.name)}
@@ -1104,8 +1140,8 @@ export default function AdminPanelPage() {
                       ))
                     ) : stats.organizations.length > 0 ? (
                       stats.organizations.map((org, idx) => (
-                        <TableRow 
-                          key={org.id} 
+                        <TableRow
+                          key={org.id}
                           className={`hover:bg-slate-50 transition-colors duration-150 border-b border-slate-100 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}`}
                         >
                           <TableCell className="font-medium py-3 pl-4">{org.name}</TableCell>
@@ -1121,7 +1157,7 @@ export default function AdminPanelPage() {
                               : '--'}
                           </TableCell>
                           <TableCell className="text-right py-3 pr-4">
-                            <Button 
+                            <Button
                               variant="outline"
                               size="sm"
                               onClick={() => handleOpenOrgSettingsModal(org.id, org.name)}
@@ -1154,16 +1190,16 @@ export default function AdminPanelPage() {
             <div className="h-10 w-1 bg-gradient-to-b from-green-600 to-emerald-600 rounded mr-3"></div>
             <h2 className="text-xl font-semibold text-slate-800">Raw Received Data</h2>
           </div>
-          
+
           <Card className="border-slate-200 shadow-sm overflow-hidden">
             <CardHeader className="bg-slate-50 pb-2">
               <CardTitle className="text-sm font-medium">
                 <div className="flex justify-between items-center">
                   <span>Tasks in Storage: {receivedTaskData.length}</span>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={() => setShowReceivedData(false)} 
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowReceivedData(false)}
                     className="h-8 px-2 text-xs text-slate-500"
                   >
                     Hide
@@ -1189,8 +1225,8 @@ export default function AdminPanelPage() {
                       <TableCell className="font-medium">{task.taskName}</TableCell>
                       <TableCell>{task.clientName}</TableCell>
                       <TableCell>
-                        <Badge 
-                          variant="outline" 
+                        <Badge
+                          variant="outline"
                           className={cn("border", getStatusBadgeClasses(task.status))}
                         >
                           {task.status}
@@ -1217,7 +1253,7 @@ export default function AdminPanelPage() {
           <div className="h-10 w-1 bg-gradient-to-b from-blue-600 to-indigo-600 rounded mr-3"></div>
           <h2 className="text-xl font-semibold text-slate-800">Setter Statistics</h2>
         </div>
-        
+
         <Card className="border-slate-200 shadow-sm overflow-hidden">
           <CardHeader className="bg-slate-50 pb-2">
             <CardTitle className="text-base font-medium">
@@ -1226,7 +1262,7 @@ export default function AdminPanelPage() {
                   <Mail className="mr-2 h-4 w-4 text-indigo-500" />
                   <span>Reply Statistics by User</span>
                 </div>
-                
+
                 {isDevelopment && (
                   <div className="flex items-center text-xs">
                     <label className="inline-flex items-center cursor-pointer">
@@ -1268,7 +1304,7 @@ export default function AdminPanelPage() {
                     Note: Showing all available data (date filtering was bypassed or no data found in the selected date range).
                   </div>
                 )}
-                
+
                 {setterStatsMetadata && (
                   <div className="mb-4 text-sm text-slate-500">
                     <p>Total users with replies: <span className="font-medium">{setterStatsMetadata.totalUsers}</span></p>
@@ -1277,7 +1313,7 @@ export default function AdminPanelPage() {
                     )}
                   </div>
                 )}
-                
+
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-slate-50/50 hover:bg-slate-50/80 border-b border-slate-200">
@@ -1287,7 +1323,7 @@ export default function AdminPanelPage() {
                   </TableHeader>
                   <TableBody>
                     {setterStats.map((stat, idx) => (
-                      <TableRow 
+                      <TableRow
                         key={`setter-${idx}`}
                         className={`hover:bg-slate-50 transition-colors duration-150 border-b border-slate-100 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}`}
                       >
@@ -1314,6 +1350,71 @@ export default function AdminPanelPage() {
       <div className="mt-8">
         <ElvCreditsWidget />
       </div>
+
+      {/* Workflow Maintenance Section */}
+      <div className="mt-8">
+        <div className="flex items-center mb-4">
+          <div className="h-10 w-1 bg-gradient-to-b from-red-600 to-orange-600 rounded mr-3"></div>
+          <h2 className="text-xl font-semibold text-slate-800">Workflow Maintenance</h2>
+        </div>
+        <Card className="border-slate-200 shadow-sm overflow-hidden">
+          <CardHeader className="bg-slate-50 pb-2">
+            <CardTitle className="text-base font-medium">
+              <div className="flex items-center justify-between w-full">
+                <div className="flex items-center">
+                  <Trash2 className="mr-2 h-4 w-4 text-red-500" />
+                  <span>Purge Stale Workflow States</span>
+                </div>
+              </div>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-4">
+            <p className="text-sm text-slate-600 mb-4">
+              This action will permanently delete all Contact Workflow State records across all organizations
+              where the status is currently 'waiting_scenario'. This is typically used to clean up states
+              that are stuck waiting for a scenario that may no longer exist or be relevant.
+            </p>
+            <AlertDialog open={isPurgeDialogOpen} onOpenChange={setIsPurgeDialogOpen}>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" disabled={isPurgePending}>
+                  {isPurgePending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="mr-2 h-4 w-4" />
+                  )}
+                  Clear Stale Workflow States
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="flex items-center">
+                    <AlertTriangle className="text-red-500 mr-2 h-5 w-5" />
+                    Are you absolutely sure?
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone. This will permanently delete all workflow states
+                    globally with the status 'waiting_scenario'. Please confirm you wish to proceed.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={isPurgePending}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handlePurgeStaleWorkflows}
+                    disabled={isPurgePending}
+                    className="bg-red-600 hover:bg-red-700"
+                  >
+                    {isPurgePending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : null}
+                    Confirm Purge
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </CardContent>
+        </Card>
+      </div>
+
 
       {/* Render the new Organization Settings Modal */}
       {selectedOrgId && selectedOrgName && (
