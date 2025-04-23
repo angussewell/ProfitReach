@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { formatDateInCentralTime } from '@/lib/date-utils';
-import { WebhookLog } from '@prisma/client';
+import { WebhookLog, Prisma } from '@prisma/client'; // Import Prisma for sql template tag
 
 export const dynamic = 'force-dynamic';
 
@@ -22,6 +22,8 @@ function safeJsonParse(value: any): any {
 // Type for our formatted response
 interface FormattedWebhookLog extends Omit<WebhookLog, 'createdAt'> {
   createdAt: string;
+  // company type is inherited from Omit<WebhookLog, ...> and will be string
+  // due to COALESCE in the raw query. No need to redefine it here.
 }
 
 export async function GET(request: Request) {
@@ -42,71 +44,57 @@ export async function GET(request: Request) {
 
     const skip = (page - 1) * limit;
 
-    let whereConditions: any[] = [
-      { organizationId: session.user.organizationId }
-    ];
+    // --- Build Raw SQL WHERE Clause ---
+    let whereClauses: Prisma.Sql[] = [Prisma.sql`"organizationId" = ${session.user.organizationId}`];
     
-    if (status) {
-      whereConditions.push({ status });
+    if (status && status !== 'all') {
+      whereClauses.push(Prisma.sql`status = ${status}`);
     }
     
-    if (scenario) {
-      whereConditions.push({ scenarioName: scenario });
+    if (scenario && scenario !== 'all') {
+      whereClauses.push(Prisma.sql`"scenarioName" = ${scenario}`);
     }
     
     if (hasMessage) {
-      whereConditions.push({ 
-        OR: [
-          { 
-            emailSubject: { 
-              not: null 
-            },
-            AND: {
-              emailSubject: { 
-                not: "" 
-              }
-            }
-          },
-          { 
-            emailHtmlBody: { 
-              not: null 
-            },
-            AND: {
-              emailHtmlBody: { 
-                not: "" 
-              }
-            }
-          }
-        ]
-      });
+      // Note: Ensure column names match exactly (case-sensitive in PostgreSQL unless quoted)
+      whereClauses.push(Prisma.sql`(("emailSubject" IS NOT NULL AND "emailSubject" != '') OR ("emailHtmlBody" IS NOT NULL AND "emailHtmlBody" != ''))`);
     }
     
     if (search) {
-      whereConditions.push({
-        OR: [
-          { contactEmail: { contains: search, mode: 'insensitive' } },
-          { contactName: { contains: search, mode: 'insensitive' } },
-          { scenarioName: { contains: search, mode: 'insensitive' } }
-        ]
-      });
+      const searchPattern = `%${search}%`;
+      whereClauses.push(Prisma.sql`("contactEmail" ILIKE ${searchPattern} OR "contactName" ILIKE ${searchPattern} OR "scenarioName" ILIKE ${searchPattern})`);
     }
 
-    const where = { AND: whereConditions };
+    const whereSql = Prisma.sql`WHERE ${Prisma.join(whereClauses, ' AND ')}`;
+    // --- End Raw SQL WHERE Clause ---
 
-    // Fetch logs with pagination
-    const [logs, total] = await Promise.all([
-      prisma.webhookLog.findMany({
-        where,
-        orderBy: {
-          createdAt: 'desc'
-        },
-        skip,
-        take: limit
-      }),
-      prisma.webhookLog.count({ where })
+
+    // --- Fetch logs with pagination using Raw SQL ---
+    const logsQuery = Prisma.sql`
+      SELECT 
+        id, "accountId", "organizationId", "createdAt", status, "scenarioName", 
+        "contactEmail", "contactName", COALESCE(company, 'Unknown') AS company, 
+        "requestBody", "responseBody", "ghlIntegrationId", "updatedAt", 
+        "emailSubject", "emailHtmlBody" 
+      FROM "WebhookLog"
+      ${whereSql}
+      ORDER BY "createdAt" DESC
+      LIMIT ${limit} OFFSET ${skip}
+    `;
+    
+    const countQuery = Prisma.sql`SELECT COUNT(*) FROM "WebhookLog" ${whereSql}`;
+
+    // Execute raw queries
+    const [logsResult, countResult] = await Promise.all([
+      prisma.$queryRaw<WebhookLog[]>(logsQuery),
+      prisma.$queryRaw<{ count: bigint }[]>(countQuery)
     ]);
+    
+    const total = Number(countResult[0]?.count ?? 0); // Extract count and convert from BigInt
+    // --- End Raw SQL Fetch ---
 
-    // Get unique scenarios for filtering
+
+    // Get unique scenarios for filtering (can likely remain as is)
     const scenarios = await prisma.webhookLog.findMany({
       where: {
         organizationId: session.user.organizationId
@@ -120,16 +108,17 @@ export async function GET(request: Request) {
       }
     });
 
-    // Format logs for frontend display
-    const formattedLogs: FormattedWebhookLog[] = logs.map(log => ({
+    // Format logs for frontend display (adjust based on raw query result structure if needed)
+    const formattedLogs: FormattedWebhookLog[] = logsResult.map(log => ({
       ...log,
-      createdAt: formatDateInCentralTime(log.createdAt.toISOString()),
-      requestBody: safeJsonParse(log.requestBody),
-      responseBody: safeJsonParse(log.responseBody)
+      // Ensure createdAt is treated as a Date object before formatting
+      createdAt: formatDateInCentralTime(new Date(log.createdAt).toISOString()), 
+      requestBody: safeJsonParse(log.requestBody), // Assuming requestBody is returned correctly
+      responseBody: safeJsonParse(log.responseBody) // Assuming responseBody is returned correctly
     }));
 
     return NextResponse.json({
-      logs: formattedLogs,
+      logs: formattedLogs, // Use the result from the raw query
       total,
       page,
       totalPages: Math.ceil(total / limit),
