@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useTransition } from 'react'; // Added useTransition
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Users, Percent, CalendarCheck, ClipboardList, TrendingUp, Eye, Loader2, Mail, InfoIcon, Calendar as CalendarIcon, Trash2, AlertTriangle } from 'lucide-react'; // Added CalendarIcon, Trash2, AlertTriangle
+import { ArrowLeft, Users, Percent, CalendarCheck, ClipboardList, TrendingUp, Eye, Loader2, Mail, InfoIcon, Calendar as CalendarIcon, Trash2, AlertTriangle, RotateCcw } from 'lucide-react'; // Added CalendarIcon, Trash2, AlertTriangle, RotateCcw
 import { subDays, startOfDay, endOfDay, format } from 'date-fns'; // Added format
 import { DateRangeFilter } from '@/components/filters/date-range-filter';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -52,7 +52,7 @@ import { toast } from 'react-hot-toast';
 import { EmailInventoryStats } from '@/components/admin/EmailInventoryStats';
 import { OrganizationSettingsModal } from '@/components/admin/OrganizationSettingsModal';
 import { ElvCreditsWidget } from '@/components/admin/ElvCreditsWidget'; // Import the new ELV widget
-import { purgeStaleWorkflowStates } from '@/lib/server-actions'; // Import the new server action
+import { purgeStaleWorkflowStates, reactivateStaleWorkflowStates } from '@/lib/server-actions'; // Import the server actions
 
 import type { DateRange } from "react-day-picker";
 
@@ -170,6 +170,10 @@ export default function AdminPanelPage() {
   // State for the purge action
   const [isPurgePending, startPurgeTransition] = useTransition();
   const [isPurgeDialogOpen, setIsPurgeDialogOpen] = useState(false);
+
+  // State for the reactivate action
+  const [isReactivatePending, startReactivateTransition] = useTransition();
+  const [isReactivateDialogOpen, setIsReactivateDialogOpen] = useState(false);
 
   // Define constants inside the component or globally if needed
   const POLLING_INTERVAL_MS = 2000; // Poll every 2 seconds
@@ -579,6 +583,27 @@ export default function AdminPanelPage() {
       }
     });
   };
+
+  // Handler for the reactivate action
+  const handleReactivateStaleWorkflows = async () => {
+    startReactivateTransition(async () => {
+      const toastId = toast.loading('Reactivating stale workflow states...');
+      try {
+        const result = await reactivateStaleWorkflowStates();
+        if (result.success) {
+          toast.success(`Successfully reactivated ${result.updatedCount ?? 0} stale workflow states to 'active'.`, { id: toastId });
+        } else {
+          throw new Error(result.error || 'Unknown error occurred during reactivation.');
+        }
+      } catch (error) {
+        console.error('Error reactivating stale workflows:', error);
+        toast.error(`Failed to reactivate: ${error instanceof Error ? error.message : 'Unknown error'}`, { id: toastId });
+      } finally {
+        setIsReactivateDialogOpen(false); // Close the dialog regardless of outcome
+      }
+    });
+  };
+
 
   // Update the runApiTest function to also check the tasks-receive endpoint
   const runApiTest = async () => {
@@ -1368,49 +1393,92 @@ export default function AdminPanelPage() {
               </div>
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-4">
-            <p className="text-sm text-slate-600 mb-4">
+          <CardContent className="pt-4 space-y-4">
+            <p className="text-sm text-slate-600">
               This action will permanently delete all Contact Workflow State records across all organizations
               where the status is currently 'waiting_scenario'. This is typically used to clean up states
               that are stuck waiting for a scenario that may no longer exist or be relevant.
             </p>
-            <AlertDialog open={isPurgeDialogOpen} onOpenChange={setIsPurgeDialogOpen}>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive" disabled={isPurgePending}>
-                  {isPurgePending ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Trash2 className="mr-2 h-4 w-4" />
-                  )}
-                  Clear Stale Workflow States
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle className="flex items-center">
-                    <AlertTriangle className="text-red-500 mr-2 h-5 w-5" />
-                    Are you absolutely sure?
-                  </AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This action cannot be undone. This will permanently delete all workflow states
-                    globally with the status 'waiting_scenario'. Please confirm you wish to proceed.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel disabled={isPurgePending}>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={handlePurgeStaleWorkflows}
-                    disabled={isPurgePending}
-                    className="bg-red-600 hover:bg-red-700"
-                  >
+            <div className="flex gap-4">
+              {/* Purge Button and Dialog */}
+              <AlertDialog open={isPurgeDialogOpen} onOpenChange={setIsPurgeDialogOpen}>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" disabled={isPurgePending || isReactivatePending}>
                     {isPurgePending ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : null}
-                    Confirm Purge
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+                    ) : (
+                      <Trash2 className="mr-2 h-4 w-4" />
+                    )}
+                    Clear Stale Workflow States
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle className="flex items-center">
+                      <AlertTriangle className="text-red-500 mr-2 h-5 w-5" />
+                      Are you absolutely sure?
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This action cannot be undone. This will permanently delete all workflow states
+                      globally with the status 'waiting_scenario'. Please confirm you wish to proceed.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={isPurgePending}>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handlePurgeStaleWorkflows}
+                      disabled={isPurgePending}
+                      className="bg-red-600 hover:bg-red-700"
+                    >
+                      {isPurgePending ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : null}
+                      Confirm Purge
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+
+              {/* Reactivate Button and Dialog */}
+              <AlertDialog open={isReactivateDialogOpen} onOpenChange={setIsReactivateDialogOpen}>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" disabled={isReactivatePending || isPurgePending}>
+                    {isReactivatePending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <RotateCcw className="mr-2 h-4 w-4" />
+                    )}
+                    Reactivate Stale Workflow States
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle className="flex items-center">
+                      <AlertTriangle className="text-orange-500 mr-2 h-5 w-5" />
+                      Confirm Reactivation
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This action will update the status of all workflow states globally
+                      from 'waiting_scenario' to 'active'. This may cause workflows to resume unexpectedly.
+                      Are you sure you want to proceed?
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={isReactivatePending}>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleReactivateStaleWorkflows}
+                      disabled={isReactivatePending}
+                      className="bg-blue-600 hover:bg-blue-700" // Use a different color for reactivation
+                    >
+                      {isReactivatePending ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : null}
+                      Confirm Reactivate
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
           </CardContent>
         </Card>
       </div>

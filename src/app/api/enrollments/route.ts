@@ -16,7 +16,7 @@ interface EnrollmentRequestBody {
 }
 
 // Constants
-const MAX_BULK_LIMIT = 10000; // Maximum number of contacts to enroll at once
+const MAX_BULK_LIMIT = 20000; // Maximum number of contacts to enroll at once
 // Whitelist of allowed webhook URL domains/prefixes for security
 const ALLOWED_WEBHOOK_DOMAINS = [
   'https://n8n.yourdomain.com', // Example - replace with actual allowed domains

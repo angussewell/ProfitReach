@@ -105,6 +105,47 @@ export async function purgeStaleWorkflowStates(): Promise<{ success: boolean; er
   }
 }
 
+/**
+ * Server action for Admins to reactivate stale ContactWorkflowState records.
+ * Updates records globally where status is 'waiting_scenario' to 'active'.
+ */
+export async function reactivateStaleWorkflowStates(): Promise<{ success: boolean; error?: string; updatedCount?: number }> {
+  'use server'; // Ensure this runs on the server
+
+  try {
+    // 1. Get user session and validate role
+    const session = await getServerSession(authOptions);
+    if (session?.user?.role !== 'admin') {
+      return { success: false, error: 'Unauthorized: Admin role required.' };
+    }
+
+    // 2. Perform the update
+    console.log("Admin action: Reactivating ContactWorkflowState records with status 'waiting_scenario' to 'active'...");
+    const updateResult = await prisma.contactWorkflowState.updateMany({
+      where: {
+        status: 'waiting_scenario',
+      },
+      data: {
+        status: 'active', // Set the new status
+        // Optionally update lastProcessedAt or add a note? For now, just status.
+        // lastProcessedAt: new Date(), 
+      },
+    });
+
+    console.log(`Reactivated ${updateResult.count} stale workflow states.`);
+
+    // 3. Optionally revalidate paths if this impacts any cached views
+    // revalidatePath('/some-relevant-path'); 
+
+    return { success: true, updatedCount: updateResult.count };
+
+  } catch (error) {
+    console.error('Error in reactivateStaleWorkflowStates server action:', error);
+    const message = error instanceof Error ? error.message : 'An unexpected error occurred';
+    return { success: false, error: `Failed to reactivate stale workflow states: ${message}` };
+  }
+}
+
 
 /**
  * Server action to bulk update the organizationId for selected contacts.
