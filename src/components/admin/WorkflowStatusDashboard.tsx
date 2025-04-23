@@ -4,7 +4,7 @@ import React, { useState, useEffect, useTransition, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { RefreshCw, Clock, PlayCircle, AlertCircle, PauseCircle, Loader2 } from 'lucide-react';
+import { RefreshCw, Clock, PlayCircle, AlertCircle, PauseCircle, Loader2, Filter } from 'lucide-react'; // Added Filter icon
 import { getWorkflowStatusCounts } from '@/lib/server-actions';
 import { toast } from 'react-hot-toast';
 
@@ -14,6 +14,7 @@ interface StatusCounts {
   active: number;
   errored: number;
   waiting_scenario: number;
+  filtered: number; // Added filtered
   [key: string]: number; // Index signature for dynamic access
 }
 
@@ -23,7 +24,11 @@ const statusDisplayConfig: { [key: string]: { label: string; icon: React.Element
   active: { label: 'Active', icon: PlayCircle, color: 'text-emerald-600' },
   errored: { label: 'Errored', icon: AlertCircle, color: 'text-red-600' },
   waiting_scenario: { label: 'Waiting Scenario', icon: PauseCircle, color: 'text-amber-600' },
+  filtered: { label: 'Filtered', icon: Filter, color: 'text-slate-600' }, // Added filtered config
 };
+
+// Order in which to display the statuses
+const displayOrder: (keyof StatusCounts)[] = ['pending_schedule', 'active', 'waiting_scenario', 'filtered', 'errored'];
 
 export function WorkflowStatusDashboard() {
   const [counts, setCounts] = useState<StatusCounts | null>(null);
@@ -31,7 +36,8 @@ export function WorkflowStatusDashboard() {
   const [isRefreshing, startRefreshTransition] = useTransition();
 
   const fetchCounts = useCallback(async () => {
-    setIsLoading(true);
+    // Don't set isLoading to true here if only refreshing
+    // setIsLoading(true); // Removed for refresh
     try {
       const result = await getWorkflowStatusCounts();
       if (result.success && result.counts) {
@@ -41,6 +47,7 @@ export function WorkflowStatusDashboard() {
           active: 0,
           errored: 0,
           waiting_scenario: 0,
+          filtered: 0, // Added filtered default
         };
         setCounts({ ...initialCounts, ...result.counts });
       } else {
@@ -51,22 +58,39 @@ export function WorkflowStatusDashboard() {
       toast.error(`Error fetching counts: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setCounts(null); // Set to null on error to show error state
     } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchCounts();
-  }, [fetchCounts]);
-
-  const handleRefresh = () => {
-    startRefreshTransition(() => {
-      fetchCounts();
-    });
+       // Only set loading to false on initial load
+       if (isLoading) {
+         setIsLoading(false);
+       }
+     }
+   }, []); // REMOVED isLoading dependency - fetchCounts logic doesn't depend on it
+ 
+   useEffect(() => {
+     // No need to set isLoading(true) here, fetchCounts does it internally now for initial load
+     fetchCounts();
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+   }, []); // Run only once on mount, fetchCounts is now stable
+ 
+   const handleRefresh = () => {
+     startRefreshTransition(async () => { // Make async to await fetchCounts
+       const toastId = toast.loading('Refreshing counts...');
+       // Explicitly set loading state for refresh, as fetchCounts no longer does
+       setIsLoading(true); 
+       try {
+         await fetchCounts(); // Await the fetch
+         toast.success('Counts refreshed!', { id: toastId });
+       } catch {
+         // Error toast is handled within fetchCounts
+         toast.dismiss(toastId); 
+       } finally {
+         setIsLoading(false); // Ensure loading is set to false after refresh attempt
+       }
+     });
   };
 
   const renderSkeleton = () => (
-    Array.from({ length: 4 }).map((_, index) => (
+    // Render 5 skeletons now
+    Array.from({ length: 5 }).map((_, index) => (
       <Card key={`skel-${index}`} className="overflow-hidden border-slate-200 shadow-sm">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <Skeleton className="h-5 w-24" />
@@ -88,20 +112,26 @@ export function WorkflowStatusDashboard() {
       );
     }
 
-    return Object.entries(statusDisplayConfig).map(([statusKey, config]) => (
-      <Card key={statusKey} className="overflow-hidden border-slate-200 shadow-sm transition-all duration-200 hover:shadow-md">
-        <div className={`h-1 bg-gradient-to-r ${config.color.replace('text-', 'from-').replace('-600', '-500')} ${config.color.replace('text-', 'to-')}`}></div>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">{config.label}</CardTitle>
-          <config.icon className={`h-4 w-4 ${config.color}`} />
-        </CardHeader>
-        <CardContent>
-          <div className={`text-2xl font-bold ${config.color}`}>
-            {counts[statusKey]?.toLocaleString() ?? '--'}
-          </div>
-        </CardContent>
-      </Card>
-    ));
+    // Use the displayOrder array to render cards in the desired sequence
+    return displayOrder.map((statusKey) => {
+      const config = statusDisplayConfig[statusKey];
+      if (!config) return null; // Should not happen if displayOrder is correct
+
+      return (
+        <Card key={statusKey} className="overflow-hidden border-slate-200 shadow-sm transition-all duration-200 hover:shadow-md">
+          <div className={`h-1 bg-gradient-to-r ${config.color.replace('text-', 'from-').replace('-600', '-500')} ${config.color.replace('text-', 'to-')}`}></div>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">{config.label}</CardTitle>
+            <config.icon className={`h-4 w-4 ${config.color}`} />
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${config.color}`}>
+              {counts[statusKey]?.toLocaleString() ?? '--'}
+            </div>
+          </CardContent>
+        </Card>
+      );
+    });
   };
 
   return (
@@ -120,7 +150,8 @@ export function WorkflowStatusDashboard() {
           Refresh
         </Button>
       </div>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {/* Adjust grid columns for 5 items */}
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
         {isLoading ? renderSkeleton() : renderCards()}
       </div>
     </div>

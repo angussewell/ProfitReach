@@ -88,7 +88,7 @@ export async function getWorkflowStatusCounts(): Promise<{
     }
 
     // 2. Define the statuses we care about
-    const relevantStatuses = ['pending_schedule', 'active', 'errored', 'waiting_scenario'];
+    const relevantStatuses = ['pending_schedule', 'active', 'errored', 'waiting_scenario', 'filtered']; // Added 'filtered'
 
     // 3. Perform the groupBy query
     const statusGroups = await prisma.contactWorkflowState.groupBy({
@@ -106,7 +106,7 @@ export async function getWorkflowStatusCounts(): Promise<{
     // 4. Format the results into a map, ensuring all relevant statuses are present
     const countsMap: { [key: string]: number } = {};
     relevantStatuses.forEach(status => {
-      countsMap[status] = 0; // Initialize all relevant statuses with 0 count
+      countsMap[status] = 0; // Initialize all relevant statuses with 0 count, including 'filtered'
     });
 
     statusGroups.forEach(group => {
