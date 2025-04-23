@@ -7,7 +7,7 @@ import { PageContainer } from '@/components/layout/PageContainer';
 import { useForm } from 'react-hook-form'; // Added
 import { zodResolver } from '@hookform/resolvers/zod'; // Added
 import * as z from 'zod'; // Added
-import { Sparkles } from 'lucide-react'; // Added
+import { Sparkles, Pencil, Trash2 } from 'lucide-react'; // Added & Keep specific icon imports
 import { useOrganization } from '@/contexts/OrganizationContext'; // Changed to useOrganization hook
 // Direct imports instead of client-components aliases
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,6 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Pencil, Trash2 } from "lucide-react"; // Keep specific icon imports
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
@@ -51,7 +50,7 @@ import {
   ClientFormMessage, // Replaced with FormMessage
   ClientTextarea // Replaced with Textarea
 } from '@/components/ui/client-components';
-*/
+*/ // This line was commented out, now uncommented
 
 interface EmailAccount {
   id: string;
@@ -62,6 +61,10 @@ interface EmailAccount {
   updatedAt: string;
   isActive: boolean;
   isHidden?: boolean;
+  // --- Add these fields ---
+  dailySendLimit: number;
+  dailySendCount: number;
+  // -----------------------
 }
 
 interface SocialAccount {
@@ -400,7 +403,7 @@ export function AccountsClient() {
               ) : (
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-lg">{account.name}</span>
-                  <Button 
+                  <Button // ClientButton -> Button
                     variant="ghost"
                     size="sm"
                     onClick={() => {
@@ -408,7 +411,7 @@ export function AccountsClient() {
                       setAccountName(account.name);
                     }}
                   >
-                    <Pencil className="h-3.5 w-3.5" /> 
+                    <Pencil className="h-3.5 w-3.5" /> {/* ClientPencilIcon -> Pencil */}
                   </Button>
                 </div>
               )}
@@ -425,22 +428,34 @@ export function AccountsClient() {
                   className="data-[state=checked]:bg-green-500"
                 />
               </div>
-              <Button 
+              <Button // ClientButton -> Button
                 variant="ghost" // Changed to ghost with text-destructive class for subtle red
                 size="icon"
                 className="text-destructive hover:bg-destructive/10"
                 onClick={() => handleDelete(account, type)}
                 aria-label="Delete account"
               >
-                <Trash2 className="h-4 w-4" /> 
+                <Trash2 className="h-4 w-4" /> {/* ClientTrashIcon -> Trash2 */}
               </Button>
             </div>
           </div>
 
           {/* Account details */}
           <div className="text-sm text-gray-500">
-            {type === 'email' 
-              ? (account as EmailAccount).email
+            {type === 'email'
+              ? (
+                <div className="flex flex-col space-y-1">
+                  <span>{(account as EmailAccount).email}</span>
+                  {/* --- Add this section --- */}
+                  <div className="flex items-center space-x-2 text-xs text-muted-foreground pt-1">
+                    <span>Daily Sends:</span>
+                    <span className="font-medium">{(account as EmailAccount).dailySendCount ?? 0}</span>
+                    <span>/</span>
+                    <span>{(account as EmailAccount).dailySendLimit ?? 'N/A'}</span>
+                  </div>
+                  {/* ----------------------- */}
+                </div>
+              )
               : <div className="flex flex-col space-y-1">
                 </div>
             }
@@ -496,14 +511,14 @@ export function AccountsClient() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button 
+            <Button // ClientButton -> Button
               variant="brand-gradient-warm" // Use the specific warm gradient
               size="default"
               onClick={() => setIsSyncDialogOpen(true)}
             >
               AI Sync New Accounts
             </Button>
-            <Button 
+            <Button // ClientButton -> Button
               variant="brand-gradient-cold" // Use the cold gradient for Connect Account
               size="default"
               onClick={handleConnect}
@@ -654,7 +669,7 @@ export function AccountsClient() {
               </div>
               
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
-                <Button 
+                <Button // ClientButton -> Button
                   type="button"
                   variant="outline"
                   size="default"
@@ -662,7 +677,7 @@ export function AccountsClient() {
                 >
                   Cancel
                 </Button>
-                <Button 
+                <Button // ClientButton -> Button
                   type="submit"
                   variant="default"
                   size="default"

@@ -656,7 +656,7 @@ model WebhookLog {
   scenarioName     String        @default("Unknown")
   contactEmail     String        @default("Unknown")
   contactName      String        @default("Unknown")
-  company          String        @default("Unknown")
+  company          String?       @default("Unknown") // Made optional to allow NULL values
   requestBody      Json
   responseBody     Json          @default("{}")
   ghlIntegrationId String?

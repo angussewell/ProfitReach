@@ -30,7 +30,11 @@ export async function GET(request: Request) {
           unipileAccountId: true,
           createdAt: true,
           updatedAt: true,
-          isActive: true
+          isActive: true,
+          // --- Add these fields ---
+          dailySendLimit: true,
+          dailySendCount: true
+          // -----------------------
         },
         orderBy: {
           createdAt: 'desc'
@@ -71,4 +75,4 @@ export async function GET(request: Request) {
       { status: 500 }
     );
   }
-} 
+}
