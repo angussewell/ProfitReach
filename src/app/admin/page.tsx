@@ -53,6 +53,7 @@ import { EmailInventoryStats } from '@/components/admin/EmailInventoryStats';
 import { OrganizationSettingsModal } from '@/components/admin/OrganizationSettingsModal';
 import { ElvCreditsWidget } from '@/components/admin/ElvCreditsWidget'; // Import the new ELV widget
 import { purgeStaleWorkflowStates, reactivateStaleWorkflowStates } from '@/lib/server-actions'; // Import the server actions
+import { WorkflowStatusDashboard } from '@/components/admin/WorkflowStatusDashboard'; // Import the new dashboard component
 
 import type { DateRange } from "react-day-picker";
 
@@ -1482,6 +1483,9 @@ export default function AdminPanelPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Workflow Status Dashboard Section */}
+      <WorkflowStatusDashboard />
 
 
       {/* Render the new Organization Settings Modal */}

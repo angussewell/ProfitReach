@@ -70,6 +70,61 @@ export async function updateMessageStatus(threadId: string, status: string) {
 }
 
 /**
+ * Server action for Admins to get counts of ContactWorkflowState records by status.
+ * Fetches counts for specific statuses: pending_schedule, active, errored, waiting_scenario.
+ */
+export async function getWorkflowStatusCounts(): Promise<{
+  success: boolean;
+  error?: string;
+  counts?: { [key: string]: number };
+}> {
+  'use server';
+
+  try {
+    // 1. Get user session and validate role
+    const session = await getServerSession(authOptions);
+    if (session?.user?.role !== 'admin') {
+      return { success: false, error: 'Unauthorized: Admin role required.' };
+    }
+
+    // 2. Define the statuses we care about
+    const relevantStatuses = ['pending_schedule', 'active', 'errored', 'waiting_scenario'];
+
+    // 3. Perform the groupBy query
+    const statusGroups = await prisma.contactWorkflowState.groupBy({
+      by: ['status'],
+      where: {
+        status: {
+          in: relevantStatuses,
+        },
+      },
+      _count: {
+        status: true,
+      },
+    });
+
+    // 4. Format the results into a map, ensuring all relevant statuses are present
+    const countsMap: { [key: string]: number } = {};
+    relevantStatuses.forEach(status => {
+      countsMap[status] = 0; // Initialize all relevant statuses with 0 count
+    });
+
+    statusGroups.forEach(group => {
+      countsMap[group.status] = group._count.status;
+    });
+
+    console.log("Admin action: Fetched workflow status counts:", countsMap);
+
+    return { success: true, counts: countsMap };
+
+  } catch (error) {
+    console.error('Error in getWorkflowStatusCounts server action:', error);
+    const message = error instanceof Error ? error.message : 'An unexpected error occurred';
+    return { success: false, error: `Failed to fetch workflow status counts: ${message}` };
+  }
+}
+
+/**
  * Server action for Admins to purge stale ContactWorkflowState records.
  * Deletes all records globally where status is 'waiting_scenario'.
  */
