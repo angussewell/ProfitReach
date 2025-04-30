@@ -8,8 +8,9 @@ import BulkEditModal from '@/components/contacts/BulkEditModal';
 import { EnrollWorkflowModal } from '@/components/contacts/EnrollWorkflowModal'; // Import the new modal
 import SendToOrganizationModal from '@/components/contacts/SendToOrganizationModal'; // Import the new Send to Org modal
 import { ClientButton as Button } from '@/components/ui/client-components'; // Import aliased Button from client-components
-// FilterBar import removed - handled by parent
 import { FilterState } from '@/types/filters';
+import { exportContactsCsv } from '@/lib/server-actions'; // Import the server action
+import toast from 'react-hot-toast'; // Import toast for notifications
 
 // Props for the EnhancedContactsTable component
 interface EnhancedContactsTableProps {
@@ -208,6 +209,10 @@ export default function EnhancedContactsTable({
   // Send to Organization state
   const [isSendToOrgModalOpen, setIsSendToOrgModalOpen] = useState(false);
 
+  // CSV Export state
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
   // Dropdown state
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
 
@@ -315,6 +320,57 @@ export default function EnhancedContactsTable({
       setIsDeleting(false);
     }
   };
+
+  // CSV Export handling
+  const handleExportCsv = async () => {
+    setIsExporting(true);
+    setExportError(null);
+    const toastId = toast.loading('Generating CSV...');
+
+    try {
+      const selectionPayload = isSelectAllMatchingActive
+        ? { type: 'filters' as const, filters: currentFilterState, searchTerm }
+        : { type: 'ids' as const, ids: selectedContactIds };
+
+      console.log('Calling exportContactsCsv with payload:', selectionPayload);
+      const result = await exportContactsCsv(selectionPayload);
+
+      toast.dismiss(toastId);
+
+      if (result.success && result.csvData && result.filename) {
+        toast.success('CSV generated successfully. Download starting...');
+
+        // Trigger download
+        const blob = new Blob([result.csvData], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', result.filename);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        // Optionally clear selection after successful export
+        // setSelectedContactIds([]);
+        // setIsSelectAllMatchingActive(false);
+
+      } else {
+        console.error('CSV Export failed:', result.error);
+        setExportError(result.error || 'Failed to export CSV.');
+        toast.error(result.error || 'Failed to export CSV.');
+      }
+    } catch (error) {
+      toast.dismiss(toastId);
+      console.error('Error calling exportContactsCsv:', error);
+      const message = error instanceof Error ? error.message : 'An unexpected error occurred.';
+      setExportError(message);
+      toast.error(`Export failed: ${message}`);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
 
   // Bulk delete handling
   const openBulkDeleteModal = () => {
@@ -496,6 +552,15 @@ export default function EnhancedContactsTable({
                 onClick={openSendToOrgModal}
               >
                 Send to Organization
+              </Button>
+              {/* Export CSV Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportCsv}
+                disabled={isExporting}
+              >
+                {isExporting ? 'Exporting...' : 'Export CSV'}
               </Button>
             </div>
           </div>

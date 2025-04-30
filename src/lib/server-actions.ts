@@ -6,8 +6,9 @@ import { Prisma } from '@prisma/client'; // Import Prisma for types
 import { v4 as uuidv4 } from 'uuid'; // Import uuid
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { FilterState } from '@/types/filters'; // Assuming FilterState type is defined here
+import { FilterState, FilterCondition } from '@/types/filters'; // Assuming FilterState type is defined here
 import { buildCombinedWhereClause } from '@/lib/filters'; // Corrected import
+import Papa from 'papaparse';
 
 // Example server action for getting a user
 export async function getUser(id: string) {
@@ -409,3 +410,253 @@ export async function archiveScenario(originalScenarioId: string) {
     };
   }
 }
+
+
+// --- START: CSV Export Server Action ---
+
+// Define the input type for the export action
+type ExportSelection = { type: 'ids'; ids: string[] } | { type: 'filters'; filters: FilterState | null; searchTerm: string | null };
+
+// Define the return type for the export action
+type ExportResult = {
+  success: boolean;
+  csvData?: string;
+  filename?: string;
+  error?: string;
+};
+
+// Define the list of fields to include in the CSV export
+const CSV_EXPORT_FIELDS: (keyof Prisma.ContactsSelect)[] = [
+  'id', 'firstName', 'lastName', 'fullName', 'linkedinUrl', 'title', 'email',
+  'emailStatus', 'photoUrl', 'headline', 'state', 'city', 'country',
+  'currentCompanyName', 'currentCompanyId', 'twitterUrl', 'facebookUrl',
+  'githubUrl', 'companyLinkedinUrl', 'companyWebsiteUrl', 'employmentHistory',
+  'phoneNumbers', 'contactEmails', 'additionalData', 'createdAt', 'updatedAt',
+  'organizationId', 'leadStatus', 'lastActivityAt', 'scenarioName',
+  'prospectResearch', 'companyResearch', 'previousMessageCopy',
+  'previousMessageSubjectLine', 'previousMessageId', 'threadId', 'emailSender',
+  'originalOutboundRepName', 'dateOfResearch', 'allEmployees', 'linkedInPosts',
+  'linkedInProfilePhoto', 'initialLinkedInMessageCopy', 'providerId',
+  'mutualConnections', 'additionalResearch', 'currentScenario', 'outboundRepName',
+  'phone', 'seoDescription'
+];
+
+// Helper function to safely stringify JSON or format dates for CSV
+function formatCsvValue(value: any): string {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value);
+    } catch (e) {
+      console.error('Error stringifying object for CSV:', e);
+      return ''; // Return empty string on error
+    }
+  }
+  return String(value);
+}
+
+/**
+ * Server action to export contacts as a CSV file.
+ * Handles exporting based on selected IDs or current filters/search.
+ */
+export async function exportContactsCsv(selection: ExportSelection): Promise<ExportResult> {
+  'use server';
+
+  console.log('Starting CSV export server action with selection:', selection.type);
+
+  try {
+    // 1. Authentication & Authorization
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id || !session.user.organizationId) {
+      console.error('CSV Export Error: Unauthorized or missing organization ID.');
+      return { success: false, error: 'Unauthorized' };
+    }
+    const organizationId = session.user.organizationId;
+    console.log(`CSV Export: Authorized for organization ID: ${organizationId}`);
+
+    // 2. Build Prisma `where` Clause
+    let finalWhereClause: Prisma.ContactsWhereInput = { organizationId };
+
+    if (selection.type === 'ids') {
+      if (!selection.ids || selection.ids.length === 0) {
+        return { success: false, error: 'No contact IDs provided for export.' };
+      }
+      finalWhereClause = {
+        ...finalWhereClause,
+        id: { in: selection.ids },
+      };
+      console.log(`CSV Export: Filtering by ${selection.ids.length} specific IDs.`);
+    } else { // selection.type === 'filters'
+      // Use buildCombinedWhereClause for standard filters + search
+      const baseWhere = buildCombinedWhereClause(
+        organizationId,
+        selection.filters,
+        selection.searchTerm
+      );
+      console.log('CSV Export: Base WHERE (filters + search):', JSON.stringify(baseWhere, null, 2));
+
+      // --- Replicate Tag Filtering Logic ---
+      const tagConditions = selection.filters?.conditions.filter(c => c.field === 'tags') || [];
+      let tagWhereClauses: Prisma.ContactsWhereInput[] = [];
+
+      if (tagConditions.length > 0) {
+        const tagNamesToLookup = new Set<string>();
+        tagConditions.forEach(cond => {
+          if (Array.isArray(cond.value)) {
+            cond.value.forEach(name => typeof name === 'string' && tagNamesToLookup.add(name));
+          }
+        });
+
+        const tagNameMap = new Map<string, string>();
+        if (tagNamesToLookup.size > 0) {
+          console.log(`CSV Export: Looking up tag IDs for: ${Array.from(tagNamesToLookup).join(', ')}`);
+          const foundTags = await prisma.tags.findMany({
+            where: { organizationId, name: { in: Array.from(tagNamesToLookup) } },
+            select: { id: true, name: true }
+          });
+          foundTags.forEach(tag => tagNameMap.set(tag.name, tag.id));
+          console.log(`CSV Export: Found ${tagNameMap.size} matching tag IDs.`);
+        }
+
+        tagConditions.forEach(cond => {
+          const operator = cond.operator;
+          const tagNames = Array.isArray(cond.value) ? cond.value.filter((v): v is string => typeof v === 'string') : [];
+          const tagIds = tagNames.map(name => tagNameMap.get(name)).filter((id): id is string => !!id);
+
+          if (tagIds.length === 0 && operator !== 'hasNoTags') {
+             console.warn(`[CSV Export Tag Filter] No valid tag IDs found for condition, skipping: ${JSON.stringify(cond)}`);
+             return;
+          }
+
+          let clause: Prisma.ContactsWhereInput | null = null;
+          switch (operator) {
+            case 'hasAnyTags':
+              clause = { ContactTags: { some: { tagId: { in: tagIds } } } };
+              break;
+            case 'hasAllTags':
+              if (tagIds.length > 0) {
+                 clause = { AND: tagIds.map(id => ({ ContactTags: { some: { tagId: id } } })) };
+              }
+              break;
+            case 'hasNoneOfTheTags': // Ensure this matches the operator used in filters.ts/types.ts
+               if (tagIds.length > 0) {
+                  clause = { ContactTags: { none: { tagId: { in: tagIds } } } };
+               }
+              break;
+            case 'hasNoTags':
+              clause = { ContactTags: { none: {} } };
+              break;
+            default:
+               console.warn(`[CSV Export Tag Filter] Unsupported tag operator: ${operator}`);
+          }
+          if (clause) {
+              tagWhereClauses.push(clause);
+          }
+        });
+      }
+      console.log('CSV Export: Generated tag WHERE clauses:', JSON.stringify(tagWhereClauses, null, 2));
+
+      // Merge tag clauses into the baseWhere
+      if (tagWhereClauses.length > 0) {
+        const logicalOp = selection.filters?.logicalOperator || 'AND';
+        if (logicalOp === 'OR') {
+          // If base already has OR, add to it. Otherwise, create new OR.
+          const existingOr = Array.isArray(baseWhere.OR) ? baseWhere.OR : (baseWhere.OR ? [baseWhere.OR] : []);
+          // If base has AND, need to wrap base AND and tag clauses in a top-level AND
+          if (baseWhere.AND) {
+             finalWhereClause = {
+                organizationId, // Keep orgId at top level
+                AND: [
+                   { AND: Array.isArray(baseWhere.AND) ? baseWhere.AND : [baseWhere.AND] }, // Wrap existing AND
+                   { OR: tagWhereClauses } // Wrap tag clauses in OR
+                ]
+             };
+          } else {
+             // Combine existing OR (if any) with tag clauses
+             finalWhereClause = { ...baseWhere, OR: [...existingOr, ...tagWhereClauses] };
+          }
+        } else { // AND
+          // If base already has AND, add to it. Otherwise, create new AND.
+          const existingAnd = Array.isArray(baseWhere.AND) ? baseWhere.AND : (baseWhere.AND ? [baseWhere.AND] : []);
+          // If base has OR, need to wrap base OR and tag clauses in a top-level AND
+          if (baseWhere.OR) {
+             finalWhereClause = {
+                organizationId, // Keep orgId at top level
+                AND: [
+                   { OR: Array.isArray(baseWhere.OR) ? baseWhere.OR : [baseWhere.OR] }, // Wrap existing OR
+                   ...tagWhereClauses // Add tag clauses directly to top-level AND
+                ]
+             };
+          } else {
+             // Combine existing AND (if any) with tag clauses
+             finalWhereClause = { ...baseWhere, AND: [...existingAnd, ...tagWhereClauses] };
+          }
+        }
+      } else {
+         // No tag clauses, just use the baseWhere from buildCombinedWhereClause
+         finalWhereClause = baseWhere;
+      }
+      // --- End Tag Filtering Logic ---
+    }
+
+    console.log('CSV Export: Final WHERE clause:', JSON.stringify(finalWhereClause, null, 2));
+
+    // 3. Fetch Data - Select ALL required fields
+    const contactsToExport = await prisma.contacts.findMany({
+      where: finalWhereClause,
+      select: CSV_EXPORT_FIELDS.reduce((acc, field) => {
+        acc[field] = true;
+        return acc;
+      }, {} as Prisma.ContactsSelect),
+      // Consider adding an orderBy clause if needed
+      // orderBy: { updatedAt: 'desc' },
+      // Add a limit for safety? Or rely on server resources?
+      // take: 10000, // Example limit
+    });
+
+    console.log(`CSV Export: Fetched ${contactsToExport.length} contacts.`);
+
+    if (contactsToExport.length === 0) {
+      return { success: false, error: 'No contacts found matching the criteria.' };
+    }
+
+    // 4. Generate CSV
+    // Map data to ensure correct order and formatting
+    const mappedData = contactsToExport.map(contact => {
+      return CSV_EXPORT_FIELDS.map(field => formatCsvValue((contact as any)[field]));
+    });
+
+    const csvString = Papa.unparse({
+      fields: CSV_EXPORT_FIELDS, // Use the defined headers
+      data: mappedData,
+    }, {
+      header: true, // Include headers row
+      quotes: true, // Ensure fields are quoted
+      newline: '\r\n', // Standard CSV newline
+    });
+
+    // 5. Return Response
+    const filename = `contacts_${new Date().toISOString().split('T')[0]}.csv`;
+    console.log(`CSV Export: Successfully generated CSV data. Filename: ${filename}`);
+
+    return { success: true, csvData: csvString, filename };
+
+  } catch (error) {
+    console.error('Error during CSV export server action:', error);
+    const message = error instanceof Error ? error.message : 'An unexpected error occurred during CSV export.';
+    // Check for specific Prisma errors if needed
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+       // Log more details for Prisma errors
+       console.error(`Prisma Error Code: ${error.code}, Meta: ${JSON.stringify(error.meta)}`);
+       return { success: false, error: `Database error during export: ${error.code}` };
+    }
+    return { success: false, error: message };
+  }
+}
+
+// --- END: CSV Export Server Action ---
