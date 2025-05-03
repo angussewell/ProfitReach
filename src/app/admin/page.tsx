@@ -62,6 +62,7 @@ interface OverallStats {
   avgReplyRate: number;
   meetingsBooked: number;
   activeScenarios: number;
+  emailsSent?: number; // Added optional emailsSent
 }
 
 interface OrgStatsData {
@@ -70,6 +71,7 @@ interface OrgStatsData {
   replyRate: number;
   meetingsBooked: number;
   activeScenarios: number;
+  emailsSent?: number; // Added optional emailsSent
   bookingRate?: number;
   replyToBookingRate?: number;
 }
@@ -926,11 +928,12 @@ export default function AdminPanelPage() {
           <h2 className="text-xl font-semibold text-slate-800">Overall Performance</h2>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {/* Updated grid to potentially accommodate 5 items */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
           <Card className="overflow-hidden border-slate-200 shadow-sm transition-all duration-200 hover:shadow-md">
             <div className="h-1 bg-gradient-to-r from-blue-500 to-blue-600"></div>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Contacts Enrolled</CardTitle>
+              <CardTitle className="text-sm font-medium">Total Contacts Researched</CardTitle> {/* Renamed */}
               <Users className="h-4 w-4 text-blue-600" />
             </CardHeader>
             <CardContent>
@@ -939,6 +942,24 @@ export default function AdminPanelPage() {
               ) : (
                 <div className="text-2xl font-bold text-slate-900">
                   {stats.overall?.contactsEnrolled ?? '--'}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* NEW Card for Emails Sent */}
+          <Card className="overflow-hidden border-slate-200 shadow-sm transition-all duration-200 hover:shadow-md">
+            <div className="h-1 bg-gradient-to-r from-sky-500 to-sky-600"></div>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Emails Sent</CardTitle>
+              <Mail className="h-4 w-4 text-sky-600" />
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <Skeleton className="h-8 w-16" />
+              ) : (
+                <div className="text-2xl font-bold text-slate-900">
+                  {stats.overall?.emailsSent ?? '--'}
                 </div>
               )}
             </CardContent>
@@ -1029,7 +1050,8 @@ export default function AdminPanelPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-[250px] text-slate-700 pl-4">Organization</TableHead>
-                      <TableHead className="text-right text-slate-700">Contacts Enrolled</TableHead>
+                      <TableHead className="text-right text-slate-700">Contacts Researched</TableHead> {/* Renamed */}
+                      <TableHead className="text-right text-slate-700">Emails Sent</TableHead> {/* Added */}
                       <TableHead className="text-right text-slate-700">Active Scenarios</TableHead>
                       <TableHead className="text-right text-slate-700 pr-4">Actions</TableHead>
                     </TableRow>
@@ -1040,6 +1062,7 @@ export default function AdminPanelPage() {
                         <TableRow key={`skel-contacts-${index}`} className="border-b border-slate-100">
                           <TableCell className="pl-4"><Skeleton className="h-5 w-3/4" /></TableCell>
                           <TableCell className="text-right"><Skeleton className="h-5 w-12 inline-block" /></TableCell>
+                          <TableCell className="text-right"><Skeleton className="h-5 w-12 inline-block" /></TableCell> {/* Added Skeleton */}
                           <TableCell className="text-right"><Skeleton className="h-5 w-12 inline-block" /></TableCell>
                           <TableCell className="text-right pr-4"><Skeleton className="h-8 w-20 inline-block" /></TableCell>
                         </TableRow>
@@ -1052,6 +1075,7 @@ export default function AdminPanelPage() {
                         >
                           <TableCell className="font-medium py-3 pl-4">{org.name}</TableCell>
                           <TableCell className="text-right py-3 text-slate-700">{org.stats?.contactsEnrolled ?? '--'}</TableCell>
+                          <TableCell className="text-right py-3 text-slate-700">{org.stats?.emailsSent ?? '--'}</TableCell> {/* Added */}
                           <TableCell className="text-right py-3 text-slate-700">{org.stats?.activeScenarios ?? '--'}</TableCell>
                           <TableCell className="text-right py-3 pr-4">
                             <Button
@@ -1067,7 +1091,7 @@ export default function AdminPanelPage() {
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={4} className="h-24 text-center text-muted-foreground bg-slate-50/30 border-b border-slate-100">
+                        <TableCell colSpan={5} className="h-24 text-center text-muted-foreground bg-slate-50/30 border-b border-slate-100"> {/* Updated colSpan */}
                           No organization data available for the selected period.
                         </TableCell>
                       </TableRow>
