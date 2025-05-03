@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client'; // Import Prisma namespace
 
 // Force dynamic API route
 export const dynamic = 'force-dynamic';
@@ -16,13 +17,22 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    console.log('Auth successful, fetching accounts for organization:', session.user.organizationId);
+    const organizationId = session.user.organizationId;
+    const userRole = session.user.role; // Get user role
+
+    console.log(`Auth successful, fetching accounts for org: ${organizationId}, user role: ${userRole}`);
     
     try {
+      // Define the where clause conditionally
+      const whereClause: Prisma.EmailAccountWhereInput = 
+        userRole === 'admin' 
+          ? {} // Admin gets all accounts, no organization filter
+          : { organizationId: organizationId }; // Non-admin gets only their org's accounts
+
+      console.log(`Applying where clause for email accounts: ${JSON.stringify(whereClause)}`);
+
       const emailAccounts = await prisma.emailAccount.findMany({
-        where: {
-          organizationId: session.user.organizationId
-        },
+        where: whereClause, // Apply the conditional where clause
         select: {
           id: true,
           name: true,
@@ -47,9 +57,9 @@ export async function GET(request: Request) {
         isHidden: account.name === 'LinkedIn Integration'
       }));
 
-      console.log('Successfully fetched accounts:', {
-        count: emailAccounts.length,
-        organizationId: session.user.organizationId
+      console.log(`Successfully fetched ${emailAccounts.length} accounts.`, {
+        isAdminFetch: userRole === 'admin',
+        organizationId: userRole !== 'admin' ? organizationId : undefined
       });
 
       return NextResponse.json(accountsWithVisibility);

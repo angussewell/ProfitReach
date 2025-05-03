@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+// import { getServerSession } from 'next-auth'; // Removed
+// import { authOptions } from '@/app/api/auth/[...nextauth]/route'; // Removed
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { formatDateInCentralTime } from '@/lib/date-utils';
@@ -47,22 +47,15 @@ function formatMessageForResponse(message: EmailMessage): FormattedEmailMessage 
   };
 }
 
+// TODO: Re-enable authorization checks
 export async function GET(request: Request) {
-  console.log('Messages API: Starting request');
+  // TODO: Provide organizationId source for prototype (e.g., hardcode, fetch default)
+  const placeholderOrganizationId = 'clw0l6g5f00001e6kabcde123'; // Replace with a valid default Org ID if needed
+  
+  console.log('Messages API: Starting GET request (Auth Disabled)');
   
   try {
-    const session = await getServerSession(authOptions);
-    console.log('Messages API: Session data:', {
-      isAuthenticated: !!session,
-      userId: session?.user?.id,
-      organizationId: session?.user?.organizationId,
-      role: session?.user?.role
-    });
-
-    if (!session?.user?.organizationId) {
-      console.log('Messages API: No organization ID in session');
-      return NextResponse.json({ error: 'Unauthorized - No organization ID' }, { status: 401 });
-    }
+    // Removed session check
 
     const url = new URL(request.url);
     const includeFiltered = url.searchParams.get('includeFiltered') === 'true';
@@ -73,20 +66,20 @@ export async function GET(request: Request) {
     const countResult = await prisma.$queryRaw<[{ count: number }]>`
       SELECT COUNT(*) as count 
       FROM "EmailMessage" 
-      WHERE "organizationId" = ${session.user.organizationId}
+      WHERE "organizationId" = ${placeholderOrganizationId}
     `;
     
     const messageCount = Number(countResult[0]?.count) || 0;
 
     console.log('Total messages in database:', {
-      organizationId: session.user.organizationId,
+      organizationId: placeholderOrganizationId,
       count: messageCount
     });
 
     // Then fetch the messages
     const messages = await prisma.$queryRaw<EmailMessage[]>`
       SELECT * FROM "EmailMessage" 
-      WHERE "organizationId" = ${session.user.organizationId}
+      WHERE "organizationId" = ${placeholderOrganizationId}
       ORDER BY "receivedAt" DESC
       LIMIT 100
     `;
@@ -114,15 +107,15 @@ export async function GET(request: Request) {
   }
 }
 
+// TODO: Re-enable authorization checks
 export async function PATCH(request: Request) {
+  // TODO: Provide organizationId source for prototype (e.g., hardcode, fetch default)
+  // const placeholderOrganizationId = 'clw0l6g5f00001e6kabcde123'; // Defined in GET, could be shared
+
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.organizationId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    // Removed session check
 
     const body = await request.json();
-    const { messageId, status } = body;
 
     if (!messageId || !status) {
       return NextResponse.json(

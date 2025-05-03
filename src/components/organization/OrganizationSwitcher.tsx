@@ -4,7 +4,7 @@ import { Fragment, useState, useEffect } from 'react';
 import { Menu, Transition } from '@headlessui/react';
 import { ChevronDownIcon } from '@heroicons/react/20/solid';
 import { cn } from '@/lib/utils';
-import { Building, Plus, LogOut, Search, LayoutDashboard } from 'lucide-react';
+import { Building, Plus, LogOut, Search, LayoutDashboard, ListTodo } from 'lucide-react'; // Added ListTodo
 import { toast } from 'sonner';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
@@ -17,19 +17,22 @@ interface OrganizationSwitcherProps {
   open?: boolean;
 }
 
+// Define ItemRenderPropArg, even if not explicitly used everywhere, for potential type consistency
 interface ItemRenderPropArg {
   active: boolean;
 }
 
+// Use type assertion as it seemed necessary for icons previously
 const ClientBuilding = Building as unknown as (props: any) => JSX.Element;
 const ClientPlus = Plus as unknown as (props: any) => JSX.Element;
 const ClientLogOut = LogOut as unknown as (props: any) => JSX.Element;
 const ClientChevronDown = ChevronDownIcon as unknown as (props: any) => JSX.Element;
 const ClientSearch = Search as unknown as (props: any) => JSX.Element;
 const ClientLayoutDashboard = LayoutDashboard as unknown as (props: any) => JSX.Element;
+const ClientListTodo = ListTodo as unknown as (props: any) => JSX.Element;
 
 export default function OrganizationSwitcher({ open = true }: OrganizationSwitcherProps): ReactElement {
-  const { 
+  const {
     organizations,
     currentOrganization,
     loading: isLoading,
@@ -55,13 +58,13 @@ export default function OrganizationSwitcher({ open = true }: OrganizationSwitch
       setFilteredOrgs([]);
       return;
     }
-    
+
     if (!searchQuery || !isAdmin) {
       setFilteredOrgs(organizations);
       return;
     }
 
-    const filtered = organizations.filter(org => 
+    const filtered = organizations.filter(org =>
       org.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
     setFilteredOrgs(filtered);
@@ -86,12 +89,12 @@ export default function OrganizationSwitcher({ open = true }: OrganizationSwitch
       {switching && (
         <LoadingOverlay message="Switching organization..." />
       )}
-      
+
       <Menu as="div" className="relative inline-block text-left w-full max-w-[250px]">
         {({ open: menuOpen }): JSX.Element => (
           <>
             <div>
-              <Menu.Button 
+              <Menu.Button
                 className={cn(
                   "inline-flex w-full items-center gap-x-2 rounded-xl bg-white px-3.5 py-2.5 text-[15px] font-medium text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 transition-all duration-200",
                   !open && "justify-center"
@@ -117,7 +120,7 @@ export default function OrganizationSwitcher({ open = true }: OrganizationSwitch
             </div>
 
             <Transition
-              as={Fragment}
+              as={Fragment} // Keep as Fragment for proper transition handling
               enter="transition ease-out duration-100"
               enterFrom="transform opacity-0 scale-95"
               enterTo="transform opacity-100 scale-100"
@@ -143,13 +146,13 @@ export default function OrganizationSwitcher({ open = true }: OrganizationSwitch
                     </div>
                   </div>
                 )}
-                
+
                 <div className="py-1 max-h-60 overflow-y-auto">
                   {isAdmin ? (
                     filteredOrgs.length > 0 ? (
                       filteredOrgs.map((org) => (
                         <Menu.Item key={org.id}>
-                          {({ active }) => (
+                          {({ active }) => ( // Use render prop consistently
                             <button
                               onClick={() => handleOrgSwitch(org.id)}
                               className={cn(
@@ -170,7 +173,7 @@ export default function OrganizationSwitcher({ open = true }: OrganizationSwitch
                   ) : (
                     organizations?.map((org) => (
                       <Menu.Item key={org.id}>
-                        {({ active }) => (
+                        {({ active }) => ( // Use render prop consistently
                           <button
                             onClick={() => handleOrgSwitch(org.id)}
                             className={cn(
@@ -189,7 +192,7 @@ export default function OrganizationSwitcher({ open = true }: OrganizationSwitch
                 <div className="py-1 border-t border-gray-100">
                   {isAdmin && (
                     <Menu.Item>
-                      {({ active }) => (
+                      {({ active }) => ( // Use render prop consistently
                         <button
                           onClick={() => setShowCreateModal(true)}
                           className={cn(
@@ -205,7 +208,7 @@ export default function OrganizationSwitcher({ open = true }: OrganizationSwitch
                   )}
                   {isAdmin && (
                     <Menu.Item>
-                      {({ active }) => (
+                      {({ active }) => ( // Use render prop consistently
                         <button
                           onClick={() => router.push('/admin')}
                           className={cn(
@@ -219,9 +222,25 @@ export default function OrganizationSwitcher({ open = true }: OrganizationSwitch
                       )}
                     </Menu.Item>
                   )}
+                  {isAdmin && ( // Add the new Follow-Up Queue item here
+                    <Menu.Item>
+                      {({ active }) => ( // Use render prop consistently
+                        <button
+                          onClick={() => router.push('/admin/follow-up-queue')}
+                          className={cn(
+                            active ? 'bg-gray-50 text-gray-900' : 'text-gray-700',
+                            'flex w-full items-center px-4 py-2.5 text-left text-[14px] font-medium tracking-[-0.1px]'
+                          )}
+                        >
+                          <ClientListTodo className="mr-2 h-4 w-4" aria-hidden="true" />
+                          Follow-Up Queue
+                        </button>
+                      )}
+                    </Menu.Item>
+                  )}
 
                   <Menu.Item>
-                    {({ active }) => (
+                    {({ active }) => ( // Use render prop consistently
                       <button
                         onClick={handleLogout}
                         className={cn(
@@ -271,4 +290,4 @@ export default function OrganizationSwitcher({ open = true }: OrganizationSwitch
       )}
     </>
   );
-} 
+}

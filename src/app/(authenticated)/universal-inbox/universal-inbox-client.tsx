@@ -15,10 +15,13 @@ import { toast } from 'sonner';
 import { updateMessageStatus } from '@/lib/server-actions';
 import { formatDateInCentralTime } from '@/lib/date-utils';
 import { getSession } from 'next-auth/react';
+// Import shared helpers (Removed LinkedInIcon import)
+import { isOurEmail, getLinkedInSenderName, getStatusColor, getStatusLabel } from '@/lib/message-utils';
+import { ConversationStatus, MessageSource } from '@prisma/client'; // Import enums
 
+// Define types locally (or import if available)
 type MessageType = 'REAL_REPLY' | 'BOUNCE' | 'AUTO_REPLY' | 'OUT_OF_OFFICE' | 'OTHER';
-type ConversationStatus = 'MEETING_BOOKED' | 'NOT_INTERESTED' | 'FOLLOW_UP_NEEDED' | 'NO_ACTION_NEEDED' | 'WAITING_FOR_REPLY';
-type MessageSource = 'EMAIL' | 'LINKEDIN';
+// ConversationStatus and MessageSource are imported from @prisma/client
 
 interface EmailMessage {
   id: string;
@@ -88,6 +91,7 @@ const daysSince = (date: Date): number => {
 };
 
 // Helper function to get status background color for the entire row
+// Keep this local as it's specific to the row styling here
 const getStatusRowStyle = (status: ConversationStatus, date?: Date, isFromUs?: boolean): string => {
   switch (status) {
     case 'MEETING_BOOKED':
@@ -95,7 +99,7 @@ const getStatusRowStyle = (status: ConversationStatus, date?: Date, isFromUs?: b
     case 'NOT_INTERESTED':
       return 'border-red-300 bg-red-50/30';
     case 'FOLLOW_UP_NEEDED':
-      return 'border-red-300 bg-red-50/30';
+      return 'border-red-300 bg-red-50/30'; // Keep red for consistency? Or use amber like queue? Using red for now.
     case 'NO_ACTION_NEEDED':
       return 'border-gray-300 bg-gray-50/30';
     case 'WAITING_FOR_REPLY':
@@ -105,89 +109,24 @@ const getStatusRowStyle = (status: ConversationStatus, date?: Date, isFromUs?: b
   }
 };
 
-// Helper function to get status color for the badge
-const getStatusColor = (status: ConversationStatus, date?: Date, isFromUs?: boolean): string => {
-  switch (status) {
-    case 'MEETING_BOOKED':
-      return 'bg-green-100 text-green-800';
-    case 'NOT_INTERESTED':
-      return 'bg-red-100 text-red-800';
-    case 'FOLLOW_UP_NEEDED':
-      return 'bg-red-100 text-red-800';
-    case 'NO_ACTION_NEEDED':
-      return 'bg-gray-100 text-gray-800';
-    case 'WAITING_FOR_REPLY':
-      return 'bg-blue-100 text-blue-800';
-    default:
-      return 'bg-gray-100 text-gray-800';
-  }
-};
-
-// Helper function to get a human-readable status label
-const getStatusLabel = (status: ConversationStatus, date?: Date, isFromUs?: boolean): string => {
-  switch (status) {
-    case 'MEETING_BOOKED':
-      return 'Meeting Booked';
-    case 'NOT_INTERESTED':
-      return 'Not Interested';
-    case 'FOLLOW_UP_NEEDED':
-      return 'Follow Up Needed';
-    case 'NO_ACTION_NEEDED':
-      return 'No Action Needed';
-    case 'WAITING_FOR_REPLY':
-      return 'Waiting for Reply';
-    default:
-      return 'Unknown Status';
-  }
-};
+// getStatusColor, getStatusLabel, getLinkedInSenderName are now imported from message-utils
+// LinkedInIcon was removed from utils
 
 // Helper for displaying message icons based on source
 const getMessageIcon = (message: EmailMessage) => {
   if (message.messageSource === 'LINKEDIN') {
-    return <LinkedInIcon className="h-5 w-5 text-blue-600" />;
+    // Replace LinkedInIcon with text or another icon
+    return <span className="text-blue-600 font-bold text-xs mr-1">(LI)</span>; // Placeholder text
   }
   return <MessageIcon className="h-5 w-5 text-slate-500" />;
 };
 
-// Add LinkedIn icon component
-const LinkedInIcon: React.FC<LucideProps> = (props) => {
-  return (
-    <svg 
-      xmlns="http://www.w3.org/2000/svg" 
-      width="24" 
-      height="24" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
-      strokeLinejoin="round" 
-      {...props}
-    >
-      <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path>
-      <rect x="2" y="9" width="4" height="12"></rect>
-      <circle cx="4" cy="4" r="2"></circle>
-    </svg>
-  );
-};
-
-// First, add a helper function to determine if a thread is a LinkedIn thread
+// Helper function to determine if a thread is a LinkedIn thread
 const isLinkedInThread = (messages: EmailMessage[]): boolean => {
   return messages.some(msg => msg.messageSource === 'LINKEDIN');
 };
 
-// First, add a helper function to get LinkedIn sender names
-// Add this near other helper functions at the top of the file
-
-// Helper function to get LinkedIn sender name from ID
-const getLinkedInSenderName = (senderId: string, message: EmailMessage, socialAccounts: SocialAccount[]): string => {
-  // Simply return the sender name directly from the database
-  // This is the value set when the message was created/received
-  return message.sender;
-};
-
-// Helper function to format date in Central Time
-const formatStoredDate = formatDateInCentralTime;
+// formatStoredDate alias removed, use formatDateInCentralTime directly
 
 export function UniversalInboxClient() {
   const [selectedThread, setSelectedThread] = useState<string | null>(null);
@@ -365,10 +304,11 @@ export function UniversalInboxClient() {
   const backToList = useCallback(() => {
     setViewMode('list');
     setSelectedThread(null); // Also clear selection when going back
-  }, []); // No dependencies needed if setViewMode/setSelectedThread are stable
+  }, []);
 
   // Memoize filtering based on search
   const filteredSortedThreadIds = useMemo(() => {
+    // Use imported getThreadStatus which now relies on imported helpers
     return sortedThreadIds.filter(threadId => {
       // Status filter
       if (statusFilter !== 'ALL' && getThreadStatus(threadId) !== statusFilter) {
@@ -502,17 +442,10 @@ export function UniversalInboxClient() {
     fetchData();
   }, []);
 
-  // Helper function to check if a message is from us
-  const isOurEmail = (sender: string, message?: EmailMessage) => {
-    // For LinkedIn messages, check against social account names
-    if (message?.messageSource === 'LINKEDIN') {
-      return socialAccounts.some(account => account.name === sender);
-    }
-    // For email messages, check against email accounts
-    return emailAccounts.some(account => account.email === sender);
-  };
+  // Remove local isOurEmail helper, use imported one
+  // const isOurEmail = ... (removed)
 
-  // Helper function to find the other participant in a thread
+  // Helper function to find the other participant in a thread (uses imported isOurEmail)
   const findOtherParticipant = (messages: EmailMessage[]) => {
     // Sort messages by date (oldest first) to find the original conversation
     const sortedMessages = [...messages].sort(
@@ -521,13 +454,15 @@ export function UniversalInboxClient() {
 
     // First try to find the original recipient if we started the thread
     const firstMessage = sortedMessages[0];
-    if (isOurEmail(firstMessage.sender, firstMessage)) {
+    // Use imported isOurEmail
+    if (isOurEmail(firstMessage.sender, firstMessage, emailAccounts, socialAccounts)) {
       return firstMessage.recipientEmail;
     }
 
     // Otherwise, use the first sender who isn't us
     const externalParticipant = sortedMessages.find(
-      msg => !isOurEmail(msg.sender, msg)
+      // Use imported isOurEmail
+      msg => !isOurEmail(msg.sender, msg, emailAccounts, socialAccounts)
     );
     if (externalParticipant) {
       return externalParticipant.sender;
@@ -985,16 +920,16 @@ export function UniversalInboxClient() {
                         return msgDate.getTime() > latestDate.getTime() ? msg : latest;
                       }, messages[0]);
                       
-                      const isLatestFromUs = isOurEmail(latestMessage.sender, latestMessage);
+                      const isLatestFromUs = isOurEmail(latestMessage.sender, latestMessage, emailAccounts, socialAccounts); // Use imported helper
                       const needsResponse = !isLatestFromUs && !latestMessage.isRead;
                       const isLinkedIn = latestMessage.messageSource === 'LINKEDIN';
 
                       // Use the helper function to get the thread status
                       const status = getThreadStatus(threadId);
-                      
-                      const statusColor = getStatusColor(status, new Date(latestMessage.receivedAt), isLatestFromUs);
-                      const rowStyle = getStatusRowStyle(status, new Date(latestMessage.receivedAt), isLatestFromUs);
-                      
+
+                      const statusColor = getStatusColor(status); // Use imported helper (remove unused args)
+                      const rowStyle = getStatusRowStyle(status, new Date(latestMessage.receivedAt), isLatestFromUs); // Keep local row style helper
+
                       return (
                         <button
                           key={threadId}
@@ -1010,16 +945,17 @@ export function UniversalInboxClient() {
                             {/* Sender & Date */}
                             <div className="col-span-3">
                               <div className="font-medium text-slate-900 truncate flex items-center gap-1">
-                                {isLinkedIn && <LinkedInIcon className="h-4 w-4 text-blue-600" />}
-                                {isLinkedIn 
-                                  ? getLinkedInSenderName(latestMessage.sender, latestMessage, socialAccounts)
+                                {/* Replace LinkedInIcon usage */}
+                                {isLinkedIn && <span className="text-xs font-normal text-blue-600 mr-1">(LI)</span>}
+                                {isLinkedIn
+                                  ? getLinkedInSenderName(latestMessage.sender, latestMessage, socialAccounts) // Use imported helper
                                   : findOtherParticipant(messages)}
                               </div>
                               <div className="text-xs text-slate-500 mt-1">
-                                {formatStoredDate(latestMessage.receivedAt)}
+                                {formatDateInCentralTime(latestMessage.receivedAt)} {/* Use imported function */}
                               </div>
                             </div>
-                            
+
                             {/* Subject & Preview */}
                             <div className="col-span-7">
                               <div className="font-medium text-slate-800 truncate">
@@ -1035,12 +971,12 @@ export function UniversalInboxClient() {
                             <div className="col-span-2 flex flex-col items-end justify-center">
                               <span className={cn(
                                 "px-2 py-0.5 rounded-full text-xs font-medium mb-1",
-                                statusColor
+                                statusColor // Use result from imported helper
                               )}>
-                                {getStatusLabel(status, new Date(latestMessage.receivedAt), isLatestFromUs)}
+                                {getStatusLabel(status)} {/* Use imported helper */}
                               </span>
-                              
-                              {status === 'FOLLOW_UP_NEEDED' && isLatestFromUs && daysSince(new Date(latestMessage.receivedAt)) > 0 && (
+
+                              {status === 'FOLLOW_UP_NEEDED' && isLatestFromUs && daysSince(new Date(latestMessage.receivedAt)) > 0 && ( // daysSince remains local
                                 <span className={cn(
                                   "px-1.5 py-0.5 rounded text-xs font-medium",
                                   daysSince(new Date(latestMessage.receivedAt)) < 3 ? "bg-blue-100 text-blue-800" : "bg-red-200 text-red-900"
@@ -1279,7 +1215,7 @@ export function UniversalInboxClient() {
                         return aDate.getTime() - bDate.getTime();
                       })
                       .map((message, index, array) => {
-                        const isFromUs = isOurEmail(message.sender, message);
+                        const isFromUs = isOurEmail(message.sender, message, emailAccounts, socialAccounts); // Use imported helper
                         const isLastMessage = index === array.length - 1;
                         const isLatestMessage = index === array.length - 1;
                         const isLinkedIn = message.messageSource === 'LINKEDIN';
@@ -1299,12 +1235,14 @@ export function UniversalInboxClient() {
                             <div className="flex justify-between items-start mb-4">
                               <div className="min-w-0 max-w-[70%]">
                                 <p className="font-medium text-slate-900 flex items-center gap-1 truncate overflow-hidden text-ellipsis">
-                                  {isLinkedIn && <LinkedInIcon className="h-4 w-4 text-blue-600 flex-shrink-0" />}
+                                  {/* Replace LinkedInIcon usage */}
+                                  {isLinkedIn && <span className="text-xs font-normal text-blue-600 mr-1">(LI)</span>}
                                   <span className="truncate">
-                                  {isLinkedIn 
-                                    ? getLinkedInSenderName(message.sender, message, socialAccounts)
+                                  {isLinkedIn
+                                    ? getLinkedInSenderName(message.sender, message, socialAccounts) // Use imported helper
                                     : message.sender}
                                   </span>
+                                   {isFromUs && <span className="text-xs text-blue-600 font-normal ml-1">(You)</span>} {/* Added (You) indicator */}
                                 </p>
                                 {/* Add console log for debugging */}
                                 {(() => {
@@ -1383,7 +1321,7 @@ export function UniversalInboxClient() {
                               </div>
                               <div className="flex items-center gap-2 flex-shrink-0">
                                 <div className="text-sm text-slate-500">
-                                  {formatStoredDate(message.receivedAt)}
+                                  {formatDateInCentralTime(message.receivedAt)} {/* Use imported function */}
                                 </div>
                                 {isLinkedIn && isLatestMessage && (
                                   <div></div>

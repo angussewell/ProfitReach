@@ -21,6 +21,8 @@ import { getStatusColor, getStatusLabel } from '@/lib/email/utils'; // Corrected
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AISuggestionPanel } from '@/components/shared/AISuggestionPanel'; // Import the new component
 
+// Removed LatestMessageRecipient interface
+
 // Interface for queue items from API
 interface FollowUpQueueItem {
   id: string; 
@@ -113,7 +115,9 @@ export default function AdminFollowUpQueuePage() {
   const [selectedFromEmail, setSelectedFromEmail] = useState<string>('');
   const [selectedSocialAccount, setSelectedSocialAccount] = useState<string>('');
   const [replyLoading, setReplyLoading] = useState<boolean>(false);
-  const userSelectedEmailRef = useRef<boolean>(false);
+  const userSelectedEmailRef = useRef<boolean>(false); // Tracks if user manually selected 'From'
+  const [latestMessageRecipients, setLatestMessageRecipients] = useState<string[] | null>(null); // State for recipient list (now string[])
+  const [selectedRecipientEmail, setSelectedRecipientEmail] = useState<string>(''); // State for selected 'To' recipient
   const replyCardRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -178,6 +182,8 @@ export default function AdminFollowUpQueuePage() {
     
     setIsThreadLoading(true);
     setCurrentThreadMessages(null);
+    setLatestMessageRecipients(null); // Reset recipients on new fetch
+    setSelectedRecipientEmail(''); // Reset selected recipient
     
     try {
       const response = await fetch(`/api/messages/thread/${threadId}`);
@@ -186,15 +192,32 @@ export default function AdminFollowUpQueuePage() {
         toast.error(errorData.error || `API Error (Thread ${response.status})`);
         throw new Error(errorData.error || `API Error fetching thread: ${response.status}`);
       }
-      const threadData: FullEmailMessage[] = await response.json();
-      setCurrentThreadMessages(threadData);
+      // Expecting { messages: FullEmailMessage[], latestMessageRecipients: string[] }
+      const { messages: threadData, latestMessageRecipients: recipientsData } = await response.json();
+      
+      setCurrentThreadMessages(threadData || []); // Ensure messages is an array
+      setLatestMessageRecipients(recipientsData || []); // Ensure recipients is string[]
+
+      // Set default selected recipient to the sender of the latest message
+      if (threadData && threadData.length > 0) {
+        // Sort again client-side just to be absolutely sure of the latest message
+        const latestMsg = [...threadData].sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime())[0];
+        setSelectedRecipientEmail(latestMsg.sender); 
+        console.log(`[FollowUpQueue] Default recipient set to: ${latestMsg.sender}`);
+      } else {
+        setSelectedRecipientEmail(''); // Clear if no messages
+        console.log('[FollowUpQueue] No messages found, clearing default recipient.');
+      }
+
     } catch (error) {
       console.error(`Error fetching thread details for ${threadId}:`, error);
       toast.error('Failed to load thread details');
+      setCurrentThreadMessages(null); // Ensure messages are cleared on error
+      setLatestMessageRecipients(null); // Ensure recipients are cleared on error
     } finally {
       setIsThreadLoading(false);
     }
-  }, []);
+  }, []); // Dependencies remain empty as it relies on threadId argument
 
   // Fetch initial data on mount
   useEffect(() => {
@@ -433,13 +456,20 @@ export default function AdminFollowUpQueuePage() {
 
   // Handle sending a reply
   const handleReply = async () => {
+    // Add check for currentThreadMessages early
     if (!currentThreadId || !currentThreadMessages || currentThreadMessages.length === 0 || !replyContent.trim() || replyLoading) return;
     
     const isLinkedIn = currentThreadMessages.some(msg => msg.messageSource === 'LINKEDIN');
     
+    // Validation checks
     if ((isLinkedIn && !selectedSocialAccount) || (!isLinkedIn && !selectedFromEmail)) {
       toast.error(`Please select ${isLinkedIn ? 'a LinkedIn' : 'an email'} account to reply from.`);
       return;
+    }
+    // Add check for selected recipient for non-LinkedIn messages
+    if (!isLinkedIn && !selectedRecipientEmail) { 
+       toast.error('Please select a recipient to send the reply to.');
+       return;
     }
     
     setReplyLoading(true);
@@ -449,7 +479,8 @@ export default function AdminFollowUpQueuePage() {
         new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime()
       )[0];
       
-      const toAddress = latestMessage.sender;
+      // Use the selected recipient email state for non-LinkedIn messages
+      const toAddress = isLinkedIn ? latestMessage.sender : selectedRecipientEmail; 
       let fromEmailForApi = '';
       let socialAccountIdForApi: string | undefined = undefined;
       
@@ -730,17 +761,37 @@ export default function AdminFollowUpQueuePage() {
                         )}
                       </div>
                       
-                      {/* To Display */}
+                      {/* To Select (Recipient Picker) */}
                       <div>
-                        <label className="block text-xs font-medium text-slate-600 mb-1">To</label>
-                        <div className="text-sm text-slate-900 border border-slate-300 rounded-md p-2 bg-white/50 h-[40px] flex items-center">
-                          {currentThreadMessages.length > 0 
-                            ? currentThreadMessages.sort((a, b) => 
-                                new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime()
-                              )[0].sender 
-                            : ''
-                          }
-                        </div>
+                        <label htmlFor="recipientSelect" className="block text-xs font-medium text-slate-600 mb-1">Send to</label>
+                        <Select
+                          value={selectedRecipientEmail}
+                          onValueChange={setSelectedRecipientEmail}
+                          // Disable if loading, no recipients, or if it's a LinkedIn message (no recipient choice there)
+                          disabled={isThreadLoading || !latestMessageRecipients || latestMessageRecipients.length === 0 || (currentThreadMessages && isLinkedInMessage(currentThreadMessages[0]))}
+                        >
+                          <SelectTrigger id="recipientSelect" className="w-full bg-white">
+                            <SelectValue placeholder="Select recipient..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {/* Map directly over the string array */}
+                            {latestMessageRecipients?.map((email) => (
+                              <SelectItem key={email} value={email}>
+                                {email}
+                                {/* Removed recipientType display logic */}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {/* Show a disabled input for LinkedIn */}
+                        {currentThreadMessages && isLinkedInMessage(currentThreadMessages[0]) && (
+                           <div className="mt-1 text-sm text-slate-500 border border-slate-200 rounded-md p-2 bg-slate-100/50 h-[40px] flex items-center">
+                             {currentThreadMessages.length > 0 
+                               ? currentThreadMessages.sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime())[0].sender 
+                               : ''
+                             } (LinkedIn - cannot change)
+                           </div>
+                        )}
                       </div>
                       
                       {/* Textarea */}
@@ -770,7 +821,12 @@ export default function AdminFollowUpQueuePage() {
                         <ClientButton 
                           size="sm" 
                           onClick={handleReply} 
-                          disabled={!replyContent.trim() || replyLoading || (isLinkedInMessage(currentThreadMessages[0]) ? !selectedSocialAccount : !selectedFromEmail)}
+                          // Update disabled check to include selectedRecipientEmail for non-LinkedIn
+                          disabled={
+                            !replyContent.trim() || 
+                            replyLoading || 
+                            (isLinkedInMessage(currentThreadMessages?.[0]) ? !selectedSocialAccount : (!selectedFromEmail || !selectedRecipientEmail))
+                          }
                           className="flex items-center gap-2"
                         >
                           {replyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
