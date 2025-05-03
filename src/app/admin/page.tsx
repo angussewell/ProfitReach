@@ -63,6 +63,7 @@ interface OverallStats {
   meetingsBooked: number;
   activeScenarios: number;
   emailsSent?: number; // Added optional emailsSent
+  responseNeededCount?: number; // Added optional responseNeededCount
 }
 
 interface OrgStatsData {
@@ -72,6 +73,7 @@ interface OrgStatsData {
   meetingsBooked: number;
   activeScenarios: number;
   emailsSent?: number; // Added optional emailsSent
+  responseNeededCount?: number; // Added optional responseNeededCount
   bookingRate?: number;
   replyToBookingRate?: number;
 }
@@ -1112,6 +1114,7 @@ export default function AdminPanelPage() {
                       <TableHead className="w-[250px] text-slate-700 pl-4">Organization</TableHead>
                       <TableHead className="text-right text-slate-700">Total Replies</TableHead>
                       <TableHead className="text-right text-slate-700">Reply Rate (%)</TableHead>
+                      <TableHead className="text-right text-slate-700">Response Needed</TableHead> {/* Added */}
                       <TableHead className="text-right text-slate-700 pr-4">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1122,6 +1125,7 @@ export default function AdminPanelPage() {
                           <TableCell className="pl-4"><Skeleton className="h-5 w-3/4" /></TableCell>
                           <TableCell className="text-right"><Skeleton className="h-5 w-12 inline-block" /></TableCell>
                           <TableCell className="text-right"><Skeleton className="h-5 w-12 inline-block" /></TableCell>
+                          <TableCell className="text-right"><Skeleton className="h-5 w-12 inline-block" /></TableCell> {/* Added Skeleton */}
                           <TableCell className="text-right pr-4"><Skeleton className="h-8 w-20 inline-block" /></TableCell>
                         </TableRow>
                       ))
@@ -1138,6 +1142,7 @@ export default function AdminPanelPage() {
                               ? `${org.stats.replyRate.toFixed(1)}%`
                               : '--'}
                           </TableCell>
+                          <TableCell className="text-right py-3 text-slate-700">{org.stats?.responseNeededCount ?? '--'}</TableCell> {/* Added */}
                           <TableCell className="text-right py-3 pr-4">
                             <Button
                               variant="outline"
@@ -1152,7 +1157,7 @@ export default function AdminPanelPage() {
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={4} className="h-24 text-center text-muted-foreground bg-slate-50/30 border-b border-slate-100">
+                        <TableCell colSpan={5} className="h-24 text-center text-muted-foreground bg-slate-50/30 border-b border-slate-100"> {/* Updated colSpan */}
                           No organization data available for the selected period.
                         </TableCell>
                       </TableRow>
