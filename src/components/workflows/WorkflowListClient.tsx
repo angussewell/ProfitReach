@@ -32,8 +32,8 @@ import {
 import { Pencil, MoreVertical, Trash, Copy } from 'lucide-react'; // Added Copy icon
 import Link from 'next/link';
 import { toast } from 'sonner';
-// Assuming a generic duplicate dialog exists or we adapt Scenario one
-import { DuplicateScenarioDialog } from '@/components/scenarios/DuplicateScenarioDialog'; // Adapt this path/component if needed
+// Import the new DuplicateWorkflowDialog
+import { DuplicateWorkflowDialog } from '@/components/workflows/DuplicateWorkflowDialog'; // Corrected import path
 
 // Define the type for the workflow data passed as props
 // This should match the type defined in the page component (including statusCounts)
@@ -400,17 +400,15 @@ export default function WorkflowListClient({ initialWorkflows }: WorkflowListCli
         </TableBody>
       </Table>
 
-      {/* Conditionally render the Duplicate Modal */}
+      {/* Conditionally render the new Duplicate Workflow Modal */}
       {isDuplicateModalOpen && currentWorkflowToDuplicate && (
-        <DuplicateScenarioDialog // Use the actual generic/adapted dialog component
+        <DuplicateWorkflowDialog // Use the new workflow-specific dialog
           isOpen={isDuplicateModalOpen}
           onClose={() => setIsDuplicateModalOpen(false)}
-          // Pass workflow data mapped to the 'scenario' prop structure
-          scenario={{ id: currentWorkflowToDuplicate.workflowId, name: currentWorkflowToDuplicate.name }}
-          // The DuplicateScenarioDialog needs modification or replacement to handle different entity types/endpoints
-          // For now, this will pass the correct ID/Name, but the API call inside the dialog might be wrong.
-          // We will address the dialog's internal logic if needed in a later step.
-          refreshScenarios={refreshWorkflows} // Assuming this prop triggers refresh
+          // Pass the workflow data directly to the 'workflow' prop
+          workflow={currentWorkflowToDuplicate}
+          // Pass the correct refresh function
+          refreshWorkflows={refreshWorkflows}
         />
       )}
     </div>

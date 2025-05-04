@@ -7,7 +7,7 @@ export type ActionType =
   | 'update_field'
   | 'clear_field'
   | 'webhook'
-  | 'branch' // Added branch back
+  // | 'branch' // Removed branch action type
   | 'remove_from_workflow'
   | 'scenario';
 
@@ -38,16 +38,16 @@ export interface WebhookConfig {
   method: 'POST'; // Only POST method is supported
 }
 
-// Added BranchConfig back based on usage in WorkflowStepCard
-export interface BranchPath {
-  weight: number;
-  nextStepId: string; // Assuming this refers to the clientId of the next step
-}
-
-export interface BranchConfig {
-  type: 'percentage_split'; // Assuming only percentage split for now
-  paths: BranchPath[];
-}
+// BranchConfig removed as 'branch' action type is removed
+// export interface BranchPath {
+//   weight: number;
+//   nextStepId: string; // Assuming this refers to the clientId of the next step
+// }
+//
+// export interface BranchConfig {
+//   type: 'percentage_split'; // Assuming only percentage split for now
+//   paths: BranchPath[];
+// }
 
 export interface RemoveFromWorkflowConfig {
   // No specific config needed
@@ -66,7 +66,7 @@ export type StepConfig =
   | UpdateFieldConfig
   | ClearFieldConfig
   | WebhookConfig
-  | BranchConfig // Added BranchConfig back
+  // | BranchConfig // Removed BranchConfig reference
   | RemoveFromWorkflowConfig
   | ScenarioConfig;
 
