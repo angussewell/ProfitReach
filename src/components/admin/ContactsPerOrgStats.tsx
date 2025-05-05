@@ -5,6 +5,7 @@ interface OrgContactStat {
   organization_name: string;
   total_contacts: number;
   available_contacts: number;
+  uncontacted_contacts: number; // Added new metric
   // Future metrics would be added here
   // future_metric_1?: number;
   // future_metric_2?: number;
@@ -33,23 +34,25 @@ export async function ContactsPerOrgStats() {
                   notIn: ['NOT_FOUND', 'unsafe', 'email_disabled'],
                 },
               },
-            },
-          },
-        },
-        // Available contacts (same email criteria plus date criteria)
+            }, // End of Contacts count object
+          }, // End of _count.select
+        }, // End of _count object
+        // Fetch relevant contact details for client-side filtering
         Contacts: {
           where: {
+            // Base filter: must have an email
             email: { not: null },
-            emailStatus: {
-              notIn: ['NOT_FOUND', 'unsafe', 'email_disabled'],
-            },
-            OR: [
-              { dateOfResearch: null },
-              { dateOfResearch: { lt: twoMonthsAgo } }
-            ]
+            // Exclude universally bad statuses relevant to Total Contacts count
+             emailStatus: {
+               notIn: ['NOT_FOUND', 'unsafe', 'email_disabled'],
+             },
           },
           select: {
+            // Fields needed for Available and Uncontacted filtering
             id: true,
+            emailStatus: true,
+            dateOfResearch: true,
+            previousMessageCopy: true,
           }
         }
       },
@@ -59,11 +62,29 @@ export async function ContactsPerOrgStats() {
     });
 
     // Map Prisma result to the component's expected format
-    data = organizationsWithCounts.map((org) => ({
-      organization_name: org.name,
-      total_contacts: org._count.Contacts, // Access count via capitalized name
-      available_contacts: org.Contacts.length, // Count available contacts
-    }));
+    // Map Prisma result and perform client-side filtering for counts
+    data = organizationsWithCounts.map((org) => {
+      const allRelevantContacts = org.Contacts; // Contacts matching base criteria
+
+      // Filter for Available Contacts
+      const availableContacts = allRelevantContacts.filter(contact => 
+        !['NOT_FOUND', 'unsafe', 'email_disabled'].includes(contact.emailStatus ?? '') && // Redundant check based on where clause, but safe
+        (contact.dateOfResearch === null || contact.dateOfResearch < twoMonthsAgo)
+      ).length;
+
+      // Filter for Uncontacted Contacts
+      const uncontactedContacts = allRelevantContacts.filter(contact =>
+        !['email_disabled', 'dead_server', 'invalid_mx', 'spamtrap'].includes(contact.emailStatus ?? '') &&
+        (contact.previousMessageCopy === null || contact.previousMessageCopy === '')
+      ).length;
+
+      return {
+        organization_name: org.name,
+        total_contacts: org._count.Contacts, // Use the direct count from Prisma
+        available_contacts: availableContacts, // Use client-filtered count
+        uncontacted_contacts: uncontactedContacts, // Use client-filtered count
+      };
+    });
 
   } catch (error) {
     console.error("Error fetching contacts per organization stats with Prisma:", error);
@@ -89,6 +110,13 @@ export async function ContactsPerOrgStats() {
                   <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-slate-600 uppercase tracking-wider whitespace-nowrap">
                     Available Contacts
                   </th>
+                  <th 
+                    scope="col" 
+                    className="px-4 py-3 text-right text-xs font-medium text-slate-600 uppercase tracking-wider whitespace-nowrap"
+                    title="Contacts with email, not disabled/dead/invalid/spamtrap status, and no previous message sent."
+                  >
+                    Uncontacted Contacts
+                  </th>
                   {/* Placeholder for future metrics */}
                   {/* 
                   <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-slate-600 uppercase tracking-wider whitespace-nowrap">
@@ -111,6 +139,9 @@ export async function ContactsPerOrgStats() {
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-medium text-slate-900">
                       {org.available_contacts}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-medium text-slate-900">
+                      {org.uncontacted_contacts}
                     </td>
                     {/* Placeholder for future metrics */}
                     {/* 
