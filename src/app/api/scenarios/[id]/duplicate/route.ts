@@ -63,25 +63,30 @@ export async function POST(
             return NextResponse.json({ error: 'Valid Scenario ID parameter is required' }, { status: 400 });
         }
 
-        // 2. Parse Request Body (Optional newName and targetOrgId)
+        // 2. Parse Request Body (Optional newName and targetOrganizationId)
         let newName: string | undefined;
         let targetOrgIdFromBody: string | undefined;
         try {
-            // Allow empty body or body without specific keys
-            const textBody = await req.text();
-            const body = textBody ? JSON.parse(textBody) : {};
+            // Use req.json() for robust parsing
+            const body = await req.json();
             newName = body.newName;
-            targetOrgIdFromBody = body.targetOrgId;
+            // Ensure we are reading the correct property name sent by the frontend
+            targetOrgIdFromBody = body.targetOrganizationId; // Corrected property name to match frontend
 
+            // Validation remains the same
             if (newName !== undefined && typeof newName !== 'string') {
                  return NextResponse.json({ error: 'If provided, newName must be a string' }, { status: 400 });
             }
+             // Validate the correct variable name
              if (targetOrgIdFromBody !== undefined && typeof targetOrgIdFromBody !== 'string') {
-                 return NextResponse.json({ error: 'If provided, targetOrgId must be a string' }, { status: 400 });
+                 return NextResponse.json({ error: 'If provided, targetOrganizationId must be a string' }, { status: 400 });
             }
 
         } catch (error) {
-            return NextResponse.json({ error: 'Invalid JSON request body' }, { status: 400 });
+             // Handle cases where body is not valid JSON or req.json() fails
+            console.error("Error parsing request body:", error);
+            // Assuming a body with targetOrganizationId is expected when duplicating cross-org.
+             return NextResponse.json({ error: 'Invalid JSON request body or missing expected fields' }, { status: 400 });
         }
 
         // 3. Fetch Original Scenario data needed for copy
