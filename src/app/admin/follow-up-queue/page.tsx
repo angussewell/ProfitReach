@@ -106,8 +106,9 @@ export default function AdminFollowUpQueuePage() {
   const [isThreadLoading, setIsThreadLoading] = useState<boolean>(false);
 
   // Account info
-  const [emailAccounts, setEmailAccounts] = useState<EmailAccount[]>([]);
+  const [emailAccounts, setEmailAccounts] = useState<EmailAccount[]>([]); // General list, potentially for other uses or initial load
   const [socialAccounts, setSocialAccounts] = useState<SocialAccount[]>([]);
+  const [replyEmailAccounts, setReplyEmailAccounts] = useState<EmailAccount[]>([]); // Specific list for the reply dropdown
 
   // State for reply functionality
   const [isReplying, setIsReplying] = useState<boolean>(false);
@@ -194,12 +195,40 @@ export default function AdminFollowUpQueuePage() {
       }
       // Expecting { messages: FullEmailMessage[], latestMessageRecipients: string[] }
       const { messages: threadData, latestMessageRecipients: recipientsData } = await response.json();
-      
-      setCurrentThreadMessages(threadData || []); // Ensure messages is an array
-      setLatestMessageRecipients(recipientsData || []); // Ensure recipients is string[]
+
+      const validThreadData = Array.isArray(threadData) ? threadData : [];
+      setCurrentThreadMessages(validThreadData); 
+      setLatestMessageRecipients(recipientsData || []); 
+
+      // Fetch relevant email accounts for the reply dropdown based on this thread's org
+      setReplyEmailAccounts([]); // Clear previous reply accounts
+      const threadOrganizationId = validThreadData[0]?.organizationId;
+
+      if (threadOrganizationId) {
+        console.log(`[FollowUpQueue] Fetching reply email accounts for org: ${threadOrganizationId}`);
+        try {
+          const replyAccountsResponse = await fetch(`/api/email-accounts?targetOrganizationId=${threadOrganizationId}`);
+          if (!replyAccountsResponse.ok) {
+            console.error(`API Error fetching reply accounts for org ${threadOrganizationId}: ${replyAccountsResponse.status}`);
+            toast.error('Failed to load "From" accounts for this thread.');
+            // Optionally fallback to general accounts or leave empty? Leaving empty for now.
+          } else {
+            const replyAccountsData: EmailAccount[] = await replyAccountsResponse.json();
+            setReplyEmailAccounts(replyAccountsData);
+            console.log(`[FollowUpQueue] Successfully fetched ${replyAccountsData.length} reply accounts for org ${threadOrganizationId}`);
+          }
+        } catch (accError) {
+           console.error(`Error fetching reply email accounts for org ${threadOrganizationId}:`, accError);
+           toast.error('Error loading "From" accounts.');
+        }
+      } else {
+         console.warn('[FollowUpQueue] Could not determine organizationId from thread data to fetch reply accounts.');
+         // Decide fallback behavior - maybe use session accounts? For now, it remains empty.
+      }
+
 
       // Set default selected recipient to the sender of the latest message
-      if (threadData && threadData.length > 0) {
+      if (validThreadData.length > 0) {
         // Sort again client-side just to be absolutely sure of the latest message
         const latestMsg = [...threadData].sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime())[0];
         setSelectedRecipientEmail(latestMsg.sender); 
@@ -254,37 +283,36 @@ export default function AdminFollowUpQueuePage() {
     // }
   }, [currentThreadId]); // Dependency: run when the thread ID changes
 
-  // Effect to auto-select 'From' account when reply opens
+  // Effect to auto-select 'From' account when reply opens (using replyEmailAccounts)
   useEffect(() => {
-    // Only run when reply section opens AND user hasn't manually selected
-    if (isReplying && currentThreadMessages && currentThreadMessages.length > 0 && !userSelectedEmailRef.current) {
+    // Only run when reply section opens AND user hasn't manually selected AND reply accounts are loaded
+    if (isReplying && currentThreadMessages && currentThreadMessages.length > 0 && !userSelectedEmailRef.current && replyEmailAccounts.length > 0) {
       const latestMessage = currentThreadMessages.sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime())[0];
-      
-      // Handle Email auto-selection
+
+      // Handle Email auto-selection using replyEmailAccounts
       if (!isLinkedInMessage(latestMessage)) {
-        const initialFromAccount = emailAccounts.find(a => a.id === latestMessage.emailAccountId) ?? 
-                                   emailAccounts.find(a => a.email === latestMessage.sender) ?? 
-                                   null;
-        
+        // Prioritize matching by emailAccountId from the message, then by sender email
+        const initialFromAccount = replyEmailAccounts.find(a => a.id === latestMessage.emailAccountId) ??
+                                   replyEmailAccounts.find(a => a.email === latestMessage.sender) ??
+                                   null; // Allow null if no match found in the specific org accounts
+
         if (initialFromAccount) {
-          console.log('[FollowUpQueue] Auto-selecting From email:', initialFromAccount.email);
+          console.log('[FollowUpQueue] Auto-selecting From email (using reply accounts):', initialFromAccount.email);
           setSelectedFromEmail(initialFromAccount.email);
         } else {
-          console.log('[FollowUpQueue] No matching From email found for auto-selection.');
-          setSelectedFromEmail(''); // Ensure it's blank if no match
+          console.log('[FollowUpQueue] No matching From email found in reply accounts for auto-selection.');
+          setSelectedFromEmail(''); // Ensure it's blank if no match within the specific org accounts
         }
-      } 
-      // LinkedIn selection might already be handled or needs similar logic if not
-      // For now, focusing on email as per requirement.
-      
+      }
+      // LinkedIn auto-selection logic (if needed) would go here, potentially using socialAccounts state
+      // else { ... handle LinkedIn ... }
+
     } else if (!isReplying) {
       // Reset the flag when the reply section closes
       userSelectedEmailRef.current = false;
-      // Optionally reset selected emails/accounts here too if desired
-      // setSelectedFromEmail('');
-      // setSelectedSocialAccount('');
     }
-  }, [isReplying, currentThreadMessages, emailAccounts, socialAccounts]); // Add dependencies
+    // Depend on replyEmailAccounts now for email auto-selection
+  }, [isReplying, currentThreadMessages, replyEmailAccounts, socialAccounts]); 
 
   // Helper to check if message is LinkedIn
   const isLinkedInMessage = (message: FollowUpQueueItem | FullEmailMessage | null): boolean => {
@@ -749,8 +777,9 @@ export default function AdminFollowUpQueuePage() {
                               <SelectValue placeholder="Select email account..." />
                             </SelectTrigger>
                             <SelectContent>
-                              {emailAccounts
-                                .filter(acc => !acc.isHidden)
+                              {/* Use replyEmailAccounts for the dropdown */}
+                              {replyEmailAccounts
+                                .filter(acc => !acc.isHidden) // Keep filtering hidden ones like LinkedIn Integration placeholder
                                 .map(account => (
                                   <SelectItem key={account.id} value={account.email}>
                                     {account.name} ({account.email})
