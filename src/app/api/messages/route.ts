@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-// import { getServerSession } from 'next-auth'; // Removed
-// import { authOptions } from '@/app/api/auth/[...nextauth]/route'; // Removed
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { formatDateInCentralTime } from '@/lib/date-utils';
@@ -47,42 +47,49 @@ function formatMessageForResponse(message: EmailMessage): FormattedEmailMessage 
   };
 }
 
-// TODO: Re-enable authorization checks
 export async function GET(request: Request) {
-  // TODO: Provide organizationId source for prototype (e.g., hardcode, fetch default)
-  const placeholderOrganizationId = 'clw0l6g5f00001e6kabcde123'; // Replace with a valid default Org ID if needed
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user?.organizationId) {
+    console.error('Messages API: Unauthorized - No session or organizationId');
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   
-  console.log('Messages API: Starting GET request (Auth Disabled)');
+  // Cast organizationId to string explicitly to ensure we're working with a string value
+  const organizationId = String(session.user.organizationId);
+  
+  console.log(`Messages API: Starting GET request for Org ID: ${organizationId}`);
   
   try {
-    // Removed session check
-
     const url = new URL(request.url);
     const includeFiltered = url.searchParams.get('includeFiltered') === 'true';
     console.log('Query params:', { includeFiltered });
 
-    // Use raw SQL queries since EmailMessage is marked with @ignore in the schema
-    // First count the messages
-    const countResult = await prisma.$queryRaw<[{ count: number }]>`
-      SELECT COUNT(*) as count 
-      FROM "EmailMessage" 
-      WHERE "organizationId" = ${placeholderOrganizationId}
-    `;
+    // COMPLETELY REWRITTEN: We're using direct $queryRawUnsafe with parameterized query and explicit type casting
+    // This approach avoids potential issues with template literals and ensures proper parameter binding
     
-    const messageCount = Number(countResult[0]?.count) || 0;
+    // First count the messages
+    // Use parameterized query without explicit UUID casting
+    const countQuery = `SELECT COUNT(*) as count FROM "EmailMessage" WHERE "organizationId" = $1`;
+    const countResult = await prisma.$queryRawUnsafe<[{ count: bigint }]>(countQuery, organizationId);
+    
+    // Convert bigint to number
+    const messageCount = Number(countResult[0]?.count ?? 0);
 
     console.log('Total messages in database:', {
-      organizationId: placeholderOrganizationId,
+      organizationId: organizationId,
       count: messageCount
     });
 
     // Then fetch the messages
-    const messages = await prisma.$queryRaw<EmailMessage[]>`
+    // Use parameterized query without explicit UUID casting
+    const messagesQuery = `
       SELECT * FROM "EmailMessage" 
-      WHERE "organizationId" = ${placeholderOrganizationId}
+      WHERE "organizationId" = $1
       ORDER BY "receivedAt" DESC
       LIMIT 100
     `;
+    const messages = await prisma.$queryRawUnsafe<EmailMessage[]>(messagesQuery, organizationId);
 
     console.log('Found messages:', {
       count: messages.length,
@@ -96,7 +103,13 @@ export async function GET(request: Request) {
     console.log('GET /api/messages - Success');
     return NextResponse.json(formattedMessages);
   } catch (error) {
-    console.error('Messages API Error:', error);
+    // Enhanced error logging for better diagnostics
+    console.error('Messages API Error:', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      organizationId: organizationId,
+      stack: error instanceof Error ? error.stack : undefined
+    });
+    
     return NextResponse.json(
       { 
         error: 'Internal server error',
@@ -107,38 +120,44 @@ export async function GET(request: Request) {
   }
 }
 
-// TODO: Re-enable authorization checks
 export async function PATCH(request: Request) {
-  // TODO: Provide organizationId source for prototype (e.g., hardcode, fetch default)
-  // const placeholderOrganizationId = 'clw0l6g5f00001e6kabcde123'; // Defined in GET, could be shared
+  const session = await getServerSession(authOptions);
+  
+  // Re-enabled authorization checks
+  if (!session?.user?.organizationId) {
+    console.error('Messages API PATCH: Unauthorized - No session or organizationId');
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
   try {
-    // Removed session check
-
     const body = await request.json();
+    const { messageId, status } = body;
 
     if (!messageId || !status) {
+      console.error('Messages API PATCH: Missing messageId or status in request body', body);
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Missing required fields: messageId and status' },
         { status: 400 }
       );
     }
 
-    // Update message status using raw SQL
+    // Update message status using raw SQL with proper parameter binding
     const currentTimestamp = new Date().toISOString();
     
-    // First update the status
-    await prisma.$executeRaw`
+    // Using $executeRawUnsafe with parameterized query for the update
+    const updateQuery = `
       UPDATE "EmailMessage"
-      SET "status" = ${status}, "statusChangedAt" = ${currentTimestamp}
-      WHERE "id" = ${messageId}
+      SET "status" = $1, "statusChangedAt" = $2
+      WHERE "id" = $3
     `;
+    await prisma.$executeRawUnsafe(updateQuery, status, currentTimestamp, messageId);
     
-    // Then retrieve the updated message
-    const updatedMessages = await prisma.$queryRaw<EmailMessage[]>`
+    // Then retrieve the updated message using $queryRawUnsafe with proper parameter binding
+    const selectQuery = `
       SELECT * FROM "EmailMessage" 
-      WHERE "id" = ${messageId}
+      WHERE "id" = $1
     `;
+    const updatedMessages = await prisma.$queryRawUnsafe<EmailMessage[]>(selectQuery, messageId);
     
     if (!updatedMessages || updatedMessages.length === 0) {
       return NextResponse.json(
