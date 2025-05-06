@@ -24,7 +24,7 @@ const replyRequestSchema = z.object({
 // Webhook URLs
 const EMAIL_WEBHOOK_URLS = [
   'https://n8n.srv768302.hstgr.cloud/webhook-test/sending-replies',
-  'https://n8n.srv768302.hstgr.cloud/webhook/sending-replies'
+  'https://n8n-n8n.swl3bc.easypanel.host/webhook/sending-replies'
 ];
 
 // LinkedIn webhook URL - Update to the correct URL

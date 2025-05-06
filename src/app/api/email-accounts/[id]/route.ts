@@ -20,8 +20,8 @@ const accountUpdateSchema = z.object({
 
 // Webhook URLs
 const WEBHOOK_URLS = [
-  'https://n8n.srv768302.hstgr.cloud/webhook-test/sending-replies',
-  'https://n8n.srv768302.hstgr.cloud/webhook/sending-replies'
+  'https://n8n.srv768302.hstgr.cloud/webhook-test/sending-replies', // Keep the test URL for now
+  'https://n8n-n8n.swl3bc.easypanel.host/webhook/sending-replies'
 ];
 
 export async function PUT(
@@ -283,4 +283,4 @@ export async function DELETE(
       { status: 500 }
     );
   }
-} 
+}
