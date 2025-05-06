@@ -13,7 +13,7 @@ interface EmailStats {
   total: number | null;
 }
 
-const N8N_WEBHOOK_URL = 'https://n8n.srv768302.hstgr.cloud/webhook/count-emails';
+const N8N_WEBHOOK_URL = 'https://n8n-n8n.swl3bc.easypanel.host/webhook/count-emails';
 const FETCH_TIMEOUT = 15000; // 15 seconds
 
 export function EmailInventoryStats() {

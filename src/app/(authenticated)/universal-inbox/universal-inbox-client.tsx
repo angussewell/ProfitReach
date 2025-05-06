@@ -1145,7 +1145,7 @@ export function UniversalInboxClient() {
                           const unipileAccountId = socialAccount?.unipileAccountId || '';
                           
                           toast.info("Retrieving full chat history...");
-                          fetch("https://n8n.srv768302.hstgr.cloud/webhook/linkedin-conversation", {
+                          fetch("https://n8n-n8n.swl3bc.easypanel.host/webhook/linkedin-conversation", {
                             method: "POST",
                             headers: {
                               "Content-Type": "application/json",

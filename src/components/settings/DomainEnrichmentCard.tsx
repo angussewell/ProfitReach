@@ -161,7 +161,7 @@ export function DomainEnrichmentCard() {
     };
 
     try {
-      const response = await fetch('https://n8n.srv768302.hstgr.cloud/webhook/enrich-domains', {
+      const response = await fetch('https://n8n-n8n.swl3bc.easypanel.host/webhook/enrich-domains', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

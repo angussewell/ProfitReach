@@ -707,15 +707,21 @@ export function WorkflowStepConfigModal({
         const currentScenarioIds = stepForm.watch('config.scenarioIds') || [];
         
         return (
-          // Use the new ScenarioMultiSelect component
-          <ScenarioMultiSelect 
-            scenarios={fetchedScenarios} 
-            isLoading={isLoadingScenarios}
-            value={currentScenarioIds} 
-            onChange={handleScenarioChange} 
-          />
-          // We also need the info text below the select
-          // TODO: Add the info text back if needed after confirming functionality
+          // Wrap multiple elements in a Fragment
+          <>
+            <ScenarioMultiSelect 
+              scenarios={fetchedScenarios} 
+              isLoading={isLoadingScenarios}
+              value={currentScenarioIds} 
+              onChange={handleScenarioChange} 
+            />
+            {/* Add back the info text */}
+            <p className="text-sm text-muted-foreground mt-2">
+              {currentScenarioIds.length > 1 
+                ? "One scenario will be randomly selected from your pool when this step executes." 
+                : "Select one or more scenarios for this step."}
+            </p>
+          </>
         );
       }
 

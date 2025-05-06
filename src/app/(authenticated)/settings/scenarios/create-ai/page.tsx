@@ -49,7 +49,7 @@ export default function CreateAIScenarioPage(): React.ReactElement {
       const scenario = await dbResponse.json();
 
       // Then send to the n8n webhook
-      const webhookResponse = await fetch('https://n8n.srv768302.hstgr.cloud/webhook/scenarios', {
+      const webhookResponse = await fetch('https://n8n-n8n.swl3bc.easypanel.host/webhook/scenarios', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -146,4 +146,4 @@ export default function CreateAIScenarioPage(): React.ReactElement {
       </div>
     </PageContainer>
   );
-} 
+}

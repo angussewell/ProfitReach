@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     console.log('Unsecured endpoint received payload:', JSON.stringify(payload, null, 2));
     
     // Forward the request to the n8n webhook
-    const response = await fetch('https://n8n.srv768302.hstgr.cloud/webhook/aisuggestions', {
+    const response = await fetch('https://n8n-n8n.swl3bc.easypanel.host/webhook/aisuggestions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -46,4 +46,4 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
-} 
+}

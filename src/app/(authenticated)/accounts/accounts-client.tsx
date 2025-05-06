@@ -617,7 +617,7 @@ export function AccountsClient() {
                 };
                 
                 // Submit request
-                fetch('https://n8n.srv768302.hstgr.cloud/webhook/new-accounts', {
+                fetch('https://n8n-n8n.swl3bc.easypanel.host/webhook/new-accounts', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify(payload)

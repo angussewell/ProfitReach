@@ -23,12 +23,12 @@ const replyRequestSchema = z.object({
 
 // Webhook URLs
 const EMAIL_WEBHOOK_URLS = [
-  'https://n8n.srv768302.hstgr.cloud/webhook-test/sending-replies',
+  'https://n8n-n8n.swl3bc.easypanel.host/webhook-test/sending-replies', // Updated domain
   'https://n8n-n8n.swl3bc.easypanel.host/webhook/sending-replies'
 ];
 
 // LinkedIn webhook URL - Update to the correct URL
-const LINKEDIN_WEBHOOK_URL = 'https://n8n.srv768302.hstgr.cloud/webhook/linkedin-replies';
+const LINKEDIN_WEBHOOK_URL = 'https://n8n-n8n.swl3bc.easypanel.host/webhook/linkedin-replies';
 
 // Add more detailed logging to help diagnose issues
 function logDebug(message: string, data: any) {

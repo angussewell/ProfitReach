@@ -48,7 +48,7 @@ export function buildPrismaWhereFromFilters(
   // Define standard filterable fields (excluding relations handled separately)
   const standardFields = [
     'firstName', 'lastName', 'email', 'title', 'currentCompanyName',
-    'leadStatus', 'city', 'state', 'country'
+    'leadStatus', 'city', 'state', 'country', 'previousMessageCopy' // Added previousMessageCopy
     // DateTime fields handled separately below
     // Add other non-DateTime direct fields from Contacts model as needed
   ];

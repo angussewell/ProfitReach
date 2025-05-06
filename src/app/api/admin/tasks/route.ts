@@ -54,7 +54,7 @@ interface CodaResponse {
 }
 */
 
-const N8N_WEBHOOK_URL = 'https://n8n.srv768302.hstgr.cloud/webhook/coda-tasks';
+const N8N_WEBHOOK_URL = 'https://n8n-n8n.swl3bc.easypanel.host/webhook/coda-tasks';
 const FETCH_TIMEOUT = 15000; // 15 seconds timeout
 
 export async function POST(request: Request) {
@@ -224,4 +224,4 @@ export async function POST(request: Request) {
     // Return empty array on critical errors
     return NextResponse.json([], { status: 500 }); // Indicate error but return empty array
   }
-} 
+}

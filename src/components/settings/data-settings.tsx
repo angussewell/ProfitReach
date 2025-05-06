@@ -55,7 +55,7 @@ export function DataSettings({ organization }: DataSettingsProps) {
 
     setIsEnriching(true);
     try {
-      const response = await fetch('https://n8n.srv768302.hstgr.cloud/webhook/contact-enrichment', {
+      const response = await fetch('https://n8n-n8n.swl3bc.easypanel.host/webhook/contact-enrichment', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

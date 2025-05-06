@@ -282,7 +282,7 @@ export default function ImportContactsModal({ isOpen, onClose }: ImportContactsM
       console.log(`Sending ${validContacts.length} contacts to n8n webhook...`);
       
       // Submit valid contacts directly to the n8n webhook instead of internal API
-      const response = await fetch('https://n8n.srv768302.hstgr.cloud/webhook/contacts-upload', {
+      const response = await fetch('https://n8n-n8n.swl3bc.easypanel.host/webhook/contacts-upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 

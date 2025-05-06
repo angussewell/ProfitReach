@@ -355,7 +355,8 @@ export default function SettingsPage() {
                       headers: {
                         'Content-Type': 'application/json',
                       },
-                      body: JSON.stringify({ location_id: newLocationId }),
+                      // Send null if the input is empty, otherwise send the string value
+                      body: JSON.stringify({ location_id: newLocationId === '' ? null : newLocationId }),
                     });
                     
                     const data = await response.json();
@@ -385,4 +386,4 @@ export default function SettingsPage() {
       </div>
     </PageContainer>
   );
-} 
+}
