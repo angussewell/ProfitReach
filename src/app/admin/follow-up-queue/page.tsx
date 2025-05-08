@@ -711,6 +711,16 @@ export default function AdminFollowUpQueuePage() {
             </div>
           </div>
 
+          {/* Display Organization Name */}
+          {queueItems[currentIndex]?.organizationName && (
+            <div className="p-4 border-b border-slate-200/60 bg-slate-50/50">
+              <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wider">Organization:</h3>
+              <p className="text-md font-semibold text-slate-700">
+                {queueItems[currentIndex].organizationName}
+              </p>
+            </div>
+          )}
+
           {/* Thread Content - Assign ref to the scrollable container */}
           <div 
             ref={scrollContainerRef} 

@@ -32,17 +32,20 @@ interface EmailMessage {
   aiSuggestion1?: string;
   aiSuggestion2?: string;
   aiSuggestion3?: string;
+  organizationName?: string; // Added organizationName
 }
 
 // Type for our formatted response
 interface FormattedEmailMessage extends Omit<EmailMessage, 'receivedAt'> {
   receivedAt: string;
+  organizationName?: string; // Added organizationName
 }
 
 // Helper function to format message for frontend display
 function formatMessageForResponse(message: EmailMessage): FormattedEmailMessage {
   return {
     ...message,
+    organizationName: message.organizationName, // Ensure it's passed through
     receivedAt: formatDateInCentralTime(message.receivedAt.toISOString())
   };
 }
@@ -83,10 +86,13 @@ export async function GET(request: Request) {
 
     // Then fetch the messages
     // Use parameterized query without explicit UUID casting
+    // Updated query to join with Organization table and fetch organization name
     const messagesQuery = `
-      SELECT * FROM "EmailMessage" 
-      WHERE "organizationId" = $1
-      ORDER BY "receivedAt" DESC
+      SELECT em.*, org.name as "organizationName"
+      FROM "EmailMessage" em
+      JOIN "Organization" org ON em."organizationId" = org.id
+      WHERE em."organizationId" = $1
+      ORDER BY em."receivedAt" DESC
       LIMIT 100
     `;
     const messages = await prisma.$queryRawUnsafe<EmailMessage[]>(messagesQuery, organizationId);
@@ -94,7 +100,8 @@ export async function GET(request: Request) {
     console.log('Found messages:', {
       count: messages.length,
       sampleMessageId: messages[0]?.id || 'no messages',
-      statuses: messages.map((m: EmailMessage) => m.status)
+      statuses: messages.map((m: EmailMessage) => m.status),
+      organizationNames: messages.map((m: EmailMessage) => m.organizationName) // Log org names
     });
 
     // Format messages for frontend display
@@ -153,9 +160,12 @@ export async function PATCH(request: Request) {
     await prisma.$executeRawUnsafe(updateQuery, status, currentTimestamp, messageId);
     
     // Then retrieve the updated message using $queryRawUnsafe with proper parameter binding
+    // Also include organizationName in the select query for the updated message
     const selectQuery = `
-      SELECT * FROM "EmailMessage" 
-      WHERE "id" = $1
+      SELECT em.*, org.name as "organizationName"
+      FROM "EmailMessage" em
+      JOIN "Organization" org ON em."organizationId" = org.id
+      WHERE em."id" = $1
     `;
     const updatedMessages = await prisma.$queryRawUnsafe<EmailMessage[]>(selectQuery, messageId);
     
