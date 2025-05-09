@@ -745,6 +745,7 @@ export function UniversalInboxClient() {
       );
 
       toast.success(`Conversation marked as ${getStatusLabel(status)}`);
+      setStatusFilter('ALL'); // Reset filter to ensure the updated item is visible
       setViewMode('list'); // Return to list view after status update
     } catch (error) {
       console.error('Error updating status:', error);
