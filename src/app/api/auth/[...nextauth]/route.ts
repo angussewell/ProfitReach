@@ -5,6 +5,7 @@ export const fetchCache = 'force-no-store';
 import NextAuth from 'next-auth';
 import { AuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
+import { PrismaAdapter } from '@next-auth/prisma-adapter';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 
@@ -21,9 +22,10 @@ const validateEnv = () => {
 // Only log in runtime
 const logEnvironment = () => {
   const isDevelopment = process.env.NODE_ENV === 'development';
-  console.log('NextAuth Environment:', {
+  console.log('[NextAuth] Environment:', {
     NEXTAUTH_URL: process.env.NEXTAUTH_URL,
     hasSecret: !!process.env.NEXTAUTH_SECRET,
+    secretLength: process.env.NEXTAUTH_SECRET ? process.env.NEXTAUTH_SECRET.length : 0,
     cookieDomain: isDevelopment ? 'none' : 'app.messagelm.com',
     isDevelopment
   });
@@ -66,6 +68,7 @@ const isDevelopment = process.env.NODE_ENV === 'development';
 const isBuildTime = process.env.NEXT_PHASE === 'phase-production-build';
 
 export const authOptions: AuthOptions = {
+  adapter: isBuildTime ? undefined : PrismaAdapter(prisma),
   providers: [
     CredentialsProvider({
       name: 'Credentials',
@@ -84,10 +87,26 @@ export const authOptions: AuthOptions = {
 
         let user;
         try {
+          // Check if this is one of the admin users mentioned in scripts
+          if (credentials.email === 'angus@alpinegen.com' || credentials.email === 'omanwanyanwu@gmail.com') {
+            console.log(`[AUTH] Attempting login with known admin email: ${credentials.email}`);
+          }
+          
           user = await prisma.user.findUnique({
             where: { email: credentials.email }
           });
           console.log(`[AUTH] User lookup result for ${credentials.email}:`, user ? `Found user ID ${user.id}, Role: ${user.role}` : 'User not found');
+          
+          // If user not found, check admin credentials from env
+          if (!user && credentials.email === process.env.ADMIN_EMAIL && credentials.password === process.env.ADMIN_PASSWORD) {
+            console.log(`[AUTH] Admin login detected with env credentials`);
+            return {
+              id: 'admin-user',
+              email: process.env.ADMIN_EMAIL,
+              name: process.env.ADMIN_NAME || 'Admin User',
+              role: 'admin'
+            };
+          }
         } catch (dbError) {
            console.error(`[AUTH] Database error fetching user ${credentials.email}:`, dbError);
            return null; // Fail on DB error
@@ -284,6 +303,7 @@ export const authOptions: AuthOptions = {
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
   jwt: {
+    // NextAuth v4+ no longer needs the secret option here - it uses the global NEXTAUTH_SECRET instead
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
   cookies: {

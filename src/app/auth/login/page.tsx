@@ -20,21 +20,30 @@ function LoginForm() {
     setError('');
     setIsLoading(true);
 
+    console.log(`Attempting login with email: ${email}`);
+    
     try {
+      const callbackUrl = searchParams?.get('callbackUrl') || '/scenarios';
+      console.log(`Login callback URL: ${callbackUrl}`);
+      
       const result = await signIn('credentials', {
         email,
         password,
         redirect: false,
       });
 
+      console.log('Login result:', result);
+
       if (result?.error) {
+        console.error(`Login error: ${result.error}`);
         if (result.error.includes('database')) {
           setError('Unable to connect to the service. Please try again in a few moments.');
         } else {
-          setError(result.error);
+          setError('Invalid email or password. Please try again.');
         }
-      } else {
-        router.push('/scenarios');
+      } else if (result?.ok) {
+        console.log(`Login successful, redirecting to: ${callbackUrl}`);
+        router.push(callbackUrl);
       }
     } catch (error: any) {
       console.error('Login error:', error);

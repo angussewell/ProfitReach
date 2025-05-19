@@ -5,7 +5,7 @@ import Image from 'next/image'; // Added Image import
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils'; // Assuming utils file exists for cn
 import { Button } from '@/components/ui/button'; // Assuming Button component exists
-import { LayoutDashboard, BarChart3, Package, LucideIcon, ArrowLeft } from 'lucide-react'; // Added ArrowLeft, Import LucideIcon type
+import { LayoutDashboard, BarChart3, Package, LucideIcon, ArrowLeft, Search } from 'lucide-react'; // Added ArrowLeft, Search, Import LucideIcon type
 import React from 'react'; // Import React
 
 // Define an interface for the navigation items
@@ -23,6 +23,7 @@ const AdminSidebar = () => {
   const navItems: NavItem[] = [
     { href: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
     { href: '/admin/inventory', label: 'Inventory', icon: Package },
+    { href: '/admin/email-search', label: 'Email Search', icon: Search },
     // Add other top-level admin links here if needed in the future
   ];
 

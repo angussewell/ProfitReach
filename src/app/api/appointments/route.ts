@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
+import { validateAuth } from '@/lib/auth/session';
 import { 
   fetchAppointments, 
   sendAppointmentWebhook as sendWebhook, 
@@ -11,9 +10,9 @@ import {
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session || !session.user.organizationId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { session, error } = await validateAuth();
+    if (error) {
+      return error;
     }
 
     const searchParams = req.nextUrl.searchParams;
