@@ -20,12 +20,10 @@ function LoginForm() {
     setError('');
     setIsLoading(true);
 
-    console.log(`Attempting login with email: ${email}`);
+    console.log(`Login attempt with email: ${email}`);
     
     try {
-      const callbackUrl = searchParams?.get('callbackUrl') || '/scenarios';
-      console.log(`Login callback URL: ${callbackUrl}`);
-      
+      // Simplify login process
       const result = await signIn('credentials', {
         email,
         password,
@@ -36,18 +34,14 @@ function LoginForm() {
 
       if (result?.error) {
         console.error(`Login error: ${result.error}`);
-        if (result.error.includes('database')) {
-          setError('Unable to connect to the service. Please try again in a few moments.');
-        } else {
-          setError('Invalid email or password. Please try again.');
-        }
-      } else if (result?.ok) {
-        console.log(`Login successful, redirecting to: ${callbackUrl}`);
-        router.push(callbackUrl);
+        setError('Login failed. Please try again.');
+      } else {
+        // Always redirect to /scenarios on success
+        router.push('/scenarios');
       }
     } catch (error: any) {
       console.error('Login error:', error);
-      setError('An error occurred. Please try again in a few moments.');
+      setError('An error occurred. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -64,6 +58,7 @@ function LoginForm() {
               fill
               className="object-contain"
               priority
+              sizes="192px"
               unoptimized
             />
           </div>

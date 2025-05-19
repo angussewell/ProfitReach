@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { subHours } from 'date-fns';
-import { validateAuth } from '@/lib/auth/session';
+import { getAuth } from '@/lib/auth-simple';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -62,8 +62,8 @@ interface Analytics {
 
 export async function GET(request: Request): Promise<NextResponse> {
   try {
-    // Check authentication using our new helper
-    const { session, error } = await validateAuth();
+    // Simple auth check
+    const { session, error } = await getAuth();
     if (error) {
       return error;
     }

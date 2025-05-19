@@ -43,7 +43,9 @@ export const metadata: Metadata = {
   },
   other: {
     'msapplication-TileColor': '#ffffff',
-    'msapplication-config': '/browserconfig.xml?v=6'
+    'msapplication-config': '/browserconfig.xml?v=6',
+    // Add the mobile-web-app-capable meta tag
+    'mobile-web-app-capable': 'yes'
   }
 };
 
@@ -63,10 +65,10 @@ export default function RootLayout({
         <link rel="icon" href="/tempshift_new_favicon_2025.ico" />
         <link rel="shortcut icon" href="/tempshift_new_favicon_2025.ico" />
         <link rel="apple-touch-icon" href="/tempshift_new_favicon_2025.ico" />
-        {/* Force no-cache for favicon */}
-        <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-        <meta http-equiv="Pragma" content="no-cache" />
-        <meta http-equiv="Expires" content="0" />
+        {/* Force no-cache for favicon - fix httpEquiv property names */}
+        <meta httpEquiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+        <meta httpEquiv="Pragma" content="no-cache" />
+        <meta httpEquiv="Expires" content="0" />
       </head>
       <body className={inter.className} suppressHydrationWarning>
         <React.Fragment>

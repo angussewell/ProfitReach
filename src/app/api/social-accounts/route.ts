@@ -1,15 +1,17 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
-import { validateAuth } from '@/lib/auth/session';
 
 // Force dynamic API route
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {
-    const { session, error } = await validateAuth();
-    if (error) {
-      return error;
+    // Super simple auth - just check if session exists
+    const session = await getServerSession(authOptions);
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const accounts = await prisma.socialAccount.findMany({
