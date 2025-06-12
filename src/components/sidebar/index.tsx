@@ -96,6 +96,12 @@ export default function Sidebar(): JSX.Element {
       adminOnly: true,
       managerAccess: true
     },
+    {
+      href: '/admin/follow-up-queue',
+      label: 'Follow-Up Queue',
+      icon: createIcon(Icons.ListTodo, 'follow-up-queue-icon'), // Added ListTodo icon
+      adminOnly: true
+    },
     { 
       href: '/accounts', 
       label: 'Accounts', 

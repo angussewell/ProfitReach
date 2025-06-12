@@ -5,17 +5,23 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { PageHeader } from '@/components/ui/page-header';
 import { ClientCard, ClientButton, ClientInput } from '@/components/ui/client-components';
-import { Inbox, Loader2, MessageSquare, Reply, Send, Trash2, X, Calendar, ThumbsDown, Clock, CheckCircle, RefreshCw, Sparkles, XCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button'; // Import Button
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'; // Import Dropdown components
+import { Inbox, Loader2, MessageSquare, Reply, Send, Trash2, X, Calendar, ThumbsDown, Clock, CheckCircle, RefreshCw, Sparkles, XCircle, ChevronLeft, ChevronRight, Search, ChevronDown } from 'lucide-react'; // Import ChevronDown
 import { cn } from '@/lib/utils';
 import type { LucideProps } from 'lucide-react';
 import { toast } from 'sonner';
 import { updateMessageStatus } from '@/lib/server-actions';
 import { formatDateInCentralTime } from '@/lib/date-utils';
 import { getSession } from 'next-auth/react';
+// Import shared helpers (Removed LinkedInIcon import)
+import { isOurEmail, getLinkedInSenderName, getStatusColor, getStatusLabel } from '@/lib/message-utils';
+import { ConversationStatus, MessageSource } from '@prisma/client'; // Import enums
 
+// Define types locally (or import if available)
 type MessageType = 'REAL_REPLY' | 'BOUNCE' | 'AUTO_REPLY' | 'OUT_OF_OFFICE' | 'OTHER';
-type ConversationStatus = 'MEETING_BOOKED' | 'NOT_INTERESTED' | 'FOLLOW_UP_NEEDED' | 'NO_ACTION_NEEDED' | 'WAITING_FOR_REPLY';
-type MessageSource = 'EMAIL' | 'LINKEDIN';
+// ConversationStatus and MessageSource are imported from @prisma/client
 
 interface EmailMessage {
   id: string;
@@ -58,6 +64,13 @@ interface SocialAccount {
   isActive: boolean;
 }
 
+// Add MailReefRecipient interface (Phase 2, Step 1)
+interface MailReefRecipient {
+  recipientEmail: string;
+  recipientType: string; // 'to', 'cc', 'bcc'
+  contactId?: string | null;
+}
+
 const LoaderIcon: React.FC<LucideProps> = Loader2;
 const InboxIcon: React.FC<LucideProps> = Inbox;
 const MessageIcon: React.FC<LucideProps> = MessageSquare;
@@ -78,6 +91,7 @@ const daysSince = (date: Date): number => {
 };
 
 // Helper function to get status background color for the entire row
+// Keep this local as it's specific to the row styling here
 const getStatusRowStyle = (status: ConversationStatus, date?: Date, isFromUs?: boolean): string => {
   switch (status) {
     case 'MEETING_BOOKED':
@@ -85,7 +99,7 @@ const getStatusRowStyle = (status: ConversationStatus, date?: Date, isFromUs?: b
     case 'NOT_INTERESTED':
       return 'border-red-300 bg-red-50/30';
     case 'FOLLOW_UP_NEEDED':
-      return 'border-red-300 bg-red-50/30';
+      return 'border-red-300 bg-red-50/30'; // Keep red for consistency? Or use amber like queue? Using red for now.
     case 'NO_ACTION_NEEDED':
       return 'border-gray-300 bg-gray-50/30';
     case 'WAITING_FOR_REPLY':
@@ -95,94 +109,30 @@ const getStatusRowStyle = (status: ConversationStatus, date?: Date, isFromUs?: b
   }
 };
 
-// Helper function to get status color for the badge
-const getStatusColor = (status: ConversationStatus, date?: Date, isFromUs?: boolean): string => {
-  switch (status) {
-    case 'MEETING_BOOKED':
-      return 'bg-green-100 text-green-800';
-    case 'NOT_INTERESTED':
-      return 'bg-red-100 text-red-800';
-    case 'FOLLOW_UP_NEEDED':
-      return 'bg-red-100 text-red-800';
-    case 'NO_ACTION_NEEDED':
-      return 'bg-gray-100 text-gray-800';
-    case 'WAITING_FOR_REPLY':
-      return 'bg-blue-100 text-blue-800';
-    default:
-      return 'bg-gray-100 text-gray-800';
-  }
-};
-
-// Helper function to get a human-readable status label
-const getStatusLabel = (status: ConversationStatus, date?: Date, isFromUs?: boolean): string => {
-  switch (status) {
-    case 'MEETING_BOOKED':
-      return 'Meeting Booked';
-    case 'NOT_INTERESTED':
-      return 'Not Interested';
-    case 'FOLLOW_UP_NEEDED':
-      return 'Follow Up Needed';
-    case 'NO_ACTION_NEEDED':
-      return 'No Action Needed';
-    case 'WAITING_FOR_REPLY':
-      return 'Waiting for Reply';
-    default:
-      return 'Unknown Status';
-  }
-};
+// getStatusColor, getStatusLabel, getLinkedInSenderName are now imported from message-utils
+// LinkedInIcon was removed from utils
 
 // Helper for displaying message icons based on source
 const getMessageIcon = (message: EmailMessage) => {
   if (message.messageSource === 'LINKEDIN') {
-    return <LinkedInIcon className="h-5 w-5 text-blue-600" />;
+    // Replace LinkedInIcon with text or another icon
+    return <span className="text-blue-600 font-bold text-xs mr-1">(LI)</span>; // Placeholder text
   }
   return <MessageIcon className="h-5 w-5 text-slate-500" />;
 };
 
-// Add LinkedIn icon component
-const LinkedInIcon: React.FC<LucideProps> = (props) => {
-  return (
-    <svg 
-      xmlns="http://www.w3.org/2000/svg" 
-      width="24" 
-      height="24" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
-      strokeLinejoin="round" 
-      {...props}
-    >
-      <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path>
-      <rect x="2" y="9" width="4" height="12"></rect>
-      <circle cx="4" cy="4" r="2"></circle>
-    </svg>
-  );
-};
-
-// First, add a helper function to determine if a thread is a LinkedIn thread
+// Helper function to determine if a thread is a LinkedIn thread
 const isLinkedInThread = (messages: EmailMessage[]): boolean => {
   return messages.some(msg => msg.messageSource === 'LINKEDIN');
 };
 
-// First, add a helper function to get LinkedIn sender names
-// Add this near other helper functions at the top of the file
-
-// Helper function to get LinkedIn sender name from ID
-const getLinkedInSenderName = (senderId: string, message: EmailMessage, socialAccounts: SocialAccount[]): string => {
-  // Simply return the sender name directly from the database
-  // This is the value set when the message was created/received
-  return message.sender;
-};
-
-// Helper function to format date in Central Time
-const formatStoredDate = formatDateInCentralTime;
+// formatStoredDate alias removed, use formatDateInCentralTime directly
 
 export function UniversalInboxClient() {
   const [selectedThread, setSelectedThread] = useState<string | null>(null);
   const [messages, setMessages] = useState<EmailMessage[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
   const [isReplying, setIsReplying] = useState(false);
   const [replyContent, setReplyContent] = useState('');
   const [replying, setReplying] = useState(false);
@@ -211,6 +161,45 @@ export function UniversalInboxClient() {
   const replyCardRef = useRef<HTMLDivElement>(null);
   // Add ref for textarea
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Add state for recipient details (Phase 2, Step 2)
+  const [recipientDetails, setRecipientDetails] = useState<Record<string, { loading: boolean; data: MailReefRecipient[] | null; error: string | null }>>({});
+
+  // Add fetch function for recipients (Phase 2, Step 3)
+  const fetchRecipients = async (internalMessageId: string, apiMessageId: string, organizationId: string | undefined) => {
+    if (!organizationId) {
+      console.error("Organization ID missing for fetching recipients");
+      setRecipientDetails(prev => ({
+        ...prev,
+        [internalMessageId]: { loading: false, data: null, error: 'Organization ID missing' }
+      }));
+      return;
+    }
+
+    setRecipientDetails(prev => ({
+      ...prev,
+      [internalMessageId]: { loading: true, data: null, error: null }
+    }));
+
+    try {
+      const response = await fetch(`/api/messages/recipients?messageId=${encodeURIComponent(apiMessageId)}&organizationId=${encodeURIComponent(organizationId)}`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to parse error' }));
+        throw new Error(errorData.error || `API Error: ${response.status}`);
+      }
+      const data: MailReefRecipient[] = await response.json();
+      setRecipientDetails(prev => ({
+        ...prev,
+        [internalMessageId]: { loading: false, data: data, error: null }
+      }));
+    } catch (error) {
+      console.error('Error fetching recipients:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to fetch recipients');
+      setRecipientDetails(prev => ({
+        ...prev,
+        [internalMessageId]: { loading: false, data: null, error: error instanceof Error ? error.message : 'Unknown error' }
+      }));
+    }
+  };
 
   // Memoize enhancedThreadGroups to stabilize its identity
   const enhancedThreadGroups = useMemo(() => {
@@ -315,16 +304,33 @@ export function UniversalInboxClient() {
   const backToList = useCallback(() => {
     setViewMode('list');
     setSelectedThread(null); // Also clear selection when going back
-  }, []); // No dependencies needed if setViewMode/setSelectedThread are stable
+  }, []);
 
   // Memoize filtering based on search
   const filteredSortedThreadIds = useMemo(() => {
-    // Need access to enhancedThreadGroups if getThreadStatus uses it
-    // Ensure getThreadStatus is stable or included in dependencies if needed
-    return sortedThreadIds.filter(
-      threadId => statusFilter === 'ALL' || getThreadStatus(threadId) === statusFilter
-    );
-  }, [sortedThreadIds, statusFilter, getThreadStatus]); // Add getThreadStatus dependency
+    // Use imported getThreadStatus which now relies on imported helpers
+    return sortedThreadIds.filter(threadId => {
+      // Status filter
+      if (statusFilter !== 'ALL' && getThreadStatus(threadId) !== statusFilter) {
+        return false;
+      }
+      // Search filter
+      if (!searchQuery.trim()) return true;
+      const query = searchQuery.trim().toLowerCase();
+      const messages = enhancedThreadGroups[threadId];
+      return messages.some(msg => {
+        // Gather all fields to search
+        const fields = [
+          msg.sender,
+          msg.recipientEmail,
+          msg.subject,
+        ];
+        return fields.some(field =>
+          field && field.toLowerCase().includes(query)
+        );
+      });
+    });
+  }, [sortedThreadIds, statusFilter, searchQuery, enhancedThreadGroups, getThreadStatus]);
 
   const currentIndex = useMemo(() => {
     if (!selectedThread) return -1;
@@ -436,17 +442,10 @@ export function UniversalInboxClient() {
     fetchData();
   }, []);
 
-  // Helper function to check if a message is from us
-  const isOurEmail = (sender: string, message?: EmailMessage) => {
-    // For LinkedIn messages, check against social account names
-    if (message?.messageSource === 'LINKEDIN') {
-      return socialAccounts.some(account => account.name === sender);
-    }
-    // For email messages, check against email accounts
-    return emailAccounts.some(account => account.email === sender);
-  };
+  // Remove local isOurEmail helper, use imported one
+  // const isOurEmail = ... (removed)
 
-  // Helper function to find the other participant in a thread
+  // Helper function to find the other participant in a thread (uses imported isOurEmail)
   const findOtherParticipant = (messages: EmailMessage[]) => {
     // Sort messages by date (oldest first) to find the original conversation
     const sortedMessages = [...messages].sort(
@@ -455,13 +454,15 @@ export function UniversalInboxClient() {
 
     // First try to find the original recipient if we started the thread
     const firstMessage = sortedMessages[0];
-    if (isOurEmail(firstMessage.sender, firstMessage)) {
+    // Use imported isOurEmail
+    if (isOurEmail(firstMessage.sender, firstMessage, emailAccounts, socialAccounts)) {
       return firstMessage.recipientEmail;
     }
 
     // Otherwise, use the first sender who isn't us
     const externalParticipant = sortedMessages.find(
-      msg => !isOurEmail(msg.sender, msg)
+      // Use imported isOurEmail
+      msg => !isOurEmail(msg.sender, msg, emailAccounts, socialAccounts)
     );
     if (externalParticipant) {
       return externalParticipant.sender;
@@ -744,6 +745,7 @@ export function UniversalInboxClient() {
       );
 
       toast.success(`Conversation marked as ${getStatusLabel(status)}`);
+      setStatusFilter('ALL'); // Reset filter to ensure the updated item is visible
       setViewMode('list'); // Return to list view after status update
     } catch (error) {
       console.error('Error updating status:', error);
@@ -852,25 +854,39 @@ export function UniversalInboxClient() {
         {viewMode === 'list' ? (
           // List View (Full Width)
           <ClientCard className="h-[calc(100vh-14rem)] overflow-hidden flex flex-col border-slate-200/60 shadow-lg shadow-slate-200/50">
-            <div className="px-6 py-4 border-b border-slate-200/60 flex items-center justify-between bg-white/95">
-              <div className="flex items-center gap-4">
-                <h2 className="text-lg font-semibold flex items-center gap-2 text-slate-900">
+            <div className="px-6 py-6 border-b border-slate-200/60 bg-white/95">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:gap-x-4 gap-y-4">
+                <h2 className="text-lg font-semibold flex items-center gap-2 text-slate-900 mb-2 sm:mb-0">
                   <InboxIcon className="h-5 w-5 text-slate-500" />
                   <span>Conversations</span>
                 </h2>
-                <select 
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value as ConversationStatus | 'ALL')}
-                  className="px-2 py-1 text-sm border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  aria-label="Filter by status"
-                >
-                  <option value="ALL">All Statuses</option>
-                  <option value="FOLLOW_UP_NEEDED">Follow Up Needed</option>
-                  <option value="WAITING_FOR_REPLY">Waiting for Reply</option>
-                  <option value="MEETING_BOOKED">Meeting Booked</option>
-                  <option value="NOT_INTERESTED">Not Interested</option>
-                  <option value="NO_ACTION_NEEDED">No Action Needed</option>
-                </select>
+                <div className="flex-1 flex flex-col sm:flex-row sm:items-center gap-3">
+                  <div className="relative flex-1 max-w-lg">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5 pointer-events-none" />
+                    <Input
+                      type="text"
+                      placeholder="Search messages…"
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      className="pl-12 pr-4 py-3 w-full rounded-xl border-2 border-slate-200 shadow focus:border-blue-400 text-lg font-medium bg-white transition-all"
+                      aria-label="Search messages"
+                      style={{ minHeight: '3.25rem' }}
+                    />
+                  </div>
+                  <select 
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value as ConversationStatus | 'ALL')}
+                    className="py-3 px-4 rounded-xl border-2 border-slate-200 shadow bg-white text-base font-medium focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all"
+                    aria-label="Filter by status"
+                  >
+                    <option value="ALL">All Statuses</option>
+                    <option value="FOLLOW_UP_NEEDED">Follow Up Needed</option>
+                    <option value="WAITING_FOR_REPLY">Waiting for Reply</option>
+                    <option value="MEETING_BOOKED">Meeting Booked</option>
+                    <option value="NOT_INTERESTED">Not Interested</option>
+                    <option value="NO_ACTION_NEEDED">No Action Needed</option>
+                  </select>
+                </div>
               </div>
             </div>
             
@@ -905,16 +921,16 @@ export function UniversalInboxClient() {
                         return msgDate.getTime() > latestDate.getTime() ? msg : latest;
                       }, messages[0]);
                       
-                      const isLatestFromUs = isOurEmail(latestMessage.sender, latestMessage);
+                      const isLatestFromUs = isOurEmail(latestMessage.sender, latestMessage, emailAccounts, socialAccounts); // Use imported helper
                       const needsResponse = !isLatestFromUs && !latestMessage.isRead;
                       const isLinkedIn = latestMessage.messageSource === 'LINKEDIN';
 
                       // Use the helper function to get the thread status
                       const status = getThreadStatus(threadId);
-                      
-                      const statusColor = getStatusColor(status, new Date(latestMessage.receivedAt), isLatestFromUs);
-                      const rowStyle = getStatusRowStyle(status, new Date(latestMessage.receivedAt), isLatestFromUs);
-                      
+
+                      const statusColor = getStatusColor(status); // Use imported helper (remove unused args)
+                      const rowStyle = getStatusRowStyle(status, new Date(latestMessage.receivedAt), isLatestFromUs); // Keep local row style helper
+
                       return (
                         <button
                           key={threadId}
@@ -930,16 +946,17 @@ export function UniversalInboxClient() {
                             {/* Sender & Date */}
                             <div className="col-span-3">
                               <div className="font-medium text-slate-900 truncate flex items-center gap-1">
-                                {isLinkedIn && <LinkedInIcon className="h-4 w-4 text-blue-600" />}
-                                {isLinkedIn 
-                                  ? getLinkedInSenderName(latestMessage.sender, latestMessage, socialAccounts)
+                                {/* Replace LinkedInIcon usage */}
+                                {isLinkedIn && <span className="text-xs font-normal text-blue-600 mr-1">(LI)</span>}
+                                {isLinkedIn
+                                  ? getLinkedInSenderName(latestMessage.sender, latestMessage, socialAccounts) // Use imported helper
                                   : findOtherParticipant(messages)}
                               </div>
                               <div className="text-xs text-slate-500 mt-1">
-                                {formatStoredDate(latestMessage.receivedAt)}
+                                {formatDateInCentralTime(latestMessage.receivedAt)} {/* Use imported function */}
                               </div>
                             </div>
-                            
+
                             {/* Subject & Preview */}
                             <div className="col-span-7">
                               <div className="font-medium text-slate-800 truncate">
@@ -955,12 +972,12 @@ export function UniversalInboxClient() {
                             <div className="col-span-2 flex flex-col items-end justify-center">
                               <span className={cn(
                                 "px-2 py-0.5 rounded-full text-xs font-medium mb-1",
-                                statusColor
+                                statusColor // Use result from imported helper
                               )}>
-                                {getStatusLabel(status, new Date(latestMessage.receivedAt), isLatestFromUs)}
+                                {getStatusLabel(status)} {/* Use imported helper */}
                               </span>
-                              
-                              {status === 'FOLLOW_UP_NEEDED' && isLatestFromUs && daysSince(new Date(latestMessage.receivedAt)) > 0 && (
+
+                              {status === 'FOLLOW_UP_NEEDED' && isLatestFromUs && daysSince(new Date(latestMessage.receivedAt)) > 0 && ( // daysSince remains local
                                 <span className={cn(
                                   "px-1.5 py-0.5 rounded text-xs font-medium",
                                   daysSince(new Date(latestMessage.receivedAt)) < 3 ? "bg-blue-100 text-blue-800" : "bg-red-200 text-red-900"
@@ -1129,7 +1146,7 @@ export function UniversalInboxClient() {
                           const unipileAccountId = socialAccount?.unipileAccountId || '';
                           
                           toast.info("Retrieving full chat history...");
-                          fetch("https://n8n.srv768302.hstgr.cloud/webhook/linkedin-conversation", {
+                          fetch("https://n8n-n8n.swl3bc.easypanel.host/webhook/linkedin-conversation", {
                             method: "POST",
                             headers: {
                               "Content-Type": "application/json",
@@ -1199,7 +1216,7 @@ export function UniversalInboxClient() {
                         return aDate.getTime() - bDate.getTime();
                       })
                       .map((message, index, array) => {
-                        const isFromUs = isOurEmail(message.sender, message);
+                        const isFromUs = isOurEmail(message.sender, message, emailAccounts, socialAccounts); // Use imported helper
                         const isLastMessage = index === array.length - 1;
                         const isLatestMessage = index === array.length - 1;
                         const isLinkedIn = message.messageSource === 'LINKEDIN';
@@ -1219,17 +1236,83 @@ export function UniversalInboxClient() {
                             <div className="flex justify-between items-start mb-4">
                               <div className="min-w-0 max-w-[70%]">
                                 <p className="font-medium text-slate-900 flex items-center gap-1 truncate overflow-hidden text-ellipsis">
-                                  {isLinkedIn && <LinkedInIcon className="h-4 w-4 text-blue-600 flex-shrink-0" />}
+                                  {/* Replace LinkedInIcon usage */}
+                                  {isLinkedIn && <span className="text-xs font-normal text-blue-600 mr-1">(LI)</span>}
                                   <span className="truncate">
-                                  {isLinkedIn 
-                                    ? getLinkedInSenderName(message.sender, message, socialAccounts)
+                                  {isLinkedIn
+                                    ? getLinkedInSenderName(message.sender, message, socialAccounts) // Use imported helper
                                     : message.sender}
                                   </span>
+                                   {isFromUs && <span className="text-xs text-blue-600 font-normal ml-1">(You)</span>} {/* Added (You) indicator */}
                                 </p>
+                                {/* Add console log for debugging */}
+                                {(() => {
+                                  if (!isLinkedIn && message.recipientEmail) {
+                                    console.log('Attempting to render recipient dropdown area for message:', message.id);
+                                  }
+                                  return null; // This IIFE is just for the side effect
+                                })()}
+                                {/* Modify "to" display for dropdown (Phase 2, Step 4) */}
                                 {!isLinkedIn && message.recipientEmail && (
-                                  <p className="text-xs text-slate-500 mt-0.5 truncate overflow-hidden text-ellipsis">
-                                    to {message.recipientEmail}
-                                  </p>
+                                  <div className="flex items-center gap-0 mt-0.5"> {/* Removed gap */}
+                                    <p className="text-xs text-slate-500 truncate overflow-hidden text-ellipsis shrink">
+                                      to {message.recipientEmail}
+                                    </p>
+                                    <DropdownMenu onOpenChange={(open) => {
+                                      // Fetch only when opening and if not already loaded/loading for this specific message
+                                      if (open && !recipientDetails[message.id]?.data && !recipientDetails[message.id]?.loading) {
+                                        fetchRecipients(message.id, message.messageId, message.organizationId);
+                                      }
+                                    }}>
+                                      <DropdownMenuTrigger asChild>
+                                        {/* Slightly larger button/icon, more negative margin */}
+                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-slate-700 hover:bg-slate-100 flex-shrink-0 ml-[-12px]">
+                                          <ChevronDown className="h-5 w-5" />
+                                          <span className="sr-only">Show all recipients</span>
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="start" className="w-64 max-h-60 overflow-y-auto">
+                                        {/* Add check for recipientDetails[message.id] existence and assign to variable */}
+                                        {(() => {
+                                          const details = recipientDetails[message.id];
+                                          if (details) {
+                                            return (
+                                              <>
+                                                {details.loading && (
+                                                  <DropdownMenuItem disabled className="flex justify-center items-center text-slate-500">
+                                                    <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading...
+                                                  </DropdownMenuItem>
+                                                )}
+                                                {details.error && (
+                                                  <DropdownMenuItem disabled className="text-red-600 text-xs">
+                                                    Error: {details.error}
+                                                  </DropdownMenuItem>
+                                                )}
+                                                {/* Check for data being an empty array specifically */}
+                                                {details.data && details.data?.length === 0 && (
+                                                  <DropdownMenuItem disabled className="text-xs text-slate-500">No other recipients found.</DropdownMenuItem>
+                                                )}
+                                                {/* Check for data being a non-empty array */}
+                                                {details.data && details.data?.length > 0 && (
+                                                  <>
+                                                    {details.data?.map((recipient, idx) => (
+                                                      <DropdownMenuItem key={idx} className="text-xs p-1.5">
+                                                        <span className="font-medium w-8 inline-block mr-1 uppercase text-slate-500 flex-shrink-0">{recipient.recipientType}:</span>
+                                                        <span className="text-slate-700 truncate">{recipient.recipientEmail}</span>
+                                                      </DropdownMenuItem>
+                                                    ))}
+                                                  </>
+                                                )}
+                                              </>
+                                            );
+                                          } else {
+                                            // Optional: Render something if the entry doesn't exist yet (e.g., before first open)
+                                            return <DropdownMenuItem disabled className="text-xs text-slate-400">Click trigger to load...</DropdownMenuItem>;
+                                          }
+                                        })()}
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </div>
                                 )}
                                 {isLinkedIn && (
                                   <p className="text-xs text-slate-500 mt-0.5">
@@ -1239,7 +1322,7 @@ export function UniversalInboxClient() {
                               </div>
                               <div className="flex items-center gap-2 flex-shrink-0">
                                 <div className="text-sm text-slate-500">
-                                  {formatStoredDate(message.receivedAt)}
+                                  {formatDateInCentralTime(message.receivedAt)} {/* Use imported function */}
                                 </div>
                                 {isLinkedIn && isLatestMessage && (
                                   <div></div>

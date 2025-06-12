@@ -11,8 +11,9 @@ async function hasOrganizationAccess(sessionOrganizationId: string, requestedOrg
 }
 
 // Helper function to escape string values for SQL to prevent injection
-function escapeSqlString(value: string | null): string {
-  if (value === null) return 'NULL';
+function escapeSqlString(value: string | null | undefined): string {
+  // Treat undefined the same as null
+  if (value === null || value === undefined) return 'NULL'; 
   // Replace single quotes with double quotes for PostgreSQL
   return `'${value.replace(/'/g, "''")}'`;
 }
@@ -308,4 +309,4 @@ export async function PUT(
     }
     return NextResponse.json({ error: 'Internal Server Error', details: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
-} 
+}

@@ -20,25 +20,28 @@ function LoginForm() {
     setError('');
     setIsLoading(true);
 
+    console.log(`Login attempt with email: ${email}`);
+    
     try {
+      // Simplify login process
       const result = await signIn('credentials', {
         email,
         password,
         redirect: false,
       });
 
+      console.log('Login result:', result);
+
       if (result?.error) {
-        if (result.error.includes('database')) {
-          setError('Unable to connect to the service. Please try again in a few moments.');
-        } else {
-          setError(result.error);
-        }
+        console.error(`Login error: ${result.error}`);
+        setError('Login failed. Please try again.');
       } else {
+        // Always redirect to /scenarios on success
         router.push('/scenarios');
       }
     } catch (error: any) {
       console.error('Login error:', error);
-      setError('An error occurred. Please try again in a few moments.');
+      setError('An error occurred. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -55,6 +58,7 @@ function LoginForm() {
               fill
               className="object-contain"
               priority
+              sizes="192px"
               unoptimized
             />
           </div>
@@ -95,7 +99,9 @@ function LoginForm() {
 
             <Button
               type="submit"
-              className="w-full h-11 text-base bg-primary hover:bg-primary/90"
+              variant="default"
+              size="lg"
+              className="w-full"
               disabled={isLoading}
             >
               {isLoading ? 'Signing in...' : 'Sign in'}
@@ -113,4 +119,4 @@ export default function LoginPage() {
       <LoginForm />
     </Suspense>
   );
-} 
+}

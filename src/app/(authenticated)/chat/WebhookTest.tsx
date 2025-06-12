@@ -8,7 +8,7 @@ import { useSession } from 'next-auth/react';
 const WEBHOOK_TIMEOUT_MS = 150000;
 
 export default function WebhookTest() {
-  const [webhookUrl, setWebhookUrl] = useState('https://n8n.srv768302.hstgr.cloud/webhook/setter');
+  const [webhookUrl, setWebhookUrl] = useState('https://n8n-n8n.swl3bc.easypanel.host/webhook/setter');
   const [testResponse, setTestResponse] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [rawResponse, setRawResponse] = useState<string>('');
@@ -198,4 +198,4 @@ export default function WebhookTest() {
       )}
     </div>
   );
-} 
+}

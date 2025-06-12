@@ -26,7 +26,7 @@ export interface WebhookMessageResponse {
 }
 
 // Default webhook URL - can be overridden in environment variables or settings
-const DEFAULT_WEBHOOK_URL = 'https://n8n.srv768302.hstgr.cloud/webhook/setter';
+const DEFAULT_WEBHOOK_URL = 'https://n8n-n8n.swl3bc.easypanel.host/webhook/setter';
 
 // Timeout for webhook requests (150 seconds)
 const WEBHOOK_TIMEOUT_MS = 150000;
@@ -169,4 +169,4 @@ export async function sendMessageToWebhook(
     console.error('Error calling webhook:', error);
     throw error;
   }
-} 
+}

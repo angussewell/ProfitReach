@@ -58,6 +58,10 @@ import {
   ScenarioConfig // Import ScenarioConfig type
   // BranchConfig removed
 } from '@/types/workflow';
+// Remove incorrect/old imports if they exist
+// import { ScenarioPicker } from './ScenarioPicker'; 
+// import { ScenarioStepConfig } from './ScenarioStepConfig'; 
+import { ScenarioMultiSelect } from './ScenarioMultiSelect'; // Correct import
 
 // --- Helper Function ---
 /**
@@ -101,32 +105,10 @@ const actionTypeLabels: Record<ActionType, string> = {
   scenario: 'Scenario',
 };
 
-// Define available field paths based on Contacts model
-const availableFieldPaths = [
-  { value: "firstName", label: "First Name" },
-  { value: "lastName", label: "Last Name" },
-  { value: "fullName", label: "Full Name" },
-  { value: "email", label: "Email" },
-  { value: "emailStatus", label: "Email Status" },
-  { value: "title", label: "Title" },
-  { value: "linkedinUrl", label: "LinkedIn URL" },
-  { value: "headline", label: "Headline" },
-  { value: "state", label: "State" },
-  { value: "city", label: "City" },
-  { value: "country", label: "Country" },
-  { value: "currentCompanyName", label: "Company Name" },
-  { value: "leadStatus", label: "Lead Status" },
+import { getSimpleFieldOptions } from '@/lib/field-definitions';
 
-  // Common additionalData fields
-  { value: "additionalData.customTag", label: "Additional Data: Custom Tag" },
-  { value: "additionalData.priorityScore", label: "Additional Data: Priority Score" },
-  { value: "additionalData.source", label: "Additional Data: Source" },
-  { value: "additionalData.notes", label: "Additional Data: Notes" },
-  { value: "additionalData.campaignId", label: "Additional Data: Campaign ID" },
-  { value: "additionalData.lastContactedDate", label: "Additional Data: Last Contacted Date" },
-  { value: "additionalData.customerType", label: "Additional Data: Customer Type" },
-  { value: "additionalData.segment", label: "Additional Data: Segment" },
-];
+// Use field paths from the centralized field definitions
+const availableFieldPaths = getSimpleFieldOptions();
 
 // Form schema
 const stepFormSchema = z.object({
@@ -220,12 +202,9 @@ export function WorkflowStepConfigModal({
   // State for forcing re-renders
   const [forceUpdateCounter, setForceUpdateCounter] = useState(0);
   
-  // Scenario-specific state - moved to component top level
-  const [scenarios, setScenarios] = useState<Array<{ id: string; name: string }>>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [scenarioPopoverOpen, setScenarioPopoverOpen] = useState(false);
-  const [scenarioNamesMap, setScenarioNamesMap] = useState<Record<string, string>>({});
+  // State for fetching scenarios (needed for the multi-select)
+  const [fetchedScenarios, setFetchedScenarios] = useState<Array<{ id: string; name: string }>>([]);
+  const [isLoadingScenarios, setIsLoadingScenarios] = useState(false);
 
   // Create a form instance with react-hook-form
   const stepForm = useForm<StepFormValues>({
@@ -240,6 +219,42 @@ export function WorkflowStepConfigModal({
   // Get current values from the form
   const actionType = stepForm.watch('actionType') as ActionType;
   const config = stepForm.watch('config') as StepConfig;
+
+  // Define stable callback for ScenarioStepConfig
+  const handleScenarioChange = React.useCallback((newScenarioIds: string[]) => {
+    const assignmentType = newScenarioIds.length > 1 ? 'random_pool' : 'single';
+    stepForm.setValue('config.scenarioIds', newScenarioIds, { shouldValidate: true });
+    stepForm.setValue('config.assignmentType', assignmentType, { shouldValidate: true });
+  }, [stepForm]); // Dependency: stepForm instance
+
+  // Fetch scenarios when the modal is open (only needs to run once or when relevant props change)
+  useEffect(() => {
+    // Only fetch if the modal is open
+    if (!isOpen) {
+      // Optionally clear scenarios when modal closes to refetch next time
+      // setFetchedScenarios([]); 
+      return; 
+    }
+
+    async function fetchScenariosData() {
+      // No need to check actionType here, fetch always if modal is open
+      // We might optimize later to only fetch if actionType *could* be scenario
+      setIsLoadingScenarios(true);
+      try {
+        const response = await fetch('/api/scenarios/simple');
+        if (!response.ok) throw new Error('Failed to fetch scenarios');
+        const data = await response.json();
+        setFetchedScenarios(data.data || []);
+      } catch (error) {
+        console.error('Error fetching scenarios:', error);
+        setFetchedScenarios([]); // Set to empty on error
+      } finally {
+        setIsLoadingScenarios(false);
+      }
+    }
+    
+    fetchScenariosData();
+  }, [isOpen]); // Re-fetch if the modal re-opens
 
   // Update form when stepData prop changes (e.g., when opening modal for editing)
   useEffect(() => {
@@ -328,33 +343,7 @@ export function WorkflowStepConfigModal({
     onOpenChange(false); // Close modal on save
   };
 
-  // Fetch scenarios when component mounts or action type changes
-  useEffect(() => {
-    async function fetchScenarios() {
-      if (actionType === 'scenario') {
-        try {
-          setIsLoading(true);
-          const response = await fetch('/api/scenarios/simple');
-          if (!response.ok) throw new Error('Failed to fetch scenarios');
-          const data = await response.json();
-          setScenarios(data.data || []);
-          
-          // Build a map of id -> name for display purposes
-          const nameMap: Record<string, string> = {};
-          (data.data || []).forEach((s: { id: string, name: string }) => {
-            nameMap[s.id] = s.name;
-          });
-          setScenarioNamesMap(nameMap);
-        } catch (error) {
-          console.error('Error fetching scenarios:', error);
-        } finally {
-          setIsLoading(false);
-        }
-      }
-    }
-    
-    fetchScenarios();
-  }, [actionType]);
+  // Fetch scenarios useEffect REMOVED - Now handled in ScenarioStepConfig.tsx
 
   // Dynamic config fields based on action type
   const renderConfigFields = () => {
@@ -714,135 +703,23 @@ export function WorkflowStepConfigModal({
         return <p className="text-sm text-muted-foreground">No configuration needed for this action.</p>;
         
       case 'scenario': {
-        // Get current selected scenario IDs from form state
-        const currentScenarioIds: string[] = Array.isArray(stepForm.getValues('config.scenarioIds'))
-          ? stepForm.getValues('config.scenarioIds')
-          : [];
-        
-        // Filter scenarios based on search query
-        const filteredScenarios = scenarios.filter(scenario => 
-          scenario.name.toLowerCase().includes(searchQuery.toLowerCase())
-        );
-        
-        // Toggle scenario selection
-        const toggleScenario = (scenarioId: string) => {
-          const newScenarioIds = currentScenarioIds.includes(scenarioId)
-            ? currentScenarioIds.filter(id => id !== scenarioId)
-            : [...currentScenarioIds, scenarioId];
-            
-          // Automatically determine assignmentType based on number of selections
-          const assignmentType = newScenarioIds.length > 1 ? 'random_pool' : 'single';
-          
-          stepForm.setValue('config.scenarioIds', newScenarioIds, { shouldValidate: true });
-          stepForm.setValue('config.assignmentType', assignmentType, { shouldValidate: true });
-        };
+        // Get current IDs directly from form state for passing as value
+        const currentScenarioIds = stepForm.watch('config.scenarioIds') || [];
         
         return (
+          // Wrap multiple elements in a Fragment
           <>
-            <FormField
-              control={stepForm.control}
-              name="config.scenarioIds"
-              render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel>Select Scenario(s)</FormLabel>
-                  
-                  <div className="flex flex-col gap-2">
-                    <Popover 
-                      open={scenarioPopoverOpen} 
-                      onOpenChange={setScenarioPopoverOpen}
-                    >
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant="outline"
-                            role="combobox"
-                            aria-expanded={scenarioPopoverOpen}
-                            className={cn(
-                              "w-full justify-between",
-                              !currentScenarioIds.length && "text-muted-foreground"
-                            )}
-                          >
-                            {currentScenarioIds.length 
-                              ? (currentScenarioIds.length === 1
-                                  ? scenarioNamesMap[currentScenarioIds[0]] || "One scenario selected"
-                                  : `${currentScenarioIds.length} scenarios selected`)
-                              : "Select scenarios..."}
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0 max-h-[300px]">
-                        <Command>
-                          <CommandInput 
-                            placeholder="Search scenarios..." 
-                            value={searchQuery}
-                            onValueChange={setSearchQuery}
-                          />
-                          <CommandList>
-                            <CommandEmpty>No scenarios found.</CommandEmpty>
-                            <CommandGroup>
-                              {isLoading ? (
-                                <div className="flex items-center justify-center p-2">
-                                  <span className="text-sm text-muted-foreground">Loading...</span>
-                                </div>
-                              ) : (
-                                filteredScenarios.map((scenario) => (
-                                  <CommandItem
-                                    key={scenario.id}
-                                    value={scenario.name}
-                                    onSelect={() => {
-                                      toggleScenario(scenario.id);
-                                    }}
-                                  >
-                                    <div className="flex items-center gap-2 w-full">
-                                      <Checkbox
-                                        checked={currentScenarioIds.includes(scenario.id)}
-                                        className="data-[state=checked]:bg-primary"
-                                      />
-                                      <span>{scenario.name}</span>
-                                    </div>
-                                  </CommandItem>
-                                ))
-                              )}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                    
-                    {/* Display selected scenarios as tags */}
-                    {currentScenarioIds.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {currentScenarioIds.map((id: string) => (
-                          <Badge 
-                            key={id} 
-                            variant="secondary"
-                            className="gap-1"
-                          >
-                            {scenarioNamesMap[id as string] || "Unnamed Scenario"}
-                            <X 
-                              className="h-3 w-3 cursor-pointer" 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleScenario(id);
-                              }}
-                            />
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  
-                  <FormMessage />
-                </FormItem>
-              )}
+            <ScenarioMultiSelect 
+              scenarios={fetchedScenarios} 
+              isLoading={isLoadingScenarios}
+              value={currentScenarioIds} 
+              onChange={handleScenarioChange} 
             />
-            
-            {/* Information about selection behavior */}
+            {/* Add back the info text */}
             <p className="text-sm text-muted-foreground mt-2">
               {currentScenarioIds.length > 1 
                 ? "One scenario will be randomly selected from your pool when this step executes." 
-                : "Select multiple scenarios to enable random selection from a pool."}
+                : "Select one or more scenarios for this step."}
             </p>
           </>
         );
@@ -854,7 +731,7 @@ export function WorkflowStepConfigModal({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+    <Dialog open={isOpen} onOpenChange={onOpenChange}> 
       <DialogContent className="sm:max-w-[525px]">
         <DialogHeader>
           <DialogTitle>{editingIndex !== null ? 'Edit Step' : 'Add New Step'}</DialogTitle>

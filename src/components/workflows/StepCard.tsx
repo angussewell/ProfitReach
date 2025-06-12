@@ -4,7 +4,7 @@ import React from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { 
-  Clock, Mail, ClipboardEdit, ClipboardX, Webhook, GitBranch, 
+  Clock, Mail, ClipboardEdit, ClipboardX, Webhook, GitBranch, Users, // Added Users icon
   LogOut, ArrowUp, ArrowDown, Pencil, Trash2, MessageSquare
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -19,7 +19,7 @@ const actionTypeIcons: Record<ActionType, React.ReactNode> = {
   update_field: <ClipboardEdit className="h-4 w-4" />,
   clear_field: <ClipboardX className="h-4 w-4" />,
   webhook: <Webhook className="h-4 w-4" />,
-  // branch removed
+  branch: <GitBranch className="h-4 w-4" />, // Added branch back
   remove_from_workflow: <LogOut className="h-4 w-4" />,
   scenario: <MessageSquare className="h-4 w-4" />,
 };
@@ -31,7 +31,7 @@ const actionTypeColors: Record<ActionType, { bg: string, border: string, text: s
   update_field: { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-700' },
   clear_field: { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-700' },
   webhook: { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-700' },
-  // branch removed
+  branch: { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-700' }, // Added branch back
   remove_from_workflow: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700' },
   scenario: { bg: 'bg-teal-50', border: 'border-teal-200', text: 'text-teal-700' },
 };
@@ -43,7 +43,7 @@ const actionTypeLabels: Record<ActionType, string> = {
   update_field: 'Update Field',
   clear_field: 'Clear Field',
   webhook: 'Webhook',
-  // branch removed
+  branch: 'Branch (Split)', // Added branch back
   remove_from_workflow: 'Remove From Workflow',
   scenario: 'Scenario',
 };
@@ -59,6 +59,7 @@ interface StepCardProps {
   onDelete: (index: number) => void;
   onMoveUp: (index: number) => void;
   onMoveDown: (index: number) => void;
+  contactCount?: number; // Add contactCount prop
   className?: string;
 }
 
@@ -128,7 +129,12 @@ function generateStepSummary(step: WorkflowStep, allSteps: WorkflowStep[]): stri
       // If config is invalid or URL is missing/empty, return default
       return 'Call Webhook';
 
-    // 'branch' case removed
+    case 'branch': // Added branch case back
+      if (typeof config === 'object' && config && 'type' in config && config.type === 'percentage_split' && 'paths' in config && Array.isArray(config.paths)) {
+         // Simplified summary for StepCard, full details might be in config modal
+         return `Split (${config.paths.length} paths)`;
+      }
+      return 'Branch'; // Fallback
 
     case 'remove_from_workflow':
       return 'End workflow for contact';
@@ -166,6 +172,7 @@ export function StepCard({
   onDelete,
   onMoveUp,
   onMoveDown,
+  contactCount, // Destructure contactCount
   className,
 }: StepCardProps) {
   const { actionType, order, customName } = step;
@@ -183,70 +190,83 @@ export function StepCard({
         'w-64 shadow-sm transition-all duration-200 hover:shadow-md mx-auto', // Center card
         colors.bg, 'border-l-4', colors.border
       )}>
-        <CardHeader className="p-3 flex flex-row justify-between items-center space-y-0">
-          <div className="flex items-center gap-2">
+        {/* Use standard padding p-3 */}
+        <CardHeader className="p-3 flex flex-row justify-between items-center space-y-0"> 
+          {/* Left side: Step number, icon, title, count */}
+          <div className="flex items-center gap-3"> {/* Increased gap */}
             <Badge
               variant="outline"
-              className={cn("rounded-full h-6 w-6 p-1 flex items-center justify-center", colors.text)}
+              className={cn("rounded-full h-6 w-6 p-1 flex items-center justify-center shrink-0", colors.text)} // Added shrink-0
             >
               {order}
             </Badge>
-            <div className="flex flex-col">
-              <span className={cn("font-medium text-sm flex items-center gap-1", colors.text)}>
-                {actionTypeIcons[actionType]}
+            {/* Group icon, title, and count */}
+            <div className="flex items-center gap-2"> 
+              <span className={cn(colors.text, "shrink-0")}>{actionTypeIcons[actionType]}</span>
+              <span className={cn("font-medium text-sm", colors.text)}>
                 {customName || actionTypeLabels[actionType]}
               </span>
+              {/* Display contact count badge if > 0 */}
+              {contactCount && contactCount > 0 && (
+                <Badge variant="secondary" className="flex items-center gap-1 text-xs h-5 px-1.5 shrink-0"> {/* Added shrink-0 */}
+                   <Users className="h-3 w-3" /> 
+                   {contactCount}
+                </Badge>
+              )}
             </div>
           </div>
+          {/* Right side: Action buttons are moved to CardContent/Footer */}
         </CardHeader>
         
-        <CardContent className="p-3 pt-0">
-          <div className="text-xs bg-white/80 p-2 rounded border border-gray-100 text-gray-700">
+        {/* Use standard padding p-3, remove pt-0 */}
+        <CardContent className="p-3"> 
+          {/* Summary text */}
+          <div className="text-xs bg-white/80 p-2 rounded border border-gray-100 text-gray-700 mb-2"> 
             {generateStepSummary(step, allSteps)}
           </div>
           
-          {/* Action buttons row */}
-          <div className="flex justify-end gap-1 mt-2">
+          {/* Action buttons row - Reverted to size="icon" */}
+          <div className="flex justify-end gap-1 mt-2"> {/* Added margin-top */}
             <Button
               variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              onClick={() => onMoveUp(index)} // Wrap in function call with index
+              size="icon" // Reverted to icon size
+              className="h-8 w-8" // Standard icon button size
+              onClick={() => onMoveUp(index)}
               disabled={isFirst}
               title="Move Up"
             >
-              <ArrowUp className="h-3 w-3" />
+              <ArrowUp className="h-4 w-4" /> {/* Keep icon size standard */}
             </Button>
 
             <Button
               variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              onClick={() => onMoveDown(index)} // Wrap in function call with index
+              size="icon" // Reverted to icon size
+              className="h-8 w-8" // Standard icon button size
+              onClick={() => onMoveDown(index)}
               disabled={isLast}
               title="Move Down"
             >
-              <ArrowDown className="h-3 w-3" />
+              <ArrowDown className="h-4 w-4" /> {/* Keep icon size standard */}
             </Button>
             
             <Button
               variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              onClick={() => onEdit(index)} // Keep index passing for edit/delete
+              size="icon" // Reverted to icon size
+              className="h-8 w-8" // Standard icon button size
+              onClick={() => onEdit(index)}
               title="Edit Step"
             >
-              <Pencil className="h-3 w-3" />
+              <Pencil className="h-4 w-4" /> {/* Keep icon size standard */}
             </Button>
 
             <Button
               variant="ghost"
-              size="icon"
-              className="h-6 w-6 text-red-500 hover:text-red-600"
-              onClick={() => onDelete(index)} // Keep index passing for edit/delete
+              size="icon" // Reverted to icon size
+              className="h-8 w-8 text-red-500 hover:text-red-600" // Standard icon button size
+              onClick={() => onDelete(index)}
               title="Delete Step"
             >
-              <Trash2 className="h-3 w-3" />
+              <Trash2 className="h-4 w-4" /> {/* Keep icon size standard */}
             </Button>
           </div>
         </CardContent>

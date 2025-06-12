@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useTransition, useRef } from 'react';
+import React, { useState, useTransition, useRef } from 'react'; // Removed useContext
+import { useOrganization } from '@/contexts/OrganizationContext'; // Import the custom hook
 import {
   Table,
   TableBody,
@@ -10,7 +11,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Switch } from '@/components/ui/switch';
-import { Badge } from '@/components/ui/badge';
+import { Badge, type BadgeProps } from '@/components/ui/badge'; // Import BadgeProps
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -28,17 +29,20 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Pencil, MoreVertical, Trash } from 'lucide-react';
+import { Pencil, MoreVertical, Trash, Copy } from 'lucide-react'; // Added Copy icon
 import Link from 'next/link';
 import { toast } from 'sonner';
+// Import the new DuplicateWorkflowDialog
+import { DuplicateWorkflowDialog } from '@/components/workflows/DuplicateWorkflowDialog'; // Corrected import path
 
 // Define the type for the workflow data passed as props
-// This should match the type defined in the page component
+// This should match the type defined in the page component (including statusCounts)
 type WorkflowData = {
   workflowId: string;
   name: string;
-  description: string | null;
+  description: string | null; // Keep description in type if needed elsewhere, but won't display in table
   isActive: boolean;
+  statusCounts: Record<string, number> | null; // Added status counts
 };
 
 interface WorkflowListClientProps {
@@ -48,10 +52,28 @@ interface WorkflowListClientProps {
 export default function WorkflowListClient({ initialWorkflows }: WorkflowListClientProps) {
   const [workflows, setWorkflows] = useState<WorkflowData[]>(initialWorkflows);
   const [isPending, startTransition] = useTransition();
+  const { currentOrganization } = useOrganization(); // Use the custom hook
   const [isDeleting, setIsDeleting] = useState(false);
   const [isForceDeleting, setIsForceDeleting] = useState(false);
   const [workflowToDelete, setWorkflowToDelete] = useState<WorkflowData | null>(null);
+  const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
+  const [currentWorkflowToDuplicate, setCurrentWorkflowToDuplicate] = useState<WorkflowData | null>(null);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Function to open the duplicate modal
+  const handleOpenDuplicateModal = (workflow: WorkflowData) => {
+    setCurrentWorkflowToDuplicate(workflow);
+    setIsDuplicateModalOpen(true);
+  };
+
+  // Placeholder for refresh logic - replace with actual refresh mechanism if different
+  const refreshWorkflows = () => {
+    // In a real app, this would likely re-fetch data or use SWR mutate
+    console.log("Refreshing workflows list...");
+    // Example: window.location.reload(); // Simple but not ideal UX
+    // Or trigger a re-fetch if using a data fetching hook
+  };
+
 
   const handleStatusChange = async (workflowId: string, newStatus: boolean) => {
     // Optimistic update for good UX
@@ -62,7 +84,22 @@ export default function WorkflowListClient({ initialWorkflows }: WorkflowListCli
     );
 
     try {
-      const response = await fetch(`/api/workflows/${workflowId}/status`, {
+      const orgId = currentOrganization?.id; // Get org ID
+
+      if (!orgId) {
+        console.error('Organization ID not found, cannot update workflow status.');
+        toast.error('Error: Organization context is missing.');
+        // Revert optimistic update if orgId is missing
+        setWorkflows((prevWorkflows) =>
+          prevWorkflows.map((wf) =>
+            wf.workflowId === workflowId ? { ...wf, isActive: !newStatus } : wf
+          )
+        );
+        return; // Stop execution if orgId is missing
+      }
+      
+      // Use the correct URL including orgId
+      const response = await fetch(`/api/workflows/${orgId}/${workflowId}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -104,11 +141,54 @@ export default function WorkflowListClient({ initialWorkflows }: WorkflowListCli
     }
   };
 
-  const truncateDescription = (text: string | null, maxLength: number = 100) => {
-    if (!text) return '-';
-    if (text.length <= maxLength) return text;
-    return text.substring(0, maxLength) + '...';
+  // Mappings for Badge Variants and Labels
+  const statusVariantMap: Record<string, BadgeProps['variant']> = {
+    active: 'default', // Using default (often green-ish or primary) for active
+    pending_schedule: 'secondary',
+    waiting_delay: 'secondary',
+    waiting_scenario: 'secondary',
+    completed: 'outline',
+    failed: 'destructive',
+    errored: 'destructive',
+    // Add other statuses as needed
   };
+
+  const statusLabelMap: Record<string, string> = {
+    active: 'Active',
+    pending_schedule: 'Pending Schedule',
+    waiting_delay: 'Waiting Delay',
+    waiting_scenario: 'Waiting Scenario',
+    completed: 'Completed',
+    failed: 'Failed',
+    errored: 'Errored',
+    // Add other statuses as needed
+  };
+
+  // Helper function to render status counts as Badges
+  const renderStatusBadges = (counts: Record<string, number> | null) => {
+    if (!counts || Object.keys(counts).length === 0) {
+      return <span className="text-muted-foreground">-</span>;
+    }
+
+    const badges = Object.entries(counts)
+      .filter(([_, count]) => count > 0) // Only show statuses with count > 0
+      .map(([status, count]) => {
+        const variant = statusVariantMap[status] || 'secondary'; // Default to secondary if status not mapped
+        const label = statusLabelMap[status] || status; // Use raw status if not mapped
+        return (
+          <Badge key={status} variant={variant} className="whitespace-nowrap">
+            {label}: {count}
+          </Badge>
+        );
+      });
+
+    if (badges.length === 0) {
+       return <span className="text-muted-foreground">-</span>; // Handle case where all counts are 0
+    }
+
+    return <div className="flex flex-wrap gap-1">{badges}</div>;
+  };
+
 
   const handleDeleteWorkflow = async (forceDelete = false) => {
     if (!workflowToDelete) return;
@@ -160,7 +240,7 @@ export default function WorkflowListClient({ initialWorkflows }: WorkflowListCli
   };
 
   return (
-    <div className="border rounded-lg overflow-hidden">
+    <div className="border-2 border-neutral-300 rounded-lg shadow-sm overflow-hidden">
       {/* Delete confirmation dialog */}
       {/* Standard delete confirmation dialog */}
       <AlertDialog 
@@ -227,7 +307,8 @@ export default function WorkflowListClient({ initialWorkflows }: WorkflowListCli
         <TableHeader>
           <TableRow>
             <TableHead className="w-[250px]">Name</TableHead>
-            <TableHead>Description</TableHead>
+            {/* Replaced Description with Enrollment Status */}
+            <TableHead>Enrollment Status</TableHead> 
             <TableHead className="w-[100px] text-center">Status</TableHead>
             <TableHead className="w-[100px] text-center">Actions</TableHead>
           </TableRow>
@@ -243,8 +324,9 @@ export default function WorkflowListClient({ initialWorkflows }: WorkflowListCli
             workflows.map((workflow) => (
               <TableRow key={workflow.workflowId}>
                 <TableCell className="font-medium">{workflow.name}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {truncateDescription(workflow.description)}
+                {/* Replaced Description cell with Status Counts cell - Now using renderStatusBadges */}
+                <TableCell>
+                  {renderStatusBadges(workflow.statusCounts)}
                 </TableCell>
                 <TableCell className="text-center">
                   <Badge variant={workflow.isActive ? 'default' : 'outline'}
@@ -289,7 +371,16 @@ export default function WorkflowListClient({ initialWorkflows }: WorkflowListCli
                           <Trash className="mr-2 h-4 w-4" />
                           Delete
                         </DropdownMenuItem>
-                        <DropdownMenuItem 
+                        {/* Duplicate Menu Item */}
+                        <DropdownMenuItem
+                          className="cursor-pointer"
+                          onSelect={(e) => e.preventDefault()} // Prevent closing menu immediately
+                          onClick={() => handleOpenDuplicateModal(workflow)}
+                        >
+                          <Copy className="mr-2 h-4 w-4" />
+                          <span>Duplicate</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
                           className="text-red-600 focus:bg-red-50 cursor-pointer"
                           onClick={() => {
                             setIsForceDeleting(true);
@@ -308,6 +399,18 @@ export default function WorkflowListClient({ initialWorkflows }: WorkflowListCli
           )}
         </TableBody>
       </Table>
+
+      {/* Conditionally render the new Duplicate Workflow Modal */}
+      {isDuplicateModalOpen && currentWorkflowToDuplicate && (
+        <DuplicateWorkflowDialog // Use the new workflow-specific dialog
+          isOpen={isDuplicateModalOpen}
+          onClose={() => setIsDuplicateModalOpen(false)}
+          // Pass the workflow data directly to the 'workflow' prop
+          workflow={currentWorkflowToDuplicate}
+          // Pass the correct refresh function
+          refreshWorkflows={refreshWorkflows}
+        />
+      )}
     </div>
   );
 }

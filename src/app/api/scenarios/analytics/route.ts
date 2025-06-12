@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { subHours } from 'date-fns';
+import { getAuth } from '@/lib/auth-simple';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -63,10 +62,10 @@ interface Analytics {
 
 export async function GET(request: Request): Promise<NextResponse> {
   try {
-    // Check authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.organizationId) {
-      return new NextResponse('Unauthorized', { status: 401 });
+    // Simple auth check
+    const { session, error } = await getAuth();
+    if (error) {
+      return error;
     }
 
     // Get date range from query parameters

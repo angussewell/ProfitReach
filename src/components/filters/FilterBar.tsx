@@ -12,21 +12,30 @@ import SaveFilterModal from './SaveFilterModal'; // Added SaveFilterModal import
 interface FilterBarProps {
   // Accept initial filter state from parent (e.g., when loading a saved filter)
   initialFilterState?: FilterState | null; 
-  // Callback when filters are applied/cleared/changed via the bar itself
+  // Callback when filters are drafted/changed (without applying)
   onFiltersChange?: (filters: FilterState) => void; 
+  // Callback when filters should be applied (explicit user action)
+  onApplyFilters?: (filters: FilterState) => void;
+  // Callback when filters are cleared
+  onClearFilters?: () => void;
   // Callback specifically after a new filter is successfully saved
   onSaveFilterSuccess?: () => void;
   // Selected filter ID and name (for update mode)
   selectedFilterId?: string | null;
   selectedFilterName?: string | null;
+  // Whether to show "draft" status indicator
+  hasPendingChanges?: boolean;
 }
 
 export default function FilterBar({ 
   initialFilterState, 
   onFiltersChange, 
+  onApplyFilters,
+  onClearFilters,
   onSaveFilterSuccess,
   selectedFilterId,
-  selectedFilterName
+  selectedFilterName,
+  hasPendingChanges
 }: FilterBarProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -74,7 +83,8 @@ export default function FilterBar({
 
   }, [initialFilterState, searchParams /*, onFiltersChange */]); // Rerun if initial state changes
   
-  // Update URL when filters change
+  // Note: We're not automatically updating the URL anymore when filters change
+  // This will only happen when explicitly applying filters
   const updateURL = useCallback((newFilters: FilterState) => {
     const params = new URLSearchParams(searchParams.toString());
     
@@ -176,11 +186,18 @@ export default function FilterBar({
     };
     
     setFilterState(newState);
-    updateURL(newState);
     
     // Notify parent if provided
     if (onFiltersChange) {
       onFiltersChange(newState);
+    }
+    
+    // Call the separate onClearFilters callback if provided
+    if (onClearFilters) {
+      onClearFilters();
+    } else {
+      // Fall back to updating URL if no callback provided
+      updateURL(newState);
     }
   };
   
@@ -192,8 +209,8 @@ export default function FilterBar({
     return (
       <div className="mb-4">
         <Button 
-          variant="outline" 
-          size="sm"
+          variant="outline" // Use outline variant for Add Filter when collapsed
+          size="default" // Use default size for better visibility
           onClick={() => setIsExpanded(true)}
           className="flex items-center gap-1"
         >
@@ -258,10 +275,10 @@ export default function FilterBar({
       
       <div className="flex flex-wrap gap-2">
         <Button
-          variant="outline"
+          variant="secondary" // Use secondary for Add Filter inside the expanded bar
           size="sm"
           onClick={addFilterCondition}
-          className="text-xs flex items-center gap-1"
+          className="flex items-center gap-1"
         >
           <Plus className="h-3 w-3" />
           Add Filter
@@ -269,10 +286,9 @@ export default function FilterBar({
         
         {filterState.conditions.length >= 2 && (
           <Button
-            variant="outline"
+            variant="secondary" // Use secondary for AND/OR toggle
             size="sm"
             onClick={toggleLogicalOperator}
-            className="text-xs"
           >
             Match {filterState.logicalOperator === 'AND' ? 'all' : 'any'} (using {filterState.logicalOperator})
           </Button>
@@ -296,9 +312,9 @@ export default function FilterBar({
               selectedFilterName={selectedFilterName}
             >
               <Button
-                variant="outline"
+                variant="secondary" // Use secondary for Save View
                 size="sm"
-                className="text-xs flex items-center gap-1"
+                className="flex items-center gap-1"
                 disabled={activeFilterCount === 0}
               >
                 <Save className="h-3 w-3" />
@@ -307,20 +323,33 @@ export default function FilterBar({
             </SaveFilterModal>
 
             <Button
-              variant="outline"
+              variant="secondary" // Use secondary for Clear Filters
               size="sm"
               onClick={clearFilters}
-              className="text-xs"
             >
               Clear Filters
             </Button>
             
             <Button
-              variant="default"
+              variant="default" // Keep default for Apply Filters
               size="sm"
-              onClick={applyFilters}
-              className="text-xs"
+              onClick={() => {
+                // First update internal state
+                applyFilters();
+                
+                // Then notify parent to apply these filters
+                if (onApplyFilters) {
+                  onApplyFilters(filterState);
+                }
+              }}
+              className="relative"
             >
+              {hasPendingChanges && (
+                <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+                </span>
+              )}
               Apply Filters
             </Button>
           </>

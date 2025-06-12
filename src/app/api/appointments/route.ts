@@ -5,14 +5,14 @@ import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { 
   fetchAppointments, 
-  sendAppointmentWebhook as sendWebhook, 
-  APPOINTMENT_WEBHOOK_URL 
+  sendAppointmentWebhook as sendWebhook
 } from '@/lib/appointments/appointment-utils';
 
 export async function GET(req: NextRequest) {
   try {
+    // Super simple auth
     const session = await getServerSession(authOptions);
-    if (!session || !session.user.organizationId) {
+    if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

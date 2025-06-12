@@ -195,10 +195,12 @@ export function EnrollWorkflowModal({
           )}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={isEnrolling}>
+          <Button variant="outline" size="default" onClick={onClose} disabled={isEnrolling}>
             Cancel
           </Button>
           <Button
+            variant="default" // Explicitly set primary variant
+            size="default" // Explicitly set standard size
             onClick={handleEnrollConfirm}
             disabled={!selectedWorkflowId || isLoadingWorkflows || isEnrolling || activeWorkflows.length === 0}
           >

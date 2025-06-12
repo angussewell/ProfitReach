@@ -45,9 +45,8 @@ export function LogDetailsDialog({ log }: LogDetailsDialogProps) {
     <Dialog>
       <DialogTrigger asChild>
         <Button
-          variant="ghost"
+          variant="brand-gradient-warm" // Use the specific warm gradient
           size="sm"
-          className="text-[#ff7a59] hover:text-[#ff957a] hover:bg-[#ff7a59]/10"
         >
           <ScrollText className="w-4 h-4 mr-2" />
           View Details
@@ -147,4 +146,4 @@ export function LogDetailsDialog({ log }: LogDetailsDialogProps) {
       </DialogContent>
     </Dialog>
   );
-} 
+}

@@ -8,8 +8,9 @@ import {
   OPERATORS_BY_TYPE,
   FilterOperator
 } from '@/types/filters';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import TagSelector from './TagSelector';
+import { FIELD_GROUPS } from '@/lib/field-definitions';
 
 interface FilterConditionRowProps {
   condition: FilterCondition;
@@ -26,6 +27,37 @@ export default function FilterConditionRow({
   const [selectedField, setSelectedField] = useState<FieldDefinition | undefined>(
     CONTACT_FIELDS.find(field => field.name === condition.field)
   );
+
+  // Group fields for more organized selection
+  const groupedFields = useMemo(() => {
+    const groups: Record<string, FieldDefinition[]> = {};
+    
+    // Initialize groups
+    Object.values(FIELD_GROUPS).forEach(group => {
+      groups[group] = [];
+    });
+    
+    // Populate groups with fields
+    CONTACT_FIELDS.forEach(field => {
+      // Find the group for this field - default to Other if not found
+      const fieldGroup = field.name.startsWith('additionalData.') 
+        ? FIELD_GROUPS.CUSTOM 
+        : Object.entries(FIELD_GROUPS).find(([key, label]) => 
+            field.name.includes(key.toLowerCase())
+          )?.[1] || FIELD_GROUPS.OTHER;
+      
+      if (!groups[fieldGroup]) {
+        groups[fieldGroup] = [];
+      }
+      
+      groups[fieldGroup].push(field);
+    });
+    
+    // Filter out empty groups
+    return Object.entries(groups)
+      .filter(([_, fields]) => fields.length > 0)
+      .sort(([groupA], [groupB]) => groupA.localeCompare(groupB));
+  }, []);
 
   // When the condition.field changes, update the selected field definition
   useEffect(() => {
@@ -90,17 +122,21 @@ export default function FilterConditionRow({
 
   return (
     <div className="flex flex-wrap md:flex-nowrap items-center gap-2 bg-gray-50 p-2 rounded-md">
-      {/* Field selector */}
+      {/* Field selector - Grouped by category */}
       <div className="w-full md:w-1/3">
         <select
           value={condition.field}
           onChange={handleFieldChange}
           className="w-full rounded-md border border-gray-300 bg-white py-2 pl-3 pr-10 text-sm leading-5 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
         >
-          {CONTACT_FIELDS.map(field => (
-            <option key={field.name} value={field.name}>
-              {field.label}
-            </option>
+          {groupedFields.map(([group, fields]) => (
+            <optgroup key={group} label={group}>
+              {fields.map(field => (
+                <option key={field.name} value={field.name}>
+                  {field.label}
+                </option>
+              ))}
+            </optgroup>
           ))}
         </select>
       </div>
@@ -204,14 +240,16 @@ export default function FilterConditionRow({
 
       {/* Remove button */}
       <div className="flex items-center justify-center">
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={onRemove}
-          className="p-2 text-gray-400 hover:text-gray-500 focus:outline-none text-xl font-bold"
           aria-label="Remove filter"
           title="Remove filter"
+          className="text-gray-400 hover:text-gray-500" // Keep hover color if desired, or remove for default ghost hover
         >
-          ×
-        </button>
+          <span className="text-xl font-bold">×</span> {/* Use span for the 'x' character */}
+        </Button>
       </div>
     </div>
   );

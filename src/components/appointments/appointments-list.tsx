@@ -269,7 +269,7 @@ export function AppointmentsList({ appointments }: AppointmentsListProps) {
   return (
     <>
       <ScrollArea className="h-[500px] rounded-md border">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
           {sortedAppointments.map((appointment) => (
             <Card key={appointment.id} className="bg-white shadow-sm hover:shadow-md transition-all duration-200">
               <CardContent className="p-4">
@@ -392,22 +392,22 @@ export function AppointmentsList({ appointments }: AppointmentsListProps) {
                     </div>
                     <div className="flex items-center gap-1">
                       <Button
-                        variant="ghost"
-                        size="icon"
+                        variant="ghost" // Use ghost for subtle actions
+                        size="icon" // Use standard icon size
                         onClick={() => handleEdit(appointment)}
                         title="Edit appointment"
-                        className="h-8 w-8 hover:bg-slate-100"
+                        className="text-muted-foreground hover:text-foreground" // Standard hover
                       >
-                        <Edit className="h-4 w-4" />
+                        <Edit className="h-5 w-5" /> {/* Use standard icon size */}
                       </Button>
                       <Button
-                        variant="ghost"
-                        size="icon"
+                        variant="destructive" // Use subtle destructive
+                        size="icon" // Use standard icon size
                         onClick={() => handleDelete(appointment.id)}
                         title="Delete appointment"
-                        className="h-8 w-8 hover:bg-red-50 hover:text-red-500"
+                        className="text-red-600 hover:bg-red-50" // Add specific destructive styling
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-5 w-5" /> {/* Use standard icon size */}
                       </Button>
                     </div>
                   </div>
@@ -576,7 +576,7 @@ export function AppointmentsList({ appointments }: AppointmentsListProps) {
                 />
                 <Button 
                   type="button" 
-                  variant="outline" 
+                  variant="secondary" // Use secondary for Add Recipient
                   size="icon"
                   onClick={addRecipient}
                 >
@@ -593,7 +593,7 @@ export function AppointmentsList({ appointments }: AppointmentsListProps) {
                         type="button" 
                         variant="ghost" 
                         size="icon" 
-                        className="h-5 w-5 ml-1 p-0"
+                        className="ml-1 h-6 w-6 p-1 text-muted-foreground hover:text-foreground" // Adjust size and styling
                         onClick={() => removeRecipient(email)}
                       >
                         <X className="h-3 w-3" />
@@ -615,10 +615,10 @@ export function AppointmentsList({ appointments }: AppointmentsListProps) {
             </div>
             
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+              <Button type="button" variant="secondary" onClick={() => setIsEditDialogOpen(false)}> {/* Use secondary for Cancel */}
                 Cancel
               </Button>
-              <Button type="submit">Save Changes</Button>
+              <Button type="submit" variant="default">Save Changes</Button> {/* Use default for primary action */}
             </DialogFooter>
           </form>
         </DialogContent>

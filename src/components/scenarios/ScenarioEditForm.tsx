@@ -133,7 +133,8 @@ export function ScenarioEditForm({ scenario, fields, snippets, attachments }: Sc
         <h1 className="text-2xl font-bold">Edit Scenario: {scenario.name}</h1>
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button variant="destructive" size="sm">
+            {/* Changed to subtle destructive style */}
+            <Button variant="outline" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10">
               <Trash2 className="w-4 h-4 mr-2" />
               Delete Scenario
             </Button>
@@ -147,12 +148,12 @@ export function ScenarioEditForm({ scenario, fields, snippets, attachments }: Sc
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                className="bg-red-600 hover:bg-red-700"
-                onClick={handleDelete}
-              >
-                Delete
+              {/* Remove asChild, apply Button styles directly if possible, or wrap Button */}
+              <AlertDialogCancel> 
+                 <Button variant="outline" size="default">Cancel</Button> 
+              </AlertDialogCancel>
+              <AlertDialogAction onClick={handleDelete}>
+                 <Button variant="destructive" size="default">Delete</Button>
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -313,6 +314,8 @@ export function ScenarioEditForm({ scenario, fields, snippets, attachments }: Sc
         <div className="flex justify-end">
           <Button 
             type="submit"
+            variant="default" // Explicitly set primary variant
+            size="default" // Explicitly set standard size
           >
             Save Changes
           </Button>

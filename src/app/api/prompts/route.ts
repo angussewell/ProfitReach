@@ -31,23 +31,29 @@ export async function GET() {
 
 // Create a new prompt
 export async function POST(request: Request) {
+  console.log(`--- Handling POST /api/prompts ---`);
+  // Optional: Log key headers
+  // console.log('Request Headers:', JSON.stringify(Object.fromEntries(request.headers), null, 2));
   try {
     const session = await getServerSession(authOptions);
+    // Optional: Log session info
+    // console.log('Session User ID:', session?.user?.id);
+    // console.log('Session Org ID:', session?.user?.organizationId);
     
     if (!session?.user?.organizationId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Log the raw incoming request body for debugging
     const rawBody = await request.clone().json(); // Clone request to read body again later
-    console.log('--- RAW INCOMING BODY /api/prompts ---:', JSON.stringify(rawBody, null, 2));
+    console.log('Received Body for Prompt:', JSON.stringify(rawBody, null, 2));
 
     const data = rawBody; // Use the already parsed body
     const { name, content } = data;
 
     if (!name || !content) {
+      console.error("!!! API Validation Error (Prompt): Missing 'name' or 'content'", { name: !!name, content: !!content });
       return NextResponse.json(
-        { error: 'Name and content are required' },
+        { success: false, error: 'Invalid input: Name and content are required.' },
         { status: 400 }
       );
     }
@@ -57,10 +63,13 @@ export async function POST(request: Request) {
     const now = new Date();
     const organizationId = session.user.organizationId;
 
+    const insertData = { id, name, content, organizationId, createdAt: now, updatedAt: now };
+    console.log('Attempting prompt INSERT with data:', insertData);
+
     // Use raw SQL to insert the record with all required fields
     await prisma.$executeRaw`
       INSERT INTO "Prompt" (id, name, content, "organizationId", "createdAt", "updatedAt")
-      VALUES (${id}, ${name}, ${content}, ${organizationId}, ${now}, ${now})
+      VALUES (${insertData.id}, ${insertData.name}, ${insertData.content}, ${insertData.organizationId}, ${insertData.createdAt}, ${insertData.updatedAt})
     `;
 
     // Fetch the created prompt to return it
@@ -70,10 +79,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json(prompt);
   } catch (error) {
-    console.error('Error creating prompt:', error);
+    console.error("!!! API Error creating prompt:", error); // Log the complete error object
     return NextResponse.json(
-      { error: 'Failed to create prompt' },
-      { status: 500 }
+      { success: false, error: 'Failed to create prompt.' },
+      { status: 500 } // Return 500 for unexpected server errors
     );
   }
 }

@@ -7,6 +7,8 @@ import { useToast } from '@/components/ui/use-toast';
 import ConversationSidebar from './ConversationSidebar';
 import ThinkingAnimation from './ThinkingAnimation';
 import WebhookTest from './WebhookTest';
+import { Button } from '@/components/ui/button'; // Added Button import
+import { cn } from '@/lib/utils'; // Added cn import
 import { CodeBlock } from './CodeBlock';
 import { parseMessageContent } from './messageUtils';
 
@@ -442,35 +444,39 @@ End of the complex example.`,
           </div>
           <div className="flex items-center gap-4">
             {/* Email Mode Toggle */}
-            <div className="flex items-center bg-slate-100 rounded-lg p-1">
-              <button
+            {/* Email Mode Toggle using Button component */}
+            <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
+              <Button
+                variant={emailMode === 'new' ? 'default' : 'secondary'}
+                size="sm"
                 onClick={() => handleEmailModeChange('new')}
-                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                  emailMode === 'new'
-                    ? 'bg-white text-red-600 shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
+                className={cn(
+                  "transition-all",
+                  emailMode === 'new' ? "shadow-sm" : "shadow-none border-transparent text-gray-600"
+                )}
               >
                 New Email
-              </button>
-              <button
+              </Button>
+              <Button
+                variant={emailMode === 'response' ? 'default' : 'secondary'}
+                size="sm"
                 onClick={() => handleEmailModeChange('response')}
-                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                  emailMode === 'response'
-                    ? 'bg-white text-red-600 shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
+                 className={cn(
+                  "transition-all",
+                  emailMode === 'response' ? "shadow-sm" : "shadow-none border-transparent text-gray-600"
+                )}
               >
                 Response
-              </button>
+              </Button>
             </div>
-            <button 
+            <Button 
+              variant="link"
               onClick={toggleWebhookTest}
-              className="text-sm text-slate-500 hover:text-slate-700 transition-colors underline-offset-4 hover:underline focus:outline-none"
+              className="text-sm"
               aria-label="Toggle webhook test panel"
             >
               {showWebhookTest ? 'Hide developer tools' : 'Developer tools'}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -564,21 +570,23 @@ End of the complex example.`,
                 }}
                 className="flex-1 px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent shadow-sm transition-shadow duration-200"
               />
-              <button 
+              <Button 
                 type="submit"
+                variant="brand-gradient-warm" // Using warm gradient for primary send action
+                size="icon"
                 disabled={!inputMessage.trim() || isLoading || !activeConversationId}
-                className="p-3.5 bg-red-500 text-white rounded-xl hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 shadow-sm"
                 aria-label="Send message"
               >
+                {/* Send Icon */}
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="22" y1="2" x2="11" y2="13"></line>
                   <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
                 </svg>
-              </button>
+              </Button>
             </form>
           </div>
         </div>
       </div>
     </div>
   );
-} 
+}

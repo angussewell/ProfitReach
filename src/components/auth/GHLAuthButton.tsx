@@ -24,11 +24,13 @@ export function GHLAuthButton() {
   };
 
   return (
-    <Button
-      onClick={handleConnect}
-      disabled={!session?.user?.organizationId}
-    >
-      Connect GoHighLevel
+<Button
+  onClick={handleConnect}
+  variant="default"
+  size="default"
+  disabled={!session?.user?.organizationId}
+>
+  Connect GoHighLevel
     </Button>
   );
-} 
+}

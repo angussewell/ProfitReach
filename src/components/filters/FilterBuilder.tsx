@@ -3,10 +3,11 @@
 import React, { useState } from 'react'; // Added React import
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Filter, FilterOperator } from '@/types/filters'; // Removed FilterGroup, createFilter
-import { createFilter } from '@/lib/filter-utils'; // Import createFilter from the correct location
-import { X, Plus, ChevronDown } from 'lucide-react';
+import { Filter, FilterOperator } from '@/types/filters';
+import { createFilter } from '@/lib/filter-utils';
+import { X, Plus } from 'lucide-react'; // Removed ChevronDown as it's handled by SearchableSelect
 import { Label } from '@/components/ui/label';
+import { SearchableSelect } from '@/components/ui/searchable-select'; // Import SearchableSelect
 
 interface FilterGroupProps {
   filters: Filter[];
@@ -18,7 +19,10 @@ interface FilterGroupProps {
 
 function FilterGroupComponent({ filters, fields, onUpdate, onDelete, showDelete }: FilterGroupProps) {
   // Corrected operator names to match FilterOperator type (camelCase)
-  const operators: FilterOperator[] = ['exists', 'not exists', 'equals', 'notEquals', 'contains', 'notContains']; 
+  const operators: FilterOperator[] = ['exists', 'not exists', 'equals', 'notEquals', 'contains', 'notContains'];
+  
+  // Map fields to the format required by SearchableSelect
+  const fieldOptions = fields.map(field => ({ value: field, label: field }));
 
   const addFilter = () => {
     const newFilter = createFilter(fields[0], 'exists');
@@ -42,18 +46,25 @@ function FilterGroupComponent({ filters, fields, onUpdate, onDelete, showDelete 
       {filters.map((filter, index) => (
         <div key={filter.id}>
           <div className="flex items-center gap-2">
-            {/* Field selector */}
-            <select
+            {/* Field selector - Replaced with SearchableSelect */}
+            <SearchableSelect
+              options={fieldOptions}
               value={filter.field}
-              onChange={(e) => updateFilter(filter.id, { field: e.target.value })}
-              className="flex w-full items-center justify-between bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 h-12 border-2 border-gray-200 focus:border-[#ff7a59] focus:ring-[#ff7a59]/20 transition-all rounded-lg"
-            >
-              {fields.map(field => (
-                <option key={field} value={field}>{field}</option>
-              ))}
-            </select>
+              onChange={(selectedValue) => updateFilter(filter.id, { field: selectedValue })}
+              placeholder="Select field..."
+              // Apply styling to match other inputs
+              // Note: SearchableSelect renders a Button trigger. We style that button.
+              // The component itself doesn't take className directly for the trigger.
+              // We might need to adjust SearchableSelect or wrap it if direct styling isn't enough.
+              // For now, relying on SearchableSelect's internal Button styling + potential overrides.
+              // Let's assume SearchableSelect's Button uses `h-12` and appropriate border/focus styles,
+              // or we adjust it later if needed after visual inspection.
+              // The base SearchableSelect uses `variant="outline"` and `w-full justify-between`.
+              // We need to ensure height and border consistency.
+              // TODO: Verify styling after implementation. Add wrapper div with classes if needed.
+            />
 
-            {/* Operator selector */}
+            {/* Operator selector - Unchanged */}
             <select
               value={filter.operator}
               onChange={(e) => {

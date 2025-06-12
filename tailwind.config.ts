@@ -57,6 +57,13 @@ const config = {
           accent: "var(--brand-accent)",
           "accent-dark": "var(--brand-accent-dark)",
           light: "var(--brand-light)",
+          // Gradient Stops
+          'warm-start': 'var(--brand-warm-start)',
+          'warm-middle': 'var(--brand-warm-middle)',
+          'warm-end': 'var(--brand-warm-end)',
+          'cold-start': 'var(--brand-cold-start)',
+          'cold-middle': 'var(--brand-cold-middle)',
+          'cold-end': 'var(--brand-cold-end)',
         },
       },
       borderRadius: {

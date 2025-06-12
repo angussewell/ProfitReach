@@ -4,30 +4,10 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import TagSelector from '@/components/filters/TagSelector';
 import { format } from 'date-fns';
+import { getCommonFieldOptions, LEAD_STATUS_OPTIONS } from '@/lib/field-definitions';
 
-
-// Field options for bulk editing
-const FIELD_OPTIONS = [
-  { value: 'title', label: 'Title' },
-  { value: 'currentCompanyName', label: 'Company' },
-  { value: 'leadStatus', label: 'Lead Status' },
-  { value: 'lastActivityAt', label: 'Last Activity Date' },
-  { value: 'tags', label: 'Tags' },
-  { value: 'country', label: 'Country' },
-  { value: 'state', label: 'State' },
-  { value: 'city', label: 'City' },
-];
-
-// Valid lead status options
-const LEAD_STATUS_OPTIONS = [
-  { value: 'New', label: 'New' },
-  { value: 'Contacted', label: 'Contacted' },
-  { value: 'Qualified', label: 'Qualified' },
-  { value: 'Unqualified', label: 'Unqualified' },
-  { value: 'Replied', label: 'Replied' },
-  { value: 'Customer', label: 'Customer' },
-  { value: 'Churned', label: 'Churned' },
-];
+// Field options for bulk editing - use the common fields subset from the centralized definition
+const FIELD_OPTIONS = getCommonFieldOptions();
 
 interface BulkEditModalProps {
   isOpen: boolean;

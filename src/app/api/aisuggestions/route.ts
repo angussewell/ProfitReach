@@ -1,50 +1,40 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth';
 
-/**
- * API route handler that proxies requests to the n8n webhook for AI suggestions
- * This solves CORS issues by handling the external API call server-side
- * This endpoint is configured as a public API that doesn't require authentication
- */
 export async function POST(request: Request) {
-  try {
-    // Get payload from the request
-    const payload = await request.json();
-    
-    // Log the incoming payload for debugging
-    console.log('AI suggestions webhook received payload:', JSON.stringify(payload, null, 2));
-    
-    // Forward the request to the n8n webhook
-    const response = await fetch('https://n8n.srv768302.hstgr.cloud/webhook/aisuggestions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-    
-    // Check if the response is ok
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`Error from n8n webhook: ${response.status} ${response.statusText}`, errorText);
-      return NextResponse.json(
-        { error: `Failed to process request: ${response.statusText}` },
-        { status: response.status }
-      );
-    }
-    
-    // Get the response data
-    const data = await response.json();
-    
-    // Log the response for debugging
-    console.log('AI suggestions webhook response:', JSON.stringify(data, null, 2));
-    
-    // Return the response to the client
-    return NextResponse.json(data, { status: 200 });
-  } catch (error) {
-    console.error('Error in AI suggestions webhook:', error);
-    return NextResponse.json(
-      { error: 'Failed to process request', details: error instanceof Error ? error.message : String(error) },
-      { status: 500 }
-    );
+  const session = await getServerSession(authOptions);
+
+  // Basic auth check (adjust role if needed)
+  if (!session?.user?.organizationId) {
+    console.error('[API/aisuggestions] Unauthorized: No session or organizationId');
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-} 
+
+  try {
+    const payload = await request.json();
+    console.log('[API/aisuggestions] Received payload:', JSON.stringify(payload, null, 2));
+
+    // TODO: Replace with real AI service call to generate suggestions based on payload.
+    // For now, return dummy suggestions after a short delay.
+
+    await new Promise(resolve => setTimeout(resolve, 500)); // Simulate network delay
+
+    const dummySuggestions = {
+      suggestions: {
+        s1: `Dummy Suggestion 1 based on:\n"${payload[0]?.content?.slice(0, 50)}..."`,
+        s2: `Dummy Suggestion 2 - maybe ask about availability?`,
+        s3: `Dummy Suggestion 3 - offer a quick call.`,
+      }
+    };
+
+    // Note: The actual implementation should likely update the EmailMessage record
+    // in the database with the new suggestions and the frontend should re-fetch
+    // or optimistically update. This stub just returns them directly.
+    return NextResponse.json(dummySuggestions);
+
+  } catch (error) {
+    console.error('[API/aisuggestions] Error processing request:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}

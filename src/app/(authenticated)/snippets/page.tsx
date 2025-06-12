@@ -19,7 +19,10 @@ import { CodeEditor } from '@/components/ui/code-editor';
 import { PageHeader } from '@/components/ui/page-header';
 import { motion } from 'framer-motion';
 import { PromptInput } from '@/components/prompts/prompt-input';
+import { Copy } from 'lucide-react'; // Import Copy icon
+import { DuplicateSnippetDialog } from '@/components/snippets/DuplicateSnippetDialog'; // Import the new dialog
 
+// Update Snippet interface if needed, though the dialog only needs id/name
 interface Snippet {
   id: string;
   name: string;
@@ -31,6 +34,8 @@ export default function SnippetsPage(): JSX.Element {
   const [loading, setLoading] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [editingSnippet, setEditingSnippet] = React.useState<Snippet | null>(null);
+  const [snippetToDuplicate, setSnippetToDuplicate] = React.useState<Snippet | null>(null); // State for duplication target
+  const [isDuplicateModalOpen, setIsDuplicateModalOpen] = React.useState(false); // State for modal visibility
   const { toast } = useToast();
 
   React.useEffect(() => {
@@ -112,6 +117,12 @@ export default function SnippetsPage(): JSX.Element {
         variant: 'destructive',
       });
     }
+  };
+
+  // Handler to open the duplicate modal
+  const handleDuplicateClick = (snippet: Snippet) => {
+    setSnippetToDuplicate(snippet);
+    setIsDuplicateModalOpen(true);
   };
 
   const filteredSnippets = snippets.filter(snippet =>
@@ -224,6 +235,14 @@ export default function SnippetsPage(): JSX.Element {
           </DialogContent>
         </Dialog>
 
+        {/* Duplicate Snippet Dialog */}
+        <DuplicateSnippetDialog
+          isOpen={isDuplicateModalOpen}
+          onClose={() => setIsDuplicateModalOpen(false)}
+          snippet={snippetToDuplicate}
+          refreshSnippets={fetchSnippets} // Pass the fetch function to refresh the list
+        />
+
         <div className="technical-grid">
           {filteredSnippets.map((snippet) => (
             <motion.div
@@ -247,9 +266,19 @@ export default function SnippetsPage(): JSX.Element {
                       >
                         Edit
                       </Button>
+                      {/* Add Duplicate Button */}
                       <Button
                         variant="ghost"
-                        size="sm"
+                        size="icon" // Use icon size for consistency if desired, or keep sm
+                        onClick={() => handleDuplicateClick(snippet)}
+                        className="text-muted-foreground hover:text-primary hover:bg-primary/5 h-8 w-8" // Adjust size/padding if using 'icon'
+                        aria-label={`Duplicate snippet ${snippet.name}`}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm" // Keep sm for Delete or adjust as needed
                         onClick={() => handleDelete(snippet.id)}
                         className="text-destructive hover:text-destructive hover:bg-destructive/5"
                       >

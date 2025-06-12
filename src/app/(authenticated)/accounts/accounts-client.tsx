@@ -1,26 +1,56 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useContext } from 'react'; // Added useContext
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { PageContainer } from '@/components/layout/PageContainer';
+import { useForm } from 'react-hook-form'; // Added
+import { zodResolver } from '@hookform/resolvers/zod'; // Added
+import * as z from 'zod'; // Added
+import { Sparkles, Pencil, Trash2 } from 'lucide-react'; // Added & Keep specific icon imports
+import { useOrganization } from '@/contexts/OrganizationContext'; // Changed to useOrganization hook
+// Direct imports instead of client-components aliases
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
+import { Textarea } from "@/components/ui/textarea";
+/* Remove alias imports
 import {
-  ClientButton,
-  ClientInput,
-  ClientCard,
-  ClientSwitch,
-  ClientTabsRoot,
-  ClientTabsList,
-  ClientTabsTrigger,
-  ClientTabsContent,
-  ClientPencilIcon,
-  ClientTrashIcon,
-  ClientSelect,
-  ClientSelectTrigger,
-  ClientSelectValue,
-  ClientSelectContent,
-  ClientSelectItem
+  ClientButton, // Replaced with Button
+  ClientInput, // Replaced with Input
+  ClientCard, // Replaced with Card
+  ClientSwitch, // Replaced with Switch
+  ClientTabsRoot, // Replaced with Tabs
+  ClientTabsList, // Replaced with TabsList
+  ClientTabsTrigger, // Replaced with TabsTrigger
+  ClientTabsContent, // Replaced with TabsContent
+  ClientPencilIcon, // Replaced with Pencil
+  ClientTrashIcon, // Replaced with Trash2
+  ClientSelect, // Replaced with Select
+  ClientSelectTrigger, // Replaced with SelectTrigger
+  ClientSelectValue, // Replaced with SelectValue
+  ClientSelectContent, // Replaced with SelectContent
+  ClientSelectItem, // Replaced with SelectItem
+  ClientDialog, // Replaced with Dialog
+  ClientDialogContent, // Replaced with DialogContent
+  ClientDialogHeader, // Replaced with DialogHeader
+  ClientDialogTitle, // Replaced with DialogTitle
+  ClientDialogDescription, // Replaced with DialogDescription
+  ClientDialogFooter, // Replaced with DialogFooter
+  ClientForm, // Replaced with Form
+  ClientFormField, // Replaced with FormField
+  ClientFormItem, // Replaced with FormItem
+  ClientFormLabel, // Replaced with FormLabel
+  ClientFormControl, // Replaced with FormControl
+  ClientFormMessage, // Replaced with FormMessage
+  ClientTextarea // Replaced with Textarea
 } from '@/components/ui/client-components';
+*/ // This line was commented out, now uncommented
 
 interface EmailAccount {
   id: string;
@@ -31,6 +61,10 @@ interface EmailAccount {
   updatedAt: string;
   isActive: boolean;
   isHidden?: boolean;
+  // --- Add these fields ---
+  dailySendLimit: number;
+  dailySendCount: number;
+  // -----------------------
 }
 
 interface SocialAccount {
@@ -55,6 +89,8 @@ export function AccountsClient() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('email');
   const [updatingAssociation, setUpdatingAssociation] = useState(false);
+  const [isSyncDialogOpen, setIsSyncDialogOpen] = useState(false); // Dialog state for modal
+  const { currentOrganization } = useOrganization(); // Changed to useOrganization hook
 
   // Filter accounts based on search query and visibility
   const filteredEmailAccounts = emailAccounts.filter(account => 
@@ -347,106 +383,122 @@ export function AccountsClient() {
     }
   };
 
-  const renderAccount = (account: EmailAccount | SocialAccount, type: 'email' | 'social') => (
-    <ClientCard key={account.id} className="p-4">
-      <div className="flex flex-col space-y-3">
-        {/* Header with name and actions */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {editingAccountId === account.id ? (
-              <ClientInput
-                value={accountName}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAccountName(e.target.value)}
-                onBlur={() => handleNameInputBlur(account, type)}
-                onKeyDown={(e) => handleNameInputKeyPress(e, account, type)}
-                className="max-w-[300px]"
-                autoFocus
-              />
-            ) : (
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-lg">{account.name}</span>
-                <ClientButton
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setEditingAccountId(account.id);
-                    setAccountName(account.name);
-                  }}
-                >
-                  <ClientPencilIcon className="h-3.5 w-3.5" />
-                </ClientButton>
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3">
+  // Convert to explicit return function to fix ambiguous syntax
+  const renderAccount = (account: EmailAccount | SocialAccount, type: 'email' | 'social') => {
+    return (
+      <Card key={account.id} className="p-4"> {/* ClientCard -> Card */}
+        <div className="flex flex-col space-y-3">
+          {/* Header with name and actions */}
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-500">
-                {account.isActive ? 'Active' : 'Inactive'}
-              </span>
-              <ClientSwitch
-                checked={account.isActive}
-                onCheckedChange={() => handleToggleActive(account, type)}
-                className="data-[state=checked]:bg-green-500"
-              />
+              {editingAccountId === account.id ? (
+                <Input // ClientInput -> Input
+                  value={accountName}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAccountName(e.target.value)}
+                  onBlur={() => handleNameInputBlur(account, type)}
+                  onKeyDown={(e) => handleNameInputKeyPress(e, account, type)}
+                  className="max-w-[300px]"
+                  autoFocus
+                />
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-lg">{account.name}</span>
+                  <Button // ClientButton -> Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setEditingAccountId(account.id);
+                      setAccountName(account.name);
+                    }}
+                  >
+                    <Pencil className="h-3.5 w-3.5" /> {/* ClientPencilIcon -> Pencil */}
+                  </Button>
+                </div>
+              )}
             </div>
-            <ClientButton
-              variant="ghost"
-              size="sm"
-              onClick={() => handleDelete(account, type)}
-              className="text-gray-400 hover:text-red-500"
-            >
-              <ClientTrashIcon className="h-4 w-4" />
-            </ClientButton>
-          </div>
-        </div>
 
-        {/* Account details */}
-        <div className="text-sm text-gray-500">
-          {type === 'email' 
-            ? (account as EmailAccount).email
-            : <div className="flex flex-col space-y-1">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500">
+                  {account.isActive ? 'Active' : 'Inactive'}
+                </span>
+                <Switch // ClientSwitch -> Switch
+                  checked={account.isActive}
+                  onCheckedChange={() => handleToggleActive(account, type)}
+                  className="data-[state=checked]:bg-green-500"
+                />
               </div>
-          }
-        </div>
-          
-        {/* Email account association dropdown for social accounts */}
-        {type === 'social' && (
-          <div className="mt-1">
-            <ClientSelect
-              value={(account as SocialAccount).emailAccountId || "none"}
-              onValueChange={(value) => handleAssociateEmail(account.id, value === "none" ? null : value)}
-              disabled={updatingAssociation}
-            >
-              <ClientSelectTrigger className="w-full h-9 text-sm">
-                <ClientSelectValue placeholder="Select an email account" />
-              </ClientSelectTrigger>
-              <ClientSelectContent>
-                <ClientSelectItem value="none">
-                  No association
-                </ClientSelectItem>
-                {getAvailableEmailAccounts(account.id).map((email) => (
-                  <ClientSelectItem key={email.id} value={email.id}>
-                    {email.name} ({email.email})
-                  </ClientSelectItem>
-                ))}
-                {/* If this social account already has an associated email that wouldn't be in the available list */}
-                {(account as SocialAccount).emailAccountId && 
-                  !getAvailableEmailAccounts(account.id).some(email => email.id === (account as SocialAccount).emailAccountId) && 
-                  emailAccounts.find(email => email.id === (account as SocialAccount).emailAccountId) && (
-                    <ClientSelectItem key={(account as SocialAccount).emailAccountId} value={(account as SocialAccount).emailAccountId}>
-                      {emailAccounts.find(email => email.id === (account as SocialAccount).emailAccountId)?.name} 
-                      ({emailAccounts.find(email => email.id === (account as SocialAccount).emailAccountId)?.email})
-                    </ClientSelectItem>
-                  )
-                }
-              </ClientSelectContent>
-            </ClientSelect>
+              <Button // ClientButton -> Button
+                variant="ghost" // Changed to ghost with text-destructive class for subtle red
+                size="icon"
+                className="text-destructive hover:bg-destructive/10"
+                onClick={() => handleDelete(account, type)}
+                aria-label="Delete account"
+              >
+                <Trash2 className="h-4 w-4" /> {/* ClientTrashIcon -> Trash2 */}
+              </Button>
+            </div>
           </div>
-        )}
-      </div>
-    </ClientCard>
-  );
+
+          {/* Account details */}
+          <div className="text-sm text-gray-500">
+            {type === 'email'
+              ? (
+                <div className="flex flex-col space-y-1">
+                  <span>{(account as EmailAccount).email}</span>
+                  {/* --- Add this section --- */}
+                  <div className="flex items-center space-x-2 text-xs text-muted-foreground pt-1">
+                    <span>Daily Sends:</span>
+                    <span className="font-medium">{(account as EmailAccount).dailySendCount ?? 0}</span>
+                    <span>/</span>
+                    <span>{(account as EmailAccount).dailySendLimit ?? 'N/A'}</span>
+                  </div>
+                  {/* ----------------------- */}
+                </div>
+              )
+              : <div className="flex flex-col space-y-1">
+                </div>
+            }
+          </div>
+            
+          {/* Email account association dropdown for social accounts */}
+          {type === 'social' && (
+            <div className="mt-1">
+              <Select // ClientSelect -> Select
+                value={(account as SocialAccount).emailAccountId || "none"}
+                onValueChange={(value) => handleAssociateEmail(account.id, value === "none" ? null : value)}
+                disabled={updatingAssociation}
+              >
+                <SelectTrigger className="w-full h-9 text-sm"> {/* ClientSelectTrigger -> SelectTrigger */}
+                  <SelectValue placeholder="Select an email account" /> {/* ClientSelectValue -> SelectValue */}
+                </SelectTrigger>
+                <SelectContent> {/* ClientSelectContent -> SelectContent */}
+                  <SelectItem value="none"> {/* ClientSelectItem -> SelectItem */}
+                    No association
+                  </SelectItem>
+                  {getAvailableEmailAccounts(account.id).map((email) => (
+                    <SelectItem key={email.id} value={email.id}> {/* ClientSelectItem -> SelectItem */}
+                      {email.name} ({email.email})
+                    </SelectItem>
+                  ))}
+                  {/* If this social account already has an associated email that wouldn't be in the available list */}
+                  {(account as SocialAccount).emailAccountId &&
+                    !getAvailableEmailAccounts(account.id).some(email => email.id === (account as SocialAccount).emailAccountId) &&
+                    emailAccounts.find(email => email.id === (account as SocialAccount).emailAccountId) && (
+                      <SelectItem key={(account as SocialAccount).emailAccountId ?? 'current-assoc'} value={(account as SocialAccount).emailAccountId ?? 'none'}> {/* ClientSelectItem -> SelectItem */}
+                        {emailAccounts.find(email => email.id === (account as SocialAccount).emailAccountId)?.name}
+                        ({emailAccounts.find(email => email.id === (account as SocialAccount).emailAccountId)?.email})
+                      </SelectItem>
+                    )
+                  }
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
+      </Card>
+    );
+  };
 
   return (
     <PageContainer>
@@ -458,24 +510,39 @@ export function AccountsClient() {
               Manage your connected email and LinkedIn accounts
             </p>
           </div>
-          <ClientButton onClick={handleConnect}>Connect Account</ClientButton>
+          <div className="flex items-center gap-2">
+            <Button // ClientButton -> Button
+              variant="brand-gradient-warm" // Use the specific warm gradient
+              size="default"
+              onClick={() => setIsSyncDialogOpen(true)}
+            >
+              AI Sync New Accounts
+            </Button>
+            <Button // ClientButton -> Button
+              variant="brand-gradient-cold" // Use the cold gradient for Connect Account
+              size="default"
+              onClick={handleConnect}
+            >
+              Connect Account
+            </Button>
+          </div>
         </div>
 
         <div className="space-y-4">
-          <ClientInput
+          <Input // ClientInput -> Input
             placeholder="Search accounts..."
             value={searchQuery}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
             className="max-w-sm"
           />
 
-          <ClientTabsRoot value={activeTab} onValueChange={setActiveTab}>
-            <ClientTabsList>
-              <ClientTabsTrigger value="email">Email Accounts</ClientTabsTrigger>
-              <ClientTabsTrigger value="social">LinkedIn Accounts</ClientTabsTrigger>
-            </ClientTabsList>
+          <Tabs value={activeTab} onValueChange={setActiveTab}> {/* ClientTabsRoot -> Tabs */}
+            <TabsList> {/* ClientTabsList -> TabsList */}
+              <TabsTrigger value="email">Email Accounts</TabsTrigger> {/* ClientTabsTrigger -> TabsTrigger */}
+              <TabsTrigger value="social">LinkedIn Accounts</TabsTrigger> {/* ClientTabsTrigger -> TabsTrigger */}
+            </TabsList>
 
-            <ClientTabsContent value="email" className="space-y-4">
+            <TabsContent value="email" className="space-y-4"> {/* ClientTabsContent -> TabsContent */}
               {loading ? (
                 <div>Loading...</div>
               ) : filteredEmailAccounts.length > 0 ? (
@@ -485,9 +552,9 @@ export function AccountsClient() {
                   No email accounts found
                 </div>
               )}
-            </ClientTabsContent>
+            </TabsContent>
 
-            <ClientTabsContent value="social" className="space-y-4">
+            <TabsContent value="social" className="space-y-4"> {/* ClientTabsContent -> TabsContent */}
               {loading ? (
                 <div>Loading...</div>
               ) : filteredSocialAccounts.length > 0 ? (
@@ -497,10 +564,133 @@ export function AccountsClient() {
                   No LinkedIn accounts found
                 </div>
               )}
-            </ClientTabsContent>
-          </ClientTabsRoot>
+            </TabsContent>
+          </Tabs> {/* ClientTabsRoot -> Tabs */}
         </div>
       </div>
+      {/* Ultra-simple plain HTML modal */}
+      {isSyncDialogOpen && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1000
+          }}
+        >
+          <div 
+            style={{
+              backgroundColor: 'white',
+              padding: '20px',
+              borderRadius: '8px',
+              width: '90%',
+              maxWidth: '425px'
+            }}
+          >
+            <h2 style={{ marginTop: 0 }}>AI Sync New Accounts</h2>
+            <p style={{ color: 'gray' }}>Request the AI to discover and add new email accounts from MailReef.</p>
+            
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault();
+                // Simple form data handling
+                const formData = new FormData(e.currentTarget);
+                const numberOfAccounts = Number(formData.get('numberOfAccounts') || 1);
+                const additionalRequirements = formData.get('additionalRequirements') as string || 'None';
+                
+                if (!currentOrganization?.id) {
+                  toast.error('Organization information is missing. Cannot submit request.');
+                  return;
+                }
+                
+                // Create payload
+                const payload = {
+                  organizationId: currentOrganization.id,
+                  numberOfAccounts: numberOfAccounts,
+                  additionalRequirements: additionalRequirements
+                };
+                
+                // Submit request
+                fetch('https://n8n-n8n.swl3bc.easypanel.host/webhook/new-accounts', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(payload)
+                })
+                .then(response => {
+                  if (!response.ok) throw new Error('Failed to send sync request');
+                  toast.success('Request received. We are working on adding the inboxes. Please check back in about 5 minutes.');
+                  setIsSyncDialogOpen(false);
+                })
+                .catch(error => {
+                  toast.error(error.message || 'An unexpected error occurred');
+                });
+              }}
+            >
+              <div style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'block', marginBottom: '5px' }}>
+                  Number of New Inboxes to Add
+                </label>
+                <input 
+                  type="number" 
+                  name="numberOfAccounts" 
+                  min="1" 
+                  defaultValue="1" 
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    border: '1px solid #ccc',
+                    borderRadius: '4px'
+                  }}
+                  required
+                />
+              </div>
+              
+              <div style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'block', marginBottom: '5px' }}>
+                  Additional Requirements (Optional)
+                </label>
+                <textarea 
+                  name="additionalRequirements" 
+                  placeholder="e.g., 'Only add accounts starting with sales@...'" 
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    border: '1px solid #ccc',
+                    borderRadius: '4px',
+                    minHeight: '80px'
+                  }}
+                />
+              </div>
+              
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
+                <Button // ClientButton -> Button
+                  type="button"
+                  variant="outline"
+                  size="default"
+                  onClick={() => setIsSyncDialogOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button // ClientButton -> Button
+                  type="submit"
+                  variant="default"
+                  size="default"
+                >
+                  Submit Request
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </PageContainer>
   );
-} 
+}
+
+// Component has been replaced with a simpler inline implementation

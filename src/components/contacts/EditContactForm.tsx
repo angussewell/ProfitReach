@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import TagSelector from '@/components/filters/TagSelector';
+import { LEAD_STATUS_OPTIONS } from '@/lib/field-definitions';
 
 type Contact = {
   id: string;
@@ -104,16 +105,7 @@ type EditContactFormProps = {
   contact: Contact;
 };
 
-// Lead status options
-const LEAD_STATUS_OPTIONS = [
-  { value: 'New', label: 'New' },
-  { value: 'Contacted', label: 'Contacted' },
-  { value: 'Qualified', label: 'Qualified' },
-  { value: 'Unqualified', label: 'Unqualified' },
-  { value: 'Replied', label: 'Replied' },
-  { value: 'Customer', label: 'Customer' },
-  { value: 'Churned', label: 'Churned' },
-];
+// Format date for display
 
 // Format date for display
 const formatDate = (date: Date | null): string => {
@@ -181,24 +173,7 @@ export default function EditContactForm({ contact }: EditContactFormProps) {
   const validateForm = (): boolean => {
     const newErrors: Partial<ContactFormData> = {};
 
-    // Email is required and must be in valid format
-    if (!formData.email) {
-      newErrors.email = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = 'Email format is invalid';
-    }
-
-    // First name or last name is required
-    if (!formData.firstName && !formData.lastName) {
-      newErrors.firstName = 'At least one name field is required';
-    }
-
-    // Lead status is required
-    if (!formData.leadStatus) {
-      newErrors.leadStatus = 'Lead status is required';
-    }
-
-    // Validate JSON
+    // Validate JSON only - removed email and name checks
     try {
       if (formData.additionalDataJson) {
         JSON.parse(formData.additionalDataJson);
@@ -399,7 +374,7 @@ export default function EditContactForm({ contact }: EditContactFormProps) {
 
               <div className="mb-4">
                 <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                  Email <span className="text-red-500">*</span>
+                  Email {/* Removed asterisk */}
                 </label>
                 <input
                   type="email"
@@ -407,7 +382,7 @@ export default function EditContactForm({ contact }: EditContactFormProps) {
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
-                  required
+                  // Removed required attribute
                   className={`w-full px-3 py-2 border rounded-md ${
                     errors.email ? 'border-red-500' : 'border-gray-300'
                   } focus:outline-none focus:ring-2 focus:ring-blue-500`}
@@ -419,18 +394,20 @@ export default function EditContactForm({ contact }: EditContactFormProps) {
 
               <div className="mb-4">
                 <label htmlFor="leadStatus" className="block text-sm font-medium text-gray-700 mb-1">
-                  Lead Status <span className="text-red-500">*</span>
+                  Lead Status {/* Removed asterisk */}
                 </label>
                 <select
                   id="leadStatus"
                   name="leadStatus"
-                  value={formData.leadStatus}
+                  value={formData.leadStatus || ''} // Ensure value is controlled even if null/undefined
                   onChange={handleChange}
-                  required
+                  // Removed required attribute
                   className={`w-full px-3 py-2 border rounded-md ${
                     errors.leadStatus ? 'border-red-500' : 'border-gray-300'
                   } focus:outline-none focus:ring-2 focus:ring-blue-500`}
                 >
+                  {/* Add a default "None" option */}
+                  <option value="">-- Select Status --</option> 
                   {LEAD_STATUS_OPTIONS.map(option => (
                     <option key={option.value} value={option.value}>
                       {option.label}

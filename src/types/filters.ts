@@ -1,3 +1,10 @@
+import { 
+  CONTACT_FIELDS as BASE_CONTACT_FIELDS, 
+  FieldOption, 
+  FIELD_GROUPS,
+  LEAD_STATUS_OPTIONS 
+} from '@/lib/field-definitions';
+
 export type FilterOperator = 
   | 'equals'
   | 'notEquals'
@@ -12,11 +19,14 @@ export type FilterOperator =
   | 'isAfter'
   | 'isBefore'
   | 'between'
+  // Tag Operators
   | 'hasAllTags'
   | 'hasAnyTags'
-  | 'hasNoneTags'
-  | 'exists' // Added for webhook filters
-  | 'not exists'; // Added for webhook filters
+  | 'hasNoneOfTheTags' // Corrected from hasNoneTags and matches backend
+  | 'hasNoTags' // Added to match backend
+  // Webhook Operators (Keep if used elsewhere)
+  | 'exists' 
+  | 'not exists'; 
 
 // Represents a single filter condition in the UI/state
 export type Filter = {
@@ -53,9 +63,9 @@ export interface FieldDefinition {
 export const OPERATORS_BY_TYPE: Record<string, { value: FilterOperator; label: string }[]> = {
   string: [
     { value: 'equals', label: 'is exactly' },
-    { value: 'notEquals', label: 'is not' },
+    { value: 'notEquals', label: 'is not' }, // Maps to 'isNot' in UI?
     { value: 'contains', label: 'contains' },
-    { value: 'notContains', label: 'does not contain' },
+    { value: 'notContains', label: 'does not contain' }, // Maps to 'doesNotContain' in UI?
     { value: 'startsWith', label: 'starts with' },
     { value: 'endsWith', label: 'ends with' },
     { value: 'isEmpty', label: 'is empty' },
@@ -78,11 +88,14 @@ export const OPERATORS_BY_TYPE: Record<string, { value: FilterOperator; label: s
     { value: 'isNotEmpty', label: 'is not empty' }
   ],
   tags: [
-    { value: 'hasAllTags', label: 'has all tags' },
     { value: 'hasAnyTags', label: 'has any tags' },
-    { value: 'hasNoneTags', label: 'has none of the tags' },
-    { value: 'isEmpty', label: 'has no tags' },
-    { value: 'isNotEmpty', label: 'has any tag' }
+    { value: 'hasAllTags', label: 'has all tags' },
+    { value: 'hasNoneOfTheTags', label: 'has none of the tags' }, // Corrected operator value
+    { value: 'hasNoTags', label: 'has no tags' }, // Added operator value
+    // Note: 'isEmpty'/'isNotEmpty' for tags might be confusing. 
+    // 'hasNoTags' and 'hasAnyTags' seem clearer. Consider removing isEmpty/isNotEmpty for tags if not used.
+    // { value: 'isEmpty', label: 'is empty' }, // Example if needed
+    // { value: 'isNotEmpty', label: 'is not empty' } // Example if needed
   ],
   boolean: [
     { value: 'equals', label: 'is' }
@@ -95,28 +108,42 @@ export const OPERATORS_BY_TYPE: Record<string, { value: FilterOperator; label: s
   ]
 };
 
+// Helper function to determine field type from the new centralized definitions
+function getFieldType(fieldValue: string): 'string' | 'number' | 'date' | 'boolean' | 'select' | 'tags' {
+  // Special cases based on field name
+  if (fieldValue === 'tags') return 'tags';
+  if (fieldValue === 'leadStatus') return 'select';
+  if (['createdAt', 'updatedAt', 'lastActivityAt', 'dateOfResearch'].includes(fieldValue)) return 'date';
+  
+  // Default to string for most fields
+  return 'string';
+}
+
+// Function to check if a field is part of additionalData
+function isJsonField(fieldValue: string): boolean {
+  return fieldValue.startsWith('additionalData.');
+}
+
+// Function to check if a field is a relation
+function isRelationField(fieldValue: string): boolean {
+  return fieldValue === 'tags';
+}
+
 // This represents all available fields that can be filtered on
-export const CONTACT_FIELDS: FieldDefinition[] = [
-  { name: 'firstName', label: 'First Name', type: 'string' },
-  { name: 'lastName', label: 'Last Name', type: 'string' },
-  { name: 'email', label: 'Email', type: 'string' },
-  { name: 'title', label: 'Title', type: 'string' },
-  { name: 'currentCompanyName', label: 'Company', type: 'string' },
-  { name: 'leadStatus', label: 'Lead Status', type: 'select', options: [
-    { label: 'New', value: 'New' },
-    { label: 'Contacted', value: 'Contacted' },
-    { label: 'Qualified', value: 'Qualified' },
-    { label: 'Unqualified', value: 'Unqualified' },
-    { label: 'Replied', value: 'Replied' },
-    { label: 'Customer', value: 'Customer' },
-    { label: 'Churned', value: 'Churned' }
-  ]},
-  { name: 'status', label: 'Status', type: 'string', isJsonField: true },
-  { name: 'city', label: 'City', type: 'string' },
-  { name: 'state', label: 'State', type: 'string' },
-  { name: 'country', label: 'Country', type: 'string' },
-  { name: 'createdAt', label: 'Created At', type: 'date' },
-  { name: 'updatedAt', label: 'Updated At', type: 'date' },
-  { name: 'lastActivityAt', label: 'Last Activity', type: 'date' },
-  { name: 'tags', label: 'Tags', type: 'tags', isRelation: true }
-];
+// Transform the base contact fields to the expected FieldDefinition format
+export const CONTACT_FIELDS: FieldDefinition[] = BASE_CONTACT_FIELDS
+  .filter(field => {
+    // Filter out fields that don't make sense to filter on
+    const excludedFields = ['employmentHistory', 'contactEmails', 'phoneNumbers'];
+    return !excludedFields.includes(field.value);
+  })
+  .map(field => ({
+    name: field.value,
+    label: field.label,
+    type: getFieldType(field.value),
+    isJsonField: isJsonField(field.value),
+    isRelation: isRelationField(field.value),
+    ...(field.value === 'leadStatus' ? {
+      options: LEAD_STATUS_OPTIONS
+    } : {})
+  }));

@@ -97,3 +97,57 @@ export async function GET(
     );
   }
 }
+
+// Add PATCH handler
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { organizationId: string } }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+    const organizationId = params.organizationId;
+
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Ensure user can modify this organization (either admin or member of the org)
+    if (session.user.role !== 'admin' && session.user.organizationId !== organizationId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const body = await request.json();
+
+    // Validate input - check if hideFromAdminStats is a boolean
+    if (typeof body.hideFromAdminStats !== 'boolean') {
+      return NextResponse.json({ error: 'Invalid input: hideFromAdminStats must be a boolean' }, { status: 400 });
+    }
+
+    console.log(`[API Org Update] Updating organization ${organizationId} with:`, { hideFromAdminStats: body.hideFromAdminStats });
+
+    const updatedOrganization = await prisma.organization.update({
+      where: {
+        id: organizationId,
+      },
+      data: {
+        hideFromAdminStats: body.hideFromAdminStats,
+        // Add updatedAt timestamp if your model requires it
+        // updatedAt: new Date(), 
+      },
+    });
+
+    console.log(`[API Org Update] Successfully updated organization ${organizationId}`);
+    return NextResponse.json(updatedOrganization);
+
+  } catch (error) {
+    console.error(`[API Org Update] Error updating organization ${params.organizationId}:`, error);
+    // Handle potential Prisma errors like record not found
+    if (error instanceof Error && 'code' in error && error.code === 'P2025') {
+       return NextResponse.json({ error: "Organization not found" }, { status: 404 });
+    }
+    return NextResponse.json(
+      { error: "Failed to update organization" },
+      { status: 500 }
+    );
+  }
+}

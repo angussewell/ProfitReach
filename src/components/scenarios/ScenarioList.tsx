@@ -28,9 +28,9 @@ export function ScenarioList({ scenarios }: ScenarioListProps) {
       <div className="text-center py-8">
         <h3 className="text-lg font-medium text-gray-900 mb-2">No scenarios yet</h3>
         <p className="text-gray-500 mb-4">Get started by creating your first scenario</p>
-        <Link href="/settings/scenarios/new">
-          <Button>Create Scenario</Button>
-        </Link>
+<Link href="/settings/scenarios/new">
+  <Button variant="default" size="default">Create Scenario</Button>
+</Link>
       </div>
     );
   }
@@ -39,7 +39,7 @@ export function ScenarioList({ scenarios }: ScenarioListProps) {
     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
       {scenarios.map((scenario) => (
         <Link key={scenario.id} href={`/settings/scenarios/${scenario.id}`}>
-          <Card className="p-6 hover:shadow-lg transition-shadow">
+          <Card className="p-6 border-2 border-neutral-300 rounded-lg shadow-sm hover:shadow-lg transition-shadow">
             <h3 className="text-lg font-medium text-gray-900 mb-2">{scenario.name}</h3>
             {scenario.description && (
               <p className="text-gray-500 mb-4 line-clamp-2">{scenario.description}</p>
@@ -64,4 +64,4 @@ export function ScenarioList({ scenarios }: ScenarioListProps) {
       ))}
     </div>
   );
-} 
+}

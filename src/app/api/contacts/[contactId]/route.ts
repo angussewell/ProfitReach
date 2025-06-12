@@ -6,17 +6,6 @@ import { authOptions } from '@/lib/auth';
 // Constants
 const PLACEHOLDER_ORG_ID = 'org_test_alpha'; // Fallback for testing
 
-// Valid lead status values
-const VALID_LEAD_STATUSES = [
-  'New',
-  'Contacted',
-  'Qualified', 
-  'Unqualified',
-  'Replied',
-  'Customer',
-  'Churned'
-];
-
 // Type for the required fields in the request body
 type UpdateContactRequest = {
   firstName?: string;
@@ -147,17 +136,6 @@ export async function PUT(
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json(
         { message: 'Invalid email format' },
-        { status: 400 }
-      );
-    }
-    
-    // Lead status validation
-    if (leadStatus && !VALID_LEAD_STATUSES.includes(leadStatus)) {
-      return NextResponse.json(
-        { 
-          message: 'Invalid lead status', 
-          validOptions: VALID_LEAD_STATUSES 
-        },
         { status: 400 }
       );
     }

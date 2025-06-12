@@ -1,19 +1,28 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react'; // Added useCallback
+'use client';
+
+import React, { useState, useEffect, useRef, useCallback } from 'react'; // Explicitly import React
 import { useRouter } from 'next/navigation';
 import BulkEditModal from '@/components/contacts/BulkEditModal';
 import { EnrollWorkflowModal } from '@/components/contacts/EnrollWorkflowModal'; // Import the new modal
-import { Button } from '@/components/ui/button'; // Import Button if not already used implicitly
-// FilterBar import removed - handled by parent
+import SendToOrganizationModal from '@/components/contacts/SendToOrganizationModal'; // Import the new Send to Org modal
+import { ClientButton as Button } from '@/components/ui/client-components'; // Import aliased Button from client-components
 import { FilterState } from '@/types/filters';
+import { exportContactsCsv } from '@/lib/server-actions'; // Import the server action
+import toast from 'react-hot-toast'; // Import toast for notifications
 
 // Props for the EnhancedContactsTable component
 interface EnhancedContactsTableProps {
   contacts: Contact[];
-  totalMatchingCount?: number;
+  totalMatchingCount: number; // Make non-optional as it's needed for pagination
   currentFilterState?: FilterState | null;
   searchTerm?: string;
+  currentPage: number;
+  pageSize: number;
+  totalPages: number;
+  onPageChange: (newPage: number) => void;
+  isLoading: boolean; // To potentially disable controls or show loading
 }
 
 // Types for our contact data
@@ -21,7 +30,7 @@ type Contact = {
   id: string;
   firstName: string | null;
   lastName: string | null;
-  email: string;
+  email: string | null;
   photoUrl: string | null;
   title: string | null;
   currentCompanyName: string | null;
@@ -69,20 +78,15 @@ function DeleteConfirmationModal({
         )}
 
         <div className="flex justify-end space-x-3">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-            disabled={isDeleting}
-          >
-            Cancel
-          </button>
-          <button
+          <Button variant="outline" size="default" onClick={onClose} disabled={isDeleting}>Cancel</Button>
+          <Button
+            variant="destructive"
+            size="default"
             onClick={onConfirm}
-            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-red-400"
             disabled={isDeleting}
           >
             {isDeleting ? 'Deleting...' : 'Delete'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -153,20 +157,17 @@ function BulkDeleteConfirmationModal({
         </div>
 
         <div className="flex justify-end space-x-3">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-            disabled={isDeleting}
-          >
-            Cancel
-          </button>
-          <button
+          {/* Corrected: Removed outer button, kept inner standardized Button */}
+          <Button variant="outline" size="default" onClick={onClose} disabled={isDeleting}>Cancel</Button>
+          {/* Corrected: Removed outer button, kept inner standardized Button */}
+          <Button
+            variant="destructive"
+            size="default"
             onClick={() => onConfirm(forceDelete)}
-            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-red-400"
             disabled={isDeleting}
           >
             {isDeleting ? 'Deleting...' : 'Delete Selected Contacts'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -178,7 +179,12 @@ export default function EnhancedContactsTable({
   contacts, 
   totalMatchingCount = 0, 
   currentFilterState = null, 
-  searchTerm = '' 
+  searchTerm = '',
+  currentPage,
+  pageSize,
+  totalPages,
+  onPageChange,
+  isLoading
 }: EnhancedContactsTableProps) {
   const router = useRouter();
   const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
@@ -200,45 +206,32 @@ export default function EnhancedContactsTable({
   // Enroll in Workflow state
   const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
 
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(DEFAULT_ITEMS_PER_PAGE);
-  
-  // Dropdown state to fix the issue with dropdowns disappearing when mouse leaves
+  // Send to Organization state
+  const [isSendToOrgModalOpen, setIsSendToOrgModalOpen] = useState(false);
+
+  // CSV Export state
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  // Dropdown state
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
-  
-  // Calculate pagination values
-  const totalItems = contacts.length;
-  const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
-  
-  // Page change handlers
-  const goToPage = (page: number) => {
-    setCurrentPage(Math.min(Math.max(1, page), totalPages));
-  };
-  
-  const handleItemsPerPageChange = (newItemsPerPage: number) => {
-    setItemsPerPage(newItemsPerPage);
-    // Recalculate current page to ensure it's still valid with new items per page
-    const newTotalPages = Math.ceil(totalItems / newItemsPerPage);
-    if (currentPage > newTotalPages) {
-      setCurrentPage(newTotalPages);
-    }
-  };
-  
-  // Get current page data
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  // Safeguard: Ensure contacts is an array before slicing
-  const safeContacts = Array.isArray(contacts) ? contacts : [];
-  const currentContacts = safeContacts.slice(indexOfFirstItem, indexOfLastItem);
-  
-  // Reset to first page when contacts array changes (e.g., after filtering)
+
+  // Pagination state is now managed by the parent component (ContactsPageClient)
+  // We receive currentPage, pageSize, totalPages, and onPageChange as props.
+
+  // Calculate display range based on props
+  const indexOfFirstItem = (currentPage - 1) * pageSize;
+  const indexOfLastItem = indexOfFirstItem + pageSize;
+
+  // The `contacts` prop now represents the data for the *current page* only.
+  const currentContacts = Array.isArray(contacts) ? contacts : [];
+
+  // Effect to reset selection when filters/search change (indicated by contacts changing)
+  // or when the current page changes.
   useEffect(() => {
-    setCurrentPage(1);
-    // Reset the "Select All Matching" state when filters or search changes
     setIsSelectAllMatchingActive(false);
     setSelectedContactIds([]);
-  }, [contacts.length, currentFilterState, searchTerm]);
+  }, [contacts, currentPage, currentFilterState, searchTerm]); // Depend on contacts and currentPage
   
   // Handle dropdown toggle
   const toggleDropdown = (contactId: string) => {
@@ -278,11 +271,13 @@ export default function EnhancedContactsTable({
     );
   };
 
-  const selectAll = () => {
-    if (selectedContactIds.length === contacts.length) {
+  const selectAllOnPage = () => {
+    if (selectedContactIds.length === currentContacts.length) {
       setSelectedContactIds([]);
+      setIsSelectAllMatchingActive(false); // Ensure this is also reset
     } else {
-      setSelectedContactIds(contacts.map(contact => contact.id));
+      setSelectedContactIds(currentContacts.map(contact => contact.id));
+      // Do not automatically set isSelectAllMatchingActive here
     }
   };
 
@@ -326,6 +321,57 @@ export default function EnhancedContactsTable({
     }
   };
 
+  // CSV Export handling
+  const handleExportCsv = async () => {
+    setIsExporting(true);
+    setExportError(null);
+    const toastId = toast.loading('Generating CSV...');
+
+    try {
+      const selectionPayload = isSelectAllMatchingActive
+        ? { type: 'filters' as const, filters: currentFilterState, searchTerm }
+        : { type: 'ids' as const, ids: selectedContactIds };
+
+      console.log('Calling exportContactsCsv with payload:', selectionPayload);
+      const result = await exportContactsCsv(selectionPayload);
+
+      toast.dismiss(toastId);
+
+      if (result.success && result.csvData && result.filename) {
+        toast.success('CSV generated successfully. Download starting...');
+
+        // Trigger download
+        const blob = new Blob([result.csvData], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', result.filename);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        // Optionally clear selection after successful export
+        // setSelectedContactIds([]);
+        // setIsSelectAllMatchingActive(false);
+
+      } else {
+        console.error('CSV Export failed:', result.error);
+        setExportError(result.error || 'Failed to export CSV.');
+        toast.error(result.error || 'Failed to export CSV.');
+      }
+    } catch (error) {
+      toast.dismiss(toastId);
+      console.error('Error calling exportContactsCsv:', error);
+      const message = error instanceof Error ? error.message : 'An unexpected error occurred.';
+      setExportError(message);
+      toast.error(`Export failed: ${message}`);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+
   // Bulk delete handling
   const openBulkDeleteModal = () => {
     setIsBulkDeleteModalOpen(true);
@@ -353,6 +399,15 @@ export default function EnhancedContactsTable({
 
   const closeEnrollModal = () => {
     setIsEnrollModalOpen(false);
+  };
+
+  // Send to Org modal handling
+  const openSendToOrgModal = () => {
+    setIsSendToOrgModalOpen(true);
+  };
+
+  const closeSendToOrgModal = () => {
+    setIsSendToOrgModalOpen(false);
   };
 
   // Callback after successful enrollment
@@ -417,12 +472,8 @@ export default function EnhancedContactsTable({
     }
   };
 
-  // Filter state and handlers
-  const handleFiltersChange = (newFilters: FilterState) => {
-    // Filters will be handled by the server component
-    // This is just to handle any client-side effects
-    console.log('Filters changed:', newFilters);
-  };
+  // Helper to get the number of contacts selected on the current page
+  const selectedOnPageCount = currentContacts.filter(c => selectedContactIds.includes(c.id)).length;
 
   return (
     <>
@@ -436,54 +487,80 @@ export default function EnhancedContactsTable({
               {!isSelectAllMatchingActive ? (
                 <div className="font-medium">
                   {selectedContactIds.length} {selectedContactIds.length === 1 ? 'contact' : 'contacts'} selected
-                  {selectedContactIds.length === contacts.length && totalMatchingCount > contacts.length && (
+                  {/* Show "Select all matching" only if all on page are selected AND there are more matching contacts total */}
+                  {selectedOnPageCount === currentContacts.length && totalMatchingCount > currentContacts.length && (
                     <span className="ml-2 text-blue-600">
-                      All {contacts.length} contacts on this page are selected.{' '}
-                      <button 
-                        onClick={() => setIsSelectAllMatchingActive(true)}
-                        className="text-blue-700 hover:text-blue-800 underline"
-                      >
-                        Select all {totalMatchingCount} contacts matching filters
-                      </button>
+                      All {currentContacts.length} contacts on this page are selected.{' '}
+                  <Button
+                    variant="link"
+                    onClick={() => {
+                      setIsSelectAllMatchingActive(true);
+                      // Optionally clear page selection if needed, or keep them selected
+                      // setSelectedContactIds([]); // Decide if you want to clear page selection
+                    }}
+                    className="text-sm p-0 h-auto"
+                  >
+                    Select all {totalMatchingCount} matching contacts
+                  </Button>
                     </span>
                   )}
                 </div>
               ) : (
                 <div className="font-medium">
                   All {totalMatchingCount} contacts matching filters are selected.{' '}
-                  <button 
+                  <Button
+                    variant="link"
                     onClick={() => {
                       setIsSelectAllMatchingActive(false);
                       setSelectedContactIds([]);
                     }}
-                    className="text-blue-700 hover:text-blue-800 underline"
+                    className="text-sm p-0 h-auto"
                   >
                     Clear selection
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
             <div className="flex gap-2">
-              <button 
-                onClick={openBulkDeleteModal}
-                className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded-md hover:bg-red-200 disabled:opacity-50"
-              >
-                Bulk Delete
-              </button>
-              <button 
-                onClick={openBulkEditModal}
-                className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 disabled:opacity-50"
-              >
-                Bulk Edit
-              </button>
-              {/* Enroll Button */}
               <Button
                 variant="outline"
                 size="sm"
+                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                onClick={openBulkDeleteModal}
+              >
+                Bulk Delete
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={openBulkEditModal}
+              >
+                Bulk Edit
+              </Button>
+              {/* Enroll Button */}
+              <Button
+                variant="secondary" // Changed to secondary
+                size="sm"
                 onClick={openEnrollModal}
-                className="px-3 py-1 text-sm bg-green-100 text-green-700 rounded-md hover:bg-green-200 border-green-200 hover:border-green-300 disabled:opacity-50"
               >
                 Enroll in Workflow
+              </Button>
+              {/* Send to Organization Button */}
+              <Button
+                variant="outline" // Or choose another appropriate variant
+                size="sm"
+                onClick={openSendToOrgModal}
+              >
+                Send to Organization
+              </Button>
+              {/* Export CSV Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportCsv}
+                disabled={isExporting}
+              >
+                {isExporting ? 'Exporting...' : 'Export CSV'}
               </Button>
             </div>
           </div>
@@ -495,11 +572,13 @@ export default function EnhancedContactsTable({
               <tr>
                 <th scope="col" className="w-10 px-3 py-3 text-left">
                   <input 
-                    type="checkbox" 
+                    type="checkbox"
                     className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    checked={contacts.length > 0 && selectedContactIds.length === contacts.length}
-                    onChange={selectAll}
-                    aria-label="Select all contacts"
+                    // Checkbox reflects selection state *on the current page*
+                    checked={currentContacts.length > 0 && selectedOnPageCount === currentContacts.length}
+                    onChange={selectAllOnPage}
+                    aria-label="Select all contacts on this page"
+                    disabled={isLoading} // Disable if loading
                   />
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -543,7 +622,8 @@ export default function EnhancedContactsTable({
                       ) : (
                         <div className="flex-shrink-0 h-10 w-10 bg-gray-200 rounded-full flex items-center justify-center">
                           <span className="text-gray-500">
-                            {contact.firstName?.charAt(0) || contact.email.charAt(0).toUpperCase()}
+                            {contact.firstName?.charAt(0) ||
+                              (contact.email ? contact.email.charAt(0).toUpperCase() : '?')}
                           </span>
                         </div>
                       )}
@@ -557,7 +637,9 @@ export default function EnhancedContactsTable({
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap overflow-hidden">
-                    <div className="text-sm text-gray-900 truncate" title={contact.email}>{contact.email}</div>
+                    <div className="text-sm text-gray-900 truncate" title={contact.email || 'No email'}>
+                      {contact.email || <span className="text-gray-400 italic">No email</span>}
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap overflow-hidden">
                     <div className="text-sm text-gray-900 truncate" title={contact.title || '-'}>{contact.title || '-'}</div>
@@ -578,17 +660,19 @@ export default function EnhancedContactsTable({
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="relative inline-block text-left contact-dropdown">
-                      <button
-                        className="px-2 py-1 text-gray-600 hover:text-gray-900 rounded-md hover:bg-gray-100"
+                      {/* Replaced raw button with Button component */}
+                      <Button
+                        variant="ghost"
+                        size="sm" // Using sm for slightly smaller target
                         onClick={(e) => {
                           e.stopPropagation();
                           toggleDropdown(contact.id);
                         }}
                       >
                         •••
-                      </button>
-                      <div 
-                        className={`absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg ${activeDropdown === contact.id ? 'block' : 'hidden'} z-10`}
+                      </Button>
+                      <div
+                        className={`absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg ${activeDropdown === contact.id ? 'block' : 'hidden'} z-10 border border-border`} // Added border
                       >
                         <div className="py-1 border border-gray-200 rounded-md">
                           <a 
@@ -597,9 +681,10 @@ export default function EnhancedContactsTable({
                           >
                             Edit
                           </a>
-                          <button 
-                            onClick={() => openDeleteModal(contact)} 
-                            className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
+                          {/* Ensured destructive text color */}
+                          <button
+                            onClick={() => openDeleteModal(contact)}
+                            className="block w-full text-left px-4 py-2 text-sm text-destructive hover:bg-destructive/10"
                           >
                             Delete
                           </button>
@@ -616,78 +701,88 @@ export default function EnhancedContactsTable({
         {/* Pagination Controls */}
         <div className="bg-gray-50 px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
           <div className="flex-1 flex justify-between sm:hidden">
-            {/* Mobile pagination controls */}
-            <button
-              onClick={() => goToPage(currentPage - 1)}
-              disabled={currentPage === 1}
-              className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            {/* Mobile pagination controls - Use onPageChange prop */}
+            <Button
+              variant="outline"
+              size="default"
+              onClick={() => onPageChange(currentPage - 1)}
+              disabled={currentPage === 1 || isLoading}
             >
               Previous
-            </button>
-            <span className="text-sm text-gray-700">
+            </Button>
+            <span className="text-sm text-gray-700 self-center">
               Page {currentPage} of {totalPages}
             </span>
-            <button
-              onClick={() => goToPage(currentPage + 1)}
-              disabled={currentPage === totalPages}
-              className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            <Button
+              variant="outline"
+              size="default"
+              onClick={() => onPageChange(currentPage + 1)}
+              disabled={currentPage === totalPages || isLoading}
             >
               Next
-            </button>
+            </Button>
           </div>
           
           <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-            {/* Desktop pagination info */}
+            {/* Desktop pagination info - Use totalMatchingCount prop */}
             <div>
               <p className="text-sm text-gray-700">
                 Showing <span className="font-medium">{totalMatchingCount === 0 ? 0 : indexOfFirstItem + 1}</span> to{' '}
                 <span className="font-medium">{Math.min(indexOfLastItem, totalMatchingCount)}</span> of{' '}
-                <span className="font-medium">{totalMatchingCount}</span> contacts
-                {totalMatchingCount === 0 && " (No contacts found)"}
+                <span className="font-medium">{totalMatchingCount}</span> results
               </p>
             </div>
             
             <div className="flex items-center space-x-4">
               {/* Items per page selector */}
               <div className="flex items-center">
+                {/* Items per page selector - This needs to be handled in the parent now */}
+                {/* Consider removing this or passing props to control pageSize in parent */}
+                {/* For now, we'll comment it out as pageSize is fixed in parent */}
+                {/*
                 <label htmlFor="items-per-page" className="text-sm text-gray-600 mr-2">
                   Per page:
                 </label>
                 <select
                   id="items-per-page"
-                  value={itemsPerPage}
-                  onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
+                  value={pageSize} // Use pageSize prop
+                  // onChange={(e) => handlePageSizeChange(Number(e.target.value))} // Need handler prop from parent
                   className="text-sm border-gray-300 rounded-md shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                  disabled={isLoading} // Disable if loading
                 >
                   {ITEMS_PER_PAGE_OPTIONS.map(option => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
+                    <option key={option} value={option}>{option}</option>
                   ))}
                 </select>
+                */}
               </div>
               
               {/* Desktop pagination controls */}
               <div>
                 <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                  <button
-                    onClick={() => goToPage(1)}
-                    disabled={currentPage === 1}
-                    className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  {/* Desktop pagination controls - Use onPageChange prop */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onPageChange(1)}
+                    disabled={currentPage === 1 || isLoading}
+                    className="rounded-r-none"
                   >
                     <span className="sr-only">First Page</span>
                     <span>«</span>
-                  </button>
-                  <button
-                    onClick={() => goToPage(currentPage - 1)}
-                    disabled={currentPage === 1}
-                    className="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onPageChange(currentPage - 1)}
+                    disabled={currentPage === 1 || isLoading}
+                    className="rounded-none"
                   >
                     <span className="sr-only">Previous Page</span>
                     <span>‹</span>
-                  </button>
-                  
-                  {/* Page numbers */}
+                  </Button>
+
+                  {/* Page numbers - Use totalPages prop */}
                   {Array.from(
                     { length: Math.min(5, totalPages) },
                     (_, i) => {
@@ -708,38 +803,41 @@ export default function EnhancedContactsTable({
                       }
                       
                       return (
-                        <button
+                        <Button
                           key={pageNum}
-                          onClick={() => goToPage(pageNum)}
+                          variant={currentPage === pageNum ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => onPageChange(pageNum)}
                           aria-current={currentPage === pageNum ? 'page' : undefined}
-                          className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium
-                            ${currentPage === pageNum 
-                              ? 'z-10 bg-blue-50 border-blue-500 text-blue-600' 
-                              : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
-                            }`}
+                          className="rounded-none"
+                          disabled={isLoading} // Disable if loading
                         >
                           {pageNum}
-                        </button>
+                        </Button>
                       );
                     }
                   )}
-                  
-                  <button
-                    onClick={() => goToPage(currentPage + 1)}
-                    disabled={currentPage === totalPages}
-                    className="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onPageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages || isLoading}
+                    className="rounded-none"
                   >
                     <span className="sr-only">Next Page</span>
                     <span>›</span>
-                  </button>
-                  <button
-                    onClick={() => goToPage(totalPages)}
-                    disabled={currentPage === totalPages}
-                    className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onPageChange(totalPages)}
+                    disabled={currentPage === totalPages || isLoading}
+                    className="rounded-l-none"
                   >
                     <span className="sr-only">Last Page</span>
                     <span>»</span>
-                  </button>
+                  </Button>
                 </nav>
               </div>
             </div>
@@ -783,12 +881,25 @@ export default function EnhancedContactsTable({
         isOpen={isEnrollModalOpen}
         onClose={closeEnrollModal}
         selectedContacts={{
-          contactIds: selectedContactIds,
+          // Only pass contactIds if 'select all matching' is NOT active
+          contactIds: isSelectAllMatchingActive ? undefined : selectedContactIds, 
           isSelectAllMatchingActive: isSelectAllMatchingActive,
-          filters: currentFilterState ?? undefined, // Pass filters if select all is active
-          searchTerm: searchTerm ?? undefined, // Pass search term if select all is active
-        }}
+          // Pass filters and search term regardless, backend uses them if isSelectAllMatchingActive is true
+          filters: currentFilterState ?? undefined, 
+          searchTerm: searchTerm ?? undefined, 
+         }}
         onEnrollmentComplete={handleEnrollmentComplete}
+      />
+
+      {/* Send to Organization Modal */}
+      <SendToOrganizationModal
+        isOpen={isSendToOrgModalOpen}
+        onClose={closeSendToOrgModal}
+        contactIds={selectedContactIds}
+        isSelectAllMatchingActive={isSelectAllMatchingActive}
+        totalMatchingCount={totalMatchingCount}
+        currentFilterState={currentFilterState}
+        searchTerm={searchTerm}
       />
     </>
   );

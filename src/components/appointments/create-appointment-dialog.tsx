@@ -7,12 +7,13 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar } from '@/components/ui/calendar';
 import { CalendarIcon, PlusCircle, X } from 'lucide-react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { formatDateInCentralTime } from '@/lib/date-utils';
 import { useEffect, useState } from 'react';
 import { format } from 'date-fns';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
+import '@/styles/datepicker-custom.css'; // Import custom styles
 
 // Define time zones
 const TIME_ZONES = [
@@ -200,26 +201,32 @@ export function CreateAppointmentDialog({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label>Date</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-start">
-                    {appointmentDate ? (
-                      format(appointmentDate, 'MMM d, yyyy')
-                    ) : (
-                      <span>Pick a date</span>
-                    )}
-                    <CalendarIcon className="ml-auto h-4 w-4" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={appointmentDate}
-                    onSelect={setAppointmentDate}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
+              <div className="relative">
+                <DatePicker
+                  selected={appointmentDate}
+                  onChange={(date: Date | null) => date && setAppointmentDate(date)}
+                  dateFormat="MMM d, yyyy"
+                  placeholderText="Pick a date"
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  customInput={
+                    <div className="relative w-full">
+                      <Input
+                        value={appointmentDate ? format(appointmentDate, 'MMM d, yyyy') : ""}
+                        placeholder="Pick a date"
+                        className="w-full cursor-pointer pr-10" // Add padding for the icon
+                        readOnly
+                        onClick={(e) => {
+                          const target = e.target as HTMLInputElement;
+                          target.blur(); // Prevent focus that would show keyboard on mobile
+                        }}
+                      />
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                        <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                    </div>
+                  }
+                />
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -286,7 +293,7 @@ export function CreateAppointmentDialog({
               />
               <Button 
                 type="button" 
-                variant="outline" 
+                variant="secondary" // Use secondary for Add Recipient
                 size="icon"
                 onClick={addRecipient}
               >
@@ -303,7 +310,7 @@ export function CreateAppointmentDialog({
                       type="button" 
                       variant="ghost" 
                       size="icon" 
-                      className="h-5 w-5 ml-1 p-0"
+                      className="ml-1 h-6 w-6 p-1 text-muted-foreground hover:text-foreground" // Adjust size and styling for consistency
                       onClick={() => removeRecipient(email)}
                     >
                       <X className="h-3 w-3" />
@@ -325,10 +332,10 @@ export function CreateAppointmentDialog({
           </div>
 
           <div className="flex justify-end space-x-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}> {/* Use secondary for Cancel */}
               Cancel
             </Button>
-            <Button type="submit">Create Appointment</Button>
+            <Button type="submit" variant="default">Create Appointment</Button> {/* Use default for primary action */}
           </div>
         </form>
       </DialogContent>

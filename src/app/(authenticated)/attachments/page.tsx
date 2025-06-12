@@ -163,7 +163,7 @@ export default function AttachmentsPage(): JSX.Element {
         >
           <Button
             onClick={() => setEditingAttachment({})}
-            className="bg-red-500 hover:bg-red-600 transition-all duration-200 shadow-sm hover:shadow-md text-white border-0 rounded-lg px-6"
+            variant="brand-gradient-warm"
           >
             <Plus className="w-4 h-4 mr-2" />
             New Attachment

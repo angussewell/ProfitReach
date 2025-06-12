@@ -16,7 +16,7 @@ interface EnrollmentRequestBody {
 }
 
 // Constants
-const MAX_BULK_LIMIT = 1000; // Maximum number of contacts to enroll at once
+const MAX_BULK_LIMIT = Number.MAX_SAFE_INTEGER; // Effectively remove the limit // Maximum number of contacts to enroll at once
 // Whitelist of allowed webhook URL domains/prefixes for security
 const ALLOWED_WEBHOOK_DOMAINS = [
   'https://n8n.yourdomain.com', // Example - replace with actual allowed domains
@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(response, { status });
       }
 
-    } else if (isSelectAllMatchingActive && filters) {
+    } else if (isSelectAllMatchingActive) { // Check only for the flag, filters/search handled by buildCombinedWhereClause
       // Build combined where clause using shared utility
       const combinedWhere = buildCombinedWhereClause(organizationId, filters, searchTerm);
 

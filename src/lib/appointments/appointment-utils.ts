@@ -5,7 +5,7 @@ import { convertToUTC } from '@/lib/date-utils';
 /**
  * The webhook URL for appointment notifications
  */
-export const APPOINTMENT_WEBHOOK_URL = 'https://n8n.srv768302.hstgr.cloud/webhook/appointment';
+export const APPOINTMENT_WEBHOOK_URL = 'https://n8n-n8n.swl3bc.easypanel.host/webhook/appointment';
 
 /**
  * Safely fetch appointments including the new columns
@@ -140,4 +140,4 @@ export async function sendAppointmentWebhook(appointmentData: any) {
     console.error('Error sending appointment webhook:', error);
     return { success: false, error };
   }
-} 
+}

@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "taskmaster-ai": {
+      "command": "npx",
+      "args": ["-y", "--package=task-master-ai", "task-master-ai"],
+      "env": {
+        "ANTHROPIC_API_KEY": "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",
+        "PERPLEXITY_API_KEY": "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",
+        "MODEL": "claude-3-7-sonnet-20250219",
+        "PERPLEXITY_MODEL": "sonar-pro",
+        "MAX_TOKENS": 64000,
+        "TEMPERATURE": 0.2,
+        "DEFAULT_SUBTASKS": 5,
+        "DEFAULT_PRIORITY": "medium"
+      }
+    }
+  }
+}

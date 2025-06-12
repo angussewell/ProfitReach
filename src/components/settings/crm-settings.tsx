@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react'; // Explicitly import React
+// Removed duplicate import line below
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from "@/components/ui/switch"; // Import Switch
 import { toast } from 'sonner';
 import { EmailListInput } from '@/components/ui/email-list-input';
 
@@ -11,6 +13,7 @@ interface Organization {
   id: string;
   name: string;
   location_id: string | null;
+  hideFromAdminStats?: boolean; // Add field here if not already present from parent
 }
 
 interface CrmInfo {
@@ -57,7 +60,9 @@ export function CrmSettings({ organization, onLocationIdChange }: CrmSettingsPro
   const [editedCrmInfo, setEditedCrmInfo] = useState<CrmInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false); // For CRM fields
+  const [hideStats, setHideStats] = useState(false); // State for the admin visibility toggle
+  const [isSavingHideStats, setIsSavingHideStats] = useState(false); // Loading state for saving toggle
 
   useEffect(() => {
     async function fetchCrmInfo() {
@@ -136,6 +141,8 @@ export function CrmSettings({ organization, onLocationIdChange }: CrmSettingsPro
         console.log('Final notification_emails:', initialData.notification_emails);
         setCrmInfo(initialData);
         setEditedCrmInfo(initialData);
+        // Also set initial state for the hideStats toggle based on organization prop
+        setHideStats(organization.hideFromAdminStats ?? false); 
       } catch (error) {
         console.error('Error fetching CRM info:', error);
         if (error instanceof Error) {
@@ -149,7 +156,8 @@ export function CrmSettings({ organization, onLocationIdChange }: CrmSettingsPro
     }
 
     fetchCrmInfo();
-  }, [organization.id]);
+  // Add organization.hideFromAdminStats to dependency array if needed, though org object change should trigger it
+  }, [organization.id, organization.hideFromAdminStats]); 
 
   const handleFieldChange = (field: keyof CrmInfo, value: string) => {
     setEditedCrmInfo(prev => {
@@ -219,6 +227,38 @@ export function CrmSettings({ organization, onLocationIdChange }: CrmSettingsPro
       setIsSaving(false);
     }
   };
+  
+  // Handler for the hideFromAdminStats toggle change (copied from data-settings)
+  const handleHideStatsChange = async (checked: boolean) => {
+    if (!organization) return;
+
+    setIsSavingHideStats(true);
+    setHideStats(checked); // Optimistic update
+
+    try {
+      // Assuming the API endpoint is correct as used before
+      const response = await fetch(`/api/organizations/${organization.id}`, { 
+        method: 'PATCH', 
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hideFromAdminStats: checked })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
+        throw new Error(errorData.error || 'Failed to update setting');
+      }
+
+      toast.success(`Organization will now be ${checked ? 'hidden from' : 'visible in'} admin stats.`);
+      // We might need a way to update the organization prop in the parent if it's used elsewhere immediately
+      // For now, rely on optimistic update within this component.
+    } catch (error) {
+      console.error('Error updating hideFromAdminStats:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to update setting');
+      setHideStats(!checked); // Revert optimistic update on error
+    } finally {
+      setIsSavingHideStats(false);
+    }
+  };
 
   const fields: FieldEntry[] = [
     { key: 'private_integration_token', label: 'Private Integration Token' },
@@ -269,6 +309,29 @@ export function CrmSettings({ organization, onLocationIdChange }: CrmSettingsPro
           </div>
         </div>
       </div>
+      
+      {/* Admin Panel Visibility Setting */}
+      <div className="bg-white rounded-xl shadow-sm ring-1 ring-gray-950/5 p-6">
+        <h2 className="text-lg font-semibold mb-4">Admin Panel Visibility</h2>
+        <div className="space-y-2">
+           <div className="flex items-center space-x-2">
+             <Switch
+               id="hide-admin-stats"
+               checked={hideStats}
+               onCheckedChange={handleHideStatsChange}
+               disabled={isSavingHideStats || !organization}
+             />
+             <Label htmlFor="hide-admin-stats" className="text-sm font-medium text-gray-700">
+               Hide from Admin Panel Stats & Breakdown
+             </Label>
+             {isSavingHideStats && <div className="animate-spin text-gray-500 ml-2">⟳</div>}
+           </div>
+           <p className="text-xs text-gray-500 pl-8"> {/* Indent description slightly */}
+             Enable this to exclude this organization's data from the overall statistics and breakdown shown on the main admin dashboard.
+           </p>
+         </div>
+      </div>
+
 
       <div className="bg-white rounded-xl shadow-sm ring-1 ring-gray-950/5 p-6">
         <h2 className="text-lg font-semibold mb-4">Notification Settings</h2>
@@ -346,4 +409,4 @@ export function CrmSettings({ organization, onLocationIdChange }: CrmSettingsPro
       </div>
     </div>
   );
-} 
+}

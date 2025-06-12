@@ -126,7 +126,7 @@ const stepSchema = z.discriminatedUnion('actionType', [
 ]); // Keep closing bracket for discriminatedUnion array
 
 // Zod schema for workflow validation
-const workflowCreateSchema = z.object({
+export const workflowCreateSchema = z.object({
   name: z.string().min(1, { message: 'Workflow name is required.' }),
   description: z.string().optional().nullable(),
   dailyContactLimit: z.number().int().positive().optional().nullable(),
@@ -206,18 +206,35 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: Request) {
+  console.log("[WORKFLOWS-API] POST request received");
+  
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.organizationId) {
+      console.log("[WORKFLOWS-API] Unauthorized request - no organization ID in session");
       const { response, status } = createApiResponse(false, undefined, 'Unauthorized', 401);
       return NextResponse.json(response, { status });
     }
     const organizationId = session.user.organizationId;
+    console.log(`[WORKFLOWS-API] Processing workflow creation for organization: ${organizationId}`);
 
-    const json = await request.json();
+    // Log entire request body for debugging
+    let json;
+    try {
+      json = await request.json();
+      console.log(`[WORKFLOWS-API] Request payload:`, JSON.stringify(json, null, 2));
+    } catch (parseError) {
+      console.error("[WORKFLOWS-API] Failed to parse request JSON:", parseError);
+      const { response, status } = createApiResponse(false, undefined, 'Invalid JSON payload', 400);
+      return NextResponse.json(response, { status });
+    }
+
+    console.log("[WORKFLOWS-API] Validating workflow data with Zod");
     const validatedData = workflowCreateSchema.safeParse(json);
 
     if (!validatedData.success) {
+      console.error("[WORKFLOWS-API] Zod validation failed:", 
+        JSON.stringify(validatedData.error.format(), null, 2));
       // Include validation details in the response data
       const { response, status } = createApiResponse(
         false, 
@@ -228,69 +245,195 @@ export async function POST(request: Request) {
       return NextResponse.json(response, { status });
     }
 
+    console.log("[WORKFLOWS-API] Validation successful, preparing data for database");
     // Extract steps along with other data
     const { name, description, dailyContactLimit, dripStartTime, dripEndTime, timezone, steps } = validatedData.data;
     const newWorkflowId = uuidv4();
-    const stepsJson = JSON.stringify(steps); // Stringify the steps array
+    
+    // Stringify and log steps for debugging
+    const stepsJson = JSON.stringify(steps);
+    console.log(`[WORKFLOWS-API] Steps JSON (length: ${stepsJson.length}):`, 
+      stepsJson.length > 1000 ? stepsJson.substring(0, 1000) + "... (truncated)" : stepsJson);
+    
+    // Log time values to diagnose potential type casting issues
+    console.log(`[WORKFLOWS-API] Time values - Start: "${dripStartTime}" (${typeof dripStartTime}), End: "${dripEndTime}" (${typeof dripEndTime})`);
+    
+    // For diagnostics, check if any fields are undefined that shouldn't be
+    console.log(`[WORKFLOWS-API] Field checks - Name: ${name}, Description: ${description === null ? 'null' : typeof description}, 
+      DailyLimit: ${dailyContactLimit === null ? 'null' : dailyContactLimit}, Timezone: ${timezone === null ? 'null' : timezone}`);
 
-    // Use Prisma.$executeRaw for the INSERT operation with parameterization for security
-    await prisma.$executeRaw(
-      Prisma.sql`
-        INSERT INTO "WorkflowDefinition" (
-          "workflowId", 
-          "organizationId", 
-          "name", 
-          "description", 
-          "dailyContactLimit", 
-          "dripStartTime", 
-          "dripEndTime", 
-          "timezone", 
-          "isActive", 
-          "steps", 
-          "createdAt", 
-          "updatedAt"
-        ) VALUES (
-          ${newWorkflowId}::uuid, 
-          ${organizationId}, 
-          ${name}, 
-          ${description}, 
-          ${dailyContactLimit}, 
-          ${dripStartTime}::time, 
-          ${dripEndTime}::time, 
-          ${timezone},
-          true,
-          ${stepsJson}::jsonb,
-          NOW(),
-          NOW()
+    // Handle time value transformation more explicitly
+    // If time fields are provided but not in the right format, this could be causing issues
+    let startTimeValue = null;
+    let endTimeValue = null;
+    
+    if (dripStartTime) {
+      // Verify time format matches HH:MM pattern before passing to SQL
+      if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(dripStartTime)) {
+        console.error(`[WORKFLOWS-API] Invalid start time format: ${dripStartTime}`);
+        const { response, status } = createApiResponse(
+          false, 
+          { fieldErrors: { dripStartTime: ['Invalid time format (HH:MM required)'] } }, 
+          'Invalid time format', 
+          400
         );
-      `
-    );
+        return NextResponse.json(response, { status });
+      }
+      startTimeValue = dripStartTime;
+    }
+    
+    if (dripEndTime) {
+      // Verify time format matches HH:MM pattern before passing to SQL
+      if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(dripEndTime)) {
+        console.error(`[WORKFLOWS-API] Invalid end time format: ${dripEndTime}`);
+        const { response, status } = createApiResponse(
+          false, 
+          { fieldErrors: { dripEndTime: ['Invalid time format (HH:MM required)'] } }, 
+          'Invalid time format', 
+          400
+        );
+        return NextResponse.json(response, { status });
+      }
+      endTimeValue = dripEndTime;
+    }
 
+    console.log("[WORKFLOWS-API] Executing SQL insert");
+    
+    // Use Prisma.$executeRaw for the INSERT operation with parameterization for security
+    try {
+      await prisma.$executeRaw(
+        Prisma.sql`
+          INSERT INTO "WorkflowDefinition" (
+            "workflowId", 
+            "organizationId", 
+            "name", 
+            "description", 
+            "dailyContactLimit", 
+            "dripStartTime", 
+            "dripEndTime", 
+            "timezone", 
+            "isActive", 
+            "steps", 
+            "createdAt", 
+            "updatedAt"
+          ) VALUES (
+            ${newWorkflowId}::uuid, 
+            ${organizationId}, 
+            ${name}, 
+            ${description}, 
+            ${dailyContactLimit}, 
+            ${startTimeValue}::time, 
+            ${endTimeValue}::time, 
+            ${timezone},
+            true,
+            ${stepsJson}::jsonb,
+            NOW(),
+            NOW()
+          );
+        `
+      );
+      console.log(`[WORKFLOWS-API] SQL insert successful for workflow ID: ${newWorkflowId}`);
+    } catch (error: unknown) {
+      const sqlError = error;
+      console.error("[WORKFLOWS-API] SQL INSERT FAILED:", sqlError);
+      
+      // Detailed SQL error diagnostics
+      if (sqlError instanceof Prisma.PrismaClientKnownRequestError) {
+        console.error(`[WORKFLOWS-API] Prisma Error Code: ${sqlError.code}`);
+        console.error(`[WORKFLOWS-API] Prisma Meta:`, JSON.stringify(sqlError.meta, null, 2));
+        
+        // Handle specific known Prisma errors
+        if (sqlError.code === 'P2002') {
+          return NextResponse.json(
+            createApiResponse(false, undefined, 'A workflow with this name already exists.', 400).response, 
+            { status: 400 }
+          );
+        }
+        
+        if (sqlError.code === 'P2003') {
+          return NextResponse.json(
+            createApiResponse(false, undefined, 'Foreign key constraint failed. This may indicate a schema mismatch.', 400).response,
+            { status: 400 }
+          );
+        }
+        
+        // Column type mismatch often manifests as P2023
+        if (sqlError.code === 'P2023') {
+          return NextResponse.json(
+            createApiResponse(false, undefined, 'Data type validation failed. This may indicate a schema mismatch or invalid data format.', 400).response,
+            { status: 400 }
+          );
+        }
+      }
+      
+      // Handle generic database errors with sufficient detail for diagnosis
+      let clientMessage = 'Database error creating workflow.';
+      let clientStatus = 500;
+      
+      // Check for specific error patterns in the message
+      const errorMsg = typeof sqlError === 'object' && sqlError !== null 
+        ? String(sqlError).toLowerCase() 
+        : typeof sqlError === 'string' 
+          ? sqlError.toLowerCase()
+          : 'unknown error';
+      
+      if (errorMsg.includes('invalid input syntax') || errorMsg.includes('cannot be cast')) {
+        clientMessage = 'Data type mismatch. This may be due to a schema version difference.';
+        clientStatus = 400;
+      }
+      
+      if (errorMsg.includes('violates not-null constraint')) {
+        clientMessage = 'Required field missing or invalid.';
+        clientStatus = 400;
+      }
+      
+      // Check for time-related errors specifically
+      if (errorMsg.includes('time') && (errorMsg.includes('format') || errorMsg.includes('syntax'))) {
+        clientMessage = 'Invalid time format provided for time fields. Use HH:MM format.';
+        clientStatus = 400;
+      }
+      
+      // Return appropriate error to client based on our analysis
+      const { response } = createApiResponse(false, undefined, clientMessage, clientStatus);
+      return NextResponse.json(response, { status: clientStatus });
+    }
+
+    console.log("[WORKFLOWS-API] Successfully created workflow, returning 201 Created");
     const { response } = createApiResponse(true, { workflowId: newWorkflowId });
     return NextResponse.json(response, { status: 201 });
 
   } catch (error) {
     // --- CRITICAL: Enhanced Error Logging ---
     console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-    console.error("!!! Critical Error inserting workflow:", error); 
+    console.error("[WORKFLOWS-API] CRITICAL ERROR:", error); 
     console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+    console.error("[WORKFLOWS-API] Error stack:", error instanceof Error ? error.stack : 'No stack trace available');
     
     // Log specific details if it's a known Prisma error
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      console.error("Prisma Error Code:", error.code);
-      console.error("Prisma Meta:", error.meta);
+      console.error("[WORKFLOWS-API] Prisma Error Code:", error.code);
+      console.error("[WORKFLOWS-API] Prisma Meta:", error.meta);
     }
+    
     // Log validation errors separately if they occur during data processing
     if (error instanceof z.ZodError) {
-       console.error("Zod Validation Error during processing:", error.format());
-       // Should ideally return 400 here, but keeping 500 for now as per original logic
+       console.error("[WORKFLOWS-API] Zod Validation Error during processing:", error.format());
+       
+       // Return 400 for validation errors
+       const { response } = createApiResponse(
+         false, 
+         { validationErrors: error.format() },
+         'Validation failed during processing',
+         400
+       );
+       return NextResponse.json(response, { status: 400 });
     }
 
     // Return a generic error to the client, but keep detailed logs server-side
     const { response, status } = createApiResponse(
         false, 
         undefined, 
-        'Database error creating workflow. Check server logs for details.', // More informative generic message
+        'An unexpected error occurred while creating the workflow. The issue has been logged for investigation.', 
         500
     );
     return NextResponse.json(response, { status });

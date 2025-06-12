@@ -8,8 +8,9 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {
+    // Super simple auth - just check if session exists
     const session = await getServerSession(authOptions);
-    if (!session?.user?.organizationId) {
+    if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

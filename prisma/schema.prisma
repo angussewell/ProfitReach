@@ -161,7 +161,7 @@ model Contacts {
   fullName                   String?                @db.VarChar(200)
   linkedinUrl                String?
   title                      String?                @db.VarChar(200)
-  email                      String                 @db.VarChar(255)
+  email                      String?                @db.VarChar(255)
   emailStatus                String?                @db.VarChar(50)
   photoUrl                   String?
   headline                   String?
@@ -355,6 +355,7 @@ model Organization {
   nextBillingDate         DateTime?
   stripeTestCustomerId    String?
   location_id             String?                   @unique
+  hideFromAdminStats      Boolean                   @default(false) // New field for admin stats visibility
   Attachment              Attachment[]
   BillingEvent            BillingEvent[]
   ChatConversation        ChatConversation[]
@@ -655,7 +656,7 @@ model WebhookLog {
   scenarioName     String        @default("Unknown")
   contactEmail     String        @default("Unknown")
   contactName      String        @default("Unknown")
-  company          String        @default("Unknown")
+  company          String?       @default("Unknown") // Made optional to allow NULL values
   requestBody      Json
   responseBody     Json          @default("{}")
   ghlIntegrationId String?

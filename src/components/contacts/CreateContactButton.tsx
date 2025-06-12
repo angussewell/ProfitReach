@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Button } from '@/components/ui/button';
 import CreateContactModal from './CreateContactModal';
 
 export default function CreateContactButton() {
@@ -11,12 +12,13 @@ export default function CreateContactButton() {
 
   return (
     <>
-      <button
+      <Button
+        variant="default"
+        size="default"
         onClick={openModal}
-        className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center"
       >
         <span className="mr-1">+</span> Create Contact
-      </button>
+      </Button>
       
       <CreateContactModal isOpen={isModalOpen} onClose={closeModal} />
     </>
