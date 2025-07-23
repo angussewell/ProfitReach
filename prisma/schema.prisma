@@ -181,7 +181,7 @@ model Contacts {
   additionalData             Json?
   createdAt                  DateTime?              @default(now()) @db.Timestamptz(6)
   updatedAt                  DateTime?              @default(now()) @db.Timestamptz(6)
-  organizationId             String?
+  organizationId             String
   leadStatus                 String?
   lastActivityAt             DateTime?              @db.Timestamptz(6)
   scenarioName               String?
@@ -207,8 +207,9 @@ model Contacts {
   seoDescription             String?
   ContactTags                ContactTags[]
   ContactWorkflowState       ContactWorkflowState[]
-  Organization               Organization?          @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_contacts_organization")
+  Organization               Organization           @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_contacts_organization")
 
+  @@unique([email, organizationId])
   @@index([currentCompanyName], map: "idx_apolloContacts_company")
   @@index([email], map: "idx_apolloContacts_email")
   @@index([linkedinUrl], map: "idx_apolloContacts_linkedin")

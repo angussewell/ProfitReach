@@ -12,7 +12,12 @@
     "lint": "next lint",
     "postinstall": "prisma generate",
     "db:seed": "prisma db seed",
-    "create-admin": "node scripts/ensure-admin-user.js"
+    "create-admin": "node scripts/ensure-admin-user.js",
+    "backfill-contacts": "ts-node prisma/scripts/backfill-contact-orgs.ts",
+    "manual-migration": "ts-node prisma/scripts/manual-migration.ts",
+    "test-multi-tenant": "ts-node prisma/scripts/test-multi-tenant.ts",
+    "check-constraints": "ts-node prisma/scripts/check-constraints.ts",
+    "fix-constraints": "ts-node prisma/scripts/fix-constraints.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.7.4",

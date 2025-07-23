@@ -238,10 +238,10 @@ export async function POST(request: NextRequest) {
     } catch (dbError) {
       console.error('Database error creating contact:', dbError);
       
-      // Check for duplicate email error
+      // Check for duplicate email error (now organization-scoped)
       if (dbError instanceof Error && dbError.message.includes('duplicate key')) {
         return NextResponse.json(
-          { message: 'A contact with this email already exists' },
+          { message: 'A contact with this email already exists in your organization' },
           { status: 409 }
         );
       }
