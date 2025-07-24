@@ -15,6 +15,8 @@ type Contact = {
   photoUrl: string | null;
   title: string | null;
   currentCompanyName: string | null;
+  propertyCount: number | null;
+  pms: string | null;
   status?: string;
 };
 
@@ -101,6 +103,8 @@ export default function ContactsTable({ contacts }: ContactsTableProps) {
             <TableHead>Email</TableHead>
             <TableHead>Title</TableHead>
             <TableHead>Company</TableHead>
+            <TableHead>Properties</TableHead>
+            <TableHead>PMS</TableHead>
             <TableHead>Status</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
@@ -140,6 +144,10 @@ export default function ContactsTable({ contacts }: ContactsTableProps) {
               <TableCell>{contact.email}</TableCell>
               <TableCell>{contact.title || '-'}</TableCell>
               <TableCell>{contact.currentCompanyName || '-'}</TableCell>
+              <TableCell>
+                {contact.propertyCount !== null ? contact.propertyCount.toLocaleString() : '-'}
+              </TableCell>
+              <TableCell>{contact.pms || '-'}</TableCell>
               <TableCell>
                 {contact.status ? (
                   <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">

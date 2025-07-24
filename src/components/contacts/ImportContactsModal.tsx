@@ -185,6 +185,14 @@ export default function ImportContactsModal({ isOpen, onClose }: ImportContactsM
             initialMappings[header] = 'facebookUrl';
           } else if (headerLower.includes('github')) {
             initialMappings[header] = 'githubUrl';
+          } else if (headerLower.includes('properties') || 
+                     headerLower.includes('property count') ||
+                     headerLower === 'number of properties') {
+            initialMappings[header] = 'propertyCount';
+          } else if (headerLower === 'pms' || 
+                     headerLower.includes('property management system') ||
+                     headerLower.includes('property management')) {
+            initialMappings[header] = 'pms';
           } else {
             initialMappings[header] = '';
           }

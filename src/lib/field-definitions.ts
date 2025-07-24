@@ -62,6 +62,8 @@ export const CONTACT_FIELDS: FieldOption[] = [
   { value: "currentCompanyId", label: "Company ID", group: FIELD_GROUPS.COMPANY },
   { value: "companyWebsiteUrl", label: "Company Website", group: FIELD_GROUPS.COMPANY },
   { value: "companyLinkedinUrl", label: "Company LinkedIn URL", group: FIELD_GROUPS.COMPANY },
+  { value: "propertyCount", label: "Number of Properties", group: FIELD_GROUPS.COMPANY },
+  { value: "pms", label: "Property Management System", group: FIELD_GROUPS.COMPANY },
   
   // Social Media
   { value: "linkedinUrl", label: "LinkedIn URL", group: FIELD_GROUPS.SOCIAL },

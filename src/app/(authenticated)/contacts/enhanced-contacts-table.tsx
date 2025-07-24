@@ -34,6 +34,8 @@ type Contact = {
   photoUrl: string | null;
   title: string | null;
   currentCompanyName: string | null;
+  propertyCount: number | null;
+  pms: string | null;
   status?: string;
 };
 
@@ -594,6 +596,12 @@ export default function EnhancedContactsTable({
                   Company
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Properties
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  PMS
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -646,6 +654,14 @@ export default function EnhancedContactsTable({
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap overflow-hidden">
                     <div className="text-sm text-gray-900 truncate" title={contact.currentCompanyName || '-'}>{contact.currentCompanyName || '-'}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">
+                      {contact.propertyCount !== null ? contact.propertyCount.toLocaleString() : '-'}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap overflow-hidden">
+                    <div className="text-sm text-gray-900 truncate" title={contact.pms || '-'}>{contact.pms || '-'}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     {contact.status ? (

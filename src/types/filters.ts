@@ -114,6 +114,7 @@ function getFieldType(fieldValue: string): 'string' | 'number' | 'date' | 'boole
   if (fieldValue === 'tags') return 'tags';
   if (fieldValue === 'leadStatus') return 'select';
   if (['createdAt', 'updatedAt', 'lastActivityAt', 'dateOfResearch'].includes(fieldValue)) return 'date';
+  if (fieldValue === 'propertyCount') return 'number';
   
   // Default to string for most fields
   return 'string';

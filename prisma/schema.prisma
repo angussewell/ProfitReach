@@ -205,6 +205,8 @@ model Contacts {
   outboundRepName            String?
   phone                      String?
   seoDescription             String?
+  propertyCount              Int?                   @map("Properties")
+  pms                        String?                @map("pms")
   ContactTags                ContactTags[]
   ContactWorkflowState       ContactWorkflowState[]
   Organization               Organization           @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_contacts_organization")

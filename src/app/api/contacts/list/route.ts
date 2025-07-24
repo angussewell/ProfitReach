@@ -205,6 +205,8 @@ export async function GET(request: Request) {
         city: true,
         state: true,
         country: true,
+        propertyCount: true,
+        pms: true,
         // Include fields needed for filtering/display if not already present
         createdAt: true,
         updatedAt: true,
