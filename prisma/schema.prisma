@@ -209,6 +209,7 @@ model Contacts {
   pms                        String?                @map("pms")
   ContactTags                ContactTags[]
   ContactWorkflowState       ContactWorkflowState[]
+  ReportHistory              ReportHistory[]
   Organization               Organization           @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_contacts_organization")
 
   @@unique([email, organizationId])
@@ -372,6 +373,7 @@ model Organization {
   Metric                  Metric[]
   Prompt                  Prompt[]
   ReplyLog                ReplyLog[]
+  ReportBuilderConfig     ReportBuilderConfig[]
   ResearchResult          ResearchResult[]
   SavedFilters            SavedFilters[]
   Scenario                Scenario[]
@@ -626,6 +628,7 @@ model User {
   updatedAt        DateTime
   Account          Account[]
   ChatConversation ChatConversation[]
+  ReportHistory    ReportHistory[]
   SavedFilters     SavedFilters[]
   Session          Session[]
   Organization     Organization?      @relation(fields: [organizationId], references: [id])
@@ -710,6 +713,39 @@ model WorkflowExecutionLog {
 
   @@index([contactWorkflowStateId], map: "idx_workflowexecutionlog_contactworkflowstateid")
   @@index([timestamp], map: "idx_workflowexecutionlog_timestamp")
+}
+
+model ReportBuilderConfig {
+  id                 String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name               String         @db.VarChar(255)
+  webhookUrl         String
+  notificationEmail  String         @db.VarChar(255)
+  organizationId     String         @db.VarChar(255)
+  createdAt          DateTime       @default(now()) @db.Timestamp(6)
+  updatedAt          DateTime       @db.Timestamp(6)
+  Organization       Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ReportHistory      ReportHistory[]
+
+  @@unique([name, organizationId])
+  @@index([organizationId], map: "idx_reportbuilderconfig_organizationid")
+}
+
+model ReportHistory {
+  id                     String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reportBuilderConfigId  String              @db.Uuid
+  contactId              String              @db.VarChar(50)
+  userId                 String
+  status                 String              @db.VarChar(50)
+  customNotes            String?
+  reportUrl              String?
+  createdAt              DateTime            @default(now()) @db.Timestamptz(6)
+  ReportBuilderConfig    ReportBuilderConfig @relation(fields: [reportBuilderConfigId], references: [id], onDelete: Cascade)
+  Contacts               Contacts            @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  User                   User                @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([reportBuilderConfigId], map: "idx_reporthistory_config_id")
+  @@index([userId], map: "idx_reporthistory_user_id")
+  @@index([createdAt], map: "idx_reporthistory_created_at")
 }
 
 enum AppointmentStatus {

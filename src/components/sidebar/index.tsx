@@ -97,6 +97,13 @@ export default function Sidebar(): JSX.Element {
       managerAccess: true
     },
     {
+      href: '/report-builder',
+      label: 'Report Builder',
+      icon: createIcon(Icons.BarChart3, 'report-builder-icon'),
+      adminOnly: true,
+      managerAccess: true
+    },
+    {
       href: '/admin/follow-up-queue',
       label: 'Follow-Up Queue',
       icon: createIcon(Icons.ListTodo, 'follow-up-queue-icon'), // Added ListTodo icon
