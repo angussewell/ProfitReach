@@ -64,15 +64,24 @@ export default function ContactSelector({
       if (query.trim()) {
         params.set('q', query.trim());
       }
-      params.set('limit', '50');
+      // Request more contacts when searching to ensure we find the right one
+      const limit = query.trim() ? '500' : '50';
+      params.set('limit', limit);
 
-      const response = await fetch(`/api/report-builder/contacts/search?${params}`);
+      const url = `/api/report-builder/contacts/search?${params}`;
+      console.log('Fetching contacts from:', url);
+      
+      const response = await fetch(url);
       
       if (!response.ok) {
         throw new Error('Failed to fetch contacts');
       }
 
       const data = await response.json();
+      console.log('Received contacts:', data.contacts?.length || 0, 'contacts');
+      if (query.trim()) {
+        console.log('Search query:', query, 'First few results:', data.contacts?.slice(0, 3));
+      }
       setContacts(data.contacts || []);
     } catch (err) {
       console.error('Error fetching contacts:', err);
@@ -130,7 +139,7 @@ export default function ContactSelector({
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[400px] p-0" align="start">
-          <Command>
+          <Command shouldFilter={false}>
             <CommandInput 
               placeholder="Search contacts..." 
               value={searchQuery}
@@ -152,9 +161,9 @@ export default function ContactSelector({
                     return (
                       <CommandItem
                         key={contact.id}
-                        value={contact.id}
-                        onSelect={(selectedValue) => {
-                          onChange(selectedValue === value ? '' : selectedValue);
+                        value={`${contact.id}_${label}`}
+                        onSelect={() => {
+                          onChange(contact.id === value ? '' : contact.id);
                           setOpen(false);
                         }}
                         className="flex items-center gap-2"
@@ -201,7 +210,10 @@ export default function ContactSelector({
       
       {!isLoading && contacts.length > 0 && (
         <div className="text-xs text-gray-500">
-          Found {contacts.length} contact{contacts.length !== 1 ? 's' : ''}
+          {searchQuery.trim() 
+            ? `Found ${contacts.length} contact${contacts.length !== 1 ? 's' : ''} matching "${searchQuery}"`
+            : `Showing ${contacts.length} recent contact${contacts.length !== 1 ? 's' : ''}`
+          }
         </div>
       )}
     </div>

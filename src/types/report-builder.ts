@@ -75,7 +75,7 @@ export interface ReportHistory {
   reportBuilderConfigId: string;
   contactId: string;
   userId: string;
-  status: 'PENDING' | 'PROCESSING' | 'SUCCESS' | 'FAILED';
+  status: 'PENDING' | 'SUCCESS' | 'FAILED';
   customNotes: string | null;
   reportUrl: string | null;
   createdAt: Date;
@@ -86,7 +86,7 @@ export interface ReportHistoryWithRelations {
   reportBuilderConfigId: string;
   contactId: string;
   userId: string;
-  status: 'PENDING' | 'PROCESSING' | 'SUCCESS' | 'FAILED';
+  status: 'PENDING' | 'SUCCESS' | 'FAILED';
   customNotes: string | null;
   reportUrl: string | null;
   createdAt: Date;

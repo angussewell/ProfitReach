@@ -250,20 +250,13 @@ export default function ReportBuilderClient() {
   const selectedConfig = configs.find(c => c.id === selectedConfigId);
 
   // Helper function to get status badge
-  const getStatusBadge = (status: 'PENDING' | 'PROCESSING' | 'SUCCESS' | 'FAILED') => {
+  const getStatusBadge = (status: 'PENDING' | 'SUCCESS' | 'FAILED') => {
     switch (status) {
       case 'PENDING':
         return (
           <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
             <Clock className="w-3 h-3 mr-1" />
             Pending
-          </Badge>
-        );
-      case 'PROCESSING':
-        return (
-          <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-            <Clock className="w-3 h-3 mr-1" />
-            Processing
           </Badge>
         );
       case 'SUCCESS':

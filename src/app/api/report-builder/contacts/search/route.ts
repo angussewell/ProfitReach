@@ -16,10 +16,20 @@ export async function GET(request: NextRequest) {
 
     const searchParams = request.nextUrl.searchParams;
     const query = searchParams.get('q') || '';
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const requestedLimit = parseInt(searchParams.get('limit') || '50');
 
-    // Ensure limit is reasonable
-    const safeLimit = Math.min(Math.max(limit, 1), 100);
+    console.log('Contact search API called:', {
+      organizationId: session.user.organizationId,
+      query,
+      requestedLimit
+    });
+
+    // Dynamic limit based on search context
+    // When searching: allow up to 500 results to find specific contacts
+    // When browsing: limit to 50 to avoid loading too many contacts
+    const safeLimit = query.trim() 
+      ? Math.min(Math.max(requestedLimit, 1), 500)
+      : Math.min(Math.max(requestedLimit, 1), 50);
 
     let contacts: ContactOption[];
 
@@ -69,6 +79,11 @@ export async function GET(request: NextRequest) {
           "updatedAt" DESC
         LIMIT ${safeLimit}
       `;
+    }
+
+    console.log(`Returning ${contacts.length} contacts for query: "${query}"`);
+    if (query && contacts.length > 0) {
+      console.log('Sample result:', contacts[0]);
     }
 
     return NextResponse.json({ contacts });

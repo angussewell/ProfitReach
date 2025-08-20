@@ -89,13 +89,13 @@ export async function POST(req: Request) {
       );
     }
 
-    // Create a report history record with PROCESSING status
+    // Create a report history record with PENDING status
     const historyRecord = await prisma.reportHistory.create({
       data: {
         reportBuilderConfigId: reportConfig.id,
         contactId: contact.id,
         userId: session.user.id,
-        status: 'PROCESSING',
+        status: 'PENDING',
         customNotes: data.customNotes,
       },
     });
