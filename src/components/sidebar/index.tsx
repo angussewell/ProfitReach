@@ -20,7 +20,10 @@ interface Route {
   icon: React.ReactElement;
   adminOnly?: boolean;
   managerAccess?: boolean;
+  authorizedRoles?: string[];
 }
+
+const REPORT_BUILDER_AUTHORIZED_ROLES = ['admin', 'manager', 'user'];
 
 const createIcon = (Icon: LucideIcon, key: string) => 
   React.createElement(Icon, { 
@@ -100,8 +103,7 @@ export default function Sidebar(): JSX.Element {
       href: '/report-builder',
       label: 'Report Builder',
       icon: createIcon(Icons.BarChart3, 'report-builder-icon'),
-      adminOnly: true,
-      managerAccess: true
+      authorizedRoles: REPORT_BUILDER_AUTHORIZED_ROLES
     },
     {
       href: '/admin/follow-up-queue',
@@ -142,11 +144,16 @@ export default function Sidebar(): JSX.Element {
 
           <nav className="flex-1 py-2 px-2">
             {routes
-              .filter(route => 
-                !route.adminOnly || 
-                session?.user?.role === 'admin' ||
-                (route.managerAccess && session?.user?.role === 'manager')
-              )
+              .filter(route => {
+                // If route has authorizedRoles, check if user's role is in the list
+                if (route.authorizedRoles) {
+                  return route.authorizedRoles.includes(session?.user?.role || '');
+                }
+                // Keep existing logic for backward compatibility
+                return !route.adminOnly || 
+                       session?.user?.role === 'admin' ||
+                       (route.managerAccess && session?.user?.role === 'manager');
+              })
               .map((route) => (
                 <SidebarLink
                   key={route.href}
