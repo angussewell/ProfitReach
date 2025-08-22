@@ -17,21 +17,6 @@ interface Scenario {
   updatedAt: Date;
 }
 
-interface WebhookLog {
-  id: string;
-  scenarioName: string;
-  status: string;
-  createdAt: Date;
-}
-
-interface ScenarioResponse {
-  id: string;
-  scenarioId: string;
-  source: string;
-  threadId: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-}
 
 interface Appointment {
   id: string;
@@ -80,9 +65,8 @@ export async function GET(request: Request): Promise<NextResponse> {
 
     // Initialize variables to store results
     let scenarios: Scenario[] = [];
-    let webhookLogs: WebhookLog[] = [];
-    let scenarioResponses: ScenarioResponse[] = [];
     let appointments: Appointment[] = [];
+    let manualRepliesMap: Record<string, number> = {};
 
     try {
       // Fetch scenarios (excluding research type)
@@ -103,84 +87,113 @@ export async function GET(request: Request): Promise<NextResponse> {
         scenarios = [];
       }
 
-      // Fetch webhook logs with date filter and status 'success'
-      console.log('Fetching webhook logs...');
+      // Fetch manual replies from ScenarioResponse table
+      console.log('Fetching manual replies...');
       try {
-        webhookLogs = await prisma.webhookLog.findMany({
-          where: {
-            organizationId: session.user.organizationId,
-            status: 'success',
-            NOT: {
-              scenarioName: {
-                contains: 'research',
-                mode: 'insensitive'
-              }
-            },
-            ...(from && to ? {
-              createdAt: {
-                gte: new Date(from),
-                lte: new Date(to),
-              },
-            } : {}),
-          },
-        });
-        console.log(`Successfully fetched ${webhookLogs.length} webhook logs`);
-      } catch (webhookError) {
-        console.error('Error fetching webhook logs:', webhookError);
-        // Continue with empty webhookLogs array instead of failing
-        webhookLogs = [];
-      }
-
-      // Get responses from the ScenarioResponse table
-      console.log('Fetching scenario responses...');
-      try {
-        // Skip the relation query since it's causing issues
-        // Get all scenario IDs first
-        const scenarioIds = scenarios.map(s => s.id);
-        
-        // Then query responses directly by scenario IDs
-        scenarioResponses = await prisma.scenarioResponse.findMany({
-          where: {
-            scenarioId: {
-              in: scenarioIds
-            },
-            ...(from && to ? {
-              createdAt: {
-                gte: new Date(from),
-                lte: new Date(to),
-              },
-            } : {})
-          }
-        });
-        console.log(`Successfully fetched ${scenarioResponses.length} scenario responses with direct query`);
-      } catch (responseError) {
-        console.error('Error fetching scenario responses with relation:', responseError);
-        
-        // Fall back to a simpler query if the relation query fails
-        try {
-          // Get all scenario IDs first
+        if (scenarios.length > 0) {
           const scenarioIds = scenarios.map(s => s.id);
-          
-          // Then query responses directly by scenario IDs
-          scenarioResponses = await prisma.scenarioResponse.findMany({
+          const manualReplies = await prisma.scenarioResponse.findMany({
             where: {
-              scenarioId: {
-                in: scenarioIds
-              },
+              scenarioId: { in: scenarioIds },
+              source: 'manual',
               ...(from && to ? {
                 createdAt: {
                   gte: new Date(from),
                   lte: new Date(to),
                 },
               } : {})
-            }
+            },
+            select: { scenarioId: true }
           });
-          console.log(`Successfully fetched ${scenarioResponses.length} scenario responses with fallback method`);
-        } catch (fallbackError) {
-          console.error('Error fetching scenario responses with fallback method:', fallbackError);
-          // Continue with empty scenarioResponses array
-          scenarioResponses = [];
+          
+          // Count manual replies per scenario
+          manualRepliesMap = manualReplies.reduce((acc, reply) => {
+            acc[reply.scenarioId] = (acc[reply.scenarioId] || 0) + 1;
+            return acc;
+          }, {} as Record<string, number>);
+          
+          console.log(`Successfully fetched ${manualReplies.length} manual replies`);
         }
+      } catch (manualRepliesError) {
+        console.error('Error fetching manual replies:', manualRepliesError);
+        // Continue with empty manual replies
+        manualRepliesMap = {};
+      }
+
+      // Get analytics from MailReefMessage table (the correct source of truth)
+      console.log('Fetching scenario analytics from MailReefMessage...');
+      
+      // Initialize variables for storing aggregated results
+      let scenarioContactCounts: Record<string, number> = {};
+      let scenarioResponseCounts: Record<string, number> = {};
+      
+      try {
+        if (scenarios.length > 0) {
+          const scenarioIds = scenarios.map(s => s.id);
+          
+          // Build date filter conditions
+          const conditions = [
+            Prisma.sql`"organizationId" = ${session.user.organizationId}`,
+            Prisma.sql`"scenarioId" = ANY(${scenarioIds})`
+          ];
+          
+          if (from && to) {
+            conditions.push(Prisma.sql`"eventTimestamp" >= ${new Date(from)}`);
+            conditions.push(Prisma.sql`"eventTimestamp" <= ${new Date(to)}`);
+          }
+          
+          // Query 1: Get total contacts (outbound messages) per scenario
+          console.log('Querying outbound messages from MailReefMessage...');
+          const outboundConditions = [...conditions, Prisma.sql`direction = 'outbound'`];
+          const outboundWhereClause = Prisma.sql`WHERE ${Prisma.join(outboundConditions, ' AND ')}`;
+          const outboundQuery = Prisma.sql`
+            SELECT "scenarioId", COUNT(*) as count 
+            FROM "MailReefMessage" 
+            ${outboundWhereClause} 
+            GROUP BY "scenarioId"
+          `;
+          
+          const outboundResults: Array<{scenarioId: string, count: bigint}> = 
+            await prisma.$queryRaw(outboundQuery);
+          
+          // Convert to lookup map
+          scenarioContactCounts = outboundResults.reduce((acc, row) => {
+            acc[row.scenarioId] = Number(row.count);
+            return acc;
+          }, {} as Record<string, number>);
+          
+          console.log(`Found contact counts for ${outboundResults.length} scenarios`);
+          
+          // Query 2: Get total responses (inbound messages) per scenario
+          console.log('Querying inbound messages from MailReefMessage...');
+          
+          // TODO: Implement thread-based reply tracking once customThreadId field is available
+          // For now, we'll count all inbound messages for this organization as a temporary measure
+          const inboundConditions = [...conditions, Prisma.sql`direction = 'inbound'`];
+          const inboundWhereClause = Prisma.sql`WHERE ${Prisma.join(inboundConditions, ' AND ')}`;
+          const inboundQuery = Prisma.sql`
+            SELECT "scenarioId", COUNT(*) as count 
+            FROM "MailReefMessage" 
+            ${inboundWhereClause} 
+            GROUP BY "scenarioId"
+          `;
+          
+          const inboundResults: Array<{scenarioId: string, count: bigint}> = 
+            await prisma.$queryRaw(inboundQuery);
+          
+          // Convert to lookup map
+          scenarioResponseCounts = inboundResults.reduce((acc, row) => {
+            acc[row.scenarioId] = Number(row.count);
+            return acc;
+          }, {} as Record<string, number>);
+          
+          console.log(`Found response counts for ${inboundResults.length} scenarios`);
+        }
+      } catch (mailReefError) {
+        console.error('Error fetching MailReef analytics:', mailReefError);
+        // Continue with empty counts - scenarios will show 0 values
+        scenarioContactCounts = {};
+        scenarioResponseCounts = {};
       }
 
       // Get appointments count for the date range
@@ -204,22 +217,29 @@ export async function GET(request: Request): Promise<NextResponse> {
         appointments = [];
       }
 
-      // Calculate analytics for each scenario
-      console.log('Calculating analytics...');
+      // Calculate analytics for each scenario using MailReefMessage data
+      console.log('Calculating analytics using MailReefMessage data...');
       const analytics: Analytics[] = scenarios.map((scenario) => {
         try {
-          const logs = webhookLogs.filter(log => log.scenarioName === scenario.name);
-          const responses = scenarioResponses.filter((r) => r.scenarioId === scenario.id);
-          const manualResponses = responses.filter((r) => r.source === 'manual');
+          // Get counts from the MailReefMessage aggregated data
+          const totalContacts = scenarioContactCounts[scenario.id] || 0;
+          const responseCount = scenarioResponseCounts[scenario.id] || 0;
+          
+          // For activeContacts, we'll use the same as totalContacts for now
+          // (since MailReefMessage doesn't have an "active" status field)
+          const activeContacts = totalContacts;
+          
+          // For manual replies count, use the pre-calculated map
+          const manualRepliesCount = manualRepliesMap[scenario.id] || 0;
           
           return {
             id: scenario.id,
             name: scenario.name,
-            touchpointType: scenario.touchpointType || 'email', // Provide default if missing
-            totalContacts: logs.length,
-            activeContacts: logs.filter(log => log.status === 'active').length,
-            responseCount: responses.length,
-            manualRepliesCount: manualResponses.length,
+            touchpointType: scenario.touchpointType || 'email',
+            totalContacts: totalContacts,
+            activeContacts: activeContacts,
+            responseCount: responseCount,
+            manualRepliesCount: manualRepliesCount,
             createdAt: scenario.createdAt,
             updatedAt: scenario.updatedAt,
           };
