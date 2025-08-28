@@ -181,10 +181,23 @@ export async function GET(request: Request): Promise<NextResponse> {
           }
 
           const replyWhereClause = Prisma.sql`WHERE ${Prisma.join(replyConditions, ' AND ')}`;
+          
+          // CRITICAL FIX: Use deduplicated contacts subquery to prevent over-counting
+          // Problem: Direct join to Contacts table causes duplicate counts when multiple 
+          // contacts share the same email address within an organization
+          // Solution: Use DISTINCT ON to get only one contact per unique (email, organizationId) pair
           const replyQuery = Prisma.sql`
             SELECT c."scenarioName", COUNT(*) as count 
             FROM "EmailMessage" em
-            JOIN "Contacts" c ON (
+            JOIN (
+              SELECT DISTINCT ON (email, "organizationId") 
+                email, "organizationId", "scenarioName"
+              FROM "Contacts"
+              WHERE email IS NOT NULL 
+                AND "organizationId" IS NOT NULL
+                AND "scenarioName" IS NOT NULL
+              ORDER BY email, "organizationId", id
+            ) c ON (
               (em."sender" = c.email OR em."recipientEmail" = c.email) 
               AND c."organizationId" = em."organizationId"
             )
