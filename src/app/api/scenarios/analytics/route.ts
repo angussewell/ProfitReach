@@ -120,8 +120,8 @@ export async function GET(request: Request): Promise<NextResponse> {
         manualRepliesMap = {};
       }
 
-      // Get analytics from MailReefMessage table (the correct source of truth)
-      console.log('Fetching scenario analytics from MailReefMessage...');
+      // Get analytics from MailReefMessage (contacts) and EmailMessage (replies) tables
+      console.log('Fetching scenario analytics from message tables...');
       
       // Initialize variables for storing aggregated results
       let scenarioContactCounts: Record<string, number> = {};
@@ -164,33 +164,57 @@ export async function GET(request: Request): Promise<NextResponse> {
           
           console.log(`Found contact counts for ${outboundResults.length} scenarios`);
           
-          // Query 2: Get total responses (inbound messages) per scenario
-          console.log('Querying inbound messages from MailReefMessage...');
+          // Query 2: Get total responses (REAL_REPLY messages) per scenario via contact email matching
+          console.log('Querying real replies from EmailMessage via Contacts...');
           
-          // TODO: Implement thread-based reply tracking once customThreadId field is available
-          // For now, we'll count all inbound messages for this organization as a temporary measure
-          const inboundConditions = [...conditions, Prisma.sql`direction = 'inbound'`];
-          const inboundWhereClause = Prisma.sql`WHERE ${Prisma.join(inboundConditions, ' AND ')}`;
-          const inboundQuery = Prisma.sql`
-            SELECT "scenarioId", COUNT(*) as count 
-            FROM "MailReefMessage" 
-            ${inboundWhereClause} 
-            GROUP BY "scenarioId"
+          // Build conditions for real reply query with proper email-to-contact join
+          const replyConditions = [
+            Prisma.sql`em."messageType" = 'REAL_REPLY'`,
+            Prisma.sql`em."organizationId" = ${session.user.organizationId}`,
+            Prisma.sql`c."organizationId" = ${session.user.organizationId}`,
+            Prisma.sql`c."scenarioName" IS NOT NULL`
+          ];
+
+          if (from && to) {
+            replyConditions.push(Prisma.sql`em."receivedAt" >= ${new Date(from)}`);
+            replyConditions.push(Prisma.sql`em."receivedAt" <= ${new Date(to)}`);
+          }
+
+          const replyWhereClause = Prisma.sql`WHERE ${Prisma.join(replyConditions, ' AND ')}`;
+          const replyQuery = Prisma.sql`
+            SELECT c."scenarioName", COUNT(*) as count 
+            FROM "EmailMessage" em
+            JOIN "Contacts" c ON (
+              (em."sender" = c.email OR em."recipientEmail" = c.email) 
+              AND c."organizationId" = em."organizationId"
+            )
+            ${replyWhereClause}
+            GROUP BY c."scenarioName"
           `;
-          
-          const inboundResults: Array<{scenarioId: string, count: bigint}> = 
-            await prisma.$queryRaw(inboundQuery);
-          
-          // Convert to lookup map
-          scenarioResponseCounts = inboundResults.reduce((acc, row) => {
-            acc[row.scenarioId] = Number(row.count);
+
+          const replyResults: Array<{scenarioName: string, count: bigint}> = 
+            await prisma.$queryRaw(replyQuery);
+
+          // Convert scenarioName-based counts to scenarioId-based counts
+          const scenarioNameToIdMap = scenarios.reduce((acc, scenario) => {
+            acc[scenario.name] = scenario.id;
+            return acc;
+          }, {} as Record<string, string>);
+
+          scenarioResponseCounts = replyResults.reduce((acc, row) => {
+            const scenarioId = scenarioNameToIdMap[row.scenarioName];
+            if (scenarioId) {
+              acc[scenarioId] = Number(row.count);
+            } else {
+              console.warn(`Found replies for unknown scenario: ${row.scenarioName}`);
+            }
             return acc;
           }, {} as Record<string, number>);
           
-          console.log(`Found response counts for ${inboundResults.length} scenarios`);
+          console.log(`Found response counts for ${replyResults.length} scenario names`);
         }
-      } catch (mailReefError) {
-        console.error('Error fetching MailReef analytics:', mailReefError);
+      } catch (analyticsError) {
+        console.error('Error fetching email analytics:', analyticsError);
         // Continue with empty counts - scenarios will show 0 values
         scenarioContactCounts = {};
         scenarioResponseCounts = {};
