@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import TagSelector from '@/components/filters/TagSelector';
 import { LEAD_STATUS_OPTIONS } from '@/lib/field-definitions';
+import { normalizeUrl } from '@/lib/utils';
 
 type Contact = {
   id: string;
@@ -173,6 +174,11 @@ export default function EditContactForm({ contact }: EditContactFormProps) {
   const validateForm = (): boolean => {
     const newErrors: Partial<ContactFormData> = {};
 
+    const normalizedWebsite = normalizeUrl(formData.companyWebsiteUrl);
+    if (normalizedWebsite === null) {
+      newErrors.companyWebsiteUrl = 'Please enter a valid website URL';
+    }
+
     // Validate JSON only - removed email and name checks
     try {
       if (formData.additionalDataJson) {
@@ -180,6 +186,7 @@ export default function EditContactForm({ contact }: EditContactFormProps) {
       }
       setAdditionalDataError(null);
     } catch (e) {
+      setErrors(newErrors);
       setAdditionalDataError('Invalid JSON format');
       return false;
     }
@@ -234,6 +241,13 @@ export default function EditContactForm({ contact }: EditContactFormProps) {
       // Prepare phoneNumbers object
       const phoneNumbers = formData.phoneNumber ? { main: formData.phoneNumber } : null;
 
+      const normalizedCompanyWebsiteUrl = normalizeUrl(formData.companyWebsiteUrl);
+      if (normalizedCompanyWebsiteUrl === null) {
+        setErrors(prev => ({ ...prev, companyWebsiteUrl: 'Please enter a valid website URL' }));
+        setIsSubmitting(false);
+        return;
+      }
+
       const response = await fetch(`/api/contacts/${contact.id}`, {
         method: 'PUT',
         headers: {
@@ -246,7 +260,7 @@ export default function EditContactForm({ contact }: EditContactFormProps) {
           email: formData.email,
           title: formData.title,
           currentCompanyName: formData.currentCompanyName,
-          companyWebsiteUrl: formData.companyWebsiteUrl,
+          companyWebsiteUrl: normalizedCompanyWebsiteUrl,
           companyLinkedinUrl: formData.companyLinkedinUrl,
           leadStatus: formData.leadStatus,
           linkedinUrl: formData.linkedinUrl,
@@ -294,13 +308,19 @@ export default function EditContactForm({ contact }: EditContactFormProps) {
         }),
       });
 
+      const responseData = await response.json();
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to update contact');
+        throw new Error(responseData?.message || 'Failed to update contact');
       }
 
       // Success!
       setSubmitSuccess(true);
+      setErrors(prev => ({ ...prev, companyWebsiteUrl: undefined }));
+      setFormData(prev => ({
+        ...prev,
+        companyWebsiteUrl: responseData?.companyWebsiteUrl ?? (normalizedCompanyWebsiteUrl || ''),
+      }));
       
       // Refresh and redirect after a short delay
       setTimeout(() => {
@@ -523,14 +543,19 @@ export default function EditContactForm({ contact }: EditContactFormProps) {
                   Company Website URL
                 </label>
                 <input
-                  type="url"
+                  type="text"
                   id="companyWebsiteUrl"
                   name="companyWebsiteUrl"
                   value={formData.companyWebsiteUrl}
                   onChange={handleChange}
                   placeholder="https://example.com"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    errors.companyWebsiteUrl ? 'border-red-500 focus:ring-red-500' : 'border-gray-300'
+                  }`}
                 />
+                {errors.companyWebsiteUrl && (
+                  <p className="mt-1 text-sm text-red-600">{errors.companyWebsiteUrl}</p>
+                )}
               </div>
 
               <div className="mb-4">

@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { normalizeUrl } from '@/lib/utils';
 
 // Constants
 const PLACEHOLDER_ORG_ID = 'org_test_alpha'; // Fallback for testing
@@ -123,6 +124,27 @@ export async function PUT(
       outboundRepName,
       seoDescription
     } = body as UpdateContactRequest;
+
+    const linkedinUrlForUpdate =
+      typeof linkedinUrl === "string" && linkedinUrl.trim() === ""
+        ? null
+        : linkedinUrl ?? null; // collapse empty submissions to NULL to satisfy unique constraint
+
+    let normalizedCompanyWebsiteUrl: string | null | undefined = undefined;
+    if (companyWebsiteUrl !== undefined) {
+      if (companyWebsiteUrl === null) {
+        normalizedCompanyWebsiteUrl = null;
+      } else {
+        const normalized = normalizeUrl(companyWebsiteUrl);
+        if (normalized === null) {
+          return NextResponse.json(
+            { message: 'Company website must be a valid URL' },
+            { status: 400 }
+          );
+        }
+        normalizedCompanyWebsiteUrl = normalized === '' ? null : normalized;
+      }
+    }
     
     // Email is required
     if (!email) {
@@ -199,6 +221,10 @@ export async function PUT(
       const phoneNumbersJson = phoneNumbers ? JSON.stringify(phoneNumbers) : null;
       
       // Start a transaction to ensure all operations succeed or fail together
+      const companyWebsiteValueForUpdate = normalizedCompanyWebsiteUrl === undefined
+        ? null
+        : normalizedCompanyWebsiteUrl;
+
       await prisma.$transaction(async (prisma) => {
         // 1. Update the contact record
         await prisma.$executeRaw`
@@ -209,10 +235,10 @@ export async function PUT(
             email = ${email},
             title = ${title ?? null},
             "currentCompanyName" = ${currentCompanyName ?? null},
-            "companyWebsiteUrl" = ${companyWebsiteUrl ?? null},
+            "companyWebsiteUrl" = ${companyWebsiteValueForUpdate},
             "companyLinkedinUrl" = ${companyLinkedinUrl ?? null},
             "leadStatus" = ${leadStatus ?? null},
-            "linkedinUrl" = ${linkedinUrl ?? null},
+            "linkedinUrl" = ${linkedinUrlForUpdate},
             "twitterUrl" = ${twitterUrl ?? null},
             "facebookUrl" = ${facebookUrl ?? null},
             "githubUrl" = ${githubUrl ?? null},
@@ -314,7 +340,8 @@ export async function PUT(
       return NextResponse.json(
         { 
           message: 'Contact updated successfully',
-          contactId: contactId
+          contactId: contactId,
+          companyWebsiteUrl: companyWebsiteValueForUpdate
         },
         { status: 200 }
       );
