@@ -185,7 +185,7 @@ export default function ContactCorrespondence({
         </Button>
       </div>
 
-      <ScrollArea className="max-h-[600px] rounded-lg border">
+      <ScrollArea className="h-[60vh] max-h-[700px] rounded-lg border">
         <div className="space-y-4 p-4">
           {responses?.messages.map((message) => {
             const timestamp = new Date(message.eventTimestamp);
