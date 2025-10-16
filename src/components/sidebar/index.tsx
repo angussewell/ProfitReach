@@ -52,6 +52,12 @@ export default function Sidebar(): JSX.Element {
       icon: createIcon(Icons.Users2, 'contacts-icon'),
       managerAccess: true
     },
+    {
+      href: '/pipeline',
+      label: 'Pipeline',
+      icon: createIcon(Icons.Filter, 'pipeline-icon'),
+      adminOnly: true,
+    },
     { 
       href: '/scenarios', 
       label: 'Scenarios', 

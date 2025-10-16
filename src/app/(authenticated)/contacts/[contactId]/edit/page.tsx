@@ -2,8 +2,15 @@ import { prisma } from '@/lib/prisma';
 import { notFound } from 'next/navigation';
 import { PageContainer } from '@/components/layout/PageContainer';
 import EditContactForm from '@/components/contacts/EditContactForm';
+import ContactCorrespondence from '@/components/contacts/ContactCorrespondence';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs';
 
 // Constants
 const PLACEHOLDER_ORG_ID = 'org_test_alpha'; // Fallback for testing
@@ -15,8 +22,6 @@ async function getContact(contactId: string) {
     const session = await getServerSession(authOptions);
     const organizationId = session?.user?.organizationId || PLACEHOLDER_ORG_ID;
     
-    console.log('Fetching contact with ID:', contactId, 'for organization:', organizationId);
-
     // Fetch the contact with all fields, including the newly added ones
     const contact = await prisma.contacts.findUnique({
       where: {
@@ -117,9 +122,25 @@ export default async function EditContactPage({
         </p>
       </div>
 
-      <div className="bg-white rounded-lg shadow-md">
-        <EditContactForm contact={contact} />
-      </div>
+      <Tabs
+        defaultValue="details"
+        className="bg-white rounded-lg shadow-md"
+      >
+        <TabsList className="flex w-full justify-start rounded-t-lg border-b border-slate-200 bg-slate-50 px-2 py-1.5">
+          <TabsTrigger value="details" className="rounded-md px-3 py-1.5">
+            Details
+          </TabsTrigger>
+          <TabsTrigger value="correspondence" className="rounded-md px-3 py-1.5">
+            Correspondence
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="details" className="p-6">
+          <EditContactForm contact={contact} />
+        </TabsContent>
+        <TabsContent value="correspondence" className="p-6">
+          <ContactCorrespondence contactId={contact.id} />
+        </TabsContent>
+      </Tabs>
     </PageContainer>
   );
 }
